@@ -242,3 +242,23 @@ app_license = "mit"
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
 
+# Fixtures
+# --------
+# Export these doctypes and their configurations to fixtures
+fixtures = [
+    "DocType",
+    "Custom Field", 
+    "Property Setter",
+    "Workspace",
+    "Print Format",
+    "Report",
+    "Dashboard",
+    "Dashboard Chart",
+    "Number Card",
+    "Role",
+    "Custom DocPerm",
+    "Workflow",
+    "Workflow State",
+    "Workflow Action Master"
+]
+
