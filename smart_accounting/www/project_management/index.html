@@ -1,0 +1,252 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<div class="project-management-container">
+    <!-- Header Section - Monday.com Style -->
+    <div class="pm-header">
+        <div class="pm-header-left">
+            <h1 class="pm-title">
+                <i class="fa fa-tasks"></i>
+                Top Figures / Top Grants Clients
+            </h1>
+            <div class="pm-tabs">
+                <button class="pm-tab active" data-view="main">Main table</button>
+                <button class="pm-tab" data-view="gantt">Gantt</button>
+                <button class="pm-tab" data-view="calendar">Calendar</button>
+            </div>
+        </div>
+        <div class="pm-header-right">
+            <button class="pm-btn pm-btn-primary">
+                <i class="fa fa-plus"></i>
+                New task
+            </button>
+            <div class="pm-actions">
+                <button class="pm-btn pm-btn-secondary">
+                    <i class="fa fa-user"></i>
+                    Person
+                </button>
+                <button class="pm-btn pm-btn-secondary">
+                    <i class="fa fa-filter"></i>
+                    Filter
+                </button>
+                <button class="pm-btn pm-btn-secondary">
+                    <i class="fa fa-sort"></i>
+                    Sort
+                </button>
+                <button class="pm-btn pm-btn-secondary">
+                    <i class="fa fa-eye-slash"></i>
+                    Hide
+                </button>
+                <button class="pm-btn pm-btn-secondary">
+                    <i class="fa fa-layer-group"></i>
+                    Group by
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search and Filter Bar -->
+    <div class="pm-toolbar">
+        <div class="pm-search">
+            <i class="fa fa-search"></i>
+            <input type="text" placeholder="Search everything..." id="pm-search-input">
+        </div>
+        <div class="pm-filters">
+            <select class="pm-filter-select" id="client-filter">
+                <option value="">All Clients</option>
+            </select>
+            <select class="pm-filter-select" id="status-filter">
+                <option value="">All Status</option>
+                <option value="Open">Open</option>
+                <option value="Working">Working</option>
+                <option value="Completed">Completed</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Main Content Area - Monday.com Table Style -->
+    <div class="pm-content">
+        <div class="pm-table-container">
+
+
+            <!-- Table Body -->
+            <div class="pm-table-body" id="pm-table-body">
+                {% if project_data and project_data.organized_data %}
+                    {% for client_name, projects in project_data.organized_data.items() %}
+                        {% for project_name, tasks in projects.items() %}
+                            <!-- Project Group Header -->
+                            <div class="pm-project-group" data-client="{{ client_name }}" data-project="{{ project_name }}">
+                                <div class="pm-project-header">
+                                    <div class="pm-project-title">
+                                        <i class="fa fa-chevron-down pm-expand-icon"></i>
+                                        <div class="pm-project-color-bar project-color-{{ loop.index0 % 6 }}"></div>
+                                        <span class="pm-project-name">{{ project_name }}</span>
+                                        <span class="pm-task-count">{{ tasks|length }} Task{{ 's' if tasks|length != 1 else '' }}</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Project Table Header -->
+                                <div class="pm-project-table-header">
+                                    <div class="pm-header-cell pm-cell-task">Task</div>
+                                    <div class="pm-header-cell pm-cell-client">Client Name</div>
+                                    <div class="pm-header-cell pm-cell-tf-tg">TF/TG</div>
+                                    <div class="pm-header-cell pm-cell-software">Software</div>
+                                    <div class="pm-header-cell pm-cell-entity">Entity</div>
+                                    <div class="pm-header-cell pm-cell-status">Status</div>
+                                    <div class="pm-header-cell pm-cell-target-month">Target Month</div>
+                                    <div class="pm-header-cell pm-cell-action-person">Action Person</div>
+                                    <div class="pm-header-cell pm-cell-preparer">Preparer</div>
+                                    <div class="pm-header-cell pm-cell-reviewer">Reviewer</div>
+                                    <div class="pm-header-cell pm-cell-partner">Partner</div>
+                                    <div class="pm-header-cell pm-cell-lodgment-due">Lodgement Due</div>
+                                    <div class="pm-header-cell pm-cell-year-end">Year End</div>
+                                    <div class="pm-header-cell pm-cell-last-updated">Last Updated</div>
+                                    <div class="pm-header-cell pm-cell-priority">Priority</div>
+                                </div>
+                                
+                                <!-- Project Tasks -->
+                                <div class="pm-task-group">
+                                    {% for task in tasks %}
+                                        <div class="pm-task-row" data-task-id="{{ task.task_id }}">
+                                            <div class="pm-cell pm-cell-task">
+                                                <i class="fa fa-circle pm-task-icon"></i>
+                                                <span class="pm-task-name">{{ task.task_name }}</span>
+                                            </div>
+                                            <div class="pm-cell pm-cell-client">
+                                                {{ task.client_name or 'No Client' }}
+                                            </div>
+                                            <div class="pm-cell pm-cell-tf-tg">
+                                                <span class="pm-tf-tg-badge">{{ task.tf_tg or 'TF' }}</span>
+                                            </div>
+                                            <div class="pm-cell pm-cell-software">
+                                                <span class="pm-software-badge">{{ task.software or 'Xero' }}</span>
+                                            </div>
+                                            <div class="pm-cell pm-cell-entity">
+                                                {{ task.task_name or 'Task' }}
+                                            </div>
+                                            <div class="pm-cell pm-cell-status">
+                                                <span class="pm-status-badge status-{{ task.status.lower() if task.status else 'open' }}">
+                                                    {{ task.status or 'Open' }}
+                                                </span>
+                                            </div>
+                                            <div class="pm-cell pm-cell-target-month">
+                                                {{ task.target_month or '-' }}
+                                            </div>
+                                            <div class="pm-cell pm-cell-action-person">
+                                                {% if task.action_person_info %}
+                                                    <div class="pm-user-avatars">
+                                                        {% for user in task.action_person_info[:2] %}
+                                                            <div class="pm-avatar" title="{{ user.full_name }}">{{ user.initials }}</div>
+                                                        {% endfor %}
+                                                        {% if task.action_person_info|length > 2 %}
+                                                            <div class="pm-avatar-more">+{{ task.action_person_info|length - 2 }}</div>
+                                                        {% endif %}
+                                                    </div>
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </div>
+                                            <div class="pm-cell pm-cell-preparer">
+                                                {% if task.preparer_info %}
+                                                    <div class="pm-user-avatars">
+                                                        {% for user in task.preparer_info[:2] %}
+                                                            <div class="pm-avatar" title="{{ user.full_name }}">{{ user.initials }}</div>
+                                                        {% endfor %}
+                                                        {% if task.preparer_info|length > 2 %}
+                                                            <div class="pm-avatar-more">+{{ task.preparer_info|length - 2 }}</div>
+                                                        {% endif %}
+                                                    </div>
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </div>
+                                            <div class="pm-cell pm-cell-reviewer">
+                                                {% if task.reviewer_info %}
+                                                    <div class="pm-user-avatars">
+                                                        {% for user in task.reviewer_info[:2] %}
+                                                            <div class="pm-avatar" title="{{ user.full_name }}">{{ user.initials }}</div>
+                                                        {% endfor %}
+                                                        {% if task.reviewer_info|length > 2 %}
+                                                            <div class="pm-avatar-more">+{{ task.reviewer_info|length - 2 }}</div>
+                                                        {% endif %}
+                                                    </div>
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </div>
+                                            <div class="pm-cell pm-cell-partner">
+                                                {% if task.partner_info %}
+                                                    <div class="pm-user-avatars">
+                                                        {% for user in task.partner_info[:2] %}
+                                                            <div class="pm-avatar" title="{{ user.full_name }}">{{ user.initials }}</div>
+                                                        {% endfor %}
+                                                        {% if task.partner_info|length > 2 %}
+                                                            <div class="pm-avatar-more">+{{ task.partner_info|length - 2 }}</div>
+                                                        {% endif %}
+                                                    </div>
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </div>
+                                            <div class="pm-cell pm-cell-lodgment-due">
+                                                {% if task.lodgment_due_date %}
+                                                    <span class="pm-due-date">{{ task.lodgment_due_date }}</span>
+                                                {% else %}
+                                                    <span class="pm-no-date">-</span>
+                                                {% endif %}
+                                            </div>
+                                            <div class="pm-cell pm-cell-year-end">
+                                                {{ task.year_end or '-' }}
+                                            </div>
+                                            <div class="pm-cell pm-cell-last-updated">
+                                                {% if task.last_updated %}
+                                                    <span class="pm-last-updated">{{ task.last_updated }}</span>
+                                                {% else %}
+                                                    <span class="pm-no-date">-</span>
+                                                {% endif %}
+                                            </div>
+                                            <div class="pm-cell pm-cell-priority">
+                                                {% if task.priority %}
+                                                    <span class="pm-priority-badge priority-{{ task.priority.lower() }}">{{ task.priority }}</span>
+                                                {% else %}
+                                                    <span class="pm-priority-badge priority-medium">Medium</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% endfor %}
+                {% else %}
+                    <div class="pm-empty-state">
+                        <i class="fa fa-tasks"></i>
+                        <h3>No projects found</h3>
+                        <p>Create your first project to get started</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="pm-summary">
+        <div class="pm-stat">
+            <span class="pm-stat-number">{{ project_data.total_projects or 0 }}</span>
+            <span class="pm-stat-label">Projects</span>
+        </div>
+        <div class="pm-stat">
+            <span class="pm-stat-number">{{ project_data.total_tasks or 0 }}</span>
+            <span class="pm-stat-label">Tasks</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script src="/assets/smart_accounting/js/project_management.js"></script>
+{% endblock %}
+
+{% block style %}
+<link rel="stylesheet" href="/assets/smart_accounting/css/project_management.css">
+{% endblock %}
