@@ -57,7 +57,7 @@ app_license = "mit"
 # ----------
 
 # application home page (will override Website Settings)
-# home_page = "login"
+home_page = "/app"
 
 # website user home page (by Role)
 # role_home_page = {
@@ -246,20 +246,19 @@ app_license = "mit"
 # --------
 # Export these doctypes and their configurations to fixtures
 fixtures = [
-    "DocType",
-    "Custom Field", 
-    "Property Setter",
-    "Workspace",
-    "Print Format",
-    "Report",
-    "Dashboard",
-    "Dashboard Chart",
-    "Number Card",
-    "Role",
-    "Custom DocPerm",
-    "Workflow",
-    "Workflow State",
-    "Workflow Action Master"
+	"DocType",
+	"Custom Field", 
+	"Property Setter",
+	"Workspace",
+	"Print Format",
+	"Report",
+	"Dashboard Chart",
+	"Number Card",
+	"Role",
+	"Custom DocPerm",
+	"Workflow",
+	"Workflow State",
+	"Workflow Action Master"
 ]
 
 # IP Protection Configuration

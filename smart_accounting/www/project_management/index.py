@@ -36,7 +36,7 @@ def get_project_management_data():
         
         # Get basic task data first, then try to get custom fields
         tasks = frappe.get_all("Task",
-            fields=["name", "subject", "status", "priority", "exp_end_date", "project", "description", "modified"],
+            fields=["name", "subject", "status", "priority", "exp_end_date", "project", "description", "modified", "company"],
             filters={"status": ["!=", "Cancelled"]},
             order_by="exp_end_date"
         )
@@ -73,15 +73,31 @@ def get_project_management_data():
             # Try to get custom fields from the task document
             try:
                 task_doc = frappe.get_doc("Task", task.name)
-                task.tf_tg = getattr(task_doc, 'custom_tf_tg', None) or "TF"
+                
+                # Get client information - Priority: custom_client > project.customer > "No Client"
+                task_custom_client = getattr(task_doc, 'custom_client', None)
+                if task_custom_client:
+                    try:
+                        client_doc = frappe.get_doc("Customer", task_custom_client)
+                        task.client_name = client_doc.customer_name
+                    except:
+                        task.client_name = task_custom_client
+                elif task.project and hasattr(task, 'project'):
+                    # Keep existing project customer logic as backup
+                    pass  # This was already handled above
+                else:
+                    task.client_name = "No Client"
+                
+                # Get other custom fields - using correct field names from fixtures
+                task.tf_tg = getattr(task_doc, 'custom_tftg', None) or getattr(task_doc, 'custom_tf_tg', None) or "TF"
                 task.service_line = getattr(task_doc, 'custom_service_line', None) or "BAS"
                 task.software = getattr(task_doc, 'custom_software', None) or "Xero"
                 task.year_end = getattr(task_doc, 'custom_year_end', None) or ""
                 task.target_month = getattr(task_doc, 'custom_target_month', None) or ""
                 task.partner = getattr(task_doc, 'custom_partner', None) or ""
                 task.reviewer = getattr(task_doc, 'custom_reviewer', None) or ""
-                task.preparer = getattr(task_doc, 'custom_preparer', None) or ""
-                task.lodgment_due_date = getattr(task_doc, 'custom_lodgment_due_date', None) or ""
+                task.preparer = getattr(task_doc, 'custom_praparer', None) or getattr(task_doc, 'custom_preparer', None) or ""
+                task.lodgment_due_date = getattr(task_doc, 'custom_lodgement_due_date', None) or getattr(task_doc, 'custom_lodgment_due_date', None) or ""
                 
                 # Get action person (assigned_to field)
                 task.action_person = getattr(task_doc, 'assigned_to', None) or ""

@@ -233,11 +233,11 @@
 
 /* Ensure project header cells use the same width as task cells */
 .pm-project-table-header .pm-header-cell {
-    flex-shrink: 0;
-    flex-grow: 0;
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
     display: flex;
     align-items: center;
-    padding: 12px 8px;
+    padding: 0 8px;
     border-right: 1px solid var(--monday-border);
 }
 
@@ -411,10 +411,10 @@ div.pm-table-header,
     display: flex;
     align-items: center;
     font-size: 14px;
-    padding: 12px 8px;
-    border-right: 1px solid var(--monday-border);
-    flex-shrink: 0;
-    flex-grow: 0;
+    padding: 0 8px;
+    border-right: 1px solid #f0f0f0;
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
 }
 
 .pm-cell:last-child {
@@ -847,4 +847,24 @@ div.pm-table-header,
 
 .pm-task-name {
     font-weight: 500;
+}
+
+/* Home Link in Title */
+.pm-home-link {
+    color: var(--monday-blue);
+    text-decoration: none;
+    margin-right: 12px;
+    padding: 8px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pm-home-link:hover {
+    background: var(--monday-hover);
+    color: var(--monday-blue);
+    text-decoration: none;
+    transform: scale(1.1);
 }
