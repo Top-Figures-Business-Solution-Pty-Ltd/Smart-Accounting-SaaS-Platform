@@ -229,6 +229,8 @@
     color: var(--monday-gray);
     margin-top: 8px;
     margin-bottom: 4px;
+    width: 2000px;
+    min-width: 2000px;
 }
 
 /* Ensure project header cells use the same width as task cells */
@@ -265,12 +267,9 @@ div.pm-table-header,
     border-right: none;
 }
 
-/* Simple column widths for flexbox layout */
-.pm-cell-task,
-.pm-header-cell.pm-cell-task { width: 200px; min-width: 200px; flex: 0 0 200px; }
-
+/* Simple column widths for flexbox layout - Task column removed */
 .pm-cell-client,
-.pm-header-cell.pm-cell-client { width: 120px; min-width: 120px; flex: 0 0 120px; }
+.pm-header-cell.pm-cell-client { width: 150px; min-width: 150px; flex: 0 0 150px; }
 
 .pm-cell-tf-tg,
 .pm-header-cell.pm-cell-tf-tg { width: 80px; min-width: 80px; flex: 0 0 80px; }
@@ -286,6 +285,15 @@ div.pm-table-header,
 
 .pm-cell-target-month,
 .pm-header-cell.pm-cell-target-month { width: 120px; min-width: 120px; flex: 0 0 120px; }
+
+.pm-cell-budget,
+.pm-header-cell.pm-cell-budget { width: 100px; min-width: 100px; flex: 0 0 100px; }
+
+.pm-cell-actual,
+.pm-header-cell.pm-cell-actual { width: 100px; min-width: 100px; flex: 0 0 100px; }
+
+.pm-cell-review-note,
+.pm-header-cell.pm-cell-review-note { width: 150px; min-width: 150px; flex: 0 0 150px; }
 
 .pm-cell-action-person,
 .pm-header-cell.pm-cell-action-person { width: 120px; min-width: 120px; flex: 0 0 120px; }
@@ -318,14 +326,14 @@ div.pm-table-header,
     max-height: 70vh;
     overflow-y: auto;
     overflow-x: visible;
-    min-width: 2200px;
+    min-width: 2000px;
     width: max-content;
 }
 
 /* Project Groups */
 .pm-project-group {
     border-bottom: 1px solid var(--monday-border);
-    min-width: 2200px;
+    min-width: 2000px;
     width: max-content;
 }
 
@@ -395,6 +403,11 @@ div.pm-table-header,
     border-bottom: 1px solid #f0f0f0;
     transition: background-color 0.2s ease;
     background: white;
+    min-height: 52px;
+    height: 52px;
+    align-items: center;
+    width: 2000px;
+    min-width: 2000px;
 }
 
 .pm-task-row .pm-cell {
@@ -411,10 +424,13 @@ div.pm-table-header,
     display: flex;
     align-items: center;
     font-size: 14px;
-    padding: 0 8px;
-    border-right: 1px solid #f0f0f0;
-    flex-shrink: 0 !important;
-    flex-grow: 0 !important;
+    padding: 12px 8px;
+    border-right: 1px solid var(--monday-border);
+    flex-shrink: 0;
+    flex-grow: 0;
+    height: 52px;
+    min-height: 52px;
+    box-sizing: border-box;
 }
 
 .pm-cell:last-child {
@@ -867,4 +883,85 @@ div.pm-table-header,
     color: var(--monday-blue);
     text-decoration: none;
     transform: scale(1.1);
+}
+
+/* Entity Type Badges */
+.pm-entity-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.entity-company {
+    background: #e3f2fd;
+    color: var(--monday-blue);
+}
+
+.entity-individual {
+    background: #f3e5f5;
+    color: var(--monday-purple);
+}
+
+.entity-partnership {
+    background: #fff3e0;
+    color: var(--monday-orange);
+}
+
+.entity-trust {
+    background: #e8f5e8;
+    color: var(--monday-green);
+}
+
+.entity-other {
+    background: #f5f5f5;
+    color: var(--monday-gray);
+}
+
+/* Currency Display */
+.pm-currency {
+    color: var(--monday-green);
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+}
+
+.pm-no-amount {
+    color: var(--monday-gray);
+    font-style: italic;
+}
+
+/* Review Note Indicator - Like Monday.com */
+.pm-review-note-indicator {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.pm-review-note-indicator.has-notes {
+    color: var(--monday-green);
+    background: #f0f9f0;
+}
+
+.pm-review-note-indicator.has-notes:hover {
+    background: #e8f5e8;
+}
+
+.pm-review-note-indicator.no-notes {
+    color: var(--monday-red);
+    background: #fff5f5;
+}
+
+.pm-review-note-indicator.no-notes:hover {
+    background: #ffe8e8;
+}
+
+.pm-review-note-indicator i {
+    font-size: 14px;
 }

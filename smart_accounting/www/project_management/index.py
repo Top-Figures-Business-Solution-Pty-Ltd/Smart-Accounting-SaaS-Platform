@@ -80,13 +80,30 @@ def get_project_management_data():
                     try:
                         client_doc = frappe.get_doc("Customer", task_custom_client)
                         task.client_name = client_doc.customer_name
+                        # Get entity type from customer
+                        task.entity_type = getattr(client_doc, 'custom_entity_type', None) or "Company"
                     except:
                         task.client_name = task_custom_client
+                        task.entity_type = "Company"
                 elif task.project and hasattr(task, 'project'):
                     # Keep existing project customer logic as backup
-                    pass  # This was already handled above
+                    # Also try to get entity from project customer
+                    if hasattr(task, 'client_name') and task.client_name and task.client_name != "Unknown Client":
+                        try:
+                            # Get entity from project customer
+                            project_doc = frappe.get_doc("Project", task.project)
+                            if project_doc.customer:
+                                client_doc = frappe.get_doc("Customer", project_doc.customer)
+                                task.entity_type = getattr(client_doc, 'custom_entity_type', None) or "Company"
+                            else:
+                                task.entity_type = "Company"
+                        except:
+                            task.entity_type = "Company"
+                    else:
+                        task.entity_type = "Company"
                 else:
                     task.client_name = "No Client"
+                    task.entity_type = "Company"
                 
                 # Get other custom fields - using correct field names from fixtures
                 task.tf_tg = getattr(task_doc, 'custom_tftg', None) or getattr(task_doc, 'custom_tf_tg', None) or "TF"
@@ -101,6 +118,23 @@ def get_project_management_data():
                 
                 # Get action person (assigned_to field)
                 task.action_person = getattr(task_doc, 'assigned_to', None) or ""
+                
+                # Get Budget and Actual Billing (newly added fields)
+                task.budget_planning = getattr(task_doc, 'custom_budget_planning', None) or 0
+                task.actual_billing = getattr(task_doc, 'custom_actual_billing', None) or 0
+                
+                # Try to get Review Notes (child table)
+                try:
+                    review_notes = frappe.get_all("Review Note", 
+                        filters={"parent": task.name, "parenttype": "Task"},
+                        fields=["note", "creation", "owner"],
+                        order_by="creation desc"
+                    )
+                    task.review_notes = review_notes
+                    task.latest_review_note = review_notes[0].note if review_notes else ""
+                except:
+                    task.review_notes = []
+                    task.latest_review_note = ""
                 
                 # Convert email addresses to user info for avatar display
                 task.preparer_info = get_user_info(task.preparer)
@@ -127,6 +161,11 @@ def get_project_management_data():
                 task.lodgment_due_date = ""
                 task.action_person = ""
                 task.last_updated = ""
+                task.entity_type = "Company"  # Default entity type
+                task.budget_planning = 0
+                task.actual_billing = 0
+                task.review_notes = []
+                task.latest_review_note = ""
                 # Set empty user info for avatars
                 task.preparer_info = None
                 task.reviewer_info = None
