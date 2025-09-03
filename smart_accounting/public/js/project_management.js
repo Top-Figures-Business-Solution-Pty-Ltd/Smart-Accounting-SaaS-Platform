@@ -56,6 +56,94 @@ class ProjectManagement {
             e.stopPropagation();
             this.startFieldEditing(e.currentTarget);
         });
+
+        // Main table tab click - Navigate to current page
+        $(document).on('click', '.pm-tab[data-url]', (e) => {
+            const url = $(e.currentTarget).data('url');
+            if (url) {
+                window.location.href = url;
+            }
+        });
+
+        // New Task dropdown toggle
+        $(document).on('click', '.pm-new-task-btn', (e) => {
+            e.stopPropagation();
+            this.toggleNewTaskMenu();
+        });
+
+        // Quick add task
+        $(document).on('click', '.pm-quick-add-task', (e) => {
+            e.stopPropagation();
+            this.quickAddTask();
+        });
+
+        // New project
+        $(document).on('click', '.pm-new-project', (e) => {
+            e.stopPropagation();
+            this.createNewProject();
+        });
+
+        // Person filter dropdown toggle
+        $(document).on('click', '.pm-person-filter-btn', (e) => {
+            e.stopPropagation();
+            this.togglePersonFilter();
+        });
+
+        // Person option click
+        $(document).on('click', '.pm-person-option', (e) => {
+            e.stopPropagation();
+            this.selectPersonFilter(e.currentTarget);
+        });
+
+        // Person search input
+        $(document).on('input', '.pm-person-search-input', (e) => {
+            this.searchPeople(e.target.value);
+        });
+
+        // Client filter dropdown toggle
+        $(document).on('click', '.pm-client-filter-btn', (e) => {
+            e.stopPropagation();
+            this.toggleClientFilter();
+        });
+
+        // Client filter option click
+        $(document).on('click', '.pm-client-filter-menu .pm-filter-option', (e) => {
+            e.stopPropagation();
+            this.selectClientFilter(e.currentTarget);
+        });
+
+        // Client search input
+        $(document).on('input', '.pm-client-search-input', (e) => {
+            this.searchClients(e.target.value);
+        });
+
+        // Status filter dropdown toggle
+        $(document).on('click', '.pm-status-filter-btn', (e) => {
+            e.stopPropagation();
+            this.toggleStatusFilter();
+        });
+
+        // Status filter option click
+        $(document).on('click', '.pm-status-filter-menu .pm-filter-option', (e) => {
+            e.stopPropagation();
+            this.selectStatusFilter(e.currentTarget);
+        });
+
+        // Close dropdowns when clicking outside
+        $(document).on('click', (e) => {
+            if (!$(e.target).closest('.pm-new-task-dropdown').length) {
+                this.closeNewTaskMenu();
+            }
+            if (!$(e.target).closest('.pm-person-filter-dropdown').length) {
+                this.closePersonFilter();
+            }
+            if (!$(e.target).closest('.pm-client-filter-dropdown').length) {
+                this.closeClientFilter();
+            }
+            if (!$(e.target).closest('.pm-status-filter-dropdown').length) {
+                this.closeStatusFilter();
+            }
+        });
     }
 
     toggleProject(projectHeader) {
@@ -1187,6 +1275,673 @@ class ProjectManagement {
     cancelFieldEditing($cell, originalValue) {
         $cell.html(`<span class="editable-field">${originalValue || '-'}</span>`);
         $cell.removeClass('editing');
+    }
+
+    toggleNewTaskMenu() {
+        const $dropdown = $('.pm-new-task-dropdown');
+        const $menu = $('.pm-new-task-menu');
+        
+        if ($dropdown.hasClass('active')) {
+            this.closeNewTaskMenu();
+        } else {
+            $dropdown.addClass('active');
+            $menu.slideDown(200);
+        }
+    }
+
+    closeNewTaskMenu() {
+        const $dropdown = $('.pm-new-task-dropdown');
+        const $menu = $('.pm-new-task-menu');
+        
+        $dropdown.removeClass('active');
+        $menu.slideUp(200);
+    }
+
+    async quickAddTask() {
+        this.closeNewTaskMenu();
+        
+        // Find the first project group
+        const $firstProject = $('.pm-project-group').first();
+        if ($firstProject.length === 0) {
+            frappe.show_alert({
+                message: 'No projects found. Please create a project first.',
+                indicator: 'orange'
+            });
+            return;
+        }
+        
+        const projectName = $firstProject.data('project');
+        const clientName = $firstProject.data('client');
+        
+        try {
+            // Show loading
+            frappe.show_alert({
+                message: 'Creating task...',
+                indicator: 'blue'
+            });
+            
+            // Create task using existing API
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.create_new_task',
+                args: {
+                    project_name: projectName,
+                    client_name: clientName
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                // Insert new task at the top of the first project
+                this.insertTaskAtTop($firstProject, response.message);
+                
+                frappe.show_alert({
+                    message: 'Task created successfully',
+                    indicator: 'green'
+                });
+            } else {
+                throw new Error(response.message?.error || 'Failed to create task');
+            }
+        } catch (error) {
+            console.error('Quick add task error:', error);
+            frappe.show_alert({
+                message: 'Failed to create task: ' + error.message,
+                indicator: 'red'
+            });
+        }
+    }
+
+    insertTaskAtTop($projectGroup, taskData) {
+        const projectName = $projectGroup.data('project');
+        const clientName = $projectGroup.data('client');
+        
+        // Create new task row HTML (same as before)
+        const newTaskRowHTML = `
+            <div class="pm-task-row new-task-highlight" data-task-id="${taskData.task_id}" data-task-name="${taskData.task_subject}" style="display: flex; width: 2000px; min-width: 2000px;">
+                <div class="pm-cell pm-cell-client" style="width: 150px; min-width: 150px; flex: 0 0 150px;" data-editable="true" data-field="custom_client" data-task-id="${taskData.task_id}" data-field-type="client_selector" data-current-client-id="" data-current-client-name="${clientName || 'No Client'}">
+                    <span class="editable-field client-display">${clientName || 'No Client'}</span>
+                </div>
+                <div class="pm-cell pm-cell-entity" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
+                    <span class="pm-entity-badge entity-company">Company</span>
+                </div>
+                <div class="pm-cell pm-cell-tf-tg" style="width: 80px; min-width: 80px; flex: 0 0 80px;" data-editable="true" data-field="custom_tftg" data-task-id="${taskData.task_id}" data-field-type="select">
+                    <span class="pm-tf-tg-badge editable-field">TF</span>
+                </div>
+                <div class="pm-cell pm-cell-software" style="width: 100px; min-width: 100px; flex: 0 0 100px;" data-editable="true" data-field="custom_software" data-task-id="${taskData.task_id}" data-field-type="select">
+                    <span class="pm-software-badge editable-field">Xero</span>
+                </div>
+                <div class="pm-cell pm-cell-status" style="width: 100px; min-width: 100px; flex: 0 0 100px;">
+                    <span class="pm-status-badge status-open">Open</span>
+                </div>
+                <div class="pm-cell pm-cell-target-month" style="width: 120px; min-width: 120px; flex: 0 0 120px;" data-editable="true" data-field="custom_target_month" data-task-id="${taskData.task_id}" data-field-type="select" data-options="January,February,March,April,May,June,July,August,September,October,November,December">
+                    <span class="editable-field">-</span>
+                </div>
+                <div class="pm-cell pm-cell-budget" style="width: 100px; min-width: 100px; flex: 0 0 100px;" data-editable="true" data-field="custom_budget_planning" data-task-id="${taskData.task_id}" data-field-type="currency">
+                    <span class="pm-no-amount editable-field">-</span>
+                </div>
+                <div class="pm-cell pm-cell-actual" style="width: 100px; min-width: 100px; flex: 0 0 100px;" data-editable="true" data-field="custom_actual_billing" data-task-id="${taskData.task_id}" data-field-type="currency">
+                    <span class="pm-no-amount editable-field">-</span>
+                </div>
+                <div class="pm-cell pm-cell-review-note" style="width: 150px; min-width: 150px; flex: 0 0 150px;">
+                    <div class="pm-review-note-indicator no-notes">
+                        <i class="fa fa-times-circle"></i>
+                        <span>none</span>
+                    </div>
+                </div>
+                <div class="pm-cell pm-cell-action-person" style="width: 120px; min-width: 120px; flex: 0 0 120px;">-</div>
+                <div class="pm-cell pm-cell-preparer" style="width: 120px; min-width: 120px; flex: 0 0 120px;">-</div>
+                <div class="pm-cell pm-cell-reviewer" style="width: 120px; min-width: 120px; flex: 0 0 120px;">-</div>
+                <div class="pm-cell pm-cell-partner" style="width: 120px; min-width: 120px; flex: 0 0 120px;">-</div>
+                <div class="pm-cell pm-cell-lodgment-due" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
+                    <span class="pm-no-date">-</span>
+                </div>
+                <div class="pm-cell pm-cell-year-end" style="width: 100px; min-width: 100px; flex: 0 0 100px;">-</div>
+                <div class="pm-cell pm-cell-last-updated" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
+                    <span class="pm-last-updated">Just now</span>
+                </div>
+                <div class="pm-cell pm-cell-priority" style="width: 100px; min-width: 100px; flex: 0 0 100px;">
+                    <span class="pm-priority-badge priority-medium">Medium</span>
+                </div>
+            </div>
+        `;
+        
+        // Insert at the top of the project's task group
+        const $taskGroup = $projectGroup.find('.pm-task-group');
+        $taskGroup.prepend(newTaskRowHTML);
+        
+        // Scroll to the new task
+        const $newRow = $taskGroup.find('.new-task-highlight');
+        $newRow[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Highlight animation
+        $newRow.css('background-color', '#e8f5e8');
+        setTimeout(() => {
+            $newRow.css('background-color', '').removeClass('new-task-highlight');
+        }, 3000);
+    }
+
+    createNewProject() {
+        this.closeNewTaskMenu();
+        
+        // Navigate to ERPNext project creation
+        frappe.show_alert({
+            message: 'Redirecting to project creation...',
+            indicator: 'blue'
+        });
+        
+        setTimeout(() => {
+            window.open('/app/project/new-project', '_blank');
+        }, 500);
+    }
+
+    togglePersonFilter() {
+        const $dropdown = $('.pm-person-filter-dropdown');
+        const $menu = $('.pm-person-filter-menu');
+        
+        if ($dropdown.hasClass('active')) {
+            this.closePersonFilter();
+        } else {
+            $dropdown.addClass('active');
+            $menu.slideDown(200);
+            this.loadAllPeople();
+        }
+    }
+
+    closePersonFilter() {
+        const $dropdown = $('.pm-person-filter-dropdown');
+        const $menu = $('.pm-person-filter-menu');
+        
+        $dropdown.removeClass('active');
+        $menu.slideUp(200);
+    }
+
+    async loadAllPeople() {
+        const $personList = $('.pm-person-list');
+        
+        try {
+            console.log('Loading all people...');
+            
+            // Get all people from tasks - simplified approach
+            const people = new Map();
+            
+            // Find all avatars on the page
+            $('.pm-avatar').each((index, avatar) => {
+                try {
+                    const $avatar = $(avatar);
+                    const fullName = $avatar.attr('title');
+                    const initials = $avatar.text();
+                    
+                    if (fullName && fullName !== '-' && fullName.trim() !== '') {
+                        const email = fullName.includes('@') ? fullName : `${fullName.toLowerCase().replace(/\s+/g, '.')}@company.com`;
+                        
+                        if (!people.has(email)) {
+                            people.set(email, {
+                                email: email,
+                                name: fullName,
+                                initials: initials
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.log('Error processing avatar:', e);
+                }
+            });
+            
+            console.log('Found people:', people);
+            
+            // Convert to array and sort
+            const peopleArray = Array.from(people.values()).sort((a, b) => a.name.localeCompare(b.name));
+            
+            console.log('People array:', peopleArray);
+            
+            // Generate HTML
+            let html = '';
+            if (peopleArray.length === 0) {
+                html = '<div class="pm-person-option"><span>No people found</span></div>';
+            } else {
+                peopleArray.forEach(person => {
+                    html += `
+                        <div class="pm-person-option" data-person-email="${person.email}" data-person-name="${person.name}">
+                            <div class="pm-person-avatar" style="background-color: ${this.getPersonColor(person.email)}">
+                                ${person.initials}
+                            </div>
+                            <span>${person.name}</span>
+                        </div>
+                    `;
+                });
+            }
+            
+            $personList.html(html);
+            console.log('Person list updated');
+            
+        } catch (error) {
+            console.error('Load people error:', error);
+            $personList.html('<div class="pm-person-option"><span>Failed to load people</span></div>');
+        }
+    }
+
+    extractPeopleFromCell($cell, peopleMap, role) {
+        try {
+            // Extract people from avatar cells
+            $cell.find('.pm-avatar').each((index, avatar) => {
+                try {
+                    const $avatar = $(avatar);
+                    const fullName = $avatar.attr('title') || '';
+                    const initials = $avatar.text() || '';
+                    
+                    if (fullName && fullName !== '-' && fullName.trim() !== '') {
+                        const email = fullName.includes('@') ? fullName : `${fullName.toLowerCase().replace(/\s+/g, '.')}@company.com`;
+                        
+                        if (!peopleMap.has(email)) {
+                            peopleMap.set(email, {
+                                email: email,
+                                name: fullName,
+                                initials: initials,
+                                roles: [role]
+                            });
+                        } else {
+                            const existing = peopleMap.get(email);
+                            if (existing.roles && !existing.roles.includes(role)) {
+                                existing.roles.push(role);
+                            }
+                        }
+                    }
+                } catch (avatarError) {
+                    console.log('Error processing avatar:', avatarError);
+                }
+            });
+        } catch (cellError) {
+            console.log('Error processing cell:', cellError);
+        }
+    }
+
+    getPersonColor(email) {
+        // Generate consistent color based on email
+        const colors = ['#0073ea', '#00c875', '#fdab3d', '#e2445c', '#a25ddc', '#ff5ac4'];
+        let hash = 0;
+        for (let i = 0; i < email.length; i++) {
+            hash = email.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        return colors[Math.abs(hash) % colors.length];
+    }
+
+    selectPersonFilter(optionElement) {
+        const $option = $(optionElement);  // Ensure it's a jQuery object
+        const $btn = $('.pm-person-filter-btn');
+        const personEmail = $option.data('person-email');
+        const personName = $option.data('person-name');
+        
+        if ($option.hasClass('pm-clear-filter')) {
+            // Clear filter
+            this.clearPersonFilter();
+        } else {
+            // Apply filter
+            this.applyPersonFilter(personEmail, personName);
+            
+            // Update button state
+            $btn.addClass('has-filter');
+            $btn.find('.pm-person-count').text('1').show();
+            
+            // Mark option as selected
+            $('.pm-person-option').removeClass('selected');
+            $option.addClass('selected');
+        }
+        
+        this.closePersonFilter();
+    }
+
+    applyPersonFilter(personEmail, personName) {
+        let visibleTasks = 0;
+        
+        $('.pm-task-row').each((index, row) => {
+            const $row = $(row);
+            
+            // Skip add task rows
+            if ($row.hasClass('pm-add-task-row')) {
+                return;
+            }
+            
+            // Check if person is involved in this task
+            const isInvolved = this.isPersonInvolvedInTask($row, personEmail, personName);
+            
+            if (isInvolved) {
+                $row.show();
+                visibleTasks++;
+            } else {
+                $row.hide();
+            }
+        });
+        
+        // Update projects visibility
+        this.updateProjectVisibility();
+        
+        frappe.show_alert({
+            message: `Filtered by ${personName} - ${visibleTasks} tasks shown`,
+            indicator: 'blue'
+        });
+    }
+
+    isPersonInvolvedInTask($row, personEmail, personName) {
+        try {
+            // Check all people-related cells
+            const peopleCells = [
+                '.pm-cell-action-person',
+                '.pm-cell-preparer', 
+                '.pm-cell-reviewer',
+                '.pm-cell-partner'
+            ];
+            
+            for (let cellSelector of peopleCells) {
+                const $cell = $row.find(cellSelector);
+                
+                // Check avatar titles
+                const $avatars = $cell.find('.pm-avatar');
+                for (let i = 0; i < $avatars.length; i++) {
+                    const title = $($avatars[i]).attr('title');
+                    if (title && title.toLowerCase().includes(personName.toLowerCase())) {
+                        return true;
+                    }
+                }
+            }
+            
+            return false;
+        } catch (error) {
+            console.log('Error checking person involvement:', error);
+            return false;
+        }
+    }
+
+    clearPersonFilter() {
+        const $btn = $('.pm-person-filter-btn');
+        
+        // Show all tasks
+        $('.pm-task-row').show();
+        $('.pm-project-group').show();
+        
+        // Reset button state
+        $btn.removeClass('has-filter');
+        $btn.find('.pm-person-count').hide();
+        
+        // Clear selection
+        $('.pm-person-option').removeClass('selected');
+        
+        frappe.show_alert({
+            message: 'Person filter cleared',
+            indicator: 'green'
+        });
+    }
+
+    updateProjectVisibility() {
+        // Hide projects that have no visible tasks
+        $('.pm-project-group').each((index, group) => {
+            const $group = $(group);
+            const visibleTasks = $group.find('.pm-task-row:visible:not(.pm-add-task-row)').length;
+            
+            if (visibleTasks > 0) {
+                $group.show();
+            } else {
+                $group.hide();
+            }
+        });
+    }
+
+    searchPeople(query) {
+        const $personList = $('.pm-person-list');
+        
+        if (!query || query.length < 2) {
+            $personList.find('.pm-person-option').show();
+            return;
+        }
+        
+        // Filter people list
+        $personList.find('.pm-person-option').each((index, option) => {
+            const $option = $(option);
+            const personName = $option.data('person-name') || '';
+            
+            if (personName.toLowerCase().includes(query.toLowerCase())) {
+                $option.show();
+            } else {
+                $option.hide();
+            }
+        });
+    }
+
+    // Client Filter Methods
+    toggleClientFilter() {
+        const $dropdown = $('.pm-client-filter-dropdown');
+        const $menu = $('.pm-client-filter-menu');
+        
+        if ($dropdown.hasClass('active')) {
+            this.closeClientFilter();
+        } else {
+            $dropdown.addClass('active');
+            $menu.slideDown(200);
+            this.loadAllClients();
+        }
+    }
+
+    closeClientFilter() {
+        const $dropdown = $('.pm-client-filter-dropdown');
+        const $menu = $('.pm-client-filter-menu');
+        
+        $dropdown.removeClass('active');
+        $menu.slideUp(200);
+    }
+
+    loadAllClients() {
+        const $clientList = $('.pm-client-list');
+        
+        try {
+            // Get all unique clients from tasks
+            const clients = new Set();
+            
+            $('.pm-task-row:not(.pm-add-task-row)').each((index, row) => {
+                const $row = $(row);
+                const clientName = $row.find('.pm-cell-client .client-display').text().trim();
+                
+                if (clientName && clientName !== 'No Client' && clientName !== '-') {
+                    clients.add(clientName);
+                }
+            });
+            
+            // Convert to sorted array
+            const clientArray = Array.from(clients).sort();
+            
+            // Generate HTML
+            let html = '';
+            clientArray.forEach(client => {
+                html += `
+                    <div class="pm-filter-option" data-client-name="${client}">
+                        <div class="pm-filter-icon">
+                            <i class="fa fa-building"></i>
+                        </div>
+                        <span>${client}</span>
+                    </div>
+                `;
+            });
+            
+            $clientList.html(html);
+            
+        } catch (error) {
+            console.error('Load clients error:', error);
+            $clientList.html('<div class="pm-filter-option"><span>Failed to load clients</span></div>');
+        }
+    }
+
+    selectClientFilter(optionElement) {
+        const $option = $(optionElement);
+        const $btn = $('.pm-client-filter-btn');
+        const clientName = $option.data('client-name');
+        
+        if ($option.hasClass('pm-clear-client-filter')) {
+            // Clear filter
+            this.clearClientFilter();
+        } else {
+            // Apply filter
+            this.applyClientFilter(clientName);
+            
+            // Update button state
+            $btn.addClass('has-filter');
+            $btn.find('span:first').text(clientName);
+            
+            // Mark option as selected
+            $('.pm-client-filter-menu .pm-filter-option').removeClass('selected');
+            $option.addClass('selected');
+        }
+        
+        this.closeClientFilter();
+    }
+
+    applyClientFilter(clientName) {
+        let visibleTasks = 0;
+        
+        $('.pm-task-row:not(.pm-add-task-row)').each((index, row) => {
+            const $row = $(row);
+            const rowClientName = $row.find('.pm-cell-client .client-display').text().trim();
+            
+            if (rowClientName === clientName) {
+                $row.show();
+                visibleTasks++;
+            } else {
+                $row.hide();
+            }
+        });
+        
+        // Update projects visibility
+        this.updateProjectVisibility();
+        
+        frappe.show_alert({
+            message: `Filtered by ${clientName} - ${visibleTasks} tasks shown`,
+            indicator: 'blue'
+        });
+    }
+
+    clearClientFilter() {
+        const $btn = $('.pm-client-filter-btn');
+        
+        // Show all tasks
+        $('.pm-task-row').show();
+        $('.pm-project-group').show();
+        
+        // Reset button state
+        $btn.removeClass('has-filter');
+        $btn.find('span:first').text('All Clients');
+        
+        // Clear selection
+        $('.pm-client-filter-menu .pm-filter-option').removeClass('selected');
+        
+        frappe.show_alert({
+            message: 'Client filter cleared',
+            indicator: 'green'
+        });
+    }
+
+    searchClients(query) {
+        const $clientList = $('.pm-client-list');
+        
+        if (!query || query.length < 2) {
+            $clientList.find('.pm-filter-option').show();
+            return;
+        }
+        
+        // Filter client list
+        $clientList.find('.pm-filter-option').each((index, option) => {
+            const $option = $(option);
+            const clientName = $option.data('client-name') || '';
+            
+            if (clientName.toLowerCase().includes(query.toLowerCase())) {
+                $option.show();
+            } else {
+                $option.hide();
+            }
+        });
+    }
+
+    // Status Filter Methods
+    toggleStatusFilter() {
+        const $dropdown = $('.pm-status-filter-dropdown');
+        const $menu = $('.pm-status-filter-menu');
+        
+        if ($dropdown.hasClass('active')) {
+            this.closeStatusFilter();
+        } else {
+            $dropdown.addClass('active');
+            $menu.slideDown(200);
+        }
+    }
+
+    closeStatusFilter() {
+        const $dropdown = $('.pm-status-filter-dropdown');
+        const $menu = $('.pm-status-filter-menu');
+        
+        $dropdown.removeClass('active');
+        $menu.slideUp(200);
+    }
+
+    selectStatusFilter(optionElement) {
+        const $option = $(optionElement);
+        const $btn = $('.pm-status-filter-btn');
+        const status = $option.data('status');
+        
+        if ($option.hasClass('pm-clear-status-filter')) {
+            // Clear filter
+            this.clearStatusFilter();
+        } else {
+            // Apply filter
+            this.applyStatusFilter(status);
+            
+            // Update button state
+            $btn.addClass('has-filter');
+            $btn.find('span:first').text(status);
+            
+            // Mark option as selected
+            $('.pm-status-filter-menu .pm-filter-option').removeClass('selected');
+            $option.addClass('selected');
+        }
+        
+        this.closeStatusFilter();
+    }
+
+    applyStatusFilter(status) {
+        let visibleTasks = 0;
+        
+        $('.pm-task-row:not(.pm-add-task-row)').each((index, row) => {
+            const $row = $(row);
+            const rowStatus = $row.find('.pm-status-badge').text().trim();
+            
+            if (rowStatus.toLowerCase() === status.toLowerCase()) {
+                $row.show();
+                visibleTasks++;
+            } else {
+                $row.hide();
+            }
+        });
+        
+        // Update projects visibility
+        this.updateProjectVisibility();
+        
+        frappe.show_alert({
+            message: `Filtered by ${status} - ${visibleTasks} tasks shown`,
+            indicator: 'blue'
+        });
+    }
+
+    clearStatusFilter() {
+        const $btn = $('.pm-status-filter-btn');
+        
+        // Show all tasks
+        $('.pm-task-row').show();
+        $('.pm-project-group').show();
+        
+        // Reset button state
+        $btn.removeClass('has-filter');
+        $btn.find('span:first').text('All Status');
+        
+        // Clear selection
+        $('.pm-status-filter-menu .pm-filter-option').removeClass('selected');
+        
+        frappe.show_alert({
+            message: 'Status filter cleared',
+            indicator: 'green'
+        });
     }
 
 }

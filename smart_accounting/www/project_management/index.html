@@ -13,36 +13,60 @@
                 Top Figures / Top Grants Clients
             </h1>
             <div class="pm-tabs">
-                <button class="pm-tab active" data-view="main">Main table</button>
+                <button class="pm-tab active" data-view="main" data-url="/project_management">Main table</button>
                 <button class="pm-tab" data-view="gantt">Gantt</button>
                 <button class="pm-tab" data-view="calendar">Calendar</button>
             </div>
         </div>
         <div class="pm-header-right">
-            <button class="pm-btn pm-btn-primary">
-                <i class="fa fa-plus"></i>
-                New task
-            </button>
-            <div class="pm-actions">
-                <button class="pm-btn pm-btn-secondary">
-                    <i class="fa fa-user"></i>
-                    Person
+            <div class="pm-new-task-dropdown">
+                <button class="pm-btn pm-btn-primary pm-new-task-btn">
+                    <i class="fa fa-plus"></i>
+                    New task
+                    <i class="fa fa-chevron-down pm-dropdown-icon"></i>
                 </button>
+                <div class="pm-new-task-menu" style="display: none;">
+                    <div class="pm-menu-item pm-quick-add-task">
+                        <i class="fa fa-plus"></i>
+                        <span>Quick add task</span>
+                        <small>Add to first project</small>
+                    </div>
+                    <div class="pm-menu-divider"></div>
+                    <div class="pm-menu-item pm-new-project">
+                        <i class="fa fa-folder-plus"></i>
+                        <span>New project</span>
+                    </div>
+                </div>
+            </div>
+            <div class="pm-actions">
+                <div class="pm-person-filter-dropdown">
+                    <button class="pm-btn pm-btn-secondary pm-person-filter-btn">
+                        <i class="fa fa-user"></i>
+                        Person
+                        <span class="pm-person-count" style="display: none;">0</span>
+                        <i class="fa fa-chevron-down pm-person-dropdown-icon"></i>
+                    </button>
+                    <div class="pm-person-filter-menu" style="display: none;">
+                        <div class="pm-person-search">
+                            <input type="text" class="pm-person-search-input" placeholder="Search people...">
+                            <i class="fa fa-search"></i>
+                        </div>
+                        <div class="pm-person-options">
+                            <div class="pm-person-option pm-clear-filter">
+                                <div class="pm-person-avatar pm-clear-avatar">
+                                    <i class="fa fa-times"></i>
+                                </div>
+                                <span>Clear filter</span>
+                            </div>
+                        </div>
+                        <div class="pm-person-list">
+                            <!-- People will be loaded dynamically -->
+                        </div>
+                    </div>
+                </div>
                 <button class="pm-btn pm-btn-secondary">
                     <i class="fa fa-filter"></i>
                     Filter
-                </button>
-                <button class="pm-btn pm-btn-secondary">
-                    <i class="fa fa-sort"></i>
-                    Sort
-                </button>
-                <button class="pm-btn pm-btn-secondary">
-                    <i class="fa fa-eye-slash"></i>
-                    Hide
-                </button>
-                <button class="pm-btn pm-btn-secondary">
-                    <i class="fa fa-layer-group"></i>
-                    Group by
                 </button>
             </div>
         </div>
@@ -55,15 +79,64 @@
             <input type="text" placeholder="Search everything..." id="pm-search-input">
         </div>
         <div class="pm-filters">
-            <select class="pm-filter-select" id="client-filter">
-                <option value="">All Clients</option>
-            </select>
-            <select class="pm-filter-select" id="status-filter">
-                <option value="">All Status</option>
-                <option value="Open">Open</option>
-                <option value="Working">Working</option>
-                <option value="Completed">Completed</option>
-            </select>
+            <div class="pm-client-filter-dropdown">
+                <button class="pm-filter-btn pm-client-filter-btn">
+                    <i class="fa fa-building"></i>
+                    All Clients
+                    <span class="pm-filter-count" style="display: none;">0</span>
+                    <i class="fa fa-chevron-down pm-filter-dropdown-icon"></i>
+                </button>
+                <div class="pm-client-filter-menu" style="display: none;">
+                    <div class="pm-filter-search">
+                        <input type="text" class="pm-client-search-input" placeholder="Search clients...">
+                        <i class="fa fa-search"></i>
+                    </div>
+                    <div class="pm-filter-options">
+                        <div class="pm-filter-option pm-clear-client-filter">
+                            <div class="pm-filter-icon">
+                                <i class="fa fa-times"></i>
+                            </div>
+                            <span>All Clients</span>
+                        </div>
+                    </div>
+                    <div class="pm-client-list">
+                        <!-- Clients will be loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="pm-status-filter-dropdown">
+                <button class="pm-filter-btn pm-status-filter-btn">
+                    <i class="fa fa-circle"></i>
+                    All Status
+                    <span class="pm-filter-count" style="display: none;">0</span>
+                    <i class="fa fa-chevron-down pm-filter-dropdown-icon"></i>
+                </button>
+                <div class="pm-status-filter-menu" style="display: none;">
+                    <div class="pm-filter-options">
+                        <div class="pm-filter-option pm-clear-status-filter">
+                            <div class="pm-filter-icon">
+                                <i class="fa fa-times"></i>
+                            </div>
+                            <span>All Status</span>
+                        </div>
+                    </div>
+                    <div class="pm-status-list">
+                        <div class="pm-filter-option" data-status="Open">
+                            <div class="pm-status-dot status-open"></div>
+                            <span>Open</span>
+                        </div>
+                        <div class="pm-filter-option" data-status="Working">
+                            <div class="pm-status-dot status-working"></div>
+                            <span>Working</span>
+                        </div>
+                        <div class="pm-filter-option" data-status="Completed">
+                            <div class="pm-status-dot status-completed"></div>
+                            <span>Completed</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
