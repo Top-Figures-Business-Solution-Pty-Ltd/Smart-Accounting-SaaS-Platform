@@ -106,7 +106,29 @@ def get_project_management_data():
                     task.entity_type = "Company"
                 
                 # Get other custom fields - using correct field names from fixtures
-                task.tf_tg = getattr(task_doc, 'custom_tftg', None) or getattr(task_doc, 'custom_tf_tg', None) or "TF"
+                tftg_company = getattr(task_doc, 'custom_tftg', None) or getattr(task_doc, 'custom_tf_tg', None)
+                # Convert company ID/name to display abbreviation
+                if tftg_company:
+                    try:
+                        # If it's a company ID, get the company name
+                        if frappe.db.exists("Company", tftg_company):
+                            company_doc = frappe.get_doc("Company", tftg_company)
+                            company_name = company_doc.company_name
+                        else:
+                            company_name = tftg_company
+                        
+                        # Convert to display abbreviation
+                        if 'Top Figures' in company_name:
+                            task.tf_tg = 'TF'
+                        elif 'Top Grants' in company_name:
+                            task.tf_tg = 'TG'
+                        else:
+                            task.tf_tg = company_name[:2].upper() if company_name else 'TF'  # Fallback: first 2 letters
+                    except Exception as e:
+                        print(f"DEBUG: TF/TG conversion error: {str(e)}, tftg_company: {tftg_company}")
+                        task.tf_tg = 'TF'
+                else:
+                    task.tf_tg = 'TF'
                 task.service_line = getattr(task_doc, 'custom_service_line', None) or "BAS"
                 task.software = getattr(task_doc, 'custom_software', None) or "Xero"
                 task.year_end = getattr(task_doc, 'custom_year_end', None) or ""
@@ -242,6 +264,156 @@ def update_task_status(task_id, new_status):
     
     except Exception as e:
         frappe.log_error(f"Task status update error: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def update_task_field(task_id, field_name, new_value):
+    """
+    Update any task field from the project management interface
+    """
+    try:
+        task = frappe.get_doc("Task", task_id)
+        
+        # Validate field name (security check)
+        allowed_fields = [
+            'custom_tftg', 'custom_tf_tg', 'custom_software', 'custom_target_month',
+            'custom_budget_planning', 'custom_actual_billing', 'custom_preparer',
+            'custom_reviewer', 'custom_partner', 'custom_year_end', 'status'
+        ]
+        
+        if field_name not in allowed_fields:
+            return {'success': False, 'error': 'Field not allowed for editing'}
+        
+        # Convert value based on field type
+        if field_name in ['custom_budget_planning', 'custom_actual_billing']:
+            try:
+                new_value = float(new_value) if new_value else 0
+            except ValueError:
+                return {'success': False, 'error': 'Invalid number format'}
+        elif field_name in ['custom_tftg', 'custom_tf_tg']:
+            # For TF/TG field, try to find the company
+            print(f"DEBUG: Trying to save TF/TG value: {new_value}")
+            
+            if new_value in ['Top Figures', 'Top Grants']:
+                try:
+                    # First try exact match
+                    if frappe.db.exists("Company", new_value):
+                        new_value = new_value  # Use as is
+                    else:
+                        # Try to find by company_name
+                        company_list = frappe.get_all("Company", 
+                            filters={"company_name": ["like", f"%{new_value}%"]}, 
+                            fields=["name", "company_name"],
+                            limit=1
+                        )
+                        if company_list:
+                            new_value = company_list[0].name
+                            print(f"DEBUG: Found company: {new_value}")
+                        else:
+                            print(f"DEBUG: Company not found, will use value as-is: {new_value}")
+                except Exception as e:
+                    print(f"DEBUG: Company lookup error: {str(e)}")
+                    # If lookup fails, just use the value as-is
+                    pass
+        
+        # Update the field
+        setattr(task, field_name, new_value)
+        task.save()
+        
+        return {'success': True, 'message': _('Field updated successfully'), 'new_value': new_value}
+    
+    except Exception as e:
+        error_msg = f"Task field update error: {str(e)}"
+        frappe.log_error(error_msg)
+        print(f"DEBUG: {error_msg}")  # Console debugging
+        print(f"DEBUG: task_id={task_id}, field_name={field_name}, new_value={new_value}")
+        return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def create_new_task(project_name, client_name=None):
+    """
+    Create a new task in the specified project
+    """
+    try:
+        # Find the project with all necessary fields
+        project_list = frappe.get_all("Project", 
+            filters={"project_name": project_name}, 
+            fields=["name", "customer", "custom_service_line"],
+            limit=1
+        )
+        
+        if not project_list:
+            return {'success': False, 'error': f'Project {project_name} not found'}
+        
+        project_id = project_list[0].name
+        project_customer = project_list[0].customer
+        project_service_line = project_list[0].custom_service_line
+        
+        # Generate auto task subject
+        existing_tasks = frappe.get_all("Task", 
+            filters={"project": project_id},
+            fields=["name"],
+            order_by="creation desc"
+        )
+        
+        task_sequence = len(existing_tasks) + 1
+        auto_subject = f"Task {task_sequence:03d} - {project_name}"
+        
+        # Create new task with minimal required fields
+        new_task = frappe.new_doc("Task")
+        new_task.subject = auto_subject
+        new_task.project = project_id
+        new_task.status = "Open"
+        new_task.priority = "Medium"
+        
+        # Set default custom fields based on project/client
+        if project_customer:
+            new_task.custom_client = project_customer
+        
+        # Inherit Service Line from Project (safe inheritance)
+        if project_service_line:
+            new_task.custom_service_line = project_service_line
+        
+        # Set default TF/TG based on client or project
+        if client_name and 'Top Figures' in client_name:
+            # Find Top Figures company
+            tf_companies = frappe.get_all("Company", 
+                filters={"company_name": ["like", "%Top Figures%"]}, 
+                fields=["name"],
+                limit=1
+            )
+            if tf_companies:
+                new_task.custom_tftg = tf_companies[0].name
+        elif client_name and 'Top Grants' in client_name:
+            # Find Top Grants company  
+            tg_companies = frappe.get_all("Company",
+                filters={"company_name": ["like", "%Top Grants%"]},
+                fields=["name"],
+                limit=1
+            )
+            if tg_companies:
+                new_task.custom_tftg = tg_companies[0].name
+        
+        # Set other defaults
+        new_task.custom_software = "Xero"
+        new_task.custom_target_month = ""
+        new_task.custom_budget_planning = 0
+        new_task.custom_actual_billing = 0
+        
+        # Save the task
+        new_task.save()
+        
+        return {
+            'success': True, 
+            'message': _('New task created successfully'),
+            'task_id': new_task.name,
+            'task_subject': new_task.subject
+        }
+    
+    except Exception as e:
+        error_msg = f"Create task error: {str(e)}"
+        frappe.log_error(error_msg)
+        print(f"DEBUG: {error_msg}")
         return {'success': False, 'error': str(e)}
 
 def get_user_info(email_or_user):

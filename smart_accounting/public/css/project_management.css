@@ -1,11 +1,17 @@
-/* Project Management - Monday.com Style */
+/* Project Management - Enhanced Monday.com Style */
 
 :root {
     --monday-blue: #0073ea;
+    --monday-blue-dark: #0056b3;
+    --monday-blue-light: #e3f2fd;
     --monday-green: #00c875;
+    --monday-green-light: #e8f5e8;
     --monday-orange: #fdab3d;
+    --monday-orange-light: #fff3e0;
     --monday-red: #e2445c;
+    --monday-red-light: #ffebee;
     --monday-purple: #a25ddc;
+    --monday-purple-light: #f3e5f5;
     --monday-pink: #ff5ac4;
     --monday-gray: #676879;
     --monday-light-gray: #f8f9fb;
@@ -13,6 +19,13 @@
     --monday-dark: #323338;
     --monday-hover: #f5f6f8;
     --monday-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    --monday-shadow-hover: 0 8px 25px rgba(0, 115, 234, 0.15);
+    --monday-shadow-active: 0 4px 15px rgba(0, 115, 234, 0.2);
+    
+    /* Advanced gradients */
+    --monday-gradient-blue: linear-gradient(135deg, #0073ea 0%, #0056b3 100%);
+    --monday-gradient-light: linear-gradient(135deg, #ffffff 0%, #f8f9fb 100%);
+    --monday-gradient-header: linear-gradient(135deg, #f8f9fb 0%, #ffffff 100%);
 }
 
 /* Reset and Base */
@@ -197,8 +210,8 @@
 }
 
 .pm-table-container {
-    background: white;
-    border-radius: 8px;
+    background: var(--monday-gradient-light);
+    border-radius: 16px;
     box-shadow: var(--monday-shadow);
     overflow-x: auto !important;
     overflow-y: visible;
@@ -214,6 +227,14 @@
     scrollbar-width: thin;
     /* Better scroll handling */
     -webkit-overflow-scrolling: touch;
+    /* Advanced styling */
+    border: 1px solid rgba(208, 212, 228, 0.5);
+    backdrop-filter: blur(10px);
+    transition: box-shadow 0.3s ease;
+}
+
+.pm-table-container:hover {
+    box-shadow: var(--monday-shadow-hover);
 }
 
 /* Project Table Header - Each project has its own header */
@@ -400,24 +421,43 @@ div.pm-table-header,
 .pm-task-row {
     display: flex;
     flex-wrap: nowrap;
-    border-bottom: 1px solid #f0f0f0;
-    transition: background-color 0.2s ease;
+    border-bottom: 1px solid var(--monday-border);
+    transition: all 0.2s ease;
     background: white;
     min-height: 52px;
     height: 52px;
     align-items: center;
     width: 2000px;
     min-width: 2000px;
+    position: relative;
 }
 
 .pm-task-row .pm-cell {
     flex-shrink: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    border-right: 1px solid var(--monday-border);
+    transition: all 0.2s ease;
 }
 
 .pm-task-row:hover {
-    background: var(--monday-hover);
+    background: #f8f9fb;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    transform: translateY(-1px);
+}
+
+.pm-task-row:hover .pm-cell {
+    border-color: rgba(0, 115, 234, 0.15);
+}
+
+/* Task row selection state */
+.pm-task-row.selected {
+    background: rgba(0, 115, 234, 0.05);
+    border-left: 3px solid var(--monday-blue);
+}
+
+.pm-task-row.selected .pm-cell {
+    border-color: rgba(0, 115, 234, 0.2);
 }
 
 .pm-cell {
@@ -478,25 +518,77 @@ div.pm-table-header,
 .priority-medium { background: #fff4e6; color: var(--monday-orange); }
 .priority-low { background: #e6f7ff; color: var(--monday-blue); }
 
-/* TF/TG Badges */
+/* Enhanced TF/TG Badges */
 .pm-tf-tg-badge {
-    padding: 4px 8px;
-    border-radius: 4px;
+    background: var(--monday-gradient-blue);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 8px;
     font-size: 11px;
-    font-weight: 500;
-    background: #e6f7ff;
-    color: var(--monday-blue);
+    font-weight: 600;
     text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 8px rgba(0, 115, 234, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
 }
 
-/* Software Badges */
+.pm-tf-tg-badge::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: left 0.5s ease;
+}
+
+.pm-tf-tg-badge:hover::before {
+    left: 100%;
+}
+
+.pm-tf-tg-badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(0, 115, 234, 0.4);
+}
+
+/* Enhanced Software Badges */
 .pm-software-badge {
-    padding: 4px 8px;
-    border-radius: 4px;
+    padding: 6px 12px;
+    border-radius: 8px;
     font-size: 11px;
-    font-weight: 500;
-    background: #f0f8ff;
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--monday-purple-light) 0%, #f0f8ff 100%);
     color: var(--monday-purple);
+    border: 1px solid rgba(162, 93, 220, 0.2);
+    box-shadow: 0 2px 8px rgba(162, 93, 220, 0.15);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.pm-software-badge::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(162, 93, 220, 0.1), transparent);
+    transition: left 0.5s ease;
+}
+
+.pm-software-badge:hover::before {
+    left: 100%;
+}
+
+.pm-software-badge:hover {
+    background: linear-gradient(135deg, var(--monday-purple) 0%, #8e44ad 100%);
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(162, 93, 220, 0.3);
 }
 
 /* Assignee Avatars */
@@ -726,32 +818,61 @@ div.pm-table-header,
 }
 
 .pm-avatar {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
-    background: var(--monday-blue);
+    background: var(--monday-gradient-blue);
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 2px solid white;
+    box-shadow: 0 3px 12px rgba(0, 115, 234, 0.25);
+    position: relative;
+    overflow: hidden;
+}
+
+.pm-avatar::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    transition: left 0.4s ease;
+}
+
+.pm-avatar:hover::before {
+    left: 100%;
 }
 
 .pm-avatar:hover {
-    transform: scale(1.1);
-    box-shadow: 0 2px 8px rgba(0, 115, 234, 0.3);
+    transform: translateY(-2px) scale(1.1);
+    box-shadow: 0 6px 20px rgba(0, 115, 234, 0.4);
 }
 
 .pm-avatar:nth-child(2) {
-    background: var(--monday-green);
+    background: linear-gradient(135deg, var(--monday-green) 0%, #00a85a 100%);
+    box-shadow: 0 3px 12px rgba(0, 200, 117, 0.25);
+}
+
+.pm-avatar:nth-child(2):hover {
+    box-shadow: 0 6px 20px rgba(0, 200, 117, 0.4);
 }
 
 .pm-avatar:nth-child(3) {
-    background: var(--monday-orange);
+    background: linear-gradient(135deg, var(--monday-orange) 0%, #e67e22 100%);
+    box-shadow: 0 3px 12px rgba(253, 171, 61, 0.25);
+}
+
+.pm-avatar:nth-child(3):hover {
+    box-shadow: 0 6px 20px rgba(253, 171, 61, 0.4);
 }
 
 .pm-avatar-more {
@@ -964,4 +1085,159 @@ div.pm-table-header,
 
 .pm-review-note-indicator i {
     font-size: 14px;
+}
+
+/* Enhanced Inline Editing Styles - Monday.com Style */
+.editable-field {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 6px 8px;
+    border-radius: 4px;
+    display: block;
+    width: 100%;
+    min-height: 20px;
+    border: 1px solid transparent;
+}
+
+.editable-field:hover {
+    background: rgba(0, 115, 234, 0.05);
+    border-color: rgba(0, 115, 234, 0.2);
+    box-shadow: 0 0 0 1px rgba(0, 115, 234, 0.1);
+}
+
+.editable-field:focus {
+    background: white;
+    border-color: var(--monday-blue);
+    box-shadow: 0 0 0 2px rgba(0, 115, 234, 0.2);
+    outline: none;
+}
+
+.pm-cell.editing {
+    background: #f0f8ff;
+    border: 2px solid var(--monday-blue);
+}
+
+.pm-inline-input,
+.pm-inline-select {
+    width: 100%;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    padding: 4px;
+    outline: none;
+    font-family: inherit;
+}
+
+.pm-inline-input:focus,
+.pm-inline-select:focus {
+    background: white;
+    border: 1px solid var(--monday-blue);
+    border-radius: 3px;
+}
+
+.pm-inline-select {
+    cursor: pointer;
+}
+
+/* Editing state indicators */
+.pm-task-row.editing {
+    background: rgba(0, 115, 234, 0.05);
+    border-left: 3px solid var(--monday-blue);
+}
+
+/* Monday.com Style Add Task Row - Integrated in Table */
+.pm-add-task-row {
+    background: #ffffff !important;
+    border-bottom: 1px solid var(--monday-border) !important;
+    transition: all 0.2s ease !important;
+    min-height: 52px !important;
+    height: 52px !important;
+    display: flex !important;
+    align-items: center !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.pm-add-task-row:hover {
+    background: #f8f9fb;
+}
+
+.pm-add-task-btn {
+    background: transparent !important;
+    border: none !important;
+    color: #676879 !important;
+    font-size: 14px !important;
+    font-weight: 400 !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 8px 12px !important;
+    width: 100% !important;
+    height: 100% !important;
+    text-align: left !important;
+    border-radius: 0 !important;
+    transition: all 0.2s ease !important;
+    font-family: inherit !important;
+    min-height: 40px !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+}
+
+.pm-add-task-btn:hover {
+    background: transparent;
+    color: #323338;
+}
+
+.pm-add-task-btn i {
+    font-size: 12px;
+    opacity: 0.7;
+    color: #0073ea;
+}
+
+.pm-add-task-btn:hover i {
+    opacity: 1;
+}
+
+/* Make sure add task row cells have the same styling as regular cells */
+.pm-add-task-row .pm-cell {
+    background: transparent !important;
+    border-right: 1px solid var(--monday-border) !important;
+    display: flex !important;
+    align-items: center !important;
+    padding: 0 !important;
+    min-height: 52px !important;
+    height: 52px !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+}
+
+.pm-add-task-row .pm-cell:last-child {
+    border-right: none !important;
+}
+
+/* Override any default button styles */
+.pm-add-task-row button,
+.pm-add-task-row .pm-add-task-btn {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    outline: none !important;
+}
+
+/* Ensure the add task row looks exactly like a table row */
+.pm-add-task-row {
+    width: 2000px !important;
+    min-width: 2000px !important;
+    flex-wrap: nowrap !important;
+}
+
+.pm-add-task-row .pm-cell:first-child {
+    border-left: none !important;
 }

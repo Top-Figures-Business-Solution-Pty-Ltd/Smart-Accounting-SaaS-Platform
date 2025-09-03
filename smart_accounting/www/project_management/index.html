@@ -113,40 +113,68 @@
                                 <div class="pm-task-group">
                                     {% for task in tasks %}
                                         <div class="pm-task-row" data-task-id="{{ task.task_id }}" data-task-name="{{ task.task_name }}" style="display: flex; width: 2000px; min-width: 2000px;">
-                                            <div class="pm-cell pm-cell-client" style="width: 150px; min-width: 150px; flex: 0 0 150px;">
-                                                {{ task.client_name or 'No Client' }}
+                                            <div class="pm-cell pm-cell-client" style="width: 150px; min-width: 150px; flex: 0 0 150px;"
+                                                 data-editable="true"
+                                                 data-field="custom_client"
+                                                 data-task-id="{{ task.task_id }}"
+                                                 data-field-type="text">
+                                                <span class="editable-field">{{ task.client_name or 'No Client' }}</span>
                                             </div>
                                             <div class="pm-cell pm-cell-entity" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
                                                 <span class="pm-entity-badge entity-{{ task.entity_type.lower() if task.entity_type else 'company' }}">
                                                     {{ task.entity_type or 'Company' }}
                                                 </span>
                                             </div>
-                                            <div class="pm-cell pm-cell-tf-tg" style="width: 80px; min-width: 80px; flex: 0 0 80px;">
-                                                <span class="pm-tf-tg-badge">{{ task.tf_tg or 'TF' }}</span>
+                                            <div class="pm-cell pm-cell-tf-tg" style="width: 80px; min-width: 80px; flex: 0 0 80px;" 
+                                                 data-editable="true" 
+                                                 data-field="custom_tftg" 
+                                                 data-task-id="{{ task.task_id }}"
+                                                 data-field-type="select"
+                                                 data-options="TF,TG"
+                                                 data-backend-options="Top Figures,Top Grants">
+                                                <span class="pm-tf-tg-badge editable-field">{{ task.tf_tg or 'TF' }}</span>
                                             </div>
-                                            <div class="pm-cell pm-cell-software" style="width: 100px; min-width: 100px; flex: 0 0 100px;">
-                                                <span class="pm-software-badge">{{ task.software or 'Xero' }}</span>
+                                            <div class="pm-cell pm-cell-software" style="width: 100px; min-width: 100px; flex: 0 0 100px;"
+                                                 data-editable="true"
+                                                 data-field="custom_software" 
+                                                 data-task-id="{{ task.task_id }}"
+                                                 data-field-type="select"
+                                                 data-options="Xero,MYOB,QuickBooks,Excel,Other">
+                                                <span class="pm-software-badge editable-field">{{ task.software or 'Xero' }}</span>
                                             </div>
                                             <div class="pm-cell pm-cell-status" style="width: 100px; min-width: 100px; flex: 0 0 100px;">
                                                 <span class="pm-status-badge status-{{ task.status.lower() if task.status else 'open' }}">
                                                     {{ task.status or 'Open' }}
                                                 </span>
                                             </div>
-                                            <div class="pm-cell pm-cell-target-month" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
-                                                {{ task.target_month or '-' }}
+                                            <div class="pm-cell pm-cell-target-month" style="width: 120px; min-width: 120px; flex: 0 0 120px;"
+                                                 data-editable="true"
+                                                 data-field="custom_target_month"
+                                                 data-task-id="{{ task.task_id }}"
+                                                 data-field-type="select"
+                                                 data-options="January,February,March,April,May,June,July,August,September,October,November,December">
+                                                <span class="editable-field">{{ task.target_month or '-' }}</span>
                                             </div>
-                                            <div class="pm-cell pm-cell-budget" style="width: 100px; min-width: 100px; flex: 0 0 100px;">
+                                            <div class="pm-cell pm-cell-budget" style="width: 100px; min-width: 100px; flex: 0 0 100px;"
+                                                 data-editable="true"
+                                                 data-field="custom_budget_planning"
+                                                 data-task-id="{{ task.task_id }}"
+                                                 data-field-type="currency">
                                                 {% if task.budget_planning and task.budget_planning > 0 %}
-                                                    <span class="pm-currency">${{ "%.2f"|format(task.budget_planning) }}</span>
+                                                    <span class="pm-currency editable-field">${{ "%.2f"|format(task.budget_planning) }}</span>
                                                 {% else %}
-                                                    <span class="pm-no-amount">-</span>
+                                                    <span class="pm-no-amount editable-field">-</span>
                                                 {% endif %}
                                             </div>
-                                            <div class="pm-cell pm-cell-actual" style="width: 100px; min-width: 100px; flex: 0 0 100px;">
+                                            <div class="pm-cell pm-cell-actual" style="width: 100px; min-width: 100px; flex: 0 0 100px;"
+                                                 data-editable="true"
+                                                 data-field="custom_actual_billing"
+                                                 data-task-id="{{ task.task_id }}"
+                                                 data-field-type="currency">
                                                 {% if task.actual_billing and task.actual_billing > 0 %}
-                                                    <span class="pm-currency">${{ "%.2f"|format(task.actual_billing) }}</span>
+                                                    <span class="pm-currency editable-field">${{ "%.2f"|format(task.actual_billing) }}</span>
                                                 {% else %}
-                                                    <span class="pm-no-amount">-</span>
+                                                    <span class="pm-no-amount editable-field">-</span>
                                                 {% endif %}
                                             </div>
                                             <div class="pm-cell pm-cell-review-note" style="width: 150px; min-width: 150px; flex: 0 0 150px;">
@@ -244,6 +272,32 @@
                                             </div>
                                         </div>
                                     {% endfor %}
+                                    
+                                    <!-- Add Task Row - Integrated Table Row -->
+                                    <div class="pm-task-row pm-add-task-row" data-project="{{ project_name }}" data-client="{{ client_name }}" style="display: flex; width: 2000px; min-width: 2000px;">
+                                        <div class="pm-cell pm-cell-client" style="width: 150px; min-width: 150px; flex: 0 0 150px;">
+                                            <button class="pm-add-task-btn">
+                                                <i class="fa fa-plus"></i>
+                                                <span>Add new task</span>
+                                            </button>
+                                        </div>
+                                        <div class="pm-cell pm-cell-entity" style="width: 120px; min-width: 120px; flex: 0 0 120px;"></div>
+                                        <div class="pm-cell pm-cell-tf-tg" style="width: 80px; min-width: 80px; flex: 0 0 80px;"></div>
+                                        <div class="pm-cell pm-cell-software" style="width: 100px; min-width: 100px; flex: 0 0 100px;"></div>
+                                        <div class="pm-cell pm-cell-status" style="width: 100px; min-width: 100px; flex: 0 0 100px;"></div>
+                                        <div class="pm-cell pm-cell-target-month" style="width: 120px; min-width: 120px; flex: 0 0 120px;"></div>
+                                        <div class="pm-cell pm-cell-budget" style="width: 100px; min-width: 100px; flex: 0 0 100px;"></div>
+                                        <div class="pm-cell pm-cell-actual" style="width: 100px; min-width: 100px; flex: 0 0 100px;"></div>
+                                        <div class="pm-cell pm-cell-review-note" style="width: 150px; min-width: 150px; flex: 0 0 150px;"></div>
+                                        <div class="pm-cell pm-cell-action-person" style="width: 120px; min-width: 120px; flex: 0 0 120px;"></div>
+                                        <div class="pm-cell pm-cell-preparer" style="width: 120px; min-width: 120px; flex: 0 0 120px;"></div>
+                                        <div class="pm-cell pm-cell-reviewer" style="width: 120px; min-width: 120px; flex: 0 0 120px;"></div>
+                                        <div class="pm-cell pm-cell-partner" style="width: 120px; min-width: 120px; flex: 0 0 120px;"></div>
+                                        <div class="pm-cell pm-cell-lodgment-due" style="width: 120px; min-width: 120px; flex: 0 0 120px;"></div>
+                                        <div class="pm-cell pm-cell-year-end" style="width: 100px; min-width: 100px; flex: 0 0 100px;"></div>
+                                        <div class="pm-cell pm-cell-last-updated" style="width: 120px; min-width: 120px; flex: 0 0 120px;"></div>
+                                        <div class="pm-cell pm-cell-priority" style="width: 100px; min-width: 100px; flex: 0 0 100px;"></div>
+                                    </div>
                                 </div>
                             </div>
                         {% endfor %}

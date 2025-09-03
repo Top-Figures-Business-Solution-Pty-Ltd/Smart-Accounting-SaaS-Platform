@@ -4633,7 +4633,7 @@
   "hide_custom": 0,
   "icon": "users",
   "indicator_color": null,
-  "is_hidden": 0,
+  "is_hidden": 1,
   "label": "Users",
   "links": [
    {
@@ -4795,7 +4795,7 @@
     "parent": "Users",
     "parentfield": "links",
     "parenttype": "Workspace",
-    "report_ref_doctype": null,
+    "report_ref_doctype": "DocShare",
     "type": "Link"
    },
    {
@@ -4889,7 +4889,7 @@
     "type": "Link"
    }
   ],
-  "modified": "2024-01-02 15:39:13.811700",
+  "modified": "2025-08-29 14:17:55.827954",
   "module": "Core",
   "name": "Users",
   "number_cards": [],
@@ -5393,7 +5393,7 @@
   "hide_custom": 0,
   "icon": "accounting",
   "indicator_color": "",
-  "is_hidden": 0,
+  "is_hidden": 1,
   "label": "Accounting",
   "links": [
    {
@@ -6369,7 +6369,7 @@
     "type": "Link"
    }
   ],
-  "modified": "2025-08-27 10:39:22.791584",
+  "modified": "2025-08-29 14:18:10.122663",
   "module": "Accounts",
   "name": "Accounting",
   "number_cards": [
@@ -8481,7 +8481,7 @@
   "hide_custom": 0,
   "icon": "project",
   "indicator_color": null,
-  "is_hidden": 0,
+  "is_hidden": 1,
   "label": "Projects",
   "links": [
    {
@@ -8791,7 +8791,7 @@
     "type": "Link"
    }
   ],
-  "modified": "2023-07-04 14:39:08.935853",
+  "modified": "2025-08-29 14:17:53.730129",
   "module": "Projects",
   "name": "Projects",
   "number_cards": [],
@@ -8881,7 +8881,7 @@
     "parent": "Projects",
     "parentfield": "shortcuts",
     "parenttype": "Workspace",
-    "report_ref_doctype": null,
+    "report_ref_doctype": "Timesheet",
     "restrict_to_domain": null,
     "stats_filter": null,
     "type": "Report",
@@ -10773,7 +10773,7 @@
   "hide_custom": 0,
   "icon": "setting",
   "indicator_color": null,
-  "is_hidden": 0,
+  "is_hidden": 1,
   "label": "ERPNext Settings",
   "links": [
    {
@@ -11515,7 +11515,7 @@
     "type": "Link"
    }
   ],
-  "modified": "2025-08-28 14:59:32.915927",
+  "modified": "2025-08-29 14:17:58.249040",
   "module": "Setup",
   "name": "ERPNext Settings",
   "number_cards": [],
@@ -12911,16 +12911,8 @@
  },
  {
   "charts": [],
-  "content": "[{\"id\":\"5-fxqUq5Hh\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Smart Accounting</span>\",\"col\":12}},{\"id\":\"5lHpcUkVaZ\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"URL1\",\"col\":3}},{\"id\":\"9uETq8MrN8\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Task Management</b></span>\",\"col\":12}},{\"id\":\"gznwZfSfU-\",\"type\":\"custom_block\",\"data\":{\"custom_block_name\":\"Task Board\",\"col\":12}},{\"id\":\"GSElRdjbmx\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Project\",\"col\":4}},{\"id\":\"jUdUh0gAqv\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Task\",\"col\":4}}]",
-  "custom_blocks": [
-   {
-    "custom_block_name": "Task Board",
-    "label": "Task Board",
-    "parent": "Smart Accounting",
-    "parentfield": "custom_blocks",
-    "parenttype": "Workspace"
-   }
-  ],
+  "content": "[{\"id\":\"5-fxqUq5Hh\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Smart Accounting</span>\",\"col\":12}},{\"id\":\"5lHpcUkVaZ\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Top Figures / Top Grants Clients\",\"col\":5}},{\"id\":\"9uETq8MrN8\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Task Management</b></span>\",\"col\":12}},{\"id\":\"GSElRdjbmx\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Project\",\"col\":4}},{\"id\":\"jUdUh0gAqv\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Task\",\"col\":4}}]",
+  "custom_blocks": [],
   "docstatus": 0,
   "doctype": "Workspace",
   "for_user": "",
@@ -12930,7 +12922,7 @@
   "is_hidden": 0,
   "label": "Smart Accounting",
   "links": [],
-  "modified": "2025-08-28 16:00:43.570184",
+  "modified": "2025-09-01 14:30:58.007072",
   "module": null,
   "name": "Smart Accounting",
   "number_cards": [],
@@ -12964,7 +12956,7 @@
     "format": null,
     "icon": null,
     "kanban_board": null,
-    "label": "URL1",
+    "label": "Top Figures / Top Grants Clients",
     "link_to": null,
     "parent": "Smart Accounting",
     "parentfield": "shortcuts",
@@ -12973,7 +12965,7 @@
     "restrict_to_domain": null,
     "stats_filter": null,
     "type": "URL",
-    "url": "https://www.baidu.com"
+    "url": "http://127.0.0.1:8000/project_management"
    }
   ],
   "title": "Smart Accounting"
