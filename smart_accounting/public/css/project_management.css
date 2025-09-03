@@ -1119,20 +1119,22 @@ div.pm-table-header,
 
 .pm-inline-input,
 .pm-inline-select {
-    width: 100%;
-    border: none;
-    background: transparent;
-    font-size: 14px;
-    padding: 4px;
-    outline: none;
-    font-family: inherit;
+    width: 100% !important;
+    border: 2px solid var(--monday-blue) !important;
+    background: white !important;
+    font-size: 14px !important;
+    padding: 6px 8px !important;
+    outline: none !important;
+    font-family: inherit !important;
+    border-radius: 4px !important;
+    margin: 0 !important;
+    box-shadow: 0 0 0 2px rgba(0, 115, 234, 0.2) !important;
 }
 
 .pm-inline-input:focus,
 .pm-inline-select:focus {
-    background: white;
-    border: 1px solid var(--monday-blue);
-    border-radius: 3px;
+    border-color: var(--monday-blue) !important;
+    box-shadow: 0 0 0 3px rgba(0, 115, 234, 0.3) !important;
 }
 
 .pm-inline-select {
@@ -1240,4 +1242,81 @@ div.pm-table-header,
 
 .pm-add-task-row .pm-cell:first-child {
     border-left: none !important;
+}
+
+/* Client Selector Styles */
+.client-selector-container {
+    width: 100%;
+    position: relative;
+}
+
+.client-search-input {
+    width: 100% !important;
+    border: 2px solid var(--monday-blue) !important;
+    border-radius: 4px !important;
+    padding: 8px 12px !important;
+    font-size: 14px !important;
+    background: white !important;
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(0, 115, 234, 0.2) !important;
+    margin: 0 !important;
+}
+
+.client-dropdown {
+    position: fixed;
+    background: white;
+    border: 1px solid var(--monday-border);
+    border-radius: 6px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    z-index: 9999;
+    max-height: 300px;
+    min-width: 280px;
+    overflow-y: auto;
+    margin-top: 4px;
+}
+
+.client-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background-color 0.2s ease;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.client-option:last-child {
+    border-bottom: none;
+}
+
+.client-option:hover {
+    background: var(--monday-hover);
+}
+
+.client-option.existing i {
+    color: var(--monday-blue);
+}
+
+.client-option.create-new {
+    background: #f8f9fb;
+    font-weight: 500;
+}
+
+.client-option.create-new i {
+    color: var(--monday-green);
+}
+
+.client-option small {
+    color: var(--monday-gray);
+    margin-left: auto;
+}
+
+.client-loading, .client-error {
+    padding: 12px;
+    text-align: center;
+    color: var(--monday-gray);
+}
+
+.client-error {
+    color: var(--monday-red);
 }

@@ -50,6 +50,12 @@ class ProjectManagement {
             e.stopPropagation();
             this.addNewTask(e.currentTarget);
         });
+
+        // Editable field click - Handle different field types
+        $(document).on('click', '.editable-field', (e) => {
+            e.stopPropagation();
+            this.startFieldEditing(e.currentTarget);
+        });
     }
 
     toggleProject(projectHeader) {
@@ -560,8 +566,6 @@ class ProjectManagement {
             });
             
             if (response.message && response.message.success) {
-                console.log('Task created successfully, response:', response.message);
-                
                 // Show success message
                 frappe.show_alert({
                     message: 'New task created successfully',
@@ -569,7 +573,6 @@ class ProjectManagement {
                 });
                 
                 // Create and insert new task row dynamically
-                console.log('Calling insertNewTaskRow...');
                 this.insertNewTaskRow(addTaskBtn, response.message);
                 
             } else {
@@ -589,20 +592,15 @@ class ProjectManagement {
     }
 
     insertNewTaskRow(addTaskBtn, taskData) {
-        console.log('insertNewTaskRow called with:', taskData);
-        
         const $addRow = $(addTaskBtn).closest('.pm-add-task-row');
         const projectName = $addRow.data('project');
         const clientName = $addRow.data('client');
         
-        console.log('Project:', projectName, 'Client:', clientName);
-        console.log('Add row element:', $addRow);
-        
         // Create new task row HTML
         const newTaskRowHTML = `
             <div class="pm-task-row" data-task-id="${taskData.task_id}" data-task-name="${taskData.task_subject}" style="display: flex; width: 2000px; min-width: 2000px;">
-                <div class="pm-cell pm-cell-client" style="width: 150px; min-width: 150px; flex: 0 0 150px;" data-editable="true" data-field="custom_client" data-task-id="${taskData.task_id}" data-field-type="text">
-                    <span class="editable-field">${clientName || 'No Client'}</span>
+                <div class="pm-cell pm-cell-client" style="width: 150px; min-width: 150px; flex: 0 0 150px;" data-editable="true" data-field="custom_client" data-task-id="${taskData.task_id}" data-field-type="client_selector" data-current-client-id="" data-current-client-name="${clientName || 'No Client'}">
+                    <span class="editable-field client-display">${clientName || 'No Client'}</span>
                 </div>
                 <div class="pm-cell pm-cell-entity" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
                     <span class="pm-entity-badge entity-company">Company</span>
@@ -649,7 +647,6 @@ class ProjectManagement {
         `;
         
         // Insert the new row before the add task row
-        console.log('Inserting new task row HTML...');
         $addRow.before(newTaskRowHTML);
         
         // Restore the add task button
@@ -657,15 +654,539 @@ class ProjectManagement {
         
         // Add a subtle animation to highlight the new row
         const $newRow = $addRow.prev();
-        console.log('New row element:', $newRow);
-        
         $newRow.css('background-color', '#e8f5e8');
-        console.log('Applied background color to new row');
         
         setTimeout(() => {
             $newRow.css('background-color', '');
-            console.log('Removed background color from new row');
         }, 2000);
+    }
+
+    startFieldEditing(fieldElement) {
+        const $field = $(fieldElement);
+        const $cell = $field.closest('.pm-cell');
+        const fieldType = $cell.data('field-type');
+        const taskId = $cell.data('task-id');
+        const fieldName = $cell.data('field');
+        
+        // Prevent multiple editing
+        if ($cell.hasClass('editing')) {
+            return;
+        }
+        
+        $cell.addClass('editing');
+        
+        switch(fieldType) {
+            case 'client_selector':
+                this.showClientSelector($cell);
+                break;
+            case 'select':
+                this.showSelectEditor($cell);
+                break;
+            case 'currency':
+                this.showCurrencyEditor($cell);
+                break;
+            default:
+                this.showTextEditor($cell);
+        }
+    }
+
+    showClientSelector($cell) {
+        const currentClientName = $cell.data('current-client-name') || '';
+        const taskId = $cell.data('task-id');
+        
+        // Create client selector HTML
+        const selectorHTML = `
+            <div class="client-selector-container">
+                <input type="text" class="client-search-input" 
+                       value="${currentClientName === 'No Client' ? '' : currentClientName}"
+                       placeholder="Search client or enter new client name..." 
+                       data-task-id="${taskId}">
+            </div>
+        `;
+        
+        // Create dropdown outside the cell
+        const dropdownHTML = `
+            <div class="client-dropdown" id="client-dropdown-${taskId}" style="display: none;">
+                <div class="client-loading">
+                    <i class="fa fa-spinner fa-spin"></i> Searching...
+                </div>
+            </div>
+        `;
+        
+        $cell.html(selectorHTML);
+        
+        // Add dropdown to body
+        $('body').append(dropdownHTML);
+        
+        const $input = $cell.find('.client-search-input');
+        const $dropdown = $(`#client-dropdown-${taskId}`);
+        
+        // Focus and select text
+        $input.focus().select();
+        
+        // Search as user types
+        let searchTimeout;
+        $input.on('input', (e) => {
+            clearTimeout(searchTimeout);
+            const query = e.target.value.trim();
+            
+            if (query.length < 2) {
+                $dropdown.hide();
+                return;
+            }
+            
+            searchTimeout = setTimeout(() => {
+                this.searchCustomers(query, $dropdown, $cell);
+            }, 300);
+        });
+        
+        // Handle escape and enter
+        $input.on('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.cancelClientEditing($cell);
+            } else if (e.key === 'Enter') {
+                const query = e.target.value.trim();
+                if (query) {
+                    this.createNewCustomer(query, $cell);
+                }
+            }
+        });
+        
+        // Handle click outside
+        $(document).on('click.client-selector', (e) => {
+            if (!$(e.target).closest('.client-selector-container').length) {
+                this.cancelClientEditing($cell);
+            }
+        });
+    }
+
+    async searchCustomers(query, $dropdown, $cell) {
+        try {
+            $dropdown.html('<div class="client-loading"><i class="fa fa-spinner fa-spin"></i> Searching...</div>');
+            
+            // Position dropdown relative to input
+            const $input = $cell.find('.client-search-input');
+            const inputOffset = $input.offset();
+            const inputHeight = $input.outerHeight();
+            
+            $dropdown.css({
+                top: inputOffset.top + inputHeight + 2,
+                left: inputOffset.left,
+                width: Math.max($input.outerWidth(), 250)
+            }).show();
+            
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.search_customers',
+                args: { query: query }
+            });
+            
+            if (response.message && response.message.success) {
+                const customers = response.message.customers;
+                let html = '';
+                
+                // Show existing customers
+                customers.forEach(customer => {
+                    html += `
+                        <div class="client-option existing" data-customer-id="${customer.name}" data-customer-name="${customer.customer_name}">
+                            <i class="fa fa-building"></i>
+                            <span>${customer.customer_name}</span>
+                            <small>(${customer.customer_type})</small>
+                        </div>
+                    `;
+                });
+                
+                // Add create new option
+                html += `
+                    <div class="client-option create-new" data-customer-name="${query}">
+                        <i class="fa fa-plus"></i>
+                        <span>Create new client: "${query}"</span>
+                    </div>
+                `;
+                
+                $dropdown.html(html);
+                
+                // Handle option clicks
+                $dropdown.find('.client-option').on('click', (e) => {
+                    const $option = $(e.currentTarget);
+                    if ($option.hasClass('create-new')) {
+                        this.createNewCustomer(query, $cell);
+                    } else {
+                        this.selectExistingCustomer($option.data('customer-id'), $option.data('customer-name'), $cell);
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Customer search error:', error);
+            $dropdown.html('<div class="client-error">Search failed</div>');
+        }
+    }
+
+    async selectExistingCustomer(customerId, customerName, $cell) {
+        const taskId = $cell.data('task-id');
+        
+        try {
+            // Show confirmation dialog
+            const confirmed = await this.showConfirmDialog(
+                `Confirm Client Change`,
+                `Change this task's client to "${customerName}"?`
+            );
+            
+            if (!confirmed) {
+                this.cancelClientEditing($cell);
+                return;
+            }
+            
+            // Update backend
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.update_task_client',
+                args: {
+                    task_id: taskId,
+                    customer_id: customerId
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                // Update frontend immediately
+                $cell.data('current-client-id', customerId);
+                $cell.data('current-client-name', customerName);
+                $cell.html(`<span class="editable-field client-display">${customerName}</span>`);
+                $cell.removeClass('editing');
+                
+                // Remove dropdown from body
+                const taskId = $cell.data('task-id');
+                $(`#client-dropdown-${taskId}`).remove();
+                
+                // Remove event listener
+                $(document).off('click.client-selector');
+                
+                frappe.show_alert({
+                    message: 'Client updated successfully',
+                    indicator: 'green'
+                });
+            } else {
+                throw new Error(response.message?.error || 'Update failed');
+            }
+        } catch (error) {
+            console.error('Client update error:', error);
+            frappe.show_alert({
+                message: 'Update failed: ' + error.message,
+                indicator: 'red'
+            });
+            this.cancelClientEditing($cell);
+        }
+    }
+
+    async createNewCustomer(customerName, $cell) {
+        const taskId = $cell.data('task-id');
+        
+        try {
+            // Show confirmation dialog
+            const confirmed = await this.showConfirmDialog(
+                `Create New Client`,
+                `Create new client "${customerName}" and link to this task?`
+            );
+            
+            if (!confirmed) {
+                this.cancelClientEditing($cell);
+                return;
+            }
+            
+            // Create new customer
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.quick_create_customer',
+                args: {
+                    customer_name: customerName,
+                    customer_type: 'Company'
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                // Update task with new customer
+                await this.selectExistingCustomer(
+                    response.message.customer_id, 
+                    response.message.customer_name, 
+                    $cell
+                );
+            } else {
+                throw new Error(response.message?.error || 'Creation failed');
+            }
+        } catch (error) {
+            console.error('Customer creation error:', error);
+            frappe.show_alert({
+                message: 'Creation failed: ' + error.message,
+                indicator: 'red'
+            });
+            this.cancelClientEditing($cell);
+        }
+    }
+
+    cancelClientEditing($cell) {
+        const originalName = $cell.data('current-client-name') || 'No Client';
+        const taskId = $cell.data('task-id');
+        
+        $cell.html(`<span class="editable-field client-display">${originalName}</span>`);
+        $cell.removeClass('editing');
+        
+        // Remove dropdown from body
+        $(`#client-dropdown-${taskId}`).remove();
+        
+        // Remove event listener
+        $(document).off('click.client-selector');
+    }
+
+    showConfirmDialog(title, message) {
+        return new Promise((resolve) => {
+            frappe.confirm(
+                message,
+                () => resolve(true),
+                () => resolve(false),
+                title
+            );
+        });
+    }
+
+    // Implement other field type editors
+    showSelectEditor($cell) {
+        const fieldName = $cell.data('field');
+        const taskId = $cell.data('task-id');
+        const currentValue = $cell.find('.editable-field').text().trim();
+        
+        // Handle different field types
+        if (fieldName === 'custom_tftg') {
+            this.showCompanySelector($cell);
+        } else if (fieldName === 'custom_software') {
+            this.showSoftwareSelector($cell);
+        } else {
+            // Regular select field
+            const options = $cell.data('options');
+            const backendOptions = $cell.data('backend-options');
+            
+            if (!options) {
+                console.log('No options available for select field');
+                return;
+            }
+            
+            const optionList = options.split(',');
+            const backendList = backendOptions ? backendOptions.split(',') : optionList;
+            
+            let selectHTML = '<select class="pm-inline-select">';
+            optionList.forEach((option, index) => {
+                const backendValue = backendList[index] || option;
+                const selected = currentValue === option ? 'selected' : '';
+                selectHTML += `<option value="${backendValue}" ${selected}>${option}</option>`;
+            });
+            selectHTML += '</select>';
+            
+            $cell.html(selectHTML);
+            const $select = $cell.find('.pm-inline-select');
+            $select.focus();
+            
+            // Handle selection change
+            $select.on('change blur', () => {
+                const newValue = $select.val();
+                const newDisplay = $select.find('option:selected').text();
+                this.saveFieldValue($cell, fieldName, taskId, newValue, newDisplay);
+            });
+            
+            // Handle escape
+            $select.on('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    this.cancelFieldEditing($cell, currentValue);
+                }
+            });
+        }
+    }
+
+    async showCompanySelector($cell) {
+        const taskId = $cell.data('task-id');
+        const currentValue = $cell.find('.editable-field').text().trim();
+        
+        try {
+            // Get dynamic company list
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_companies_for_tftg'
+            });
+            
+            if (response.message && response.message.success) {
+                const companies = response.message.companies;
+                
+                let selectHTML = '<select class="pm-inline-select">';
+                companies.forEach(company => {
+                    const selected = currentValue === company.display ? 'selected' : '';
+                    selectHTML += `<option value="${company.id}" ${selected}>${company.display}</option>`;
+                });
+                selectHTML += '</select>';
+                
+                $cell.html(selectHTML);
+                const $select = $cell.find('.pm-inline-select');
+                $select.focus();
+                
+                // Handle selection change
+                $select.on('change blur', () => {
+                    const newValue = $select.val();
+                    const newDisplay = $select.find('option:selected').text();
+                    this.saveFieldValue($cell, 'custom_tftg', taskId, newValue, newDisplay);
+                });
+                
+                // Handle escape
+                $select.on('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        this.cancelFieldEditing($cell, currentValue);
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Company selector error:', error);
+            this.cancelFieldEditing($cell, currentValue);
+        }
+    }
+
+    showSoftwareSelector($cell) {
+        const taskId = $cell.data('task-id');
+        const currentValue = $cell.find('.editable-field').text().trim();
+        
+        // Fixed software options - these are standard accounting platforms
+        const softwareOptions = [
+            'Xero', 'MYOB', 'QuickBooks', 'Excel', 'Other'
+        ];
+        
+        let selectHTML = '<select class="pm-inline-select">';
+        softwareOptions.forEach(software => {
+            const selected = currentValue === software ? 'selected' : '';
+            selectHTML += `<option value="${software}" ${selected}>${software}</option>`;
+        });
+        selectHTML += '</select>';
+        
+        $cell.html(selectHTML);
+        const $select = $cell.find('.pm-inline-select');
+        $select.focus();
+        
+        // Handle selection change - use special software update method
+        $select.on('change blur', () => {
+            const newValue = $select.val();
+            this.saveSoftwareValue($cell, taskId, newValue);
+        });
+        
+        // Handle escape
+        $select.on('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.cancelFieldEditing($cell, currentValue);
+            }
+        });
+    }
+
+    async saveSoftwareValue($cell, taskId, newValue) {
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.update_task_software',
+                args: {
+                    task_id: taskId,
+                    software_value: newValue
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                // Update display immediately
+                $cell.html(`<span class="editable-field">${newValue}</span>`);
+                $cell.removeClass('editing');
+                
+                frappe.show_alert({
+                    message: 'Software updated successfully',
+                    indicator: 'green'
+                });
+            } else {
+                throw new Error(response.message?.error || 'Update failed');
+            }
+        } catch (error) {
+            console.error('Software update error:', error);
+            frappe.show_alert({
+                message: 'Update failed: ' + error.message,
+                indicator: 'red'
+            });
+            this.cancelFieldEditing($cell, newValue);
+        }
+    }
+
+    showCurrencyEditor($cell) {
+        const fieldName = $cell.data('field');
+        const taskId = $cell.data('task-id');
+        const currentValue = $cell.find('.editable-field').text().replace(/[$,]/g, '').trim();
+        
+        const inputHTML = `<input type="number" class="pm-inline-input" value="${currentValue === '-' ? '' : currentValue}" step="0.01" min="0">`;
+        
+        $cell.html(inputHTML);
+        const $input = $cell.find('.pm-inline-input');
+        $input.focus().select();
+        
+        // Handle enter and blur
+        $input.on('blur keydown', (e) => {
+            if (e.type === 'blur' || e.key === 'Enter') {
+                const newValue = parseFloat($input.val()) || 0;
+                this.saveFieldValue($cell, fieldName, taskId, newValue, `$${newValue.toFixed(2)}`);
+            } else if (e.key === 'Escape') {
+                this.cancelFieldEditing($cell, currentValue);
+            }
+        });
+    }
+
+    showTextEditor($cell) {
+        const fieldName = $cell.data('field');
+        const taskId = $cell.data('task-id');
+        const currentValue = $cell.find('.editable-field').text().trim();
+        
+        const inputHTML = `<input type="text" class="pm-inline-input" value="${currentValue}">`;
+        
+        $cell.html(inputHTML);
+        const $input = $cell.find('.pm-inline-input');
+        $input.focus().select();
+        
+        // Handle enter and blur
+        $input.on('blur keydown', (e) => {
+            if (e.type === 'blur' || e.key === 'Enter') {
+                const newValue = $input.val().trim();
+                this.saveFieldValue($cell, fieldName, taskId, newValue, newValue);
+            } else if (e.key === 'Escape') {
+                this.cancelFieldEditing($cell, currentValue);
+            }
+        });
+    }
+
+    async saveFieldValue($cell, fieldName, taskId, newValue, displayValue) {
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.update_task_field',
+                args: {
+                    task_id: taskId,
+                    field_name: fieldName,
+                    new_value: newValue
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                // Update display immediately
+                $cell.html(`<span class="editable-field">${displayValue || newValue || '-'}</span>`);
+                $cell.removeClass('editing');
+                
+                frappe.show_alert({
+                    message: 'Field updated successfully',
+                    indicator: 'green'
+                });
+            } else {
+                throw new Error(response.message?.error || 'Update failed');
+            }
+        } catch (error) {
+            console.error('Field update error:', error);
+            frappe.show_alert({
+                message: 'Update failed: ' + error.message,
+                indicator: 'red'
+            });
+            this.cancelFieldEditing($cell, displayValue);
+        }
+    }
+
+    cancelFieldEditing($cell, originalValue) {
+        $cell.html(`<span class="editable-field">${originalValue || '-'}</span>`);
+        $cell.removeClass('editing');
     }
 
 }

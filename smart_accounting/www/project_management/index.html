@@ -117,8 +117,10 @@
                                                  data-editable="true"
                                                  data-field="custom_client"
                                                  data-task-id="{{ task.task_id }}"
-                                                 data-field-type="text">
-                                                <span class="editable-field">{{ task.client_name or 'No Client' }}</span>
+                                                 data-field-type="client_selector"
+                                                 data-current-client-id="{{ task.custom_client or '' }}"
+                                                 data-current-client-name="{{ task.client_name or 'No Client' }}">
+                                                <span class="editable-field client-display">{{ task.client_name or 'No Client' }}</span>
                                             </div>
                                             <div class="pm-cell pm-cell-entity" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
                                                 <span class="pm-entity-badge entity-{{ task.entity_type.lower() if task.entity_type else 'company' }}">

@@ -9,10 +9,10 @@ def get_context(context):
     """
     # Check if user is logged in
     if frappe.session.user == 'Guest':
-        frappe.throw(_("Please login to access this page"), frappe.PermissionError)
+        frappe.throw("Please login to access this page", frappe.PermissionError)
     
     # Set page context
-    context.title = _("Project Management")
+    context.title = "Project Management"
     context.show_sidebar = False
     context.show_header = True
     
@@ -76,30 +76,34 @@ def get_project_management_data():
                 
                 # Get client information - Priority: custom_client > project.customer > "No Client"
                 task_custom_client = getattr(task_doc, 'custom_client', None)
+                print(f"DEBUG: Task {task.name} - custom_client field value: {task_custom_client}")
+                
                 if task_custom_client:
                     try:
                         client_doc = frappe.get_doc("Customer", task_custom_client)
                         task.client_name = client_doc.customer_name
+                        task.custom_client = task_custom_client  # Store the ID for frontend
                         # Get entity type from customer
-                        task.entity_type = getattr(client_doc, 'custom_entity_type', None) or "Company"
-                    except:
+                        task.entity_type = getattr(client_doc, 'custom_entity_type', None) or getattr(client_doc, 'customer_type', None) or "Company"
+                        print(f"DEBUG: Successfully loaded client: {task.client_name} (ID: {task_custom_client})")
+                    except Exception as e:
+                        print(f"DEBUG: Error loading custom_client {task_custom_client}: {str(e)}")
                         task.client_name = task_custom_client
                         task.entity_type = "Company"
-                elif task.project and hasattr(task, 'project'):
-                    # Keep existing project customer logic as backup
-                    # Also try to get entity from project customer
-                    if hasattr(task, 'client_name') and task.client_name and task.client_name != "Unknown Client":
-                        try:
-                            # Get entity from project customer
-                            project_doc = frappe.get_doc("Project", task.project)
-                            if project_doc.customer:
-                                client_doc = frappe.get_doc("Customer", project_doc.customer)
-                                task.entity_type = getattr(client_doc, 'custom_entity_type', None) or "Company"
-                            else:
-                                task.entity_type = "Company"
-                        except:
+                elif task.project:
+                    # Try to get customer from project
+                    try:
+                        project_doc = frappe.get_doc("Project", task.project)
+                        if project_doc.customer:
+                            client_doc = frappe.get_doc("Customer", project_doc.customer)
+                            task.client_name = client_doc.customer_name
+                            task.entity_type = getattr(client_doc, 'custom_entity_type', None) or getattr(client_doc, 'customer_type', None) or "Company"
+                        else:
+                            task.client_name = "No Client"
                             task.entity_type = "Company"
-                    else:
+                    except Exception as e:
+                        print(f"DEBUG: Error loading project customer: {str(e)}")
+                        task.client_name = "No Client"
                         task.entity_type = "Company"
                 else:
                     task.client_name = "No Client"
@@ -260,7 +264,7 @@ def update_task_status(task_id, new_status):
         task.status = new_status
         task.save()
         
-        return {'success': True, 'message': _('Task status updated successfully')}
+        return {'success': True, 'message': 'Task status updated successfully'}
     
     except Exception as e:
         frappe.log_error(f"Task status update error: {str(e)}")
@@ -320,7 +324,7 @@ def update_task_field(task_id, field_name, new_value):
         setattr(task, field_name, new_value)
         task.save()
         
-        return {'success': True, 'message': _('Field updated successfully'), 'new_value': new_value}
+        return {'success': True, 'message': 'Field updated successfully', 'new_value': new_value}
     
     except Exception as e:
         error_msg = f"Task field update error: {str(e)}"
@@ -405,7 +409,7 @@ def create_new_task(project_name, client_name=None):
         
         return {
             'success': True, 
-            'message': _('New task created successfully'),
+            'message': 'New task created successfully',
             'task_id': new_task.name,
             'task_subject': new_task.subject
         }
@@ -467,6 +471,183 @@ def get_user_info(email_or_user):
     except Exception as e:
         # If anything fails, return basic info
         return [{'email': str(email_or_user), 'initials': get_initials(str(email_or_user)), 'full_name': str(email_or_user)}]
+
+@frappe.whitelist()
+def get_companies_for_tftg():
+    """
+    Get all companies that contain 'Top' in name for TF/TG selection
+    """
+    try:
+        companies = frappe.get_all("Company",
+            filters={"company_name": ["like", "%Top%"]},
+            fields=["name", "company_name", "abbr"],
+            order_by="company_name"
+        )
+        
+        # Create display mapping
+        company_options = []
+        for company in companies:
+            if 'Figures' in company.company_name:
+                display_name = 'TF'
+            elif 'Grants' in company.company_name:
+                display_name = 'TG'
+            else:
+                display_name = company.abbr or company.company_name[:2]
+            
+            company_options.append({
+                'id': company.name,
+                'name': company.company_name,
+                'display': display_name
+            })
+        
+        return {'success': True, 'companies': company_options}
+    
+    except Exception as e:
+        frappe.log_error(f"Company lookup error: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def search_customers(query):
+    """
+    Search existing customers by name
+    """
+    try:
+        if not query or len(query.strip()) < 2:
+            return {'success': True, 'customers': []}
+        
+        # Search customers by customer_name
+        customers = frappe.get_all("Customer",
+            filters={
+                "customer_name": ["like", f"%{query}%"],
+                "disabled": 0
+            },
+            fields=["name", "customer_name", "customer_type"],
+            limit=10,
+            order_by="customer_name"
+        )
+        
+        return {
+            'success': True, 
+            'customers': customers,
+            'query': query
+        }
+    
+    except Exception as e:
+        frappe.log_error(f"Customer search error: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def quick_create_customer(customer_name, customer_type="Company"):
+    """
+    Quickly create a new customer
+    """
+    try:
+        # Check if customer already exists
+        existing = frappe.db.get_value("Customer", {"customer_name": customer_name})
+        if existing:
+            return {
+                'success': True, 
+                'customer_id': existing,
+                'customer_name': customer_name,
+                'message': 'Customer already exists'
+            }
+        
+        # Create new customer
+        new_customer = frappe.new_doc("Customer")
+        new_customer.customer_name = customer_name
+        new_customer.customer_type = customer_type
+        
+        # Set minimal required fields
+        new_customer.customer_group = frappe.db.get_single_value("Selling Settings", "customer_group") or "All Customer Groups"
+        new_customer.territory = frappe.db.get_single_value("Selling Settings", "territory") or "All Territories"
+        
+        new_customer.save()
+        
+        return {
+            'success': True, 
+            'customer_id': new_customer.name,
+            'customer_name': new_customer.customer_name,
+            'customer_type': new_customer.customer_type,
+            'message': 'New customer created successfully'
+        }
+    
+    except Exception as e:
+        error_msg = f"Customer creation error: {str(e)}"
+        frappe.log_error(error_msg)
+        return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def update_task_software(task_id, software_value):
+    """
+    Update task software and optionally sync to customer
+    """
+    try:
+        task = frappe.get_doc("Task", task_id)
+        
+        # Update task software directly
+        task.custom_software = software_value
+        task.save()
+        
+        # Sync to customer's accounting platform if task has a client
+        customer_updated = False
+        if hasattr(task, 'custom_client') and task.custom_client:
+            try:
+                customer = frappe.get_doc("Customer", task.custom_client)
+                old_platform = customer.custom_accounting_platform
+                
+                # Update customer's platform
+                customer.custom_accounting_platform = software_value
+                customer.save()
+                customer_updated = True
+                
+                print(f"DEBUG: Updated customer {customer.customer_name} accounting platform: {old_platform} → {software_value}")
+            except Exception as e:
+                # Don't fail the task update if customer update fails
+                print(f"DEBUG: Could not update customer software: {str(e)}")
+        
+        # Prepare success message
+        message = 'Software updated successfully'
+        if customer_updated:
+            message += ' (Customer accounting platform also updated)'
+        
+        return {
+            'success': True, 
+            'message': message,
+            'software_value': software_value,
+            'customer_synced': customer_updated
+        }
+    
+    except Exception as e:
+        error_msg = f"Software update error: {str(e)}"
+        frappe.log_error(error_msg)
+        return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def update_task_client(task_id, customer_id):
+    """
+    Update task's client association
+    """
+    try:
+        task = frappe.get_doc("Task", task_id)
+        
+        # Get customer info
+        customer = frappe.get_doc("Customer", customer_id)
+        
+        # Update task
+        task.custom_client = customer_id
+        task.save()
+        
+        return {
+            'success': True, 
+            'message': 'Task client updated successfully',
+            'customer_name': customer.customer_name,
+            'customer_type': customer.customer_type
+        }
+    
+    except Exception as e:
+        error_msg = f"Task client update error: {str(e)}"
+        frappe.log_error(error_msg)
+        return {'success': False, 'error': str(e)}
 
 def get_initials(name):
     """

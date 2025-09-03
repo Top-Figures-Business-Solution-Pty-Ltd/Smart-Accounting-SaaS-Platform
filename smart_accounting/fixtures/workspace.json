@@ -8481,7 +8481,7 @@
   "hide_custom": 0,
   "icon": "project",
   "indicator_color": null,
-  "is_hidden": 1,
+  "is_hidden": 0,
   "label": "Projects",
   "links": [
    {
@@ -8791,7 +8791,7 @@
     "type": "Link"
    }
   ],
-  "modified": "2025-08-29 14:17:53.730129",
+  "modified": "2025-09-03 13:59:13.336161",
   "module": "Projects",
   "name": "Projects",
   "number_cards": [],
@@ -12911,7 +12911,7 @@
  },
  {
   "charts": [],
-  "content": "[{\"id\":\"5-fxqUq5Hh\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Smart Accounting</span>\",\"col\":12}},{\"id\":\"5lHpcUkVaZ\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Top Figures / Top Grants Clients\",\"col\":5}},{\"id\":\"9uETq8MrN8\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Task Management</b></span>\",\"col\":12}},{\"id\":\"GSElRdjbmx\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Project\",\"col\":4}},{\"id\":\"jUdUh0gAqv\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Task\",\"col\":4}}]",
+  "content": "[{\"id\":\"5-fxqUq5Hh\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Smart Accounting</span>\",\"col\":12}},{\"id\":\"5lHpcUkVaZ\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Top Figures / Top Grants Clients\",\"col\":5}},{\"id\":\"9uETq8MrN8\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Task Management</b></span>\",\"col\":12}},{\"id\":\"GSElRdjbmx\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Project\",\"col\":4}},{\"id\":\"jUdUh0gAqv\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Task\",\"col\":4}},{\"id\":\"JLrQlWryFm\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Clients\",\"col\":4}}]",
   "custom_blocks": [],
   "docstatus": 0,
   "doctype": "Workspace",
@@ -12922,13 +12922,21 @@
   "is_hidden": 0,
   "label": "Smart Accounting",
   "links": [],
-  "modified": "2025-09-01 14:30:58.007072",
+  "modified": "2025-09-03 11:22:09.043651",
   "module": null,
   "name": "Smart Accounting",
   "number_cards": [],
   "parent_page": "",
   "public": 1,
   "quick_lists": [
+   {
+    "document_type": "Customer",
+    "label": "Clients",
+    "parent": "Smart Accounting",
+    "parentfield": "quick_lists",
+    "parenttype": "Workspace",
+    "quick_list_filter": "[]"
+   },
    {
     "document_type": "Project",
     "label": "Project",
