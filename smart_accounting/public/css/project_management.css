@@ -30,7 +30,7 @@
 
 /* Reset and Base */
 .project-management-container {
-    background: var(--monday-light-gray);
+    background: #f8f9fb;
     min-height: 100vh;
     font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color: var(--monday-dark);
@@ -54,12 +54,53 @@
     position: sticky;
     top: 0;
     z-index: 100;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin: 0;
+}
+
+/* Column Resizer Styles */
+.pm-header-cell {
+    position: relative;
+}
+
+.pm-column-resizer {
+    position: absolute;
+    top: 0;
+    right: -2px;
+    width: 8px;
+    height: 100%;
+    cursor: col-resize;
+    background: transparent;
+    z-index: 100;
+    transition: background-color 0.2s ease;
+}
+
+.pm-column-resizer:hover {
+    background: var(--monday-blue);
+}
+
+.pm-column-resizer.resizing {
+    background: var(--monday-blue);
+}
+
+/* Resizing indicator */
+.pm-table-container.resizing {
+    user-select: none;
+    cursor: col-resize;
+}
+
+.pm-table-container.resizing .pm-task-row,
+.pm-table-container.resizing .pm-project-table-header {
+    pointer-events: none;
 }
 
 .pm-header-left {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 8px;
+    flex-shrink: 0;
+    min-width: 0;
 }
 
 .pm-title {
@@ -70,6 +111,8 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .pm-title i {
@@ -78,33 +121,45 @@
 
 .pm-tabs {
     display: flex;
-    gap: 4px;
+    gap: 0;
+    border-bottom: 1px solid var(--monday-border);
+    margin-bottom: 16px;
 }
 
 .pm-tab {
-    padding: 8px 16px;
+    padding: 12px 20px;
     border: none;
     background: none;
     color: var(--monday-gray);
     font-weight: 500;
     cursor: pointer;
-    border-radius: 6px;
+    border-radius: 0;
     transition: all 0.2s ease;
+    position: relative;
+    border-bottom: 2px solid transparent;
+    font-size: 14px;
 }
 
 .pm-tab.active {
-    background: var(--monday-blue);
-    color: white;
+    background: none;
+    color: var(--monday-blue);
+    border-bottom-color: var(--monday-blue);
+    font-weight: 600;
 }
 
 .pm-tab:hover:not(.active) {
     background: var(--monday-hover);
+    color: var(--monday-dark);
 }
 
 .pm-header-right {
     display: flex;
     align-items: center;
     gap: 12px;
+    background: var(--monday-light-gray);
+    border-radius: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--monday-border);
 }
 
 .pm-actions {
@@ -205,33 +260,51 @@
 .pm-content {
     padding: 24px;
     width: 100%;
-    overflow-x: visible;
-    min-width: 100%;
+    overflow: visible;
 }
 
 .pm-table-container {
-    background: var(--monday-gradient-light);
-    border-radius: 16px;
-    box-shadow: var(--monday-shadow);
-    overflow-x: auto !important;
+    background: transparent;
+    overflow-x: auto;
     overflow-y: visible;
     width: 100%;
     position: relative;
-    /* Force horizontal scroll for wide content */
-    min-width: 100%;
-    /* Enable smooth scrolling */
     scroll-behavior: smooth;
-    /* Ensure container can handle wide content */
-    max-width: none;
-    /* Force scrollbar to be visible */
-    scrollbar-width: thin;
-    /* Better scroll handling */
     -webkit-overflow-scrolling: touch;
-    /* Advanced styling */
     border: 1px solid rgba(208, 212, 228, 0.5);
     backdrop-filter: blur(10px);
     transition: box-shadow 0.3s ease;
+    /* Make scrollbar always visible */
+    scrollbar-width: thin;
+    scrollbar-color: var(--monday-border) transparent;
 }
+
+/* Webkit scrollbar styling */
+.pm-table-container::-webkit-scrollbar {
+    height: 12px;
+}
+
+.pm-table-container::-webkit-scrollbar-track {
+    background: var(--monday-light-gray);
+    border-radius: 6px;
+}
+
+.pm-table-container::-webkit-scrollbar-thumb {
+    background: var(--monday-border);
+    border-radius: 6px;
+    border: 2px solid var(--monday-light-gray);
+}
+
+.pm-table-container::-webkit-scrollbar-thumb:hover {
+    background: var(--monday-gray);
+}
+
+/* Make table container sticky at bottom for scrollbar visibility */
+.pm-table-container {
+    position: sticky;
+    bottom: 0;
+}
+
 
 .pm-table-container:hover {
     box-shadow: var(--monday-shadow-hover);
@@ -344,11 +417,10 @@ div.pm-table-header,
 
 /* Table Body */
 .pm-table-body {
-    max-height: 70vh;
-    overflow-y: auto;
-    overflow-x: visible;
+    overflow: visible;
     min-width: 2000px;
     width: max-content;
+    position: relative;
 }
 
 /* Project Groups */
@@ -356,6 +428,41 @@ div.pm-table-header,
     border-bottom: 1px solid var(--monday-border);
     min-width: 2000px;
     width: max-content;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    margin-bottom: 16px;
+    border-left: 4px solid var(--monday-blue);
+}
+
+/* Fixed First Column Styles */
+.pm-header-cell.pm-cell-client,
+.pm-cell.pm-cell-client {
+    position: sticky;
+    left: 0;
+    background: white;
+    z-index: 10;
+    border-right: 2px solid var(--monday-border);
+    border-bottom: 1px solid var(--monday-border);
+}
+
+.pm-project-table-header .pm-header-cell.pm-cell-client {
+    background: var(--monday-light-gray);
+    z-index: 11;
+    border-bottom: 1px solid var(--monday-border);
+}
+
+/* Add shadow to indicate sticky column */
+.pm-header-cell.pm-cell-client::after,
+.pm-cell.pm-cell-client::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: -2px;
+    width: 2px;
+    height: 100%;
+    background: linear-gradient(to right, rgba(0,0,0,0.1), transparent);
+    pointer-events: none;
 }
 
 .pm-project-header {
@@ -1331,6 +1438,12 @@ div.pm-table-header,
     display: flex;
     align-items: center;
     gap: 8px;
+    font-weight: 600;
+    box-shadow: var(--monday-shadow);
+}
+
+.pm-new-task-btn:hover {
+    box-shadow: var(--monday-shadow-hover);
 }
 
 .pm-dropdown-icon {

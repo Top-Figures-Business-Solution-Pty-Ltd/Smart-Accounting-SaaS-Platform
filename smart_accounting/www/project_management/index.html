@@ -69,80 +69,78 @@
                     Filter
                 </button>
             </div>
+            <div class="pm-search">
+                <i class="fa fa-search"></i>
+                <input type="text" placeholder="Search clients..." id="pm-search-input">
+            </div>
+            <div class="pm-filters">
+                <div class="pm-client-filter-dropdown">
+                    <button class="pm-filter-btn pm-client-filter-btn">
+                        <i class="fa fa-building"></i>
+                        All Clients
+                        <span class="pm-filter-count" style="display: none;">0</span>
+                        <i class="fa fa-chevron-down pm-filter-dropdown-icon"></i>
+                    </button>
+                    <div class="pm-client-filter-menu" style="display: none;">
+                        <div class="pm-filter-search">
+                            <input type="text" class="pm-client-search-input" placeholder="Search clients...">
+                            <i class="fa fa-search"></i>
+                        </div>
+                        <div class="pm-filter-options">
+                            <div class="pm-filter-option pm-clear-client-filter">
+                                <div class="pm-filter-icon">
+                                    <i class="fa fa-times"></i>
+                                </div>
+                                <span>All Clients</span>
+                            </div>
+                        </div>
+                        <div class="pm-client-list">
+                            <!-- Clients will be loaded dynamically -->
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="pm-status-filter-dropdown">
+                    <button class="pm-filter-btn pm-status-filter-btn">
+                        <i class="fa fa-circle"></i>
+                        All Status
+                        <span class="pm-filter-count" style="display: none;">0</span>
+                        <i class="fa fa-chevron-down pm-filter-dropdown-icon"></i>
+                    </button>
+                    <div class="pm-status-filter-menu" style="display: none;">
+                        <div class="pm-filter-options">
+                            <div class="pm-filter-option pm-clear-status-filter">
+                                <div class="pm-filter-icon">
+                                    <i class="fa fa-times"></i>
+                                </div>
+                                <span>All Status</span>
+                            </div>
+                        </div>
+                        <div class="pm-status-list">
+                            <div class="pm-filter-option" data-status="Open">
+                                <div class="pm-status-dot status-open"></div>
+                                <span>Open</span>
+                            </div>
+                            <div class="pm-filter-option" data-status="Working">
+                                <div class="pm-status-dot status-working"></div>
+                                <span>Working</span>
+                            </div>
+                            <div class="pm-filter-option" data-status="Completed">
+                                <div class="pm-status-dot status-completed"></div>
+                                <span>Completed</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Search and Filter Bar -->
-    <div class="pm-toolbar">
-        <div class="pm-search">
-            <i class="fa fa-search"></i>
-            <input type="text" placeholder="Search everything..." id="pm-search-input">
-        </div>
-        <div class="pm-filters">
-            <div class="pm-client-filter-dropdown">
-                <button class="pm-filter-btn pm-client-filter-btn">
-                    <i class="fa fa-building"></i>
-                    All Clients
-                    <span class="pm-filter-count" style="display: none;">0</span>
-                    <i class="fa fa-chevron-down pm-filter-dropdown-icon"></i>
-                </button>
-                <div class="pm-client-filter-menu" style="display: none;">
-                    <div class="pm-filter-search">
-                        <input type="text" class="pm-client-search-input" placeholder="Search clients...">
-                        <i class="fa fa-search"></i>
-                    </div>
-                    <div class="pm-filter-options">
-                        <div class="pm-filter-option pm-clear-client-filter">
-                            <div class="pm-filter-icon">
-                                <i class="fa fa-times"></i>
-                            </div>
-                            <span>All Clients</span>
-                        </div>
-                    </div>
-                    <div class="pm-client-list">
-                        <!-- Clients will be loaded dynamically -->
-                    </div>
-                </div>
-            </div>
-            
-            <div class="pm-status-filter-dropdown">
-                <button class="pm-filter-btn pm-status-filter-btn">
-                    <i class="fa fa-circle"></i>
-                    All Status
-                    <span class="pm-filter-count" style="display: none;">0</span>
-                    <i class="fa fa-chevron-down pm-filter-dropdown-icon"></i>
-                </button>
-                <div class="pm-status-filter-menu" style="display: none;">
-                    <div class="pm-filter-options">
-                        <div class="pm-filter-option pm-clear-status-filter">
-                            <div class="pm-filter-icon">
-                                <i class="fa fa-times"></i>
-                            </div>
-                            <span>All Status</span>
-                        </div>
-                    </div>
-                    <div class="pm-status-list">
-                        <div class="pm-filter-option" data-status="Open">
-                            <div class="pm-status-dot status-open"></div>
-                            <span>Open</span>
-                        </div>
-                        <div class="pm-filter-option" data-status="Working">
-                            <div class="pm-status-dot status-working"></div>
-                            <span>Working</span>
-                        </div>
-                        <div class="pm-filter-option" data-status="Completed">
-                            <div class="pm-status-dot status-completed"></div>
-                            <span>Completed</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+
 
     <!-- Main Content Area - Monday.com Table Style -->
     <div class="pm-content">
-        <div class="pm-table-container">
+        <div class="pm-table-container pm-full-width-table">
 
 
             <!-- Table Body -->
@@ -162,31 +160,82 @@
                                 </div>
                                 
                                 <!-- Project Table Header -->
-                                <div class="pm-project-table-header" style="display: flex; width: 2000px; min-width: 2000px;">
-                                    <div class="pm-header-cell pm-cell-client" style="width: 150px; min-width: 150px; flex: 0 0 150px;">Client Name</div>
-                                    <div class="pm-header-cell pm-cell-entity" style="width: 120px; min-width: 120px; flex: 0 0 120px;">Entity</div>
-                                    <div class="pm-header-cell pm-cell-tf-tg" style="width: 80px; min-width: 80px; flex: 0 0 80px;">TF/TG</div>
-                                    <div class="pm-header-cell pm-cell-software" style="width: 100px; min-width: 100px; flex: 0 0 100px;">Software</div>
-                                    <div class="pm-header-cell pm-cell-status" style="width: 100px; min-width: 100px; flex: 0 0 100px;">Status</div>
-                                    <div class="pm-header-cell pm-cell-target-month" style="width: 120px; min-width: 120px; flex: 0 0 120px;">Target Month</div>
-                                    <div class="pm-header-cell pm-cell-budget" style="width: 100px; min-width: 100px; flex: 0 0 100px;">Budget</div>
-                                    <div class="pm-header-cell pm-cell-actual" style="width: 100px; min-width: 100px; flex: 0 0 100px;">Actual</div>
-                                    <div class="pm-header-cell pm-cell-review-note" style="width: 150px; min-width: 150px; flex: 0 0 150px;">Review Note</div>
-                                    <div class="pm-header-cell pm-cell-action-person" style="width: 120px; min-width: 120px; flex: 0 0 120px;">Action Person</div>
-                                    <div class="pm-header-cell pm-cell-preparer" style="width: 120px; min-width: 120px; flex: 0 0 120px;">Preparer</div>
-                                    <div class="pm-header-cell pm-cell-reviewer" style="width: 120px; min-width: 120px; flex: 0 0 120px;">Reviewer</div>
-                                    <div class="pm-header-cell pm-cell-partner" style="width: 120px; min-width: 120px; flex: 0 0 120px;">Partner</div>
-                                    <div class="pm-header-cell pm-cell-lodgment-due" style="width: 120px; min-width: 120px; flex: 0 0 120px;">Lodgement Due</div>
-                                    <div class="pm-header-cell pm-cell-year-end" style="width: 100px; min-width: 100px; flex: 0 0 100px;">Year End</div>
-                                    <div class="pm-header-cell pm-cell-last-updated" style="width: 120px; min-width: 120px; flex: 0 0 120px;">Last Updated</div>
-                                    <div class="pm-header-cell pm-cell-priority" style="width: 100px; min-width: 100px; flex: 0 0 100px;">Priority</div>
+                                <div class="pm-project-table-header pm-responsive-table">
+                                    <div class="pm-header-cell pm-cell-client" data-column="client">
+                                        <span>Client Name</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
+                                    <div class="pm-header-cell pm-cell-entity" data-column="entity">
+                                        <span>Entity</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
+                                    <div class="pm-header-cell pm-cell-tf-tg" data-column="tf-tg">
+                                        <span>TF/TG</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
+                                    <div class="pm-header-cell pm-cell-software" data-column="software">
+                                        <span>Software</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
+                                    <div class="pm-header-cell pm-cell-status" data-column="status">
+                                        <span>Status</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
+                                    <div class="pm-header-cell pm-cell-target-month" data-column="target-month">
+                                        <span>Target Month</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
+                                    <div class="pm-header-cell pm-cell-budget" data-column="budget">
+                                        <span>Budget</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
+                                    <div class="pm-header-cell pm-cell-actual" data-column="actual">
+                                        <span>Actual</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
+                                    <div class="pm-header-cell pm-cell-review-note" data-column="review-note">
+                                        <span>Review Note</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
+                                    <div class="pm-header-cell pm-cell-action-person" data-column="action-person">
+                                        <span>Action Person</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
+                                    <div class="pm-header-cell pm-cell-preparer" data-column="preparer">
+                                        <span>Preparer</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
+                                    <div class="pm-header-cell pm-cell-reviewer" data-column="reviewer">
+                                        <span>Reviewer</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
+                                    <div class="pm-header-cell pm-cell-partner" data-column="partner">
+                                        <span>Partner</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
+                                    <div class="pm-header-cell pm-cell-lodgment-due" data-column="lodgment-due">
+                                        <span>Lodgement Due</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
+                                    <div class="pm-header-cell pm-cell-year-end" data-column="year-end">
+                                        <span>Year End</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
+                                    <div class="pm-header-cell pm-cell-last-updated" data-column="last-updated">
+                                        <span>Last Updated</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
+                                    <div class="pm-header-cell pm-cell-priority" data-column="priority">
+                                        <span>Priority</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
                                 </div>
                                 
                                 <!-- Project Tasks -->
                                 <div class="pm-task-group">
                                     {% for task in tasks %}
-                                        <div class="pm-task-row" data-task-id="{{ task.task_id }}" data-task-name="{{ task.task_name }}" style="display: flex; width: 2000px; min-width: 2000px;">
-                                            <div class="pm-cell pm-cell-client" style="width: 150px; min-width: 150px; flex: 0 0 150px;"
+                                        <div class="pm-task-row pm-responsive-table" data-task-id="{{ task.task_id }}" data-task-name="{{ task.task_name }}">
+                                            <div class="pm-cell pm-cell-client"
                                                  data-editable="true"
                                                  data-field="custom_client"
                                                  data-task-id="{{ task.task_id }}"
@@ -195,12 +244,12 @@
                                                  data-current-client-name="{{ task.client_name or 'No Client' }}">
                                                 <span class="editable-field client-display">{{ task.client_name or 'No Client' }}</span>
                                             </div>
-                                            <div class="pm-cell pm-cell-entity" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
+                                            <div class="pm-cell pm-cell-entity">
                                                 <span class="pm-entity-badge entity-{{ task.entity_type.lower() if task.entity_type else 'company' }}">
                                                     {{ task.entity_type or 'Company' }}
                                                 </span>
                                             </div>
-                                            <div class="pm-cell pm-cell-tf-tg" style="width: 80px; min-width: 80px; flex: 0 0 80px;" 
+                                            <div class="pm-cell pm-cell-tf-tg" 
                                                  data-editable="true" 
                                                  data-field="custom_tftg" 
                                                  data-task-id="{{ task.task_id }}"
@@ -209,7 +258,7 @@
                                                  data-backend-options="Top Figures,Top Grants">
                                                 <span class="pm-tf-tg-badge editable-field">{{ task.tf_tg or 'TF' }}</span>
                                             </div>
-                                            <div class="pm-cell pm-cell-software" style="width: 100px; min-width: 100px; flex: 0 0 100px;"
+                                            <div class="pm-cell pm-cell-software"
                                                  data-editable="true"
                                                  data-field="custom_software" 
                                                  data-task-id="{{ task.task_id }}"
@@ -217,12 +266,12 @@
                                                  data-options="Xero,MYOB,QuickBooks,Excel,Other">
                                                 <span class="pm-software-badge editable-field">{{ task.software or 'Xero' }}</span>
                                             </div>
-                                            <div class="pm-cell pm-cell-status" style="width: 100px; min-width: 100px; flex: 0 0 100px;">
+                                            <div class="pm-cell pm-cell-status">
                                                 <span class="pm-status-badge status-{{ task.status.lower() if task.status else 'open' }}">
                                                     {{ task.status or 'Open' }}
                                                 </span>
                                             </div>
-                                            <div class="pm-cell pm-cell-target-month" style="width: 120px; min-width: 120px; flex: 0 0 120px;"
+                                            <div class="pm-cell pm-cell-target-month"
                                                  data-editable="true"
                                                  data-field="custom_target_month"
                                                  data-task-id="{{ task.task_id }}"
@@ -230,7 +279,7 @@
                                                  data-options="January,February,March,April,May,June,July,August,September,October,November,December">
                                                 <span class="editable-field">{{ task.target_month or '-' }}</span>
                                             </div>
-                                            <div class="pm-cell pm-cell-budget" style="width: 100px; min-width: 100px; flex: 0 0 100px;"
+                                            <div class="pm-cell pm-cell-budget"
                                                  data-editable="true"
                                                  data-field="custom_budget_planning"
                                                  data-task-id="{{ task.task_id }}"
@@ -241,7 +290,7 @@
                                                     <span class="pm-no-amount editable-field">-</span>
                                                 {% endif %}
                                             </div>
-                                            <div class="pm-cell pm-cell-actual" style="width: 100px; min-width: 100px; flex: 0 0 100px;"
+                                            <div class="pm-cell pm-cell-actual"
                                                  data-editable="true"
                                                  data-field="custom_actual_billing"
                                                  data-task-id="{{ task.task_id }}"
@@ -252,7 +301,7 @@
                                                     <span class="pm-no-amount editable-field">-</span>
                                                 {% endif %}
                                             </div>
-                                            <div class="pm-cell pm-cell-review-note" style="width: 150px; min-width: 150px; flex: 0 0 150px;">
+                                            <div class="pm-cell pm-cell-review-note">
                                                 {% if task.review_notes and task.review_notes|length > 0 %}
                                                     <div class="pm-review-note-indicator has-notes" title="点击查看所有Review Notes">
                                                         <i class="fa fa-check-circle"></i>
@@ -265,7 +314,7 @@
                                                     </div>
                                                 {% endif %}
                                             </div>
-                                            <div class="pm-cell pm-cell-action-person" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
+                                            <div class="pm-cell pm-cell-action-person">
                                                 {% if task.action_person_info %}
                                                     <div class="pm-user-avatars">
                                                         {% for user in task.action_person_info[:2] %}
@@ -279,7 +328,7 @@
                                                     -
                                                 {% endif %}
                                             </div>
-                                            <div class="pm-cell pm-cell-preparer" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
+                                            <div class="pm-cell pm-cell-preparer">
                                                 {% if task.preparer_info %}
                                                     <div class="pm-user-avatars">
                                                         {% for user in task.preparer_info[:2] %}
@@ -293,7 +342,7 @@
                                                     -
                                                 {% endif %}
                                             </div>
-                                            <div class="pm-cell pm-cell-reviewer" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
+                                            <div class="pm-cell pm-cell-reviewer">
                                                 {% if task.reviewer_info %}
                                                     <div class="pm-user-avatars">
                                                         {% for user in task.reviewer_info[:2] %}
@@ -307,7 +356,7 @@
                                                     -
                                                 {% endif %}
                                             </div>
-                                            <div class="pm-cell pm-cell-partner" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
+                                            <div class="pm-cell pm-cell-partner">
                                                 {% if task.partner_info %}
                                                     <div class="pm-user-avatars">
                                                         {% for user in task.partner_info[:2] %}
@@ -321,24 +370,24 @@
                                                     -
                                                 {% endif %}
                                             </div>
-                                            <div class="pm-cell pm-cell-lodgment-due" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
+                                            <div class="pm-cell pm-cell-lodgment-due">
                                                 {% if task.lodgment_due_date %}
                                                     <span class="pm-due-date">{{ task.lodgment_due_date }}</span>
                                                 {% else %}
                                                     <span class="pm-no-date">-</span>
                                                 {% endif %}
                                             </div>
-                                            <div class="pm-cell pm-cell-year-end" style="width: 100px; min-width: 100px; flex: 0 0 100px;">
+                                            <div class="pm-cell pm-cell-year-end">
                                                 {{ task.year_end or '-' }}
                                             </div>
-                                            <div class="pm-cell pm-cell-last-updated" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
+                                            <div class="pm-cell pm-cell-last-updated">
                                                 {% if task.last_updated %}
                                                     <span class="pm-last-updated">{{ task.last_updated }}</span>
                                                 {% else %}
                                                     <span class="pm-no-date">-</span>
                                                 {% endif %}
                                             </div>
-                                            <div class="pm-cell pm-cell-priority" style="width: 100px; min-width: 100px; flex: 0 0 100px;">
+                                            <div class="pm-cell pm-cell-priority">
                                                 {% if task.priority %}
                                                     <span class="pm-priority-badge priority-{{ task.priority.lower() }}">{{ task.priority }}</span>
                                                 {% else %}
@@ -349,29 +398,29 @@
                                     {% endfor %}
                                     
                                     <!-- Add Task Row - Integrated Table Row -->
-                                    <div class="pm-task-row pm-add-task-row" data-project="{{ project_name }}" data-client="{{ client_name }}" style="display: flex; width: 2000px; min-width: 2000px;">
-                                        <div class="pm-cell pm-cell-client" style="width: 150px; min-width: 150px; flex: 0 0 150px;">
+                                    <div class="pm-task-row pm-add-task-row pm-responsive-table" data-project="{{ project_name }}" data-client="{{ client_name }}">
+                                        <div class="pm-cell pm-cell-client">
                                             <button class="pm-add-task-btn">
                                                 <i class="fa fa-plus"></i>
                                                 <span>Add new task</span>
                                             </button>
                                         </div>
-                                        <div class="pm-cell pm-cell-entity" style="width: 120px; min-width: 120px; flex: 0 0 120px;"></div>
-                                        <div class="pm-cell pm-cell-tf-tg" style="width: 80px; min-width: 80px; flex: 0 0 80px;"></div>
-                                        <div class="pm-cell pm-cell-software" style="width: 100px; min-width: 100px; flex: 0 0 100px;"></div>
-                                        <div class="pm-cell pm-cell-status" style="width: 100px; min-width: 100px; flex: 0 0 100px;"></div>
-                                        <div class="pm-cell pm-cell-target-month" style="width: 120px; min-width: 120px; flex: 0 0 120px;"></div>
-                                        <div class="pm-cell pm-cell-budget" style="width: 100px; min-width: 100px; flex: 0 0 100px;"></div>
-                                        <div class="pm-cell pm-cell-actual" style="width: 100px; min-width: 100px; flex: 0 0 100px;"></div>
-                                        <div class="pm-cell pm-cell-review-note" style="width: 150px; min-width: 150px; flex: 0 0 150px;"></div>
-                                        <div class="pm-cell pm-cell-action-person" style="width: 120px; min-width: 120px; flex: 0 0 120px;"></div>
-                                        <div class="pm-cell pm-cell-preparer" style="width: 120px; min-width: 120px; flex: 0 0 120px;"></div>
-                                        <div class="pm-cell pm-cell-reviewer" style="width: 120px; min-width: 120px; flex: 0 0 120px;"></div>
-                                        <div class="pm-cell pm-cell-partner" style="width: 120px; min-width: 120px; flex: 0 0 120px;"></div>
-                                        <div class="pm-cell pm-cell-lodgment-due" style="width: 120px; min-width: 120px; flex: 0 0 120px;"></div>
-                                        <div class="pm-cell pm-cell-year-end" style="width: 100px; min-width: 100px; flex: 0 0 100px;"></div>
-                                        <div class="pm-cell pm-cell-last-updated" style="width: 120px; min-width: 120px; flex: 0 0 120px;"></div>
-                                        <div class="pm-cell pm-cell-priority" style="width: 100px; min-width: 100px; flex: 0 0 100px;"></div>
+                                        <div class="pm-cell pm-cell-entity"></div>
+                                        <div class="pm-cell pm-cell-tf-tg"></div>
+                                        <div class="pm-cell pm-cell-software"></div>
+                                        <div class="pm-cell pm-cell-status"></div>
+                                        <div class="pm-cell pm-cell-target-month"></div>
+                                        <div class="pm-cell pm-cell-budget"></div>
+                                        <div class="pm-cell pm-cell-actual"></div>
+                                        <div class="pm-cell pm-cell-review-note"></div>
+                                        <div class="pm-cell pm-cell-action-person"></div>
+                                        <div class="pm-cell pm-cell-preparer"></div>
+                                        <div class="pm-cell pm-cell-reviewer"></div>
+                                        <div class="pm-cell pm-cell-partner"></div>
+                                        <div class="pm-cell pm-cell-lodgment-due"></div>
+                                        <div class="pm-cell pm-cell-year-end"></div>
+                                        <div class="pm-cell pm-cell-last-updated"></div>
+                                        <div class="pm-cell pm-cell-priority"></div>
                                     </div>
                                 </div>
                             </div>
@@ -399,6 +448,7 @@
             <span class="pm-stat-label">Tasks</span>
         </div>
     </div>
+    
 </div>
 {% endblock %}
 

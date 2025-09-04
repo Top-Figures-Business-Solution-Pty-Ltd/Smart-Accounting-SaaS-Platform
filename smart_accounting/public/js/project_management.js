@@ -10,6 +10,7 @@ class ProjectManagement {
         this.initializeFilters();
         this.setupSearch();
         this.initializeInlineEditing();
+        this.initializeColumnResizing();
     }
 
     bindEvents() {
@@ -1944,6 +1945,169 @@ class ProjectManagement {
         });
     }
 
+    // Column Resizing Functionality
+    initializeColumnResizing() {
+        this.isResizing = false;
+        this.currentColumn = null;
+        this.startX = 0;
+        this.startWidth = 0;
+        this.columnWidths = this.loadColumnWidths();
+        
+        // Apply saved column widths
+        this.applyColumnWidths();
+        
+        // Bind resize events
+        this.bindResizeEvents();
+    }
+    
+    bindResizeEvents() {
+        // Mouse down on resizer
+        $(document).on('mousedown', '.pm-column-resizer', (e) => {
+            e.preventDefault();
+            this.startResize(e);
+        });
+        
+        // Mouse move
+        $(document).on('mousemove', (e) => {
+            if (this.isResizing) {
+                this.doResize(e);
+            }
+        });
+        
+        // Mouse up
+        $(document).on('mouseup', () => {
+            if (this.isResizing) {
+                this.endResize();
+            }
+        });
+        
+        // Prevent text selection during resize
+        $(document).on('selectstart', () => {
+            if (this.isResizing) {
+                return false;
+            }
+        });
+    }
+    
+    startResize(e) {
+        this.isResizing = true;
+        this.currentColumn = $(e.target).closest('.pm-header-cell').data('column');
+        this.startX = e.clientX;
+        this.startWidth = $(e.target).closest('.pm-header-cell').outerWidth();
+        
+        // Add visual feedback
+        $('.pm-table-container').addClass('resizing');
+        $(e.target).addClass('resizing');
+        
+        // Prevent default behavior
+        e.preventDefault();
+    }
+    
+    doResize(e) {
+        if (!this.isResizing || !this.currentColumn) return;
+        
+        const diff = e.clientX - this.startX;
+        const newWidth = Math.max(50, this.startWidth + diff); // Minimum width of 50px
+        
+        // Apply new width to all cells in this column
+        this.setColumnWidth(this.currentColumn, newWidth);
+    }
+    
+    endResize() {
+        if (!this.isResizing) return;
+        
+        // Save the new width
+        if (this.currentColumn) {
+            const newWidth = $(`.pm-header-cell[data-column="${this.currentColumn}"]`).outerWidth();
+            this.columnWidths[this.currentColumn] = newWidth;
+            this.saveColumnWidths();
+        }
+        
+        // Clean up
+        this.isResizing = false;
+        this.currentColumn = null;
+        $('.pm-table-container').removeClass('resizing');
+        $('.pm-column-resizer').removeClass('resizing');
+    }
+    
+    setColumnWidth(column, width) {
+        // Set width for header
+        $(`.pm-header-cell[data-column="${column}"]`).css('width', width + 'px');
+        
+        // Set width for corresponding data cells - map column names to CSS classes
+        const columnClassMap = {
+            'client': 'pm-cell-client',
+            'entity': 'pm-cell-entity',
+            'tf-tg': 'pm-cell-tf-tg',
+            'software': 'pm-cell-software',
+            'status': 'pm-cell-status',
+            'target-month': 'pm-cell-target-month',
+            'budget': 'pm-cell-budget',
+            'actual': 'pm-cell-actual',
+            'review-note': 'pm-cell-review-note',
+            'action-person': 'pm-cell-action-person',
+            'preparer': 'pm-cell-preparer',
+            'reviewer': 'pm-cell-reviewer',
+            'partner': 'pm-cell-partner',
+            'lodgment-due': 'pm-cell-lodgment-due',
+            'year-end': 'pm-cell-year-end',
+            'last-updated': 'pm-cell-last-updated',
+            'priority': 'pm-cell-priority'
+        };
+        
+        const cellClass = `.${columnClassMap[column]}`;
+        if (cellClass !== '.undefined') {
+            $(cellClass).css('width', width + 'px');
+        }
+    }
+    
+    applyColumnWidths() {
+        Object.keys(this.columnWidths).forEach(column => {
+            this.setColumnWidth(column, this.columnWidths[column]);
+        });
+    }
+    
+    loadColumnWidths() {
+        const saved = localStorage.getItem('pm-column-widths');
+        if (saved) {
+            try {
+                return JSON.parse(saved);
+            } catch (e) {
+                console.warn('Failed to load column widths:', e);
+            }
+        }
+        
+        // Default column widths
+        return {
+            'client': 150,
+            'entity': 100,
+            'tf-tg': 80,
+            'software': 120,
+            'status': 100,
+            'target-month': 120,
+            'budget': 120,
+            'actual': 120,
+            'review-note': 120,
+            'action-person': 130,
+            'preparer': 120,
+            'reviewer': 120,
+            'partner': 120,
+            'lodgment-due': 130,
+            'year-end': 100,
+            'last-updated': 130,
+            'priority': 100
+        };
+    }
+    
+    saveColumnWidths() {
+        try {
+            localStorage.setItem('pm-column-widths', JSON.stringify(this.columnWidths));
+        } catch (e) {
+            console.warn('Failed to save column widths:', e);
+        }
+    }
+
+
 }
 
 // Context Menu Styles
@@ -1996,6 +2160,7 @@ const contextMenuStyles = `
 }
 </style>
 `;
+
 
 // Initialize when DOM is ready
 $(document).ready(function() {

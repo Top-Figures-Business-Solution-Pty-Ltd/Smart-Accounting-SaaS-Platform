@@ -27,6 +27,8 @@ def get_project_management_data():
     Based on user's data structure: Company → Client → Project → Task
     """
     try:
+        # Clear any existing caches to ensure fresh data
+        frappe.clear_cache()
         # First, let's get basic project data using frappe.get_all (simpler and safer)
         projects = frappe.get_all("Project", 
             fields=["name", "project_name", "customer", "status", "expected_end_date", "priority"],
@@ -264,6 +266,10 @@ def update_task_status(task_id, new_status):
         task.status = new_status
         task.save()
         
+        # Force commit and clear cache
+        frappe.db.commit()
+        frappe.clear_cache()
+        
         return {'success': True, 'message': 'Task status updated successfully'}
     
     except Exception as e:
@@ -323,6 +329,12 @@ def update_task_field(task_id, field_name, new_value):
         # Update the field
         setattr(task, field_name, new_value)
         task.save()
+        
+        # Force commit to database immediately
+        frappe.db.commit()
+        
+        # Clear caches to ensure fresh data
+        frappe.clear_cache()
         
         return {'success': True, 'message': 'Field updated successfully', 'new_value': new_value}
     
@@ -587,6 +599,10 @@ def update_task_software(task_id, software_value):
         # Update task software directly
         task.custom_software = software_value
         task.save()
+        
+        # Force commit and clear cache
+        frappe.db.commit()
+        frappe.clear_cache()
         
         # Sync to customer's accounting platform if task has a client
         customer_updated = False
