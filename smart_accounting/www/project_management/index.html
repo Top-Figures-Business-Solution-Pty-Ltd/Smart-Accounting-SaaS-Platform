@@ -64,10 +64,75 @@
                         </div>
                     </div>
                 </div>
-                <button class="pm-btn pm-btn-secondary">
-                    <i class="fa fa-filter"></i>
-                    Filter
-                </button>
+                <div class="pm-advanced-filter-dropdown">
+                    <button class="pm-btn pm-btn-secondary pm-advanced-filter-btn">
+                        <i class="fa fa-filter"></i>
+                        Filter
+                        <i class="fa fa-chevron-down pm-filter-dropdown-icon"></i>
+                    </button>
+                    <div class="pm-advanced-filter-panel" style="display: none;">
+                        <div class="pm-filter-header">
+                            <h4>Advanced filters</h4>
+                            <span class="pm-filter-count">Showing all of <span id="total-tasks">0</span> tasks</span>
+                            <button class="pm-filter-close">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="pm-filter-toggle">
+                            <label class="pm-toggle">
+                                <input type="checkbox" id="filter-with-ai">
+                                <span class="pm-toggle-slider"></span>
+                            </label>
+                            <span>Filter with AI</span>
+                            <span class="pm-new-badge">New</span>
+                        </div>
+                        
+                        <div class="pm-filter-conditions">
+                            <div class="pm-filter-condition" data-index="0">
+                                <div class="pm-filter-where">Where</div>
+                                <select class="pm-filter-column">
+                                    <option value="">Column</option>
+                                    <option value="client_name">Client Name</option>
+                                    <option value="entity">Entity</option>
+                                    <option value="tf_tg">TF/TG</option>
+                                    <option value="software">Software</option>
+                                    <option value="status">Status</option>
+                                    <option value="target_month">Target Month</option>
+                                    <option value="budget">Budget</option>
+                                    <option value="actual">Actual</option>
+                                </select>
+                                <select class="pm-filter-condition-type">
+                                    <option value="">Condition</option>
+                                    <option value="equals">equals</option>
+                                    <option value="not_equals">doesn't equal</option>
+                                </select>
+                                <select class="pm-filter-value">
+                                    <option value="">Value</option>
+                                </select>
+                                <button class="pm-filter-remove" style="display: none;">
+                                    <i class="fa fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="pm-filter-actions">
+                            <button class="pm-btn pm-btn-link pm-add-filter">
+                                <i class="fa fa-plus"></i>
+                                New filter
+                            </button>
+                            <button class="pm-btn pm-btn-link pm-add-group">
+                                <i class="fa fa-plus"></i>
+                                New group
+                            </button>
+                        </div>
+                        
+                        <div class="pm-filter-footer">
+                            <button class="pm-btn pm-btn-link pm-clear-all">Clear all</button>
+                            <button class="pm-btn pm-btn-primary pm-save-view">Save as new view</button>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="pm-search">
                 <i class="fa fa-search"></i>

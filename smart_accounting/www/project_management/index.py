@@ -263,6 +263,7 @@ def update_task_status(task_id, new_status):
     """
     try:
         task = frappe.get_doc("Task", task_id)
+        task.flags.ignore_version = True
         task.status = new_status
         task.save()
         
@@ -282,7 +283,9 @@ def update_task_field(task_id, field_name, new_value):
     Update any task field from the project management interface
     """
     try:
+        # Get fresh document and ignore version conflicts
         task = frappe.get_doc("Task", task_id)
+        task.flags.ignore_version = True
         
         # Validate field name (security check)
         allowed_fields = [
@@ -485,6 +488,33 @@ def get_user_info(email_or_user):
         return [{'email': str(email_or_user), 'initials': get_initials(str(email_or_user)), 'full_name': str(email_or_user)}]
 
 @frappe.whitelist()
+def get_task_status_options():
+    """
+    Get available status options for Task doctype
+    """
+    try:
+        # Get Task doctype meta to fetch status field options
+        task_meta = frappe.get_meta("Task")
+        status_field = None
+        
+        for field in task_meta.fields:
+            if field.fieldname == "status":
+                status_field = field
+                break
+        
+        if status_field and hasattr(status_field, 'options') and status_field.options:
+            # Split options by newline and clean them
+            options = [opt.strip() for opt in status_field.options.split('\n') if opt.strip()]
+            return {'success': True, 'status_options': options}
+        else:
+            # Fallback to default options
+            return {'success': True, 'status_options': ['Open', 'Working', 'Completed', 'Cancelled']}
+            
+    except Exception as e:
+        frappe.log_error(f"Error getting task status options: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
 def get_companies_for_tftg():
     """
     Get all companies that contain 'Top' in name for TF/TG selection
@@ -595,6 +625,7 @@ def update_task_software(task_id, software_value):
     """
     try:
         task = frappe.get_doc("Task", task_id)
+        task.flags.ignore_version = True
         
         # Update task software directly
         task.custom_software = software_value
@@ -645,6 +676,7 @@ def update_task_client(task_id, customer_id):
     """
     try:
         task = frappe.get_doc("Task", task_id)
+        task.flags.ignore_version = True
         
         # Get customer info
         customer = frappe.get_doc("Customer", customer_id)

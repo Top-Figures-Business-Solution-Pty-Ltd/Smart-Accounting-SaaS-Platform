@@ -11,6 +11,8 @@ class ProjectManagement {
         this.setupSearch();
         this.initializeInlineEditing();
         this.initializeColumnResizing();
+        this.initializeAdvancedFilter();
+        this.loadSystemOptions();
     }
 
     bindEvents() {
@@ -312,12 +314,27 @@ class ProjectManagement {
         const $badge = $(statusBadge);
         const taskId = $badge.closest('.pm-task-row').data('task-id');
         
-        const statusOptions = [
-            { value: 'Open', label: 'Open', color: 'var(--monday-orange)' },
-            { value: 'Working', label: 'Working', color: 'var(--monday-blue)' },
-            { value: 'Completed', label: 'Completed', color: 'var(--monday-green)' },
-            { value: 'Cancelled', label: 'Cancelled', color: 'var(--monday-red)' }
+        // Use dynamic status options with auto-assigned colors
+        const colors = [
+            'var(--monday-orange)',
+            'var(--monday-blue)', 
+            'var(--monday-green)',
+            'var(--monday-red)',
+            'var(--monday-purple)',
+            'var(--monday-pink)',
+            '#9333ea', // purple-600
+            '#059669', // emerald-600
+            '#dc2626', // red-600
+            '#ea580c', // orange-600
+            '#7c3aed', // violet-600
+            '#0891b2'  // cyan-600
         ];
+        
+        const statusOptions = (this.statusOptions || ['Open', 'Working', 'Completed', 'Cancelled']).map((status, index) => ({
+            value: status,
+            label: status,
+            color: colors[index % colors.length]
+        }));
 
         this.showContextMenu($badge, statusOptions, (newStatus) => {
             this.updateTaskStatus(taskId, newStatus);
@@ -395,9 +412,13 @@ class ProjectManagement {
                 const $statusBadge = $row.find('.pm-status-badge');
                 const $progressBar = $row.find('.pm-progress-fill');
 
-                $statusBadge.removeClass('status-open status-working status-completed status-cancelled')
-                           .addClass(`status-${newStatus.toLowerCase()}`)
+                // Remove all existing status classes and add new one
+                $statusBadge.attr('class', 'pm-status-badge')
+                           .addClass(`status-${this.getStatusClass(newStatus)}`)
                            .text(newStatus);
+                
+                // Apply dynamic color
+                this.applyStatusColor($statusBadge, newStatus);
 
                 // Update progress bar
                 let progress = 0;
@@ -578,6 +599,8 @@ class ProjectManagement {
                 // Update display based on field type
                 this.updateCellDisplay($cell, displayValue, fieldType);
                 
+                console.log(`Updated ${fieldType} field with value: ${displayValue}`);
+                
                 frappe.show_alert({
                     message: 'Field updated successfully',
                     indicator: 'green'
@@ -634,6 +657,23 @@ class ProjectManagement {
             default:
                 $cell.html(`<span class="editable-field">${value || '-'}</span>`);
         }
+        
+        // Force CSS reflow and ensure proper styling
+        $cell.removeClass('editing');
+        $cell[0].offsetHeight; // Force reflow
+        
+        // For currency fields, ensure proper styling is applied
+        if (fieldType === 'currency') {
+            const $currencySpan = $cell.find('.pm-currency, .pm-no-amount');
+            if ($currencySpan.length) {
+                $currencySpan[0].offsetHeight; // Force reflow for currency elements
+            }
+        }
+        
+        // Re-trigger any hover/focus states if needed
+        setTimeout(() => {
+            $cell.trigger('updated');
+        }, 10);
     }
 
     async addNewTask(addTaskBtn) {
@@ -940,6 +980,7 @@ class ProjectManagement {
                 $cell.data('current-client-name', customerName);
                 $cell.html(`<span class="editable-field client-display">${customerName}</span>`);
                 $cell.removeClass('editing');
+                $cell[0].offsetHeight; // Force reflow
                 
                 // Remove dropdown from body
                 const taskId = $cell.data('task-id');
@@ -1175,9 +1216,10 @@ class ProjectManagement {
             });
             
             if (response.message && response.message.success) {
-                // Update display immediately
-                $cell.html(`<span class="editable-field">${newValue}</span>`);
+                // Update display immediately with proper styling
+                $cell.html(`<span class="pm-software-badge editable-field">${newValue}</span>`);
                 $cell.removeClass('editing');
+                $cell[0].offsetHeight; // Force reflow
                 
                 frappe.show_alert({
                     message: 'Software updated successfully',
@@ -1252,9 +1294,11 @@ class ProjectManagement {
             });
             
             if (response.message && response.message.success) {
-                // Update display immediately
-                $cell.html(`<span class="editable-field">${displayValue || newValue || '-'}</span>`);
-                $cell.removeClass('editing');
+                // Get field type from cell data
+                const fieldType = $cell.data('field-type') || 'text';
+                
+                // Update display immediately with proper field type handling
+                this.updateCellDisplay($cell, displayValue || newValue, fieldType);
                 
                 frappe.show_alert({
                     message: 'Field updated successfully',
@@ -2107,6 +2151,383 @@ class ProjectManagement {
         }
     }
 
+    // Advanced Filter Functionality
+    initializeAdvancedFilter() {
+        this.activeFilters = [];
+        this.bindAdvancedFilterEvents();
+        this.updateTaskCount();
+    }
+
+    bindAdvancedFilterEvents() {
+        // Toggle filter panel
+        $(document).on('click', '.pm-advanced-filter-btn', (e) => {
+            e.stopPropagation();
+            $('.pm-advanced-filter-panel').toggle();
+        });
+
+        // Close filter panel
+        $(document).on('click', '.pm-filter-close', () => {
+            $('.pm-advanced-filter-panel').hide();
+        });
+
+        // Column selection change
+        $(document).on('change', '.pm-filter-column', (e) => {
+            this.updateValueOptions($(e.target));
+        });
+
+        // Apply filters when condition changes (real-time filtering)
+        $(document).on('change', '.pm-filter-column, .pm-filter-condition-type, .pm-filter-value', () => {
+            this.applyAdvancedFilters();
+        });
+
+        // Remove filter condition
+        $(document).on('click', '.pm-filter-remove', (e) => {
+            $(e.target).closest('.pm-filter-condition').remove();
+            this.applyAdvancedFilters();
+            this.updateRemoveButtons();
+        });
+
+        // Add new filter
+        $(document).on('click', '.pm-add-filter', () => {
+            this.addNewFilterCondition();
+        });
+
+        // Clear all filters
+        $(document).on('click', '.pm-clear-all', () => {
+            this.clearAllFilters();
+        });
+
+        // Click outside to close
+        $(document).on('click', (e) => {
+            if (!$(e.target).closest('.pm-advanced-filter-dropdown').length) {
+                $('.pm-advanced-filter-panel').hide();
+            }
+        });
+    }
+
+    updateValueOptions($columnSelect) {
+        const column = $columnSelect.val();
+        const $valueSelect = $columnSelect.closest('.pm-filter-condition').find('.pm-filter-value');
+        
+        // Clear existing options
+        $valueSelect.empty().append('<option value="">Value</option>');
+        
+        if (!column) return;
+        
+        // Get unique values for selected column
+        const values = new Set();
+        $('.pm-task-row').each((i, row) => {
+            const $row = $(row);
+            let value = '';
+            
+            switch (column) {
+                case 'client_name':
+                    value = $row.find('.pm-cell-client .client-display').text().trim();
+                    break;
+                case 'entity':
+                    value = $row.find('.pm-cell-entity .pm-entity-badge').text().trim();
+                    break;
+                case 'tf_tg':
+                    value = $row.find('.pm-cell-tf-tg .pm-tf-tg-badge').text().trim();
+                    break;
+                case 'software':
+                    value = $row.find('.pm-cell-software .pm-software-badge').text().trim();
+                    break;
+                case 'status':
+                    value = $row.find('.pm-cell-status .pm-status-badge').text().trim();
+                    break;
+                case 'target_month':
+                    value = $row.find('.pm-cell-target-month .editable-field').text().trim();
+                    break;
+            }
+            
+            if (value && value !== '-' && value !== 'No Client') {
+                values.add(value);
+            }
+        });
+        
+        // Add options to select
+        Array.from(values).sort().forEach(value => {
+            $valueSelect.append(`<option value="${value}">${value}</option>`);
+        });
+    }
+
+    applyAdvancedFilters() {
+        const filters = [];
+        
+        // Collect all filter conditions
+        $('.pm-filter-condition').each((i, condition) => {
+            const $condition = $(condition);
+            const column = $condition.find('.pm-filter-column').val();
+            const conditionType = $condition.find('.pm-filter-condition-type').val();
+            const value = $condition.find('.pm-filter-value').val();
+            
+            if (column && conditionType && (value || conditionType === 'is_empty' || conditionType === 'is_not_empty')) {
+                filters.push({ column, condition: conditionType, value });
+            }
+        });
+        
+        this.activeFilters = filters;
+        this.filterTasks();
+        this.updateTaskCount();
+    }
+
+    filterTasks() {
+        $('.pm-task-row').each((i, row) => {
+            const $row = $(row);
+            let shouldShow = true;
+            
+            // Apply each filter
+            this.activeFilters.forEach(filter => {
+                const cellValue = this.getCellValue($row, filter.column);
+                
+                switch (filter.condition) {
+                    case 'equals':
+                        if (cellValue !== filter.value) shouldShow = false;
+                        break;
+                    case 'contains':
+                        if (!cellValue.toLowerCase().includes(filter.value.toLowerCase())) shouldShow = false;
+                        break;
+                    case 'not_equals':
+                        if (cellValue === filter.value) shouldShow = false;
+                        break;
+                    case 'is_empty':
+                        if (cellValue && cellValue !== '-') shouldShow = false;
+                        break;
+                    case 'is_not_empty':
+                        if (!cellValue || cellValue === '-') shouldShow = false;
+                        break;
+                }
+            });
+            
+            if (shouldShow) {
+                $row.show();
+            } else {
+                $row.hide();
+            }
+        });
+        
+        // Hide/show project groups based on visible tasks
+        this.updateProjectVisibility();
+    }
+
+    getCellValue($row, column) {
+        switch (column) {
+            case 'client_name':
+                return $row.find('.pm-cell-client .client-display').text().trim();
+            case 'entity':
+                return $row.find('.pm-cell-entity .pm-entity-badge').text().trim();
+            case 'tf_tg':
+                return $row.find('.pm-cell-tf-tg .pm-tf-tg-badge').text().trim();
+            case 'software':
+                return $row.find('.pm-cell-software .pm-software-badge').text().trim();
+            case 'status':
+                return $row.find('.pm-cell-status .pm-status-badge').text().trim();
+            case 'target_month':
+                return $row.find('.pm-cell-target-month .editable-field').text().trim();
+            default:
+                return '';
+        }
+    }
+
+    addNewFilterCondition() {
+        const conditionIndex = $('.pm-filter-condition').length;
+        const newCondition = `
+            <div class="pm-filter-condition" data-index="${conditionIndex}">
+                <div class="pm-filter-where">And</div>
+                <select class="pm-filter-column">
+                    <option value="">Column</option>
+                    <option value="client_name">Client Name</option>
+                    <option value="entity">Entity</option>
+                    <option value="tf_tg">TF/TG</option>
+                    <option value="software">Software</option>
+                    <option value="status">Status</option>
+                    <option value="target_month">Target Month</option>
+                    <option value="budget">Budget</option>
+                    <option value="actual">Actual</option>
+                </select>
+                <select class="pm-filter-condition-type">
+                    <option value="">Condition</option>
+                    <option value="equals">equals</option>
+                    <option value="not_equals">doesn't equal</option>
+                </select>
+                <select class="pm-filter-value">
+                    <option value="">Value</option>
+                </select>
+                <button class="pm-filter-remove">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+        `;
+        
+        $('.pm-filter-conditions').append(newCondition);
+        this.updateRemoveButtons();
+    }
+
+    updateRemoveButtons() {
+        const $conditions = $('.pm-filter-condition');
+        
+        if ($conditions.length > 1) {
+            $conditions.find('.pm-filter-remove').show();
+        } else {
+            $conditions.find('.pm-filter-remove').hide();
+        }
+    }
+
+    clearAllFilters() {
+        $('.pm-filter-conditions').html(`
+            <div class="pm-filter-condition">
+                <div class="pm-filter-where">Where</div>
+                <select class="pm-filter-column">
+                    <option value="">Column</option>
+                    <option value="client_name">Client Name</option>
+                    <option value="entity">Entity</option>
+                    <option value="tf_tg">TF/TG</option>
+                    <option value="software">Software</option>
+                    <option value="status">Status</option>
+                    <option value="target_month">Target Month</option>
+                    <option value="budget">Budget</option>
+                    <option value="actual">Actual</option>
+                </select>
+                <select class="pm-filter-condition-type">
+                    <option value="">Condition</option>
+                    <option value="equals">equals</option>
+                    <option value="not_equals">doesn't equal</option>
+                </select>
+                <select class="pm-filter-value">
+                    <option value="">Value</option>
+                </select>
+            </div>
+        `);
+        
+        this.activeFilters = [];
+        $('.pm-task-row').show();
+        this.updateProjectVisibility();
+        this.updateTaskCount();
+    }
+
+    updateTaskCount() {
+        const totalTasks = $('.pm-task-row:not(.pm-add-task-row)').length;
+        const visibleTasks = $('.pm-task-row:not(.pm-add-task-row):visible').length;
+        
+        $('#total-tasks').text(totalTasks);
+        
+        if (this.activeFilters.length > 0) {
+            $('.pm-filter-count').html(`Showing ${visibleTasks} of ${totalTasks} tasks`);
+        } else {
+            $('.pm-filter-count').html(`Showing all of ${totalTasks} tasks`);
+        }
+    }
+
+    // Load system options
+    async loadSystemOptions() {
+        try {
+            // Load task status options
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_task_status_options'
+            });
+            
+            if (response.message && response.message.success) {
+                this.statusOptions = response.message.status_options;
+                this.updateStatusFilters();
+                // Apply colors to existing status badges on page load
+                this.applyExistingStatusColors();
+            }
+        } catch (error) {
+            console.warn('Failed to load system options:', error);
+            // Use fallback options
+            this.statusOptions = ['Open', 'Working', 'Completed', 'Cancelled'];
+        }
+    }
+
+    updateStatusFilters() {
+        // Update status filter dropdown in header
+        const $statusList = $('.pm-status-list');
+        $statusList.empty();
+        
+        this.statusOptions.forEach((status, index) => {
+            const statusClass = this.getStatusClass(status);
+            $statusList.append(`
+                <div class="pm-filter-option" data-status="${status}">
+                    <div class="pm-status-dot status-${statusClass}"></div>
+                    <span>${status}</span>
+                </div>
+            `);
+        });
+        
+        // Generate dynamic CSS for new status colors
+        this.generateStatusCSS();
+    }
+
+    getStatusClass(status) {
+        // Convert status to CSS-friendly class name
+        return status.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    }
+
+    applyStatusColor($badge, status) {
+        const colors = [
+            'var(--monday-orange)',
+            'var(--monday-blue)', 
+            'var(--monday-green)',
+            'var(--monday-red)',
+            'var(--monday-purple)',
+            'var(--monday-pink)',
+            '#9333ea', '#059669', '#dc2626', '#ea580c', '#7c3aed', '#0891b2'
+        ];
+        
+        const statusIndex = this.statusOptions.indexOf(status);
+        const color = colors[statusIndex % colors.length];
+        
+        $badge.css('background-color', color);
+    }
+
+    generateStatusCSS() {
+        // Remove existing dynamic status styles
+        $('#dynamic-status-styles').remove();
+        
+        const colors = [
+            'var(--monday-orange)',
+            'var(--monday-blue)', 
+            'var(--monday-green)',
+            'var(--monday-red)',
+            'var(--monday-purple)',
+            'var(--monday-pink)',
+            '#9333ea', '#059669', '#dc2626', '#ea580c', '#7c3aed', '#0891b2'
+        ];
+        
+        let css = '<style id="dynamic-status-styles">';
+        
+        this.statusOptions.forEach((status, index) => {
+            const statusClass = this.getStatusClass(status);
+            const color = colors[index % colors.length];
+            
+            css += `
+                .pm-status-badge.status-${statusClass} {
+                    background-color: ${color} !important;
+                    color: white !important;
+                }
+                .pm-status-dot.status-${statusClass} {
+                    background-color: ${color} !important;
+                }
+            `;
+        });
+        
+        css += '</style>';
+        $('head').append(css);
+    }
+
+    applyExistingStatusColors() {
+        // Apply colors to all existing status badges on the page
+        $('.pm-status-badge').each((i, badge) => {
+            const $badge = $(badge);
+            const status = $badge.text().trim();
+            if (status && this.statusOptions.includes(status)) {
+                this.applyStatusColor($badge, status);
+                // Also update CSS class
+                $badge.addClass(`status-${this.getStatusClass(status)}`);
+            }
+        });
+    }
 
 }
 
