@@ -2005,21 +2005,45 @@ class ProjectManagement {
     }
     
     bindResizeEvents() {
-        // Mouse down on resizer
+        // Mouse events
         $(document).on('mousedown', '.pm-column-resizer', (e) => {
             e.preventDefault();
             this.startResize(e);
         });
         
-        // Mouse move
         $(document).on('mousemove', (e) => {
             if (this.isResizing) {
                 this.doResize(e);
             }
         });
         
-        // Mouse up
         $(document).on('mouseup', () => {
+            if (this.isResizing) {
+                this.endResize();
+            }
+        });
+        
+        // Touch events for mobile support
+        $(document).on('touchstart', '.pm-column-resizer', (e) => {
+            e.preventDefault();
+            const touch = e.originalEvent.touches[0];
+            this.startResize({
+                clientX: touch.clientX,
+                target: e.target
+            });
+        });
+        
+        $(document).on('touchmove', (e) => {
+            if (this.isResizing) {
+                e.preventDefault();
+                const touch = e.originalEvent.touches[0];
+                this.doResize({
+                    clientX: touch.clientX
+                });
+            }
+        });
+        
+        $(document).on('touchend', () => {
             if (this.isResizing) {
                 this.endResize();
             }
@@ -2030,6 +2054,19 @@ class ProjectManagement {
             if (this.isResizing) {
                 return false;
             }
+        });
+        
+        // Handle window resize
+        $(window).on('resize', () => {
+            if (!this.isResizing) {
+                this.updateTableWidth();
+            }
+        });
+        
+        // Right-click context menu for column headers
+        $(document).on('contextmenu', '.pm-header-cell', (e) => {
+            e.preventDefault();
+            this.showColumnContextMenu(e);
         });
     }
     
@@ -2055,6 +2092,9 @@ class ProjectManagement {
         
         // Apply new width to all cells in this column
         this.setColumnWidth(this.currentColumn, newWidth);
+        
+        // Add visual feedback
+        this.showResizeGuide(e.clientX);
     }
     
     endResize() {
@@ -2072,11 +2112,42 @@ class ProjectManagement {
         this.currentColumn = null;
         $('.pm-table-container').removeClass('resizing');
         $('.pm-column-resizer').removeClass('resizing');
+        this.hideResizeGuide();
+    }
+    
+    showResizeGuide(clientX) {
+        let guide = $('.pm-resize-guide');
+        if (guide.length === 0) {
+            guide = $('<div class="pm-resize-guide"></div>');
+            $('body').append(guide);
+        }
+        
+        const tableContainer = $('.pm-table-container');
+        const containerRect = tableContainer[0].getBoundingClientRect();
+        
+        guide.css({
+            left: clientX + 'px',
+            top: containerRect.top + 'px',
+            height: containerRect.height + 'px',
+            display: 'block'
+        });
+    }
+    
+    hideResizeGuide() {
+        $('.pm-resize-guide').hide();
     }
     
     setColumnWidth(column, width) {
-        // Set width for header
-        $(`.pm-header-cell[data-column="${column}"]`).css('width', width + 'px');
+        // Ensure minimum width
+        const minWidth = Math.max(width, 50);
+        
+        // Set width for header cells
+        $(`.pm-header-cell[data-column="${column}"]`).css({
+            'width': minWidth + 'px',
+            'min-width': minWidth + 'px',
+            'max-width': minWidth + 'px',
+            'flex': `0 0 ${minWidth}px`
+        });
         
         // Set width for corresponding data cells - map column names to CSS classes
         const columnClassMap = {
@@ -2101,8 +2172,16 @@ class ProjectManagement {
         
         const cellClass = `.${columnClassMap[column]}`;
         if (cellClass !== '.undefined') {
-            $(cellClass).css('width', width + 'px');
+            $(cellClass).css({
+                'width': minWidth + 'px',
+                'min-width': minWidth + 'px',
+                'max-width': minWidth + 'px',
+                'flex': `0 0 ${minWidth}px`
+            });
         }
+        
+        // Update total table width
+        this.updateTableWidth();
     }
     
     applyColumnWidths() {
@@ -2149,6 +2228,113 @@ class ProjectManagement {
         } catch (e) {
             console.warn('Failed to save column widths:', e);
         }
+    }
+    
+    updateTableWidth() {
+        // Calculate total width based on all column widths
+        const totalWidth = Object.values(this.columnWidths).reduce((sum, width) => sum + width, 0);
+        const minTotalWidth = Math.max(totalWidth, 1500); // Minimum table width
+        
+        // Update table container widths
+        $('.pm-project-table-header, .pm-task-row').css({
+            'width': minTotalWidth + 'px',
+            'min-width': minTotalWidth + 'px'
+        });
+    }
+    
+    resetColumnWidths() {
+        // Reset to default widths
+        this.columnWidths = this.loadColumnWidths();
+        this.applyColumnWidths();
+        
+        // Clear saved widths
+        localStorage.removeItem('pm-column-widths');
+        
+        frappe.show_alert({
+            message: 'Column widths reset to default',
+            indicator: 'blue'
+        });
+    }
+    
+    showColumnContextMenu(e) {
+        // Remove existing menu
+        $('.pm-column-context-menu').remove();
+        
+        const menu = $(`
+            <div class="pm-column-context-menu">
+                <div class="pm-context-menu-item" data-action="reset-widths">
+                    <i class="fa fa-refresh"></i>
+                    Reset all column widths
+                </div>
+                <div class="pm-context-menu-item" data-action="auto-fit">
+                    <i class="fa fa-arrows-h"></i>
+                    Auto-fit columns
+                </div>
+            </div>
+        `);
+        
+        // Position menu
+        menu.css({
+            position: 'fixed',
+            left: e.clientX + 'px',
+            top: e.clientY + 'px',
+            zIndex: 10000
+        });
+        
+        $('body').append(menu);
+        
+        // Bind menu actions
+        menu.on('click', '.pm-context-menu-item', (event) => {
+            const action = $(event.currentTarget).data('action');
+            
+            switch(action) {
+                case 'reset-widths':
+                    this.resetColumnWidths();
+                    break;
+                case 'auto-fit':
+                    this.autoFitColumns();
+                    break;
+            }
+            
+            menu.remove();
+        });
+        
+        // Close menu on outside click
+        $(document).one('click', () => {
+            menu.remove();
+        });
+    }
+    
+    autoFitColumns() {
+        // Auto-fit columns based on content
+        Object.keys(this.columnWidths).forEach(column => {
+            const headerCell = $(`.pm-header-cell[data-column="${column}"]`);
+            const headerText = headerCell.find('span').text();
+            
+            // Calculate width based on content
+            const tempElement = $('<span>').text(headerText).css({
+                'font-size': '11px',
+                'font-weight': '600',
+                'visibility': 'hidden',
+                'position': 'absolute'
+            });
+            
+            $('body').append(tempElement);
+            const textWidth = tempElement.outerWidth();
+            tempElement.remove();
+            
+            // Set minimum width based on content + padding
+            const newWidth = Math.max(textWidth + 40, 80);
+            this.setColumnWidth(column, newWidth);
+            this.columnWidths[column] = newWidth;
+        });
+        
+        this.saveColumnWidths();
+        
+        frappe.show_alert({
+            message: 'Columns auto-fitted',
+            indicator: 'green'
+        });
     }
 
     // Advanced Filter Functionality
