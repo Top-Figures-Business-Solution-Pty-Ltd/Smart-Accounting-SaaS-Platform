@@ -379,60 +379,92 @@
                                                     </div>
                                                 {% endif %}
                                             </div>
-                                            <div class="pm-cell pm-cell-action-person">
+                                            <div class="pm-cell pm-cell-action-person" 
+                                                 data-editable="true" 
+                                                 data-field="custom_action_person" 
+                                                 data-task-id="{{ task.task_id }}"
+                                                 data-field-type="person_selector">
                                                 {% if task.action_person_info %}
-                                                    <div class="pm-user-avatars">
+                                                    <div class="pm-user-avatars editable-field">
                                                         {% for user in task.action_person_info[:2] %}
-                                                            <div class="pm-avatar" title="{{ user.full_name }}">{{ user.initials }}</div>
+                                                            <div class="pm-avatar" title="{{ user.full_name }}" data-email="{{ user.email }}">{{ user.initials }}</div>
                                                         {% endfor %}
                                                         {% if task.action_person_info|length > 2 %}
                                                             <div class="pm-avatar-more">+{{ task.action_person_info|length - 2 }}</div>
                                                         {% endif %}
                                                     </div>
                                                 {% else %}
-                                                    -
+                                                    <div class="pm-user-avatars editable-field pm-empty-person">
+                                                        <div class="pm-avatar pm-empty-avatar">
+                                                            <i class="fa fa-user"></i>
+                                                        </div>
+                                                    </div>
                                                 {% endif %}
                                             </div>
-                                            <div class="pm-cell pm-cell-preparer">
+                                            <div class="pm-cell pm-cell-preparer"
+                                                 data-editable="true" 
+                                                 data-field="custom_preparer" 
+                                                 data-task-id="{{ task.task_id }}"
+                                                 data-field-type="person_selector">
                                                 {% if task.preparer_info %}
-                                                    <div class="pm-user-avatars">
+                                                    <div class="pm-user-avatars editable-field">
                                                         {% for user in task.preparer_info[:2] %}
-                                                            <div class="pm-avatar" title="{{ user.full_name }}">{{ user.initials }}</div>
+                                                            <div class="pm-avatar" title="{{ user.full_name }}" data-email="{{ user.email }}">{{ user.initials }}</div>
                                                         {% endfor %}
                                                         {% if task.preparer_info|length > 2 %}
                                                             <div class="pm-avatar-more">+{{ task.preparer_info|length - 2 }}</div>
                                                         {% endif %}
                                                     </div>
                                                 {% else %}
-                                                    -
+                                                    <div class="pm-user-avatars editable-field pm-empty-person">
+                                                        <div class="pm-avatar pm-empty-avatar">
+                                                            <i class="fa fa-user"></i>
+                                                        </div>
+                                                    </div>
                                                 {% endif %}
                                             </div>
-                                            <div class="pm-cell pm-cell-reviewer">
+                                            <div class="pm-cell pm-cell-reviewer"
+                                                 data-editable="true" 
+                                                 data-field="custom_reviewer" 
+                                                 data-task-id="{{ task.task_id }}"
+                                                 data-field-type="person_selector">
                                                 {% if task.reviewer_info %}
-                                                    <div class="pm-user-avatars">
+                                                    <div class="pm-user-avatars editable-field">
                                                         {% for user in task.reviewer_info[:2] %}
-                                                            <div class="pm-avatar" title="{{ user.full_name }}">{{ user.initials }}</div>
+                                                            <div class="pm-avatar" title="{{ user.full_name }}" data-email="{{ user.email }}">{{ user.initials }}</div>
                                                         {% endfor %}
                                                         {% if task.reviewer_info|length > 2 %}
                                                             <div class="pm-avatar-more">+{{ task.reviewer_info|length - 2 }}</div>
                                                         {% endif %}
                                                     </div>
                                                 {% else %}
-                                                    -
+                                                    <div class="pm-user-avatars editable-field pm-empty-person">
+                                                        <div class="pm-avatar pm-empty-avatar">
+                                                            <i class="fa fa-user"></i>
+                                                        </div>
+                                                    </div>
                                                 {% endif %}
                                             </div>
-                                            <div class="pm-cell pm-cell-partner">
+                                            <div class="pm-cell pm-cell-partner"
+                                                 data-editable="true" 
+                                                 data-field="custom_partner" 
+                                                 data-task-id="{{ task.task_id }}"
+                                                 data-field-type="person_selector">
                                                 {% if task.partner_info %}
-                                                    <div class="pm-user-avatars">
+                                                    <div class="pm-user-avatars editable-field">
                                                         {% for user in task.partner_info[:2] %}
-                                                            <div class="pm-avatar" title="{{ user.full_name }}">{{ user.initials }}</div>
+                                                            <div class="pm-avatar" title="{{ user.full_name }}" data-email="{{ user.email }}">{{ user.initials }}</div>
                                                         {% endfor %}
                                                         {% if task.partner_info|length > 2 %}
                                                             <div class="pm-avatar-more">+{{ task.partner_info|length - 2 }}</div>
                                                         {% endif %}
                                                     </div>
                                                 {% else %}
-                                                    -
+                                                    <div class="pm-user-avatars editable-field pm-empty-person">
+                                                        <div class="pm-avatar pm-empty-avatar">
+                                                            <i class="fa fa-user"></i>
+                                                        </div>
+                                                    </div>
                                                 {% endif %}
                                             </div>
                                             <div class="pm-cell pm-cell-lodgment-due">

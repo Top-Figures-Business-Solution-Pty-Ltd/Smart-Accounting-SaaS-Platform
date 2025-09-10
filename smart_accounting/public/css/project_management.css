@@ -167,6 +167,35 @@
     font-size: 13px;
 }
 
+/* Unified Dropdown Menu Styles */
+.pm-new-task-menu,
+.pm-person-filter-menu,
+.pm-client-filter-menu,
+.pm-status-filter-menu {
+    position: fixed !important;
+    background: white;
+    border: 1px solid var(--monday-border);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    display: none;
+    min-width: 200px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.pm-advanced-filter-panel {
+    position: fixed !important;
+    background: white;
+    border: 1px solid var(--monday-border);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    display: none;
+    min-width: 300px;
+    padding: 16px;
+}
+
 .pm-context-menu-item {
     display: flex;
     align-items: center;
@@ -1242,13 +1271,27 @@ div.pm-table-header,
     display: flex;
     align-items: center;
     gap: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.pm-user-avatars:hover {
+    transform: translateY(-1px);
+}
+
+/* Empty Person State */
+.pm-empty-person {
+    opacity: 0.6;
+}
+
+.pm-empty-person:hover {
+    opacity: 0.8;
 }
 
 .pm-avatar {
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: var(--monday-gradient-blue);
     color: white;
     display: flex;
     align-items: center;
@@ -1259,9 +1302,310 @@ div.pm-table-header,
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     border: 2px solid white;
-    box-shadow: 0 3px 12px rgba(0, 115, 234, 0.25);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
     position: relative;
     overflow: hidden;
+    /* Color will be set dynamically via style attribute */
+}
+
+/* Empty Avatar Style */
+.pm-empty-avatar {
+    background: #e6e9ef !important;
+    color: #676879 !important;
+    border: 2px dashed #d0d4e4 !important;
+    box-shadow: none !important;
+}
+
+.pm-empty-avatar i {
+    font-size: 14px;
+    font-weight: normal;
+}
+
+.pm-empty-person:hover .pm-empty-avatar {
+    background: #dde1eb !important;
+    border-color: var(--monday-blue) !important;
+    color: var(--monday-blue) !important;
+}
+
+/* Person Info Tooltip */
+.pm-person-tooltip {
+    position: fixed;
+    background: white;
+    border: 1px solid var(--monday-border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    padding: 12px;
+    z-index: 1001;
+    display: none;
+    min-width: 200px;
+    max-width: 280px;
+}
+
+.pm-person-tooltip-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.pm-person-tooltip-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--monday-blue);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.pm-person-tooltip-info h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--monday-dark);
+}
+
+.pm-person-tooltip-info p {
+    margin: 2px 0 0 0;
+    font-size: 12px;
+    color: var(--monday-gray);
+}
+
+.pm-person-tooltip-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #e6e9ef;
+}
+
+.pm-person-tooltip-action {
+    flex: 1;
+    padding: 6px 12px;
+    background: #f6f7fb;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.pm-person-tooltip-action:hover {
+    background: #e6e9ef;
+}
+
+/* Person Selector Modal */
+.pm-person-selector-modal {
+    position: fixed;
+    z-index: 1001;
+    display: none;
+}
+
+.pm-person-selector-content {
+    background: white;
+    border: 1px solid var(--monday-border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    width: 320px;
+    max-height: 400px;
+    overflow: hidden;
+}
+
+.pm-person-selector-header {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    border-bottom: 1px solid #e6e9ef;
+}
+
+.pm-person-selector-close {
+    background: none;
+    border: none;
+    color: var(--monday-gray);
+    cursor: pointer;
+    padding: 4px;
+    margin-left: 8px;
+}
+
+.pm-person-selector-body {
+    padding: 12px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.pm-person-selector-body h4 {
+    margin: 0 0 8px 0;
+    font-size: 12px;
+    color: var(--monday-gray);
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.pm-person-search {
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    border-bottom: 1px solid #e6e9ef;
+    outline: none;
+    font-size: 13px;
+}
+
+.pm-person-options {
+    padding: 4px 0;
+    border-bottom: 1px solid #e6e9ef;
+}
+
+.pm-person-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.pm-person-option:hover {
+    background: var(--monday-hover);
+}
+
+.pm-person-option .pm-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 10px;
+    flex-shrink: 0;
+}
+
+.pm-person-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.pm-person-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--monday-dark);
+    margin-bottom: 2px;
+}
+
+.pm-person-role {
+    font-size: 11px;
+    color: var(--monday-gray);
+    font-weight: normal;
+}
+
+.pm-contact-details {
+    background: none;
+    border: none;
+    color: #0073ea;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 0;
+    text-decoration: underline;
+}
+
+.pm-contact-details:hover {
+    color: #0056b3;
+}
+
+.pm-contact-details i {
+    margin-left: 2px;
+    font-size: 9px;
+}
+
+/* Contact Dropdown */
+.pm-contact-dropdown {
+    position: fixed;
+    background: white;
+    border: 1px solid var(--monday-border);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    padding: 4px 0;
+    z-index: 1002;
+    min-width: 120px;
+}
+
+.pm-contact-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background-color 0.2s ease;
+}
+
+.pm-contact-item:hover {
+    background: var(--monday-hover);
+}
+
+.pm-contact-item i {
+    width: 12px;
+    color: var(--monday-gray);
+}
+
+.pm-clear-person {
+    color: var(--monday-gray);
+    font-style: italic;
+}
+
+/* Current People Section */
+.pm-current-people {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e6e9ef;
+}
+
+.pm-current-person-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.pm-current-person {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 16px;
+    background: #f1f2f4;
+    border: 1px solid #d0d4e4;
+    font-size: 12px;
+}
+
+.pm-current-person:hover {
+    background: #e6e9ef;
+}
+
+.pm-current-person .pm-avatar {
+    width: 24px;
+    height: 24px;
+    font-size: 9px;
+}
+
+.pm-remove-person {
+    background: none;
+    border: none;
+    color: var(--monday-gray);
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 50%;
+    margin-left: 4px;
+    font-size: 10px;
+    line-height: 1;
+}
+
+.pm-remove-person:hover {
+    background: #ff4757;
+    color: white;
+}
+
+.pm-current-person .pm-person-name {
+    font-weight: 500;
+    color: var(--monday-dark);
 }
 
 .pm-avatar::before {
@@ -1540,8 +1884,9 @@ div.pm-table-header,
 }
 
 .pm-cell.editing {
-    background: #f0f8ff;
+    background: rgba(0, 115, 234, 0.1);
     border: 2px solid var(--monday-blue);
+    box-shadow: 0 0 0 1px rgba(0, 115, 234, 0.2);
 }
 
 .pm-inline-input,

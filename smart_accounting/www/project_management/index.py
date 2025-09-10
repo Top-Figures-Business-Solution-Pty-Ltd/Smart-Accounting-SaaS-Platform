@@ -144,8 +144,8 @@ def get_project_management_data():
                 task.preparer = getattr(task_doc, 'custom_praparer', None) or getattr(task_doc, 'custom_preparer', None) or ""
                 task.lodgment_due_date = getattr(task_doc, 'custom_lodgement_due_date', None) or getattr(task_doc, 'custom_lodgment_due_date', None) or ""
                 
-                # Get action person (assigned_to field)
-                task.action_person = getattr(task_doc, 'assigned_to', None) or ""
+                # Get action person (try custom_action_person first, fallback to assigned_to)
+                task.action_person = getattr(task_doc, 'custom_action_person', None) or getattr(task_doc, 'assigned_to', None) or ""
                 
                 # Get Budget and Actual Billing (newly added fields)
                 task.budget_planning = getattr(task_doc, 'custom_budget_planning', None) or 0
@@ -291,7 +291,8 @@ def update_task_field(task_id, field_name, new_value):
         allowed_fields = [
             'custom_tftg', 'custom_tf_tg', 'custom_software', 'custom_target_month',
             'custom_budget_planning', 'custom_actual_billing', 'custom_preparer',
-            'custom_reviewer', 'custom_partner', 'custom_year_end', 'status'
+            'custom_reviewer', 'custom_partner', 'custom_year_end', 'status',
+            'assigned_to', 'custom_action_person'  # For action person
         ]
         
         if field_name not in allowed_fields:

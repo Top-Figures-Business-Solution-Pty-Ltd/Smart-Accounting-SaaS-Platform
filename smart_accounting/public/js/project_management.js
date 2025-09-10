@@ -2,6 +2,7 @@
 
 class ProjectManagement {
     constructor() {
+        this.tooltipHideTimer = null;
         this.init();
     }
 
@@ -58,6 +59,31 @@ class ProjectManagement {
         $(document).on('click', '.editable-field', (e) => {
             e.stopPropagation();
             this.startFieldEditing(e.currentTarget);
+        });
+        
+        // Person avatar hover events with delay
+        $(document).on('mouseenter', '.pm-avatar[data-email]', (e) => {
+            clearTimeout(this.tooltipHideTimer);
+            this.showPersonTooltip(e.currentTarget);
+        });
+        
+        $(document).on('mouseleave', '.pm-avatar[data-email]', () => {
+            this.tooltipHideTimer = setTimeout(() => {
+                if (!$('.pm-person-tooltip:hover').length) {
+                    this.hidePersonTooltip();
+                }
+            }, 300);
+        });
+        
+        // Keep tooltip open when hovering over it
+        $(document).on('mouseenter', '.pm-person-tooltip', () => {
+            clearTimeout(this.tooltipHideTimer);
+        });
+        
+        $(document).on('mouseleave', '.pm-person-tooltip', () => {
+            this.tooltipHideTimer = setTimeout(() => {
+                this.hidePersonTooltip();
+            }, 200);
         });
 
         // Main table tab click - Navigate to current page
@@ -132,19 +158,13 @@ class ProjectManagement {
             this.selectStatusFilter(e.currentTarget);
         });
 
-        // Close dropdowns when clicking outside
+        // Unified dropdown management - close all when clicking outside
         $(document).on('click', (e) => {
-            if (!$(e.target).closest('.pm-new-task-dropdown').length) {
-                this.closeNewTaskMenu();
-            }
-            if (!$(e.target).closest('.pm-person-filter-dropdown').length) {
-                this.closePersonFilter();
-            }
-            if (!$(e.target).closest('.pm-client-filter-dropdown').length) {
-                this.closeClientFilter();
-            }
-            if (!$(e.target).closest('.pm-status-filter-dropdown').length) {
-                this.closeStatusFilter();
+            // Check if click is outside any dropdown
+            const isOutsideDropdown = !$(e.target).closest('.pm-dropdown-container, .pm-new-task-dropdown, .pm-person-filter-dropdown, .pm-client-filter-dropdown, .pm-status-filter-dropdown, .pm-advanced-filter-dropdown').length;
+            
+            if (isOutsideDropdown) {
+                this.closeAllDropdowns();
             }
         });
     }
@@ -725,55 +745,10 @@ class ProjectManagement {
         const projectName = $addRow.data('project');
         const clientName = $addRow.data('client');
         
-        // Create new task row HTML
-        const newTaskRowHTML = `
-            <div class="pm-task-row" data-task-id="${taskData.task_id}" data-task-name="${taskData.task_subject}" style="display: flex; width: 2000px; min-width: 2000px;">
-                <div class="pm-cell pm-cell-client" style="width: 150px; min-width: 150px; flex: 0 0 150px;" data-editable="true" data-field="custom_client" data-task-id="${taskData.task_id}" data-field-type="client_selector" data-current-client-id="" data-current-client-name="${clientName || 'No Client'}">
-                    <span class="editable-field client-display">${clientName || 'No Client'}</span>
-                </div>
-                <div class="pm-cell pm-cell-entity" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
-                    <span class="pm-entity-badge entity-company">Company</span>
-                </div>
-                <div class="pm-cell pm-cell-tf-tg" style="width: 80px; min-width: 80px; flex: 0 0 80px;" data-editable="true" data-field="custom_tftg" data-task-id="${taskData.task_id}" data-field-type="select" data-options="TF,TG" data-backend-options="Top Figures,Top Grants">
-                    <span class="pm-tf-tg-badge editable-field">TF</span>
-                </div>
-                <div class="pm-cell pm-cell-software" style="width: 100px; min-width: 100px; flex: 0 0 100px;" data-editable="true" data-field="custom_software" data-task-id="${taskData.task_id}" data-field-type="select" data-options="Xero,MYOB,QuickBooks,Excel,Other">
-                    <span class="pm-software-badge editable-field">Xero</span>
-                </div>
-                <div class="pm-cell pm-cell-status" style="width: 100px; min-width: 100px; flex: 0 0 100px;">
-                    <span class="pm-status-badge status-open">Open</span>
-                </div>
-                <div class="pm-cell pm-cell-target-month" style="width: 120px; min-width: 120px; flex: 0 0 120px;" data-editable="true" data-field="custom_target_month" data-task-id="${taskData.task_id}" data-field-type="select" data-options="January,February,March,April,May,June,July,August,September,October,November,December">
-                    <span class="editable-field">-</span>
-                </div>
-                <div class="pm-cell pm-cell-budget" style="width: 100px; min-width: 100px; flex: 0 0 100px;" data-editable="true" data-field="custom_budget_planning" data-task-id="${taskData.task_id}" data-field-type="currency">
-                    <span class="pm-no-amount editable-field">-</span>
-                </div>
-                <div class="pm-cell pm-cell-actual" style="width: 100px; min-width: 100px; flex: 0 0 100px;" data-editable="true" data-field="custom_actual_billing" data-task-id="${taskData.task_id}" data-field-type="currency">
-                    <span class="pm-no-amount editable-field">-</span>
-                </div>
-                <div class="pm-cell pm-cell-review-note" style="width: 150px; min-width: 150px; flex: 0 0 150px;">
-                    <div class="pm-review-note-indicator no-notes">
-                        <i class="fa fa-times-circle"></i>
-                        <span>none</span>
-                    </div>
-                </div>
-                <div class="pm-cell pm-cell-action-person" style="width: 120px; min-width: 120px; flex: 0 0 120px;">-</div>
-                <div class="pm-cell pm-cell-preparer" style="width: 120px; min-width: 120px; flex: 0 0 120px;">-</div>
-                <div class="pm-cell pm-cell-reviewer" style="width: 120px; min-width: 120px; flex: 0 0 120px;">-</div>
-                <div class="pm-cell pm-cell-partner" style="width: 120px; min-width: 120px; flex: 0 0 120px;">-</div>
-                <div class="pm-cell pm-cell-lodgment-due" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
-                    <span class="pm-no-date">-</span>
-                </div>
-                <div class="pm-cell pm-cell-year-end" style="width: 100px; min-width: 100px; flex: 0 0 100px;">-</div>
-                <div class="pm-cell pm-cell-last-updated" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
-                    <span class="pm-last-updated">Just now</span>
-                </div>
-                <div class="pm-cell pm-cell-priority" style="width: 100px; min-width: 100px; flex: 0 0 100px;">
-                    <span class="pm-priority-badge priority-medium">Medium</span>
-                </div>
-            </div>
-        `;
+        // Get current column widths and generate HTML
+        const currentWidths = this.getCurrentColumnWidths();
+        const totalWidth = Object.values(currentWidths).reduce((sum, width) => sum + width, 0);
+        const newTaskRowHTML = this.generateNewTaskRowHTML(taskData, clientName, currentWidths, totalWidth);
         
         // Insert the new row before the add task row
         $addRow.before(newTaskRowHTML);
@@ -802,11 +777,17 @@ class ProjectManagement {
             return;
         }
         
+        // Clear all previous editing states and close dropdowns
+        this.clearAllEditingStates();
+        
         $cell.addClass('editing');
         
         switch(fieldType) {
             case 'client_selector':
                 this.showClientSelector($cell);
+                break;
+            case 'person_selector':
+                this.showPersonSelector($cell, taskId, fieldName);
                 break;
             case 'select':
                 this.showSelectEditor($cell);
@@ -1323,15 +1304,7 @@ class ProjectManagement {
     }
 
     toggleNewTaskMenu() {
-        const $dropdown = $('.pm-new-task-dropdown');
-        const $menu = $('.pm-new-task-menu');
-        
-        if ($dropdown.hasClass('active')) {
-            this.closeNewTaskMenu();
-        } else {
-            $dropdown.addClass('active');
-            $menu.slideDown(200);
-        }
+        this.openDropdown('pm-new-task-dropdown', 'pm-new-task-menu');
     }
 
     closeNewTaskMenu() {
@@ -1343,7 +1316,7 @@ class ProjectManagement {
     }
 
     async quickAddTask() {
-        this.closeNewTaskMenu();
+        this.closeAllDropdowns();
         
         // Find the first project group
         const $firstProject = $('.pm-project-group').first();
@@ -1398,55 +1371,10 @@ class ProjectManagement {
         const projectName = $projectGroup.data('project');
         const clientName = $projectGroup.data('client');
         
-        // Create new task row HTML (same as before)
-        const newTaskRowHTML = `
-            <div class="pm-task-row new-task-highlight" data-task-id="${taskData.task_id}" data-task-name="${taskData.task_subject}" style="display: flex; width: 2000px; min-width: 2000px;">
-                <div class="pm-cell pm-cell-client" style="width: 150px; min-width: 150px; flex: 0 0 150px;" data-editable="true" data-field="custom_client" data-task-id="${taskData.task_id}" data-field-type="client_selector" data-current-client-id="" data-current-client-name="${clientName || 'No Client'}">
-                    <span class="editable-field client-display">${clientName || 'No Client'}</span>
-                </div>
-                <div class="pm-cell pm-cell-entity" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
-                    <span class="pm-entity-badge entity-company">Company</span>
-                </div>
-                <div class="pm-cell pm-cell-tf-tg" style="width: 80px; min-width: 80px; flex: 0 0 80px;" data-editable="true" data-field="custom_tftg" data-task-id="${taskData.task_id}" data-field-type="select">
-                    <span class="pm-tf-tg-badge editable-field">TF</span>
-                </div>
-                <div class="pm-cell pm-cell-software" style="width: 100px; min-width: 100px; flex: 0 0 100px;" data-editable="true" data-field="custom_software" data-task-id="${taskData.task_id}" data-field-type="select">
-                    <span class="pm-software-badge editable-field">Xero</span>
-                </div>
-                <div class="pm-cell pm-cell-status" style="width: 100px; min-width: 100px; flex: 0 0 100px;">
-                    <span class="pm-status-badge status-open">Open</span>
-                </div>
-                <div class="pm-cell pm-cell-target-month" style="width: 120px; min-width: 120px; flex: 0 0 120px;" data-editable="true" data-field="custom_target_month" data-task-id="${taskData.task_id}" data-field-type="select" data-options="January,February,March,April,May,June,July,August,September,October,November,December">
-                    <span class="editable-field">-</span>
-                </div>
-                <div class="pm-cell pm-cell-budget" style="width: 100px; min-width: 100px; flex: 0 0 100px;" data-editable="true" data-field="custom_budget_planning" data-task-id="${taskData.task_id}" data-field-type="currency">
-                    <span class="pm-no-amount editable-field">-</span>
-                </div>
-                <div class="pm-cell pm-cell-actual" style="width: 100px; min-width: 100px; flex: 0 0 100px;" data-editable="true" data-field="custom_actual_billing" data-task-id="${taskData.task_id}" data-field-type="currency">
-                    <span class="pm-no-amount editable-field">-</span>
-                </div>
-                <div class="pm-cell pm-cell-review-note" style="width: 150px; min-width: 150px; flex: 0 0 150px;">
-                    <div class="pm-review-note-indicator no-notes">
-                        <i class="fa fa-times-circle"></i>
-                        <span>none</span>
-                    </div>
-                </div>
-                <div class="pm-cell pm-cell-action-person" style="width: 120px; min-width: 120px; flex: 0 0 120px;">-</div>
-                <div class="pm-cell pm-cell-preparer" style="width: 120px; min-width: 120px; flex: 0 0 120px;">-</div>
-                <div class="pm-cell pm-cell-reviewer" style="width: 120px; min-width: 120px; flex: 0 0 120px;">-</div>
-                <div class="pm-cell pm-cell-partner" style="width: 120px; min-width: 120px; flex: 0 0 120px;">-</div>
-                <div class="pm-cell pm-cell-lodgment-due" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
-                    <span class="pm-no-date">-</span>
-                </div>
-                <div class="pm-cell pm-cell-year-end" style="width: 100px; min-width: 100px; flex: 0 0 100px;">-</div>
-                <div class="pm-cell pm-cell-last-updated" style="width: 120px; min-width: 120px; flex: 0 0 120px;">
-                    <span class="pm-last-updated">Just now</span>
-                </div>
-                <div class="pm-cell pm-cell-priority" style="width: 100px; min-width: 100px; flex: 0 0 100px;">
-                    <span class="pm-priority-badge priority-medium">Medium</span>
-                </div>
-            </div>
-        `;
+        // Get current column widths and generate HTML
+        const currentWidths = this.getCurrentColumnWidths();
+        const totalWidth = Object.values(currentWidths).reduce((sum, width) => sum + width, 0);
+        const newTaskRowHTML = this.generateNewTaskRowHTML(taskData, clientName, currentWidths, totalWidth, 'new-task-highlight');
         
         // Insert at the top of the project's task group
         const $taskGroup = $projectGroup.find('.pm-task-group');
@@ -1464,7 +1392,7 @@ class ProjectManagement {
     }
 
     createNewProject() {
-        this.closeNewTaskMenu();
+        this.closeAllDropdowns();
         
         // Navigate to ERPNext project creation
         frappe.show_alert({
@@ -1478,14 +1406,9 @@ class ProjectManagement {
     }
 
     togglePersonFilter() {
-        const $dropdown = $('.pm-person-filter-dropdown');
-        const $menu = $('.pm-person-filter-menu');
-        
-        if ($dropdown.hasClass('active')) {
-            this.closePersonFilter();
-        } else {
-            $dropdown.addClass('active');
-            $menu.slideDown(200);
+        this.openDropdown('pm-person-filter-dropdown', 'pm-person-filter-menu');
+        // Load people data when opening
+        if ($('.pm-person-filter-menu').is(':visible')) {
             this.loadAllPeople();
         }
     }
@@ -1630,7 +1553,7 @@ class ProjectManagement {
             $option.addClass('selected');
         }
         
-        this.closePersonFilter();
+        this.closeAllDropdowns();
     }
 
     applyPersonFilter(personEmail, personName) {
@@ -1751,14 +1674,9 @@ class ProjectManagement {
 
     // Client Filter Methods
     toggleClientFilter() {
-        const $dropdown = $('.pm-client-filter-dropdown');
-        const $menu = $('.pm-client-filter-menu');
-        
-        if ($dropdown.hasClass('active')) {
-            this.closeClientFilter();
-        } else {
-            $dropdown.addClass('active');
-            $menu.slideDown(200);
+        this.openDropdown('pm-client-filter-dropdown', 'pm-client-filter-menu');
+        // Load clients data when opening
+        if ($('.pm-client-filter-menu').is(':visible')) {
             this.loadAllClients();
         }
     }
@@ -1832,7 +1750,7 @@ class ProjectManagement {
             $option.addClass('selected');
         }
         
-        this.closeClientFilter();
+        this.closeAllDropdowns();
     }
 
     applyClientFilter(clientName) {
@@ -1902,15 +1820,7 @@ class ProjectManagement {
 
     // Status Filter Methods
     toggleStatusFilter() {
-        const $dropdown = $('.pm-status-filter-dropdown');
-        const $menu = $('.pm-status-filter-menu');
-        
-        if ($dropdown.hasClass('active')) {
-            this.closeStatusFilter();
-        } else {
-            $dropdown.addClass('active');
-            $menu.slideDown(200);
-        }
+        this.openDropdown('pm-status-filter-dropdown', 'pm-status-filter-menu');
     }
 
     closeStatusFilter() {
@@ -1942,7 +1852,7 @@ class ProjectManagement {
             $option.addClass('selected');
         }
         
-        this.closeStatusFilter();
+        this.closeAllDropdowns();
     }
 
     applyStatusFilter(status) {
@@ -2336,6 +2246,755 @@ class ProjectManagement {
             indicator: 'green'
         });
     }
+    
+    getCurrentColumnWidths() {
+        // Get current column widths (either from stored widths or actual DOM)
+        const currentWidths = {};
+        
+        Object.keys(this.columnWidths).forEach(column => {
+            const headerCell = $(`.pm-header-cell[data-column="${column}"]`);
+            if (headerCell.length > 0) {
+                // Get actual width from DOM
+                currentWidths[column] = headerCell.outerWidth() || this.columnWidths[column];
+            } else {
+                // Fallback to stored width
+                currentWidths[column] = this.columnWidths[column];
+            }
+        });
+        
+        return currentWidths;
+    }
+    
+    generateNewTaskRowHTML(taskData, clientName, currentWidths, totalWidth, additionalClasses = '') {
+        // Generate new task row HTML with current column widths
+        return `
+            <div class="pm-task-row ${additionalClasses}" data-task-id="${taskData.task_id}" data-task-name="${taskData.task_subject}" style="display: flex; width: ${totalWidth}px; min-width: ${totalWidth}px;">
+                <div class="pm-cell pm-cell-client" style="width: ${currentWidths.client}px; min-width: ${currentWidths.client}px; flex: 0 0 ${currentWidths.client}px;" data-editable="true" data-field="custom_client" data-task-id="${taskData.task_id}" data-field-type="client_selector" data-current-client-id="" data-current-client-name="${clientName || 'No Client'}">
+                    <span class="editable-field client-display">${clientName || 'No Client'}</span>
+                </div>
+                <div class="pm-cell pm-cell-entity" style="width: ${currentWidths.entity}px; min-width: ${currentWidths.entity}px; flex: 0 0 ${currentWidths.entity}px;">
+                    <span class="pm-entity-badge entity-company">Company</span>
+                </div>
+                <div class="pm-cell pm-cell-tf-tg" style="width: ${currentWidths['tf-tg']}px; min-width: ${currentWidths['tf-tg']}px; flex: 0 0 ${currentWidths['tf-tg']}px;" data-editable="true" data-field="custom_tftg" data-task-id="${taskData.task_id}" data-field-type="select" data-options="TF,TG" data-backend-options="Top Figures,Top Grants">
+                    <span class="pm-tf-tg-badge editable-field">TF</span>
+                </div>
+                <div class="pm-cell pm-cell-software" style="width: ${currentWidths.software}px; min-width: ${currentWidths.software}px; flex: 0 0 ${currentWidths.software}px;" data-editable="true" data-field="custom_software" data-task-id="${taskData.task_id}" data-field-type="select" data-options="Xero,MYOB,QuickBooks,Excel,Other">
+                    <span class="pm-software-badge editable-field">Xero</span>
+                </div>
+                <div class="pm-cell pm-cell-status" style="width: ${currentWidths.status}px; min-width: ${currentWidths.status}px; flex: 0 0 ${currentWidths.status}px;">
+                    <span class="pm-status-badge status-open">Open</span>
+                </div>
+                <div class="pm-cell pm-cell-target-month" style="width: ${currentWidths['target-month']}px; min-width: ${currentWidths['target-month']}px; flex: 0 0 ${currentWidths['target-month']}px;" data-editable="true" data-field="custom_target_month" data-task-id="${taskData.task_id}" data-field-type="select" data-options="January,February,March,April,May,June,July,August,September,October,November,December">
+                    <span class="editable-field">-</span>
+                </div>
+                <div class="pm-cell pm-cell-budget" style="width: ${currentWidths.budget}px; min-width: ${currentWidths.budget}px; flex: 0 0 ${currentWidths.budget}px;" data-editable="true" data-field="custom_budget_planning" data-task-id="${taskData.task_id}" data-field-type="currency">
+                    <span class="pm-no-amount editable-field">-</span>
+                </div>
+                <div class="pm-cell pm-cell-actual" style="width: ${currentWidths.actual}px; min-width: ${currentWidths.actual}px; flex: 0 0 ${currentWidths.actual}px;" data-editable="true" data-field="custom_actual_billing" data-task-id="${taskData.task_id}" data-field-type="currency">
+                    <span class="pm-no-amount editable-field">-</span>
+                </div>
+                <div class="pm-cell pm-cell-review-note" style="width: ${currentWidths['review-note']}px; min-width: ${currentWidths['review-note']}px; flex: 0 0 ${currentWidths['review-note']}px;">
+                    <div class="pm-review-note-indicator no-notes">
+                        <i class="fa fa-times-circle"></i>
+                        <span>none</span>
+                    </div>
+                </div>
+                <div class="pm-cell pm-cell-action-person" style="width: ${currentWidths['action-person']}px; min-width: ${currentWidths['action-person']}px; flex: 0 0 ${currentWidths['action-person']}px;" data-editable="true" data-field="custom_action_person" data-task-id="${taskData.task_id}" data-field-type="person_selector">
+                    <div class="pm-user-avatars editable-field pm-empty-person">
+                        <div class="pm-avatar pm-empty-avatar">
+                            <i class="fa fa-user"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="pm-cell pm-cell-preparer" style="width: ${currentWidths.preparer}px; min-width: ${currentWidths.preparer}px; flex: 0 0 ${currentWidths.preparer}px;" data-editable="true" data-field="custom_preparer" data-task-id="${taskData.task_id}" data-field-type="person_selector">
+                    <div class="pm-user-avatars editable-field pm-empty-person">
+                        <div class="pm-avatar pm-empty-avatar">
+                            <i class="fa fa-user"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="pm-cell pm-cell-reviewer" style="width: ${currentWidths.reviewer}px; min-width: ${currentWidths.reviewer}px; flex: 0 0 ${currentWidths.reviewer}px;" data-editable="true" data-field="custom_reviewer" data-task-id="${taskData.task_id}" data-field-type="person_selector">
+                    <div class="pm-user-avatars editable-field pm-empty-person">
+                        <div class="pm-avatar pm-empty-avatar">
+                            <i class="fa fa-user"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="pm-cell pm-cell-partner" style="width: ${currentWidths.partner}px; min-width: ${currentWidths.partner}px; flex: 0 0 ${currentWidths.partner}px;" data-editable="true" data-field="custom_partner" data-task-id="${taskData.task_id}" data-field-type="person_selector">
+                    <div class="pm-user-avatars editable-field pm-empty-person">
+                        <div class="pm-avatar pm-empty-avatar">
+                            <i class="fa fa-user"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="pm-cell pm-cell-lodgment-due" style="width: ${currentWidths['lodgment-due']}px; min-width: ${currentWidths['lodgment-due']}px; flex: 0 0 ${currentWidths['lodgment-due']}px;">
+                    <span class="pm-no-date">-</span>
+                </div>
+                <div class="pm-cell pm-cell-year-end" style="width: ${currentWidths['year-end']}px; min-width: ${currentWidths['year-end']}px; flex: 0 0 ${currentWidths['year-end']}px;">-</div>
+                <div class="pm-cell pm-cell-last-updated" style="width: ${currentWidths['last-updated']}px; min-width: ${currentWidths['last-updated']}px; flex: 0 0 ${currentWidths['last-updated']}px;">
+                    <span class="pm-last-updated">Just now</span>
+                </div>
+                <div class="pm-cell pm-cell-priority" style="width: ${currentWidths.priority}px; min-width: ${currentWidths.priority}px; flex: 0 0 ${currentWidths.priority}px;">
+                    <span class="pm-priority-badge priority-medium">Medium</span>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Clear all editing states
+    clearAllEditingStates() {
+        // Remove editing class from all cells
+        $('.pm-cell.editing').removeClass('editing');
+        
+        // Close all dropdowns and modals
+        this.closeAllDropdowns();
+        $('.pm-person-selector-modal').remove();
+        $('.pm-contact-dropdown').remove();
+        $('.pm-person-tooltip').remove();
+        
+        // Clean up event listeners
+        $(document).off('click.person-selector click.contact-dropdown');
+    }
+    
+    // Unified Dropdown Management
+    closeAllDropdowns() {
+        // Close all dropdown menus
+        $('.pm-new-task-menu').hide();
+        $('.pm-person-filter-menu').hide();
+        $('.pm-client-filter-menu').hide();
+        $('.pm-status-filter-menu').hide();
+        $('.pm-advanced-filter-panel').hide();
+        
+        // Remove active states
+        $('.pm-new-task-dropdown').removeClass('active');
+        $('.pm-person-filter-dropdown').removeClass('active');
+        $('.pm-client-filter-dropdown').removeClass('active');
+        $('.pm-status-filter-dropdown').removeClass('active');
+        $('.pm-advanced-filter-dropdown').removeClass('active');
+    }
+    
+    openDropdown(dropdownClass, menuClass) {
+        const $dropdown = $(`.${dropdownClass}`);
+        const $menu = $(`.${menuClass}`);
+        const $btn = $dropdown.find('button').first();
+        
+        // If this dropdown is already open, close it
+        if ($menu.is(':visible')) {
+            this.closeAllDropdowns();
+            return;
+        }
+        
+        // Close all other dropdowns first
+        this.closeAllDropdowns();
+        
+        // Position the dropdown menu properly
+        this.positionDropdownMenu($btn, $menu);
+        
+        // Show the menu and add active state
+        $menu.show();
+        $dropdown.addClass('active');
+    }
+    
+    positionDropdownMenu($button, $menu) {
+        // Get button position and dimensions
+        const btnOffset = $button.offset();
+        const btnHeight = $button.outerHeight();
+        const btnWidth = $button.outerWidth();
+        const menuWidth = $menu.outerWidth();
+        const menuHeight = $menu.outerHeight();
+        const windowWidth = $(window).width();
+        const windowHeight = $(window).height();
+        const scrollTop = $(window).scrollTop();
+        
+        // Calculate initial position below button
+        let left = btnOffset.left;
+        let top = btnOffset.top + btnHeight + 5; // 5px gap
+        
+        // Adjust horizontal position if menu goes beyond screen edges
+        if (left + menuWidth > windowWidth - 20) {
+            left = btnOffset.left + btnWidth - menuWidth;
+        }
+        if (left < 20) {
+            left = 20;
+        }
+        
+        // Adjust vertical position if menu goes beyond bottom of screen
+        if (top + menuHeight > scrollTop + windowHeight - 20) {
+            top = btnOffset.top - menuHeight - 5; // Show above button
+        }
+        
+        // Ensure menu doesn't go above viewport
+        if (top < scrollTop + 20) {
+            top = scrollTop + 20;
+        }
+        
+        // Set position with higher z-index for modals
+        const zIndex = $menu.hasClass('pm-person-selector-modal') ? 1001 : 1000;
+        
+        $menu.css({
+            position: 'fixed',
+            top: top + 'px',
+            left: left + 'px',
+            zIndex: zIndex
+        });
+    }
+
+    // Person Selector and Tooltip Functions
+    showPersonSelector($cell, taskId, fieldName) {
+        // Get current person emails
+        const currentEmails = [];
+        $cell.find('.pm-avatar[data-email]').each(function() {
+            const email = $(this).data('email');
+            if (email) currentEmails.push(email);
+        });
+        
+        // Create person selector dropdown outside the table
+        const selectorHTML = `
+            <div class="pm-person-selector-modal" id="pm-person-selector-${taskId}-${fieldName}">
+                <div class="pm-person-selector-content">
+                    <div class="pm-person-selector-header">
+                        <input type="text" class="pm-person-search" placeholder="Search names, roles or teams" value="">
+                        <button class="pm-person-selector-close">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="pm-person-selector-body">
+                        ${currentEmails.length > 0 ? `
+                            <div class="pm-current-people">
+                                <div class="pm-current-person-list">
+                                    ${currentEmails.map(email => {
+                                        const avatar = $cell.find(`[data-email="${email}"]`);
+                                        const name = avatar.attr('title') || email;
+                                        return `
+                                            <div class="pm-current-person" data-email="${email}">
+                                                <div class="pm-avatar" style="background: ${this.getAvatarColor(name)}">
+                                                    ${this.getInitials(name)}
+                                                </div>
+                                                <span class="pm-person-name">${name.split(' ')[0]}</span>
+                                                <button class="pm-remove-person" data-email="${email}">
+                                                    <i class="fa fa-times"></i>
+                                                </button>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                        <h4>Suggested people</h4>
+                        <div class="pm-person-options">
+                            <div class="pm-person-option pm-clear-person" data-email="">
+                                <div class="pm-avatar pm-empty-avatar">
+                                    <i class="fa fa-user"></i>
+                                </div>
+                                <div class="pm-person-info">
+                                    <div class="pm-person-name">No assignment</div>
+                                    <div class="pm-person-email">Clear current assignment</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="pm-person-list">
+                            <!-- People will be loaded dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing selector
+        $('.pm-person-selector-modal').remove();
+        
+        // Add to body
+        $('body').append(selectorHTML);
+        const $selector = $(`#pm-person-selector-${taskId}-${fieldName}`);
+        
+        // Position the modal properly relative to cell
+        this.positionModalRelativeToCell($cell, $selector);
+        
+        // Show with animation
+        $selector.fadeIn(200);
+        
+        // Focus search input
+        const $searchInput = $selector.find('.pm-person-search');
+        $searchInput.focus();
+        
+        // Load all people
+        this.loadPeopleForSelector($selector.find('.pm-person-list'));
+        
+        // Bind events
+        $searchInput.on('input', (e) => {
+            this.searchPeopleForSelector(e.target.value, $selector.find('.pm-person-list'));
+        });
+        
+        $selector.on('click', '.pm-person-option', (e) => {
+            e.stopPropagation();
+            const email = $(e.currentTarget).data('email');
+            const name = $(e.currentTarget).data('name') || '';
+            this.selectPerson($cell, taskId, fieldName, email, name);
+            $selector.remove();
+        });
+        
+        $selector.find('.pm-person-selector-close').on('click', () => {
+            this.cancelPersonSelection($cell);
+            $selector.remove();
+        });
+        
+        // Remove person button
+        $selector.on('click', '.pm-remove-person', (e) => {
+            e.stopPropagation();
+            const emailToRemove = $(e.currentTarget).data('email');
+            this.removePerson($cell, taskId, fieldName, emailToRemove);
+            $selector.remove();
+        });
+        
+        // Close on outside click
+        setTimeout(() => {
+            $(document).on('click.person-selector', (e) => {
+                if (!$(e.target).closest('.pm-person-selector-modal').length) {
+                    this.cancelPersonSelection($cell);
+                    $('.pm-person-selector-modal').remove();
+                    $(document).off('click.person-selector');
+                }
+            });
+        }, 100);
+    }
+    
+    
+    positionModalRelativeToCell($cell, $modal) {
+        const cellOffset = $cell.offset();
+        const cellHeight = $cell.outerHeight();
+        const cellWidth = $cell.outerWidth();
+        const modalWidth = 320;
+        const modalHeight = 400;
+        const windowWidth = $(window).width();
+        const windowHeight = $(window).height();
+        const scrollTop = $(window).scrollTop();
+        const scrollLeft = $(window).scrollLeft();
+        
+        // Calculate position - prefer right side of cell
+        let left = cellOffset.left + cellWidth + 10;
+        let top = cellOffset.top;
+        
+        // If modal would go off right edge, position on left side
+        if (left + modalWidth > scrollLeft + windowWidth - 20) {
+            left = cellOffset.left - modalWidth - 10;
+        }
+        
+        // If still off left edge, center horizontally
+        if (left < scrollLeft + 20) {
+            left = cellOffset.left - (modalWidth / 2) + (cellWidth / 2);
+            // Position below cell if centered
+            top = cellOffset.top + cellHeight + 10;
+        }
+        
+        // Adjust vertical position if modal goes off bottom
+        if (top + modalHeight > scrollTop + windowHeight - 20) {
+            top = cellOffset.top - modalHeight + cellHeight;
+        }
+        
+        // Ensure modal stays within viewport
+        if (top < scrollTop + 20) {
+            top = scrollTop + 20;
+        }
+        if (left < scrollLeft + 20) {
+            left = scrollLeft + 20;
+        }
+        
+        $modal.css({
+            position: 'fixed',
+            left: left + 'px',
+            top: top + 'px',
+            zIndex: 1001
+        });
+    }
+    
+    async loadPeopleForSelector($container) {
+        try {
+            // Get all enabled users with roles
+            const response = await frappe.call({
+                method: 'frappe.client.get_list',
+                args: {
+                    doctype: 'User',
+                    fields: ['name', 'email', 'full_name', 'user_image', 'role_profile_name'],
+                    filters: [
+                        ['enabled', '=', 1],
+                        ['user_type', '=', 'System User'],
+                        ['name', '!=', 'Guest']
+                    ],
+                    limit_page_length: 50,
+                    order_by: 'full_name asc'
+                }
+            });
+            
+            if (response.message && response.message.length > 0) {
+                const peopleHTML = response.message.map(user => {
+                    const displayName = user.full_name || user.email;
+                    const role = user.role_profile_name || 'System User';
+                    return `
+                        <div class="pm-person-option" data-email="${user.email}" data-name="${displayName}">
+                            <div class="pm-avatar" style="background: ${this.getAvatarColor(displayName)}">
+                                ${this.getInitials(displayName)}
+                            </div>
+                            <div class="pm-person-info">
+                                <div class="pm-person-name">${displayName}</div>
+                                <div class="pm-person-role">${role}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                $container.html(peopleHTML);
+            } else {
+                $container.html('<div class="pm-no-people">No users found</div>');
+            }
+        } catch (error) {
+            console.error('Error loading people:', error);
+            $container.html('<div class="pm-no-people">Error loading users</div>');
+        }
+    }
+    
+    searchPeopleForSelector(query, $container) {
+        if (!query) {
+            this.loadPeopleForSelector($container);
+            return;
+        }
+        
+        // Filter existing options
+        $container.find('.pm-person-option').each(function() {
+            const name = $(this).data('name') || '';
+            const email = $(this).data('email') || '';
+            const visible = name.toLowerCase().includes(query.toLowerCase()) || 
+                           email.toLowerCase().includes(query.toLowerCase());
+            $(this).toggle(visible);
+        });
+    }
+    
+    async selectPerson($cell, taskId, fieldName, email, name) {
+        try {
+            // Update task field
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.update_task_field',
+                args: {
+                    task_id: taskId,
+                    field_name: fieldName,
+                    new_value: email
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                // Update UI
+                this.updatePersonFieldDisplay($cell, email, name);
+                
+                frappe.show_alert({
+                    message: 'Person assignment updated',
+                    indicator: 'green'
+                });
+            } else {
+                throw new Error(response.message?.error || 'Update failed');
+            }
+        } catch (error) {
+            console.error('Error updating person:', error);
+            frappe.show_alert({
+                message: 'Failed to update assignment',
+                indicator: 'red'
+            });
+            this.cancelPersonSelection($cell);
+        }
+        
+        // Clean up
+        $(document).off('click.person-selector');
+    }
+    
+    updatePersonFieldDisplay($cell, email, name) {
+        if (!email) {
+            // Show empty state
+            $cell.html(`
+                <div class="pm-user-avatars editable-field pm-empty-person">
+                    <div class="pm-avatar pm-empty-avatar">
+                        <i class="fa fa-user"></i>
+                    </div>
+                </div>
+            `);
+        } else {
+            // Show person
+            const initials = this.getInitials(name);
+            const color = this.getAvatarColor(name);
+            $cell.html(`
+                <div class="pm-user-avatars editable-field">
+                    <div class="pm-avatar" title="${name}" data-email="${email}" style="background: ${color}">
+                        ${initials}
+                    </div>
+                </div>
+            `);
+        }
+        $cell.removeClass('editing');
+    }
+    
+    async removePerson($cell, taskId, fieldName, emailToRemove) {
+        try {
+            // Update task field to remove this person
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.update_task_field',
+                args: {
+                    task_id: taskId,
+                    field_name: fieldName,
+                    new_value: ''
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                // Update UI to empty state
+                this.updatePersonFieldDisplay($cell, '', '');
+                
+                frappe.show_alert({
+                    message: 'Person removed',
+                    indicator: 'orange'
+                });
+            }
+        } catch (error) {
+            console.error('Error removing person:', error);
+            frappe.show_alert({
+                message: 'Failed to remove person',
+                indicator: 'red'
+            });
+        }
+        
+        $(document).off('click.person-selector');
+    }
+    
+    cancelPersonSelection($cell) {
+        // Get original content from data attributes or restore from server
+        const taskId = $cell.data('task-id');
+        const fieldName = $cell.data('field');
+        
+        // Restore from current data without making server call
+        this.restorePersonFieldFromData($cell, taskId, fieldName);
+        
+        $cell.removeClass('editing');
+        $(document).off('click.person-selector');
+    }
+    
+    async restorePersonFieldFromData($cell, taskId, fieldName) {
+        try {
+            // Get fresh data from server to restore accurate state
+            const response = await frappe.call({
+                method: 'frappe.client.get',
+                args: {
+                    doctype: 'Task',
+                    name: taskId,
+                    fields: [fieldName]
+                }
+            });
+            
+            if (response.message) {
+                const currentValue = response.message[fieldName];
+                if (currentValue) {
+                    // Get user info and restore display
+                    const userResponse = await frappe.call({
+                        method: 'frappe.client.get',
+                        args: {
+                            doctype: 'User',
+                            name: currentValue,
+                            fields: ['full_name', 'email']
+                        }
+                    });
+                    
+                    if (userResponse.message) {
+                        const user = userResponse.message;
+                        const displayName = user.full_name || user.email;
+                        this.updatePersonFieldDisplay($cell, user.email, displayName);
+                        return;
+                    }
+                }
+            }
+            
+            // If no data, show empty state
+            this.updatePersonFieldDisplay($cell, '', '');
+            
+        } catch (error) {
+            console.error('Error restoring field data:', error);
+            // Show empty state on error
+            this.updatePersonFieldDisplay($cell, '', '');
+        }
+    }
+    
+    showPersonTooltip(avatarElement) {
+        const $avatar = $(avatarElement);
+        const email = $avatar.data('email');
+        const name = $avatar.attr('title') || email;
+        
+        if (!email) return;
+        
+        // Create tooltip
+        const tooltipHTML = `
+            <div class="pm-person-tooltip">
+                <div class="pm-person-tooltip-header">
+                    <div class="pm-person-tooltip-avatar" style="background: ${this.getAvatarColor(name)}">
+                        ${this.getInitials(name)}
+                    </div>
+                    <div class="pm-person-tooltip-info">
+                        <h4>${name}</h4>
+                        <p>Team Member</p>
+                        <p>9:32 AM, Sydney</p>
+                    </div>
+                </div>
+                <div class="pm-person-tooltip-actions">
+                    <button class="pm-person-tooltip-action pm-contact-details-btn" data-email="${email}">
+                        Contact Details <i class="fa fa-chevron-down"></i>
+                    </button>
+                    <button class="pm-person-tooltip-action">Ask for an update</button>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing tooltip
+        $('.pm-person-tooltip').remove();
+        
+        // Add to body
+        $('body').append(tooltipHTML);
+        
+        // Position tooltip
+        const $tooltip = $('.pm-person-tooltip');
+        const avatarOffset = $avatar.offset();
+        const avatarHeight = $avatar.outerHeight();
+        
+        // Use unified positioning for tooltip
+        this.positionDropdownMenu($avatar, $tooltip);
+        $tooltip.show();
+        
+        // Bind contact details click in tooltip
+        $tooltip.on('click', '.pm-contact-details-btn', (e) => {
+            e.stopPropagation();
+            const email = $(e.currentTarget).data('email');
+            this.showContactDropdown(e.currentTarget, email);
+        });
+    }
+    
+    hidePersonTooltip() {
+        $('.pm-person-tooltip').remove();
+    }
+    
+    getInitials(name) {
+        if (!name) return '?';
+        const parts = name.split(' ');
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[1][0]).toUpperCase();
+        }
+        return name.substring(0, 2).toUpperCase();
+    }
+    
+    getAvatarColor(name) {
+        const colors = [
+            '#0073ea', '#00c875', '#ff5ac4', '#ffcb00', '#a25ddc',
+            '#ff642e', '#66ccff', '#bb3354', '#9cd326', '#784bd1'
+        ];
+        let hash = 0;
+        for (let i = 0; i < (name || '').length; i++) {
+            hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        return colors[Math.abs(hash) % colors.length];
+    }
+    
+    getUserRole(email) {
+        const roleMap = {
+            'admin': 'Administrator',
+            'manager': 'Manager', 
+            'partner': 'Partner',
+            'senior': 'Senior',
+            'junior': 'Junior'
+        };
+        
+        const emailLower = email.toLowerCase();
+        for (const [key, role] of Object.entries(roleMap)) {
+            if (emailLower.includes(key)) {
+                return role;
+            }
+        }
+        return 'Team Member';
+    }
+    
+    async showContactDropdown(button, email) {
+        $('.pm-contact-dropdown').remove();
+        
+        // Get user details for contact info
+        let contactItems = [];
+        
+        // Always show email
+        contactItems.push(`
+            <div class="pm-contact-item" data-action="email" data-contact="${email}">
+                <i class="fa fa-envelope"></i>
+                <span>Email: ${email}</span>
+            </div>
+        `);
+        
+        // Try to get phone from user profile
+        try {
+            const userResponse = await frappe.call({
+                method: 'frappe.client.get',
+                args: {
+                    doctype: 'User',
+                    name: email,
+                    fields: ['phone', 'mobile_no']
+                }
+            });
+            
+            if (userResponse.message) {
+                const phone = userResponse.message.phone || userResponse.message.mobile_no;
+                if (phone) {
+                    contactItems.push(`
+                        <div class="pm-contact-item" data-action="phone" data-contact="${phone}">
+                            <i class="fa fa-phone"></i>
+                            <span>Phone: ${phone}</span>
+                        </div>
+                    `);
+                }
+            }
+        } catch (error) {
+            console.log('Could not load phone number');
+        }
+        
+        const dropdownHTML = `
+            <div class="pm-contact-dropdown">
+                ${contactItems.join('')}
+            </div>
+        `;
+        
+        $('body').append(dropdownHTML);
+        const $dropdown = $('.pm-contact-dropdown');
+        const btnOffset = $(button).offset();
+        
+        // Use unified positioning for contact dropdown
+        this.positionDropdownMenu($(button), $dropdown);
+        $dropdown.show();
+        
+        $dropdown.on('click', '.pm-contact-item', (e) => {
+            const action = $(e.currentTarget).data('action');
+            const contact = $(e.currentTarget).data('contact');
+            this.handleContactAction(action, contact);
+            $dropdown.remove();
+        });
+        
+        setTimeout(() => {
+            $(document).on('click.contact-dropdown', (e) => {
+                if (!$(e.target).closest('.pm-contact-dropdown').length) {
+                    $dropdown.remove();
+                    $(document).off('click.contact-dropdown');
+                }
+            });
+        }, 100);
+    }
+    
+    handleContactAction(action, contact) {
+        switch(action) {
+            case 'email':
+                window.open(`mailto:${contact}`);
+                break;
+            case 'phone':
+                window.open(`tel:${contact}`);
+                break;
+            default:
+                frappe.show_alert({message: 'Contact action completed', indicator: 'blue'});
+        }
+    }
 
     // Advanced Filter Functionality
     initializeAdvancedFilter() {
@@ -2348,12 +3007,12 @@ class ProjectManagement {
         // Toggle filter panel
         $(document).on('click', '.pm-advanced-filter-btn', (e) => {
             e.stopPropagation();
-            $('.pm-advanced-filter-panel').toggle();
+            this.openDropdown('pm-advanced-filter-dropdown', 'pm-advanced-filter-panel');
         });
 
         // Close filter panel
         $(document).on('click', '.pm-filter-close', () => {
-            $('.pm-advanced-filter-panel').hide();
+            this.closeAllDropdowns();
         });
 
         // Column selection change
@@ -2383,12 +3042,7 @@ class ProjectManagement {
             this.clearAllFilters();
         });
 
-        // Click outside to close
-        $(document).on('click', (e) => {
-            if (!$(e.target).closest('.pm-advanced-filter-dropdown').length) {
-                $('.pm-advanced-filter-panel').hide();
-            }
-        });
+        // Click outside handling is now managed by unified dropdown system
     }
 
     updateValueOptions($columnSelect) {
