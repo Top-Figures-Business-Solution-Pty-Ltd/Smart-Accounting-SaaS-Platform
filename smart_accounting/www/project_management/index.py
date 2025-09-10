@@ -29,6 +29,8 @@ def get_project_management_data():
     try:
         # Clear any existing caches to ensure fresh data
         frappe.clear_cache()
+        frappe.db.commit()  # 确保所有数据库操作都已提交
+        
         # First, let's get basic project data using frappe.get_all (simpler and safer)
         projects = frappe.get_all("Project", 
             fields=["name", "project_name", "customer", "status", "expected_end_date", "priority"],
@@ -175,6 +177,13 @@ def get_project_management_data():
                     task.last_updated = task.modified.strftime("%Y-%m-%d") if hasattr(task.modified, 'strftime') else str(task.modified)
                 else:
                     task.last_updated = ""
+                
+                # 总是实时计算评论数量 - 最准确的方式
+                task.comment_count = frappe.db.count('Comment', {
+                    'reference_doctype': 'Task',
+                    'reference_name': task.name,
+                    'comment_type': 'Comment'
+                })
                     
             except:
                 # If custom fields don't exist, use default values
@@ -199,6 +208,12 @@ def get_project_management_data():
                 task.reviewer_info = None
                 task.partner_info = None
                 task.action_person_info = None
+                # Set default comment count - 实时计算
+                task.comment_count = frappe.db.count('Comment', {
+                    'reference_doctype': 'Task',
+                    'reference_name': task.name,
+                    'comment_type': 'Comment'
+                })
             
             # Set assignees to None for now (we'll add this later if needed)
             task.assignees = None
@@ -715,3 +730,274 @@ def get_initials(name):
     
     # Limit to 2 characters
     return initials[:2] if initials else "?"
+
+
+@frappe.whitelist()
+def get_task_comments(task_id):
+    """
+    Get all comments for a specific task using ERPNext's built-in Comment system
+    """
+    try:
+        if not task_id:
+            return {
+                'success': False,
+                'error': 'Task ID is required'
+            }
+
+        # Get comments from ERPNext's Comment doctype
+        comments = frappe.get_all(
+            'Comment',
+            filters={
+                'reference_doctype': 'Task',
+                'reference_name': task_id,
+                'comment_type': 'Comment'
+            },
+            fields=[
+                'name', 'content', 'comment_by', 'comment_email', 
+                'creation', 'modified', 'owner'
+            ],
+            order_by='creation asc'
+        )
+        
+        # Process comments to add permission info
+        processed_comments = []
+        current_user = frappe.session.user
+        
+        for comment in comments:
+            # Check if current user can edit/delete this comment
+            can_edit = (comment.owner == current_user or 
+                       frappe.has_permission('Comment', 'write', comment.name))
+            can_delete = (comment.owner == current_user or 
+                         frappe.has_permission('Comment', 'delete', comment.name))
+            
+            processed_comments.append({
+                'name': comment.name,
+                'content': comment.content,
+                'comment_by': comment.comment_by or comment.owner,
+                'comment_email': comment.comment_email,
+                'creation': comment.creation,
+                'modified': comment.modified,
+                'can_edit': can_edit,
+                'can_delete': can_delete
+            })
+        
+        return {
+            'success': True,
+            'comments': processed_comments,
+            'count': len(processed_comments)
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting task comments: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+@frappe.whitelist()
+def add_task_comment(task_id, comment_content):
+    """
+    Add a new comment to a task using ERPNext's Comment system
+    """
+    try:
+        if not task_id or not comment_content:
+            return {
+                'success': False,
+                'error': 'Task ID and comment content are required'
+            }
+
+        # Verify task exists
+        if not frappe.db.exists('Task', task_id):
+            return {
+                'success': False,
+                'error': 'Task not found'
+            }
+
+        # Create new comment using ERPNext's Comment doctype
+        comment_doc = frappe.get_doc({
+            'doctype': 'Comment',
+            'comment_type': 'Comment',
+            'reference_doctype': 'Task',
+            'reference_name': task_id,
+            'content': comment_content,
+            'comment_email': frappe.session.user,
+            'comment_by': frappe.get_cached_value('User', frappe.session.user, 'full_name') or frappe.session.user
+        })
+        
+        comment_doc.insert(ignore_permissions=False)
+        
+        # 立即提交并清除缓存
+        frappe.db.commit()
+        frappe.clear_cache()
+        
+        # Get updated comment count by counting
+        comment_count = frappe.db.count('Comment', {
+            'reference_doctype': 'Task',
+            'reference_name': task_id,
+            'comment_type': 'Comment'
+        })
+        
+        return {
+            'success': True,
+            'comment_id': comment_doc.name,
+            'comment_count': comment_count,
+            'message': 'Comment added successfully'
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error adding task comment: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+@frappe.whitelist()
+def delete_task_comment(comment_id):
+    """
+    Delete a comment
+    """
+    try:
+        if not comment_id:
+            return {
+                'success': False,
+                'error': 'Comment ID is required'
+            }
+
+        # Get comment to verify permissions and get task info
+        comment_doc = frappe.get_doc('Comment', comment_id)
+        
+        if not comment_doc:
+            return {
+                'success': False,
+                'error': 'Comment not found'
+            }
+        
+        # Check permissions - user can delete their own comments or if they have delete permission
+        current_user = frappe.session.user
+        if (comment_doc.owner != current_user and 
+            not frappe.has_permission('Comment', 'delete', comment_id)):
+            return {
+                'success': False,
+                'error': 'You do not have permission to delete this comment'
+            }
+        
+        # Store task info before deletion
+        task_id = comment_doc.reference_name
+        
+        # Delete the comment
+        frappe.delete_doc('Comment', comment_id)
+        
+        # 立即提交并清除缓存
+        frappe.db.commit()
+        frappe.clear_cache()
+        
+        # Get updated comment count by counting
+        comment_count = frappe.db.count('Comment', {
+            'reference_doctype': 'Task',
+            'reference_name': task_id,
+            'comment_type': 'Comment'
+        })
+        
+        return {
+            'success': True,
+            'comment_count': comment_count,
+            'message': 'Comment deleted successfully'
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error deleting task comment: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+@frappe.whitelist()
+def update_task_comment(comment_id, new_content):
+    """
+    Update/edit a comment
+    """
+    try:
+        if not comment_id or not new_content:
+            return {
+                'success': False,
+                'error': 'Comment ID and new content are required'
+            }
+
+        # Get comment to verify permissions
+        comment_doc = frappe.get_doc('Comment', comment_id)
+        
+        if not comment_doc:
+            return {
+                'success': False,
+                'error': 'Comment not found'
+            }
+        
+        # Check permissions - user can edit their own comments or if they have write permission
+        current_user = frappe.session.user
+        if (comment_doc.owner != current_user and 
+            not frappe.has_permission('Comment', 'write', comment_id)):
+            return {
+                'success': False,
+                'error': 'You do not have permission to edit this comment'
+            }
+        
+        # Update the comment
+        comment_doc.content = new_content
+        comment_doc.save()
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'message': 'Comment updated successfully'
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error updating task comment: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+@frappe.whitelist()
+def sync_comment_counts():
+    """
+    Synchronize comment counts for all tasks - useful for data migration
+    This method updates the custom_comment_count field based on actual comment counts
+    """
+    try:
+        # Get all tasks
+        tasks = frappe.get_all('Task', fields=['name'])
+        updated_count = 0
+        
+        for task in tasks:
+            task_id = task.name
+            
+            # Count actual comments
+            actual_count = frappe.db.count('Comment', {
+                'reference_doctype': 'Task',
+                'reference_name': task_id,
+                'comment_type': 'Comment'
+            })
+            
+            # Update task's comment count field
+            frappe.db.set_value('Task', task_id, 'custom_comment_count', actual_count)
+            updated_count += 1
+        
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'message': f'Successfully synchronized comment counts for {updated_count} tasks',
+            'updated_count': updated_count
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error synchronizing comment counts: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }

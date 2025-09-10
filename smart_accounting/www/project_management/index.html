@@ -300,14 +300,22 @@
                                 <div class="pm-task-group">
                                     {% for task in tasks %}
                                         <div class="pm-task-row pm-responsive-table" data-task-id="{{ task.task_id }}" data-task-name="{{ task.task_name }}">
-                                            <div class="pm-cell pm-cell-client"
+                                            <div class="pm-cell pm-cell-client pm-client-with-comments"
                                                  data-editable="true"
                                                  data-field="custom_client"
                                                  data-task-id="{{ task.task_id }}"
                                                  data-field-type="client_selector"
                                                  data-current-client-id="{{ task.custom_client or '' }}"
                                                  data-current-client-name="{{ task.client_name or 'No Client' }}">
-                                                <span class="editable-field client-display">{{ task.client_name or 'No Client' }}</span>
+                                                <div class="pm-client-content">
+                                                    <span class="editable-field client-display">{{ task.client_name or 'No Client' }}</span>
+                                                </div>
+                                                <div class="pm-client-comments">
+                                                    <div class="pm-comment-indicator" data-task-id="{{ task.task_id }}" title="点击查看或添加评论">
+                                                        <i class="fa fa-comment-o"></i>
+                                                        <span class="pm-comment-count">{{ task.comment_count or 0 }}</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                             <div class="pm-cell pm-cell-entity">
                                                 <span class="pm-entity-badge entity-{{ task.entity_type.lower() if task.entity_type else 'company' }}">

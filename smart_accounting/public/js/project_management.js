@@ -158,6 +158,42 @@ class ProjectManagement {
             this.selectStatusFilter(e.currentTarget);
         });
 
+        // Comment indicator click
+        $(document).on('click', '.pm-comment-indicator', (e) => {
+            e.stopPropagation();
+            const taskId = $(e.currentTarget).data('task-id');
+            this.showCommentModal(taskId);
+        });
+
+        // Comment modal events
+        $(document).on('click', '.pm-comment-modal-close', () => {
+            this.closeCommentModal();
+        });
+
+        $(document).on('click', '.pm-comment-modal', (e) => {
+            if (e.target === e.currentTarget) {
+                this.closeCommentModal();
+            }
+        });
+
+        $(document).on('click', '.pm-comment-submit', (e) => {
+            e.preventDefault();
+            this.submitComment();
+        });
+
+        // Comment actions
+        $(document).on('click', '.pm-comment-action[data-action="edit"]', (e) => {
+            e.stopPropagation();
+            const commentId = $(e.currentTarget).data('comment-id');
+            this.editComment(commentId);
+        });
+
+        $(document).on('click', '.pm-comment-action[data-action="delete"]', (e) => {
+            e.stopPropagation();
+            const commentId = $(e.currentTarget).data('comment-id');
+            this.deleteComment(commentId);
+        });
+
         // Unified dropdown management - close all when clicking outside
         $(document).on('click', (e) => {
             // Check if click is outside any dropdown
@@ -956,10 +992,16 @@ class ProjectManagement {
             });
             
             if (response.message && response.message.success) {
-                // Update frontend immediately
+                // Update frontend immediately - preserve comment indicator
                 $cell.data('current-client-id', customerId);
                 $cell.data('current-client-name', customerName);
-                $cell.html(`<span class="editable-field client-display">${customerName}</span>`);
+                const currentCommentHtml = $cell.find('.pm-client-comments').prop('outerHTML');
+                $cell.html(`
+                    <div class="pm-client-content">
+                        <span class="editable-field client-display">${customerName}</span>
+                    </div>
+                    ${currentCommentHtml}
+                `);
                 $cell.removeClass('editing');
                 $cell[0].offsetHeight; // Force reflow
                 
@@ -1035,7 +1077,22 @@ class ProjectManagement {
         const originalName = $cell.data('current-client-name') || 'No Client';
         const taskId = $cell.data('task-id');
         
-        $cell.html(`<span class="editable-field client-display">${originalName}</span>`);
+        // Preserve comment indicator when canceling
+        const currentCommentHtml = $cell.find('.pm-client-comments').prop('outerHTML') || `
+            <div class="pm-client-comments">
+                <div class="pm-comment-indicator" data-task-id="${taskId}">
+                    <i class="fa fa-comment-o"></i>
+                    <span class="pm-comment-count">0</span>
+                </div>
+            </div>
+        `;
+        
+        $cell.html(`
+            <div class="pm-client-content">
+                <span class="editable-field client-display">${originalName}</span>
+            </div>
+            ${currentCommentHtml}
+        `);
         $cell.removeClass('editing');
         
         // Remove dropdown from body
@@ -2143,7 +2200,7 @@ class ProjectManagement {
     updateTableWidth() {
         // Calculate total width based on all column widths
         const totalWidth = Object.values(this.columnWidths).reduce((sum, width) => sum + width, 0);
-        const minTotalWidth = Math.max(totalWidth, 1500); // Minimum table width
+        const minTotalWidth = Math.max(totalWidth, 2000); // Minimum table width
         
         // Update table container widths
         $('.pm-project-table-header, .pm-task-row').css({
@@ -2268,9 +2325,17 @@ class ProjectManagement {
     generateNewTaskRowHTML(taskData, clientName, currentWidths, totalWidth, additionalClasses = '') {
         // Generate new task row HTML with current column widths
         return `
-            <div class="pm-task-row ${additionalClasses}" data-task-id="${taskData.task_id}" data-task-name="${taskData.task_subject}" style="display: flex; width: ${totalWidth}px; min-width: ${totalWidth}px;">
-                <div class="pm-cell pm-cell-client" style="width: ${currentWidths.client}px; min-width: ${currentWidths.client}px; flex: 0 0 ${currentWidths.client}px;" data-editable="true" data-field="custom_client" data-task-id="${taskData.task_id}" data-field-type="client_selector" data-current-client-id="" data-current-client-name="${clientName || 'No Client'}">
-                    <span class="editable-field client-display">${clientName || 'No Client'}</span>
+            <div class="pm-task-row ${additionalClasses}" data-task-id="${taskData.task_id}" data-task-name="${taskData.task_subject}" style="display: flex; width: 2000px; min-width: 2000px;">
+                <div class="pm-cell pm-cell-client pm-client-with-comments" style="width: ${currentWidths.client}px; min-width: ${currentWidths.client}px; flex: 0 0 ${currentWidths.client}px;" data-editable="true" data-field="custom_client" data-task-id="${taskData.task_id}" data-field-type="client_selector" data-current-client-id="" data-current-client-name="${clientName || 'No Client'}">
+                    <div class="pm-client-content">
+                        <span class="editable-field client-display">${clientName || 'No Client'}</span>
+                    </div>
+                    <div class="pm-client-comments">
+                        <div class="pm-comment-indicator" data-task-id="${taskData.task_id}">
+                            <i class="fa fa-comment-o"></i>
+                            <span class="pm-comment-count">0</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="pm-cell pm-cell-entity" style="width: ${currentWidths.entity}px; min-width: ${currentWidths.entity}px; flex: 0 0 ${currentWidths.entity}px;">
                     <span class="pm-entity-badge entity-company">Company</span>
@@ -2293,12 +2358,12 @@ class ProjectManagement {
                 <div class="pm-cell pm-cell-actual" style="width: ${currentWidths.actual}px; min-width: ${currentWidths.actual}px; flex: 0 0 ${currentWidths.actual}px;" data-editable="true" data-field="custom_actual_billing" data-task-id="${taskData.task_id}" data-field-type="currency">
                     <span class="pm-no-amount editable-field">-</span>
                 </div>
-                <div class="pm-cell pm-cell-review-note" style="width: ${currentWidths['review-note']}px; min-width: ${currentWidths['review-note']}px; flex: 0 0 ${currentWidths['review-note']}px;">
-                    <div class="pm-review-note-indicator no-notes">
-                        <i class="fa fa-times-circle"></i>
-                        <span>none</span>
-                    </div>
-                </div>
+                                <div class="pm-cell pm-cell-review-note" style="width: ${currentWidths['review-note']}px; min-width: ${currentWidths['review-note']}px; flex: 0 0 ${currentWidths['review-note']}px;">
+                                    <div class="pm-review-note-indicator no-notes">
+                                        <i class="fa fa-times-circle"></i>
+                                        <span>none</span>
+                                    </div>
+                                </div>
                 <div class="pm-cell pm-cell-action-person" style="width: ${currentWidths['action-person']}px; min-width: ${currentWidths['action-person']}px; flex: 0 0 ${currentWidths['action-person']}px;" data-editable="true" data-field="custom_action_person" data-task-id="${taskData.task_id}" data-field-type="person_selector">
                     <div class="pm-user-avatars editable-field pm-empty-person">
                         <div class="pm-avatar pm-empty-avatar">
@@ -3367,6 +3432,328 @@ class ProjectManagement {
                 $badge.addClass(`status-${this.getStatusClass(status)}`);
             }
         });
+    }
+
+    // Comment System Methods
+    async showCommentModal(taskId) {
+        try {
+            // Get task info first
+            const taskResponse = await frappe.call({
+                method: 'frappe.client.get',
+                args: {
+                    doctype: 'Task',
+                    name: taskId,
+                    fields: ['subject']
+                }
+            });
+
+            const taskSubject = taskResponse.message ? taskResponse.message.subject : `Task ${taskId}`;
+            
+            // Create modal HTML
+            const modalHTML = `
+                <div class="pm-comment-modal" id="pm-comment-modal-${taskId}">
+                    <div class="pm-comment-modal-content">
+                        <div class="pm-comment-modal-header">
+                            <h3 class="pm-comment-modal-title">Comments - ${taskSubject}</h3>
+                            <button class="pm-comment-modal-close">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="pm-comment-modal-body">
+                            <div class="pm-comment-list" id="pm-comment-list-${taskId}">
+                                <div class="pm-comment-loading">
+                                    <i class="fa fa-spinner fa-spin"></i> Loading comments...
+                                </div>
+                            </div>
+                            <div class="pm-comment-input-area">
+                                <textarea class="pm-comment-input" placeholder="Write a comment..." data-task-id="${taskId}"></textarea>
+                                <div class="pm-comment-input-footer">
+                                    <div class="pm-comment-input-info">
+                                        Press Ctrl+Enter to send
+                                    </div>
+                                    <button class="pm-comment-submit" data-task-id="${taskId}">
+                                        Send Comment
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Remove existing modal
+            $('.pm-comment-modal').remove();
+            
+            // Add modal to body
+            $('body').append(modalHTML);
+            
+            // Show modal
+            $(`#pm-comment-modal-${taskId}`).fadeIn(200);
+            
+            // Load comments
+            await this.loadComments(taskId);
+            
+            // Focus on input
+            $('.pm-comment-input').focus();
+            
+            // Handle Ctrl+Enter
+            $('.pm-comment-input').on('keydown', (e) => {
+                if (e.ctrlKey && e.key === 'Enter') {
+                    e.preventDefault();
+                    this.submitComment();
+                }
+            });
+            
+        } catch (error) {
+            console.error('Error showing comment modal:', error);
+            frappe.show_alert({
+                message: 'Failed to open comments',
+                indicator: 'red'
+            });
+        }
+    }
+    
+    async loadComments(taskId) {
+        if (!taskId) {
+            console.error('Task ID is required to load comments');
+            return;
+        }
+        
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_task_comments',
+                args: {
+                    task_id: taskId
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                const comments = response.message.comments || [];
+                this.renderComments(taskId, comments);
+                
+                // Update comment count in the table
+                const commentCount = response.message.count || comments.length;
+                this.updateCommentCount(taskId, commentCount);
+            } else {
+                throw new Error(response.message?.error || 'Failed to load comments');
+            }
+        } catch (error) {
+            console.error('Error loading comments:', error);
+            const $commentList = $(`#pm-comment-list-${taskId}`);
+            if ($commentList.length > 0) {
+                $commentList.html(`
+                    <div class="pm-comment-empty">
+                        <i class="fa fa-exclamation-triangle"></i>
+                        <h4>Failed to load comments</h4>
+                        <p>Please try again later</p>
+                        <button class="pm-btn pm-btn-secondary" onclick="window.projectManagement.loadComments('${taskId}')">
+                            <i class="fa fa-refresh"></i> Retry
+                        </button>
+                    </div>
+                `);
+            }
+        }
+    }
+    
+    renderComments(taskId, comments) {
+        const $commentList = $(`#pm-comment-list-${taskId}`);
+        
+        if (!comments || comments.length === 0) {
+            $commentList.html(`
+                <div class="pm-comment-empty">
+                    <i class="fa fa-comment-o"></i>
+                    <h4>No comments yet</h4>
+                    <p>Be the first to add a comment!</p>
+                </div>
+            `);
+            return;
+        }
+        
+        let html = '';
+        comments.forEach(comment => {
+            const timeAgo = this.formatTimeAgo(comment.creation);
+            const initials = this.getInitials(comment.comment_by);
+            const avatarColor = this.getAvatarColor(comment.comment_by);
+            
+            html += `
+                <div class="pm-comment-item" data-comment-id="${comment.name}">
+                    <div class="pm-comment-avatar" style="background: ${avatarColor}">
+                        ${initials}
+                    </div>
+                    <div class="pm-comment-content">
+                        <div class="pm-comment-header">
+                            <span class="pm-comment-author">${comment.comment_by}</span>
+                            <span class="pm-comment-time">${timeAgo}</span>
+                        </div>
+                        <div class="pm-comment-text">${this.escapeHtml(comment.content)}</div>
+                        <div class="pm-comment-actions">
+                            <button class="pm-comment-action" data-action="reply" data-comment-id="${comment.name}">
+                                Reply
+                            </button>
+                            ${comment.can_edit ? `
+                                <button class="pm-comment-action" data-action="edit" data-comment-id="${comment.name}">
+                                    Edit
+                                </button>
+                            ` : ''}
+                            ${comment.can_delete ? `
+                                <button class="pm-comment-action" data-action="delete" data-comment-id="${comment.name}">
+                                    Delete
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        $commentList.html(html);
+    }
+    
+    async submitComment() {
+        const $input = $('.pm-comment-input');
+        const taskId = $input.data('task-id');
+        const content = $input.val().trim();
+        
+        if (!content) {
+            frappe.show_alert({
+                message: 'Please enter a comment',
+                indicator: 'orange'
+            });
+            return;
+        }
+        
+        try {
+            // Disable submit button
+            const $submitBtn = $('.pm-comment-submit');
+            $submitBtn.prop('disabled', true).text('Sending...');
+            
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.add_task_comment',
+                args: {
+                    task_id: taskId,
+                    comment_content: content
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                // Clear input
+                $input.val('');
+                
+                // Reload comments
+                await this.loadComments(taskId);
+                
+                // Update comment count in table
+                this.updateCommentCount(taskId, response.message.comment_count);
+                
+                frappe.show_alert({
+                    message: 'Comment added successfully',
+                    indicator: 'green'
+                });
+            } else {
+                throw new Error(response.message?.error || 'Failed to add comment');
+            }
+        } catch (error) {
+            console.error('Error submitting comment:', error);
+            frappe.show_alert({
+                message: 'Failed to add comment: ' + error.message,
+                indicator: 'red'
+            });
+        } finally {
+            // Re-enable submit button
+            $('.pm-comment-submit').prop('disabled', false).text('Send Comment');
+        }
+    }
+    
+    async deleteComment(commentId) {
+        const confirmed = await this.showConfirmDialog(
+            'Delete Comment',
+            'Are you sure you want to delete this comment? This action cannot be undone.'
+        );
+        
+        if (!confirmed) return;
+        
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.delete_task_comment',
+                args: {
+                    comment_id: commentId
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                // Remove comment from UI
+                $(`.pm-comment-item[data-comment-id="${commentId}"]`).fadeOut(300, function() {
+                    $(this).remove();
+                });
+                
+                // Update comment count
+                const taskId = $('.pm-comment-input').data('task-id');
+                this.updateCommentCount(taskId, response.message.comment_count);
+                
+                frappe.show_alert({
+                    message: 'Comment deleted',
+                    indicator: 'orange'
+                });
+            } else {
+                throw new Error(response.message?.error || 'Failed to delete comment');
+            }
+        } catch (error) {
+            console.error('Error deleting comment:', error);
+            frappe.show_alert({
+                message: 'Failed to delete comment',
+                indicator: 'red'
+            });
+        }
+    }
+    
+    closeCommentModal() {
+        $('.pm-comment-modal').fadeOut(200, function() {
+            $(this).remove();
+        });
+    }
+    
+    updateCommentCount(taskId, count) {
+        const $indicator = $(`.pm-comment-indicator[data-task-id="${taskId}"]`);
+        
+        if ($indicator.length === 0) {
+            console.warn(`Comment indicator not found for task ${taskId}`);
+            return;
+        }
+        
+        const $countSpan = $indicator.find('.pm-comment-count');
+        const validCount = Math.max(0, parseInt(count) || 0); // Ensure non-negative integer
+        
+        $countSpan.text(validCount);
+        
+        if (validCount > 0) {
+            $indicator.addClass('has-comments');
+            $indicator.find('i').removeClass('fa-comment-o').addClass('fa-comment');
+        } else {
+            $indicator.removeClass('has-comments');
+            $indicator.find('i').removeClass('fa-comment').addClass('fa-comment-o');
+        }
+    }
+    
+    formatTimeAgo(dateString) {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+        
+        return date.toLocaleDateString();
+    }
+    
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
 }
