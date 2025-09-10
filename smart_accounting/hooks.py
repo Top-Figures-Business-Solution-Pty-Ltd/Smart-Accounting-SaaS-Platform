@@ -245,20 +245,29 @@ home_page = "/app"
 # Fixtures
 # --------
 # Export these doctypes and their configurations to fixtures
+# Only export custom/non-standard items to avoid conflicts
 fixtures = [
-	"DocType",
-	"Custom Field", 
-	"Property Setter",
-	"Workspace",
-	"Print Format",
-	"Report",
-	"Dashboard Chart",
-	"Number Card",
-	"Role",
-	"Custom DocPerm",
-	"Workflow",
-	"Workflow State",
-	"Workflow Action Master"
+	{
+		"doctype": "Custom Field",
+		"filters": [["dt", "in", ["Task", "Project", "Customer", "User"]]]
+	},
+	{
+		"doctype": "Property Setter", 
+		"filters": [["doc_type", "in", ["Task", "Project", "Customer"]]]
+	},
+	{
+		"doctype": "Workspace",
+		"filters": [["module", "=", "Smart Accounting"]]
+	},
+	{
+		"doctype": "Role",
+		"filters": [["name", "like", "%Smart%"]]
+	},
+	{
+		"doctype": "Custom DocPerm",
+		"filters": [["parent", "in", ["Task", "Project", "Customer"]]]
+	}
+	# 不导出 Dashboard Chart, Number Card 等可能包含标准内容的 DocType
 ]
 
 # IP Protection Configuration

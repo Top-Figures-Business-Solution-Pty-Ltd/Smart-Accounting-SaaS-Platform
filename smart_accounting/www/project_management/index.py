@@ -1001,3 +1001,85 @@ def sync_comment_counts():
             'success': False,
             'error': str(e)
         }
+
+
+@frappe.whitelist()
+def get_task_activity_log(task_id):
+    """
+    Get activity log for a specific task using ERPNext's Version system
+    """
+    try:
+        if not task_id:
+            return {
+                'success': False,
+                'error': 'Task ID is required'
+            }
+
+        # Get version history from ERPNext's Version doctype
+        versions = frappe.get_all(
+            'Version',
+            filters={
+                'ref_doctype': 'Task',
+                'docname': task_id
+            },
+            fields=[
+                'name', 'owner', 'creation', 'data'
+            ],
+            order_by='creation desc',
+            limit=50
+        )
+        
+        # Also get comments as activities
+        comments = frappe.get_all(
+            'Comment',
+            filters={
+                'reference_doctype': 'Task',
+                'reference_name': task_id,
+                'comment_type': 'Comment'
+            },
+            fields=[
+                'name', 'content', 'comment_by', 'creation', 'owner'
+            ],
+            order_by='creation desc'
+        )
+        
+        # Combine and sort activities
+        activities = []
+        
+        # Add version changes
+        for version in versions:
+            activities.append({
+                'type': 'change',
+                'name': version.name,
+                'owner': version.owner,
+                'creation': version.creation,
+                'data': version.data,
+                'description': 'Task updated'
+            })
+        
+        # Add comments
+        for comment in comments:
+            activities.append({
+                'type': 'comment',
+                'name': comment.name,
+                'owner': comment.comment_by or comment.owner,
+                'creation': comment.creation,
+                'data': None,
+                'description': f'Added comment: {comment.content[:50]}...' if len(comment.content) > 50 else f'Added comment: {comment.content}'
+            })
+        
+        # Sort by creation time (newest first)
+        activities.sort(key=lambda x: x['creation'], reverse=True)
+        
+        return {
+            'success': True,
+            'activities': activities,
+            'count': len(activities)
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting task activity log: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }

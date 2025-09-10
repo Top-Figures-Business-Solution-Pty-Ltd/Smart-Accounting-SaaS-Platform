@@ -3454,22 +3454,42 @@ class ProjectManagement {
                 <div class="pm-comment-modal" id="pm-comment-modal-${taskId}">
                     <div class="pm-comment-modal-content">
                         <div class="pm-comment-modal-header">
-                            <h3 class="pm-comment-modal-title">Comments - ${taskSubject}</h3>
+                            <h3 class="pm-comment-modal-title">Updates - ${taskSubject}</h3>
+                            <div class="pm-comment-modal-tabs">
+                                <button class="pm-comment-tab active" data-tab="comments">
+                                    <i class="fa fa-comment"></i> Comments
+                                </button>
+                                <button class="pm-comment-tab" data-tab="activity">
+                                    <i class="fa fa-history"></i> Activity Log
+                                </button>
+                            </div>
                             <button class="pm-comment-modal-close">
                                 <i class="fa fa-times"></i>
                             </button>
                         </div>
                         <div class="pm-comment-modal-body">
-                            <div class="pm-comment-list" id="pm-comment-list-${taskId}">
-                                <div class="pm-comment-loading">
-                                    <i class="fa fa-spinner fa-spin"></i> Loading comments...
+                            <div class="pm-tab-content">
+                                <div class="pm-comment-list pm-tab-panel active" id="pm-comment-list-${taskId}" data-tab="comments">
+                                    <div class="pm-comment-loading">
+                                        <i class="fa fa-spinner fa-spin"></i> Loading comments...
+                                    </div>
+                                </div>
+                                <div class="pm-activity-list pm-tab-panel" id="pm-activity-list-${taskId}" data-tab="activity" style="display: none;">
+                                    <div class="pm-activity-loading">
+                                        <i class="fa fa-spinner fa-spin"></i> Loading activity...
+                                    </div>
                                 </div>
                             </div>
                             <div class="pm-comment-input-area">
-                                <textarea class="pm-comment-input" placeholder="Write a comment..." data-task-id="${taskId}"></textarea>
+                                <div class="pm-comment-input-container">
+                                    <textarea class="pm-comment-input" placeholder="Write a comment... (Type @ to mention someone)" data-task-id="${taskId}"></textarea>
+                                    <div class="pm-mention-dropdown" id="pm-mention-dropdown-${taskId}" style="display: none;">
+                                        <!-- Mention suggestions will appear here -->
+                                    </div>
+                                </div>
                                 <div class="pm-comment-input-footer">
                                     <div class="pm-comment-input-info">
-                                        Press Ctrl+Enter to send
+                                        Press Ctrl+Enter to send • Type @ to mention
                                     </div>
                                     <button class="pm-comment-submit" data-task-id="${taskId}">
                                         Send Comment
@@ -3496,12 +3516,33 @@ class ProjectManagement {
             // Focus on input
             $('.pm-comment-input').focus();
             
-            // Handle Ctrl+Enter
+            // Handle Ctrl+Enter and @ mentions
             $('.pm-comment-input').on('keydown', (e) => {
                 if (e.ctrlKey && e.key === 'Enter') {
                     e.preventDefault();
                     this.submitComment();
+                } else if (e.key === 'Escape') {
+                    this.hideMentionDropdown(taskId);
+                } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    if ($(`#pm-mention-dropdown-${taskId}`).is(':visible')) {
+                        e.preventDefault();
+                        this.navigateMentions(taskId, e.key === 'ArrowDown' ? 1 : -1);
+                    }
+                } else if (e.key === 'Enter' && $(`#pm-mention-dropdown-${taskId}`).is(':visible')) {
+                    e.preventDefault();
+                    this.selectCurrentMention(taskId);
                 }
+            });
+            
+            // Handle @ mention typing
+            $('.pm-comment-input').on('input', (e) => {
+                this.handleMentionInput(e.target, taskId);
+            });
+            
+            // Handle tab switching
+            $('.pm-comment-tab').on('click', (e) => {
+                const tab = $(e.currentTarget).data('tab');
+                this.switchCommentTab(taskId, tab);
             });
             
         } catch (error) {
@@ -3754,6 +3795,304 @@ class ProjectManagement {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    // @ Mention System
+    handleMentionInput(textarea, taskId) {
+        const text = textarea.value;
+        const cursorPosition = textarea.selectionStart;
+        
+        // Find @ symbol before cursor
+        const textBeforeCursor = text.substring(0, cursorPosition);
+        const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+        
+        if (lastAtIndex === -1) {
+            this.hideMentionDropdown(taskId);
+            return;
+        }
+        
+        // Check if @ is at start or after whitespace
+        const charBeforeAt = lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : ' ';
+        if (charBeforeAt !== ' ' && charBeforeAt !== '\n') {
+            this.hideMentionDropdown(taskId);
+            return;
+        }
+        
+        // Get text after @
+        const mentionText = textBeforeCursor.substring(lastAtIndex + 1);
+        
+        // Check if there's a space after @ (which would end the mention)
+        if (mentionText.includes(' ') || mentionText.includes('\n')) {
+            this.hideMentionDropdown(taskId);
+            return;
+        }
+        
+        // Show mention suggestions
+        this.showMentionSuggestions(taskId, mentionText, lastAtIndex);
+    }
+    
+    async showMentionSuggestions(taskId, query, atPosition) {
+        const $dropdown = $(`#pm-mention-dropdown-${taskId}`);
+        
+        try {
+            // Get users for mentions
+            const response = await frappe.call({
+                method: 'frappe.client.get_list',
+                args: {
+                    doctype: 'User',
+                    fields: ['name', 'email', 'full_name'],
+                    filters: [
+                        ['enabled', '=', 1],
+                        ['user_type', '=', 'System User'],
+                        ['name', '!=', 'Guest']
+                    ],
+                    limit_page_length: 10,
+                    order_by: 'full_name asc'
+                }
+            });
+            
+            if (response.message) {
+                let users = response.message;
+                
+                // Filter by query if provided
+                if (query) {
+                    users = users.filter(user => 
+                        (user.full_name || '').toLowerCase().includes(query.toLowerCase()) ||
+                        user.email.toLowerCase().includes(query.toLowerCase())
+                    );
+                }
+                
+                this.renderMentionSuggestions(taskId, users, atPosition);
+            }
+        } catch (error) {
+            console.error('Error loading mention suggestions:', error);
+        }
+    }
+    
+    renderMentionSuggestions(taskId, users, atPosition) {
+        const $dropdown = $(`#pm-mention-dropdown-${taskId}`);
+        
+        if (!users || users.length === 0) {
+            $dropdown.hide();
+            return;
+        }
+        
+        let html = '';
+        users.forEach((user, index) => {
+            const displayName = user.full_name || user.email;
+            const initials = this.getInitials(displayName);
+            const avatarColor = this.getAvatarColor(displayName);
+            
+            html += `
+                <div class="pm-mention-item ${index === 0 ? 'selected' : ''}" 
+                     data-email="${user.email}" 
+                     data-name="${displayName}"
+                     data-index="${index}">
+                    <div class="pm-mention-avatar" style="background: ${avatarColor}">
+                        ${initials}
+                    </div>
+                    <div class="pm-mention-info">
+                        <div class="pm-mention-name">${displayName}</div>
+                        <div class="pm-mention-email">${user.email}</div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        $dropdown.html(html).show();
+        
+        // Store position for insertion
+        $dropdown.data('at-position', atPosition);
+        
+        // Handle clicks
+        $dropdown.off('click').on('click', '.pm-mention-item', (e) => {
+            const $item = $(e.currentTarget);
+            this.insertMention(taskId, $item.data('email'), $item.data('name'));
+        });
+    }
+    
+    navigateMentions(taskId, direction) {
+        const $dropdown = $(`#pm-mention-dropdown-${taskId}`);
+        const $items = $dropdown.find('.pm-mention-item');
+        const $selected = $items.filter('.selected');
+        
+        if ($items.length === 0) return;
+        
+        let newIndex = 0;
+        if ($selected.length > 0) {
+            const currentIndex = $selected.data('index');
+            newIndex = currentIndex + direction;
+            
+            // Wrap around
+            if (newIndex < 0) newIndex = $items.length - 1;
+            if (newIndex >= $items.length) newIndex = 0;
+        }
+        
+        $items.removeClass('selected');
+        $items.eq(newIndex).addClass('selected');
+    }
+    
+    selectCurrentMention(taskId) {
+        const $dropdown = $(`#pm-mention-dropdown-${taskId}`);
+        const $selected = $dropdown.find('.pm-mention-item.selected');
+        
+        if ($selected.length > 0) {
+            this.insertMention(taskId, $selected.data('email'), $selected.data('name'));
+        }
+    }
+    
+    insertMention(taskId, email, name) {
+        const $textarea = $('.pm-comment-input');
+        const text = $textarea.val();
+        const cursorPosition = $textarea[0].selectionStart;
+        const $dropdown = $(`#pm-mention-dropdown-${taskId}`);
+        const atPosition = $dropdown.data('at-position');
+        
+        // Replace from @ to cursor with mention
+        const beforeAt = text.substring(0, atPosition);
+        const afterCursor = text.substring(cursorPosition);
+        const mention = `@${name} `;
+        
+        const newText = beforeAt + mention + afterCursor;
+        const newCursorPos = beforeAt.length + mention.length;
+        
+        $textarea.val(newText);
+        $textarea[0].setSelectionRange(newCursorPos, newCursorPos);
+        $textarea.focus();
+        
+        this.hideMentionDropdown(taskId);
+    }
+    
+    hideMentionDropdown(taskId) {
+        $(`#pm-mention-dropdown-${taskId}`).hide();
+    }
+    
+    // Tab Switching and Activity Log
+    switchCommentTab(taskId, tab) {
+        // Update tab buttons
+        $('.pm-comment-tab').removeClass('active');
+        $(`.pm-comment-tab[data-tab="${tab}"]`).addClass('active');
+        
+        // Update tab panels - 使用正确的选择器
+        $('.pm-tab-panel').removeClass('active').hide();
+        
+        if (tab === 'comments') {
+            $(`#pm-comment-list-${taskId}`).addClass('active').show();
+            $('.pm-comment-input-area').show();
+        } else if (tab === 'activity') {
+            $(`#pm-activity-list-${taskId}`).addClass('active').show();
+            $('.pm-comment-input-area').hide();
+            // Load activity log if needed
+            this.loadActivityLog(taskId);
+        }
+    }
+    
+    async loadActivityLog(taskId) {
+        const $activityList = $(`#pm-activity-list-${taskId}`);
+        
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_task_activity_log',
+                args: {
+                    task_id: taskId
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                const activities = response.message.activities || [];
+                this.renderActivityLog(taskId, activities);
+            } else {
+                throw new Error(response.message?.error || 'Failed to load activity log');
+            }
+        } catch (error) {
+            console.error('Error loading activity log:', error);
+            $activityList.html(`
+                <div class="pm-comment-empty">
+                    <i class="fa fa-exclamation-triangle"></i>
+                    <h4>Failed to load activity log</h4>
+                    <p>Please try again later</p>
+                </div>
+            `);
+        }
+    }
+    
+    renderActivityLog(taskId, activities) {
+        const $activityList = $(`#pm-activity-list-${taskId}`);
+        
+        if (!activities || activities.length === 0) {
+            $activityList.html(`
+                <div class="pm-comment-empty">
+                    <i class="fa fa-history"></i>
+                    <h4>No activity yet</h4>
+                    <p>Task activity will appear here</p>
+                </div>
+            `);
+            return;
+        }
+        
+        let html = '';
+        activities.forEach(activity => {
+            const timeAgo = this.formatTimeAgo(activity.creation);
+            const initials = this.getInitials(activity.owner);
+            const avatarColor = this.getAvatarColor(activity.owner);
+            
+            html += `
+                <div class="pm-activity-item">
+                    <div class="pm-comment-avatar" style="background: ${avatarColor}">
+                        ${initials}
+                    </div>
+                    <div class="pm-comment-content">
+                        <div class="pm-comment-header">
+                            <span class="pm-comment-author">${activity.owner}</span>
+                            <span class="pm-comment-time">${timeAgo}</span>
+                        </div>
+                        <div class="pm-activity-description">
+                            <i class="fa fa-edit"></i>
+                            ${this.formatActivityDescription(activity)}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        $activityList.html(html);
+    }
+    
+    formatActivityDescription(activity) {
+        const data = activity.data ? JSON.parse(activity.data) : {};
+        
+        if (data.changed && data.changed.length > 0) {
+            const changes = data.changed.map(change => {
+                const fieldLabel = this.getFieldLabel(change[0]);
+                const oldValue = change[1] || 'Empty';
+                const newValue = change[2] || 'Empty';
+                return `Changed <strong>${fieldLabel}</strong> from "${oldValue}" to "${newValue}"`;
+            });
+            return changes.join('<br>');
+        }
+        
+        return 'Task updated';
+    }
+    
+    getFieldLabel(fieldName) {
+        const fieldLabels = {
+            'status': 'Status',
+            'priority': 'Priority',
+            'custom_client': 'Client',
+            'custom_tftg': 'TF/TG',
+            'custom_software': 'Software',
+            'custom_target_month': 'Target Month',
+            'custom_budget_planning': 'Budget',
+            'custom_actual_billing': 'Actual',
+            'custom_action_person': 'Action Person',
+            'custom_preparer': 'Preparer',
+            'custom_reviewer': 'Reviewer',
+            'custom_partner': 'Partner',
+            'subject': 'Task Name',
+            'description': 'Description'
+        };
+        
+        return fieldLabels[fieldName] || fieldName;
     }
 
 }
