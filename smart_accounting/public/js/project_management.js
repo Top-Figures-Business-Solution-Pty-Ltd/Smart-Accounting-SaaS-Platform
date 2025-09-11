@@ -565,6 +565,9 @@ class ProjectManagement {
             case 'currency':
                 editor = this.createCurrencyEditor($cell, currentValue);
                 break;
+            case 'date':
+                editor = this.createDateEditor($cell, currentValue);
+                break;
             case 'text':
                 editor = this.createTextEditor($cell, currentValue);
                 break;
@@ -1962,13 +1965,12 @@ class ProjectManagement {
         this.currentColumn = null;
         this.startX = 0;
         this.startWidth = 0;
-        this.columnWidths = this.loadColumnWidths();
         
-        // Apply saved column widths
-        this.applyColumnWidths();
-        
-        // Bind resize events
-        this.bindResizeEvents();
+        // Load column widths and initialize after loading
+        this.loadColumnWidthsAsync().then(() => {
+            // Bind resize events after column widths are loaded
+            this.bindResizeEvents();
+        });
     }
     
     bindResizeEvents() {
@@ -2155,18 +2157,49 @@ class ProjectManagement {
         Object.keys(this.columnWidths).forEach(column => {
             this.setColumnWidth(column, this.columnWidths[column]);
         });
+        // Update total table width after applying all column widths
+        this.updateTableWidth();
     }
     
+    loadColumnWidthsAsync() {
+        // Load user-specific column widths from server (User Preferences DocType)
+        return new Promise((resolve) => {
+            frappe.call({
+                method: 'smart_accounting.www.project_management.index.load_user_column_widths',
+                callback: (r) => {
+                    if (r.message && r.message.success) {
+                        this.columnWidths = r.message.column_widths;
+                        console.log('✅ Loaded user column widths for:', frappe.session.user, this.columnWidths);
+                    } else {
+                        // If server fails, try localStorage as fallback
+                        const userKey = `pm-column-widths-${frappe.session.user}`;
+                        const saved = localStorage.getItem(userKey);
+                        if (saved) {
+                            try {
+                                this.columnWidths = JSON.parse(saved);
+                                console.log('✅ Loaded from localStorage fallback:', this.columnWidths);
+                            } catch (e) {
+                                this.columnWidths = this.getDefaultColumnWidths();
+                            }
+                        } else {
+                            this.columnWidths = this.getDefaultColumnWidths();
+                        }
+                        console.log('⚠️ Using fallback column widths for:', frappe.session.user);
+                    }
+                    // Apply widths immediately after loading
+                    this.applyColumnWidths();
+                    resolve();
+                }
+            });
+        });
+    }
+    
+    // Keep old method for compatibility
     loadColumnWidths() {
-        const saved = localStorage.getItem('pm-column-widths');
-        if (saved) {
-            try {
-                return JSON.parse(saved);
-            } catch (e) {
-                console.warn('Failed to load column widths:', e);
-            }
-        }
-        
+        return this.loadColumnWidthsAsync();
+    }
+    
+    getDefaultColumnWidths() {
         // Default column widths
         return {
             'client': 150,
@@ -2190,11 +2223,33 @@ class ProjectManagement {
     }
     
     saveColumnWidths() {
-        try {
-            localStorage.setItem('pm-column-widths', JSON.stringify(this.columnWidths));
-        } catch (e) {
-            console.warn('Failed to save column widths:', e);
-        }
+        // Save user-specific column widths with dual storage (server + localStorage)
+        clearTimeout(this.saveTimeout);
+        this.saveTimeout = setTimeout(() => {
+            // Save to localStorage immediately for instant fallback
+            const userKey = `pm-column-widths-${frappe.session.user}`;
+            try {
+                localStorage.setItem(userKey, JSON.stringify(this.columnWidths));
+                console.log('✅ Column widths saved to localStorage for user:', frappe.session.user);
+            } catch (e) {
+                console.warn('Failed to save to localStorage:', e);
+            }
+            
+            // Also try to save to server
+            frappe.call({
+                method: 'smart_accounting.www.project_management.index.save_user_column_widths',
+                args: {
+                    column_widths: this.columnWidths
+                },
+                callback: (r) => {
+                    if (r.message && r.message.success) {
+                        console.log('✅ Column widths saved to server for user:', frappe.session.user);
+                    } else {
+                        console.warn('⚠️ Failed to save to server, localStorage fallback active:', r.message?.error);
+                    }
+                }
+            });
+        }, 300); // Reduced debounce for better responsiveness
     }
     
     updateTableWidth() {
@@ -2211,15 +2266,23 @@ class ProjectManagement {
     
     resetColumnWidths() {
         // Reset to default widths
-        this.columnWidths = this.loadColumnWidths();
+        this.columnWidths = this.getDefaultColumnWidths();
         this.applyColumnWidths();
         
-        // Clear saved widths
-        localStorage.removeItem('pm-column-widths');
-        
-        frappe.show_alert({
-            message: 'Column widths reset to default',
-            indicator: 'blue'
+        // Clear saved widths on server
+        frappe.call({
+            method: 'smart_accounting.www.project_management.index.save_user_column_widths',
+            args: {
+                column_widths: {} // Empty object to clear saved preferences
+            },
+            callback: (r) => {
+                if (r.message && r.message.success) {
+                    frappe.show_alert({
+                        message: 'Column widths reset to default',
+                        indicator: 'blue'
+                    });
+                }
+            }
         });
     }
     
@@ -4093,6 +4156,22 @@ class ProjectManagement {
         };
         
         return fieldLabels[fieldName] || fieldName;
+    }
+
+    createDateEditor($cell, currentValue) {
+        // Convert display value to date format if needed
+        let dateValue = '';
+        if (currentValue && currentValue !== '-') {
+            // If it's already in YYYY-MM-DD format, use as is
+            if (/^\d{4}-\d{2}-\d{2}$/.test(currentValue)) {
+                dateValue = currentValue;
+            } else if (/^\d{4}-\d{2}-\d{2}/.test(currentValue)) {
+                // Extract just the date part if it has time
+                dateValue = currentValue.split(' ')[0];
+            }
+        }
+        
+        return `<input type="date" class="pm-inline-input" value="${dateValue}" lang="en" style="width: 100%; border: 2px solid var(--monday-blue); padding: 6px 8px; border-radius: 4px;">`;
     }
 
 }

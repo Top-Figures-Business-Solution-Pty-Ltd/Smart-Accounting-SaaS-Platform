@@ -257,7 +257,7 @@ fixtures = [
 	},
 	{
 		"doctype": "Workspace",
-		"filters": [["module", "=", "Smart Accounting"]]
+		"filters": [["name", "like", "%Smart%"]]
 	},
 	{
 		"doctype": "Role",
@@ -266,6 +266,10 @@ fixtures = [
 	{
 		"doctype": "Custom DocPerm",
 		"filters": [["parent", "in", ["Task", "Project", "Customer"]]]
+	},
+	{
+		"doctype": "DocType",
+		"filters": [["name", "in", ["User Preferences"]]]
 	}
 	# 不导出 Dashboard Chart, Number Card 等可能包含标准内容的 DocType
 ]

@@ -137,8 +137,8 @@ def get_project_management_data():
                         task.tf_tg = 'TF'
                 else:
                     task.tf_tg = 'TF'
-                task.service_line = getattr(task_doc, 'custom_service_line', None) or "BAS"
-                task.software = getattr(task_doc, 'custom_software', None) or "Xero"
+                task.service_line = getattr(task_doc, 'custom_service_line', None) or ""
+                task.software = getattr(task_doc, 'custom_software', None) or ""
                 task.year_end = getattr(task_doc, 'custom_year_end', None) or ""
                 task.target_month = getattr(task_doc, 'custom_target_month', None) or ""
                 task.partner = getattr(task_doc, 'custom_partner', None) or ""
@@ -186,10 +186,10 @@ def get_project_management_data():
                 })
                     
             except:
-                # If custom fields don't exist, use default values
-                task.tf_tg = "TF"
-                task.service_line = "BAS"
-                task.software = "Xero"
+                # If custom fields don't exist, use empty values
+                task.tf_tg = ""
+                task.service_line = ""
+                task.software = ""
                 task.year_end = ""
                 task.target_month = ""
                 task.partner = ""
@@ -307,7 +307,8 @@ def update_task_field(task_id, field_name, new_value):
             'custom_tftg', 'custom_tf_tg', 'custom_software', 'custom_target_month',
             'custom_budget_planning', 'custom_actual_billing', 'custom_preparer',
             'custom_reviewer', 'custom_partner', 'custom_year_end', 'status',
-            'assigned_to', 'custom_action_person'  # For action person
+            'assigned_to', 'custom_action_person', 'custom_service_line',
+            'custom_client', 'custom_lodgment_due_date', 'custom_lodgement_due_date'
         ]
         
         if field_name not in allowed_fields:
@@ -319,6 +320,23 @@ def update_task_field(task_id, field_name, new_value):
                 new_value = float(new_value) if new_value else 0
             except ValueError:
                 return {'success': False, 'error': 'Invalid number format'}
+        elif field_name == 'custom_year_end':
+            # Validate Year End is a valid month
+            valid_months = ['January', 'February', 'March', 'April', 'May', 'June',
+                           'July', 'August', 'September', 'October', 'November', 'December']
+            if new_value and new_value not in valid_months:
+                return {'success': False, 'error': f'Year End must be a valid month. Invalid value: {new_value}'}
+            print(f"DEBUG: Year End validation passed for value: {new_value}")
+        elif field_name in ['custom_lodgment_due_date', 'custom_lodgement_due_date']:
+            # Validate date format for lodgment due date
+            if new_value:
+                try:
+                    from datetime import datetime
+                    # Try to parse the date to ensure it's valid
+                    datetime.strptime(new_value, '%Y-%m-%d')
+                    print(f"DEBUG: Lodgment due date validation passed for value: {new_value}")
+                except ValueError:
+                    return {'success': False, 'error': f'Invalid date format. Use YYYY-MM-DD format.'}
         elif field_name in ['custom_tftg', 'custom_tf_tg']:
             # For TF/TG field, try to find the company
             print(f"DEBUG: Trying to save TF/TG value: {new_value}")
@@ -345,9 +363,8 @@ def update_task_field(task_id, field_name, new_value):
                     # If lookup fails, just use the value as-is
                     pass
         
-        # Update the field
-        setattr(task, field_name, new_value)
-        task.save()
+        # Update the field using set_value to avoid full document validation
+        frappe.db.set_value("Task", task_id, field_name, new_value)
         
         # Force commit to database immediately
         frappe.db.commit()
@@ -429,8 +446,8 @@ def create_new_task(project_name, client_name=None):
             if tg_companies:
                 new_task.custom_tftg = tg_companies[0].name
         
-        # Set other defaults
-        new_task.custom_software = "Xero"
+        # Set other defaults (empty, let user choose)
+        new_task.custom_software = ""
         new_task.custom_target_month = ""
         new_task.custom_budget_planning = 0
         new_task.custom_actual_billing = 0
@@ -640,16 +657,14 @@ def update_task_software(task_id, software_value):
     Update task software and optionally sync to customer
     """
     try:
-        task = frappe.get_doc("Task", task_id)
-        task.flags.ignore_version = True
+        # Update task software directly using set_value to avoid full document validation
+        frappe.db.set_value("Task", task_id, "custom_software", software_value)
         
-        # Update task software directly
-        task.custom_software = software_value
-        task.save()
-        
-        # Force commit and clear cache
+        # Force commit
         frappe.db.commit()
-        frappe.clear_cache()
+        
+        # Get task document for customer sync (without saving)
+        task = frappe.get_doc("Task", task_id)
         
         # Sync to customer's accounting platform if task has a client
         customer_updated = False
@@ -997,6 +1012,110 @@ def sync_comment_counts():
         
     except Exception as e:
         frappe.log_error(f"Error synchronizing comment counts: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+@frappe.whitelist()
+def save_user_column_widths(column_widths):
+    """
+    Save user's column width preferences to UserPreferences document
+    High performance: uses dedicated DocType for user preferences
+    """
+    try:
+        import json
+        
+        if not column_widths:
+            return {'success': False, 'error': 'Column widths data required'}
+        
+        # Convert to JSON string if it's not already
+        if isinstance(column_widths, dict):
+            column_widths_json = json.dumps(column_widths)
+        else:
+            column_widths_json = column_widths
+        
+        # Check if UserPreferences record exists for current user
+        existing = frappe.db.get_value("User Preferences", {"user": frappe.session.user})
+        
+        if existing:
+            # Update existing record
+            frappe.db.set_value('User Preferences', existing, 'pm_column_widths', column_widths_json)
+        else:
+            # Create new UserPreferences record
+            user_prefs = frappe.new_doc("User Preferences")
+            user_prefs.user = frappe.session.user
+            user_prefs.pm_column_widths = column_widths_json
+            user_prefs.insert(ignore_permissions=True)
+        
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'message': 'Column widths saved successfully'
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error saving user column widths: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def load_user_column_widths():
+    """
+    Load user's column width preferences from UserPreferences document
+    High performance: dedicated DocType for user preferences
+    """
+    try:
+        import json
+        
+        # Get column widths from UserPreferences document
+        column_widths_json = frappe.db.get_value('User Preferences', 
+                                                {'user': frappe.session.user}, 
+                                                'pm_column_widths')
+        
+        if column_widths_json:
+            try:
+                column_widths = json.loads(column_widths_json)
+                return {
+                    'success': True,
+                    'column_widths': column_widths
+                }
+            except json.JSONDecodeError:
+                # If JSON is corrupted, return default
+                pass
+        
+        # Return default widths if no saved preferences
+        default_widths = {
+            'client': 150,
+            'entity': 100,
+            'tf-tg': 80,
+            'software': 120,
+            'status': 100,
+            'target-month': 120,
+            'budget': 120,
+            'actual': 120,
+            'review-note': 120,
+            'action-person': 130,
+            'preparer': 120,
+            'reviewer': 120,
+            'partner': 120,
+            'lodgment-due': 130,
+            'year-end': 100,
+            'last-updated': 130,
+            'priority': 100
+        }
+        
+        return {
+            'success': True,
+            'column_widths': default_widths
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error loading user column widths: {str(e)}")
         return {
             'success': False,
             'error': str(e)

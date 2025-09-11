@@ -475,15 +475,26 @@
                                                     </div>
                                                 {% endif %}
                                             </div>
-                                            <div class="pm-cell pm-cell-lodgment-due">
-                                                {% if task.lodgment_due_date %}
-                                                    <span class="pm-due-date">{{ task.lodgment_due_date }}</span>
-                                                {% else %}
-                                                    <span class="pm-no-date">-</span>
-                                                {% endif %}
+                                            <div class="pm-cell pm-cell-lodgment-due"
+                                                 data-editable="true"
+                                                 data-field="custom_lodgment_due_date"
+                                                 data-task-id="{{ task.task_id }}"
+                                                 data-field-type="date">
+                                                <span class="editable-field">
+                                                    {% if task.lodgment_due_date %}
+                                                        {{ task.lodgment_due_date }}
+                                                    {% else %}
+                                                        -
+                                                    {% endif %}
+                                                </span>
                                             </div>
-                                            <div class="pm-cell pm-cell-year-end">
-                                                {{ task.year_end or '-' }}
+                                            <div class="pm-cell pm-cell-year-end"
+                                                 data-editable="true"
+                                                 data-field="custom_year_end"
+                                                 data-task-id="{{ task.task_id }}"
+                                                 data-field-type="select"
+                                                 data-options="January,February,March,April,May,June,July,August,September,October,November,December">
+                                                <span class="editable-field">{{ task.year_end or '-' }}</span>
                                             </div>
                                             <div class="pm-cell pm-cell-last-updated">
                                                 {% if task.last_updated %}
