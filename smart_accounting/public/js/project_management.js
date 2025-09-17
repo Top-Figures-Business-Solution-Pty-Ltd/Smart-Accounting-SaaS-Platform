@@ -4931,8 +4931,21 @@ class ProjectManagement {
             $('.pm-workspace-menu').toggle();
         });
         
-        // Handle workspace item clicks
-        $(document).on('click', '.pm-workspace-item:not(.pm-create-workspace)', (e) => {
+        // Handle create workspace button (top-level)
+        $(document).on('click', '.pm-create-workspace', (e) => {
+            e.stopPropagation();
+            this.showCreateWorkspaceDialog();
+        });
+        
+        // Handle create board button (can be top-level or under workspace)
+        $(document).on('click', '.pm-create-board', (e) => {
+            e.stopPropagation();
+            const parentPartition = $(e.currentTarget).data('parent');
+            this.showCreateBoardDialog(parentPartition);
+        });
+        
+        // Handle workspace item clicks (exclude create buttons)
+        $(document).on('click', '.pm-workspace-item:not(.pm-create-workspace):not(.pm-create-board)', (e) => {
             e.stopPropagation();
             const $item = $(e.currentTarget);
             const hasChildren = $item.data('has-children');
@@ -4998,7 +5011,7 @@ class ProjectManagement {
                 `).join('')}
                 <div class="pm-workspace-divider"></div>
                 <div class="pm-workspace-item pm-create-board" data-parent="${parentPartition}">
-                    <i class="fa fa-plus"></i>
+                    <i class="fa fa-folder-plus"></i>
                     <span>Create new board</span>
                 </div>
             </div>
@@ -5016,6 +5029,207 @@ class ProjectManagement {
     showMainMenu() {
         // Reload the main menu
         location.reload();
+    }
+
+    showCreateWorkspaceDialog() {
+        const dialogHTML = `
+            <div class="pm-create-dialog-overlay">
+                <div class="pm-create-dialog">
+                    <div class="pm-create-dialog-header">
+                        <h3>Create New Workspace</h3>
+                        <button class="pm-create-dialog-close">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="pm-create-dialog-body">
+                        <div class="pm-form-group">
+                            <label>Workspace Name</label>
+                            <input type="text" class="pm-workspace-name-input" placeholder="Enter workspace name..." maxlength="50">
+                        </div>
+                        <div class="pm-form-group">
+                            <label>Description (Optional)</label>
+                            <textarea class="pm-workspace-description-input" placeholder="Brief description..." rows="2" maxlength="200"></textarea>
+                        </div>
+                    </div>
+                    <div class="pm-create-dialog-footer">
+                        <button class="pm-btn pm-btn-secondary pm-cancel-create">Cancel</button>
+                        <button class="pm-btn pm-btn-primary pm-confirm-create">
+                            <i class="fa fa-plus"></i>
+                            Create Workspace
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        $('body').append(dialogHTML);
+        $('.pm-create-dialog-overlay').fadeIn(200);
+        $('.pm-workspace-name-input').focus();
+        
+        this.bindCreateDialogEvents(true); // true = workspace
+    }
+
+    showCreateBoardDialog(parentPartition) {
+        const isUnderWorkspace = !!parentPartition;
+        const dialogTitle = isUnderWorkspace ? `Create New Board in Workspace` : `Create New Board`;
+        
+        const dialogHTML = `
+            <div class="pm-create-dialog-overlay">
+                <div class="pm-create-dialog">
+                    <div class="pm-create-dialog-header">
+                        <h3>${dialogTitle}</h3>
+                        <button class="pm-create-dialog-close">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="pm-create-dialog-body">
+                        <div class="pm-form-group">
+                            <label>Board Name</label>
+                            <input type="text" class="pm-workspace-name-input" placeholder="Enter board name..." maxlength="50">
+                        </div>
+                        ${!parentPartition ? `
+                        <div class="pm-form-group">
+                            <label>Parent Workspace (Optional)</label>
+                            <select class="pm-parent-workspace-select">
+                                <option value="">No parent (standalone board)</option>
+                            </select>
+                        </div>
+                        ` : ''}
+                        <div class="pm-form-group">
+                            <label>Description (Optional)</label>
+                            <textarea class="pm-workspace-description-input" placeholder="Brief description..." rows="2" maxlength="200"></textarea>
+                        </div>
+                        ${parentPartition ? `<input type="hidden" class="pm-parent-partition" value="${parentPartition}">` : ''}
+                    </div>
+                    <div class="pm-create-dialog-footer">
+                        <button class="pm-btn pm-btn-secondary pm-cancel-create">Cancel</button>
+                        <button class="pm-btn pm-btn-primary pm-confirm-create">
+                            <i class="fa fa-plus"></i>
+                            Create Board
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        $('body').append(dialogHTML);
+        $('.pm-create-dialog-overlay').fadeIn(200);
+        $('.pm-workspace-name-input').focus();
+        
+        // Load available workspaces if creating standalone board
+        if (!parentPartition) {
+            this.loadAvailableWorkspaces();
+        }
+        
+        this.bindCreateDialogEvents(false, parentPartition); // false = board, not workspace
+    }
+
+    bindCreateDialogEvents(isWorkspace, parentPartition = null) {
+        // Close dialog
+        $('.pm-create-dialog-close, .pm-cancel-create').on('click', () => {
+            $('.pm-create-dialog-overlay').fadeOut(200, function() {
+                $(this).remove();
+            });
+        });
+        
+        // Close on overlay click
+        $('.pm-create-dialog-overlay').on('click', (e) => {
+            if (e.target === e.currentTarget) {
+                $('.pm-create-dialog-overlay').fadeOut(200, function() {
+                    $(this).remove();
+                });
+            }
+        });
+        
+        // Handle enter key
+        $('.pm-workspace-name-input').on('keypress', (e) => {
+            if (e.which === 13) {
+                $('.pm-confirm-create').click();
+            }
+        });
+        
+        // Create button
+        $('.pm-confirm-create').on('click', async () => {
+            const name = $('.pm-workspace-name-input').val().trim();
+            const description = $('.pm-workspace-description-input').val().trim();
+            const parent = $('.pm-parent-partition').val() || $('.pm-parent-workspace-select').val() || parentPartition;
+            
+            if (!name) {
+                frappe.show_alert({
+                    message: 'Name is required',
+                    indicator: 'red'
+                });
+                return;
+            }
+            
+            // Disable button during creation
+            $('.pm-confirm-create').prop('disabled', true).text('Creating...');
+            
+            try {
+                const response = await frappe.call({
+                    method: 'smart_accounting.www.project_management.index.create_partition',
+                    args: {
+                        partition_name: name,
+                        is_workspace: isWorkspace,
+                        parent_partition: parent,
+                        description: description
+                    }
+                });
+                
+                if (response.message && response.message.success) {
+                    frappe.show_alert({
+                        message: response.message.message,
+                        indicator: 'green'
+                    });
+                    
+                    // Close dialog
+                    $('.pm-create-dialog-overlay').remove();
+                    
+                    // Navigate to new partition
+                    const currentUrl = new URL(window.location);
+                    currentUrl.searchParams.set('view', response.message.partition_name);
+                    currentUrl.searchParams.set('_t', Date.now());
+                    window.location.href = currentUrl.toString();
+                    
+                } else {
+                    throw new Error(response.message?.error || 'Creation failed');
+                }
+                
+            } catch (error) {
+                frappe.show_alert({
+                    message: 'Error: ' + error.message,
+                    indicator: 'red'
+                });
+                $('.pm-confirm-create').prop('disabled', false).html('<i class="fa fa-plus"></i> Create ' + (isWorkspace ? 'Workspace' : 'Board'));
+            }
+        });
+    }
+
+    async loadAvailableWorkspaces() {
+        try {
+            // Get all workspaces (is_workspace = 1)
+            const response = await frappe.call({
+                method: 'frappe.client.get_list',
+                args: {
+                    doctype: 'Partition',
+                    fields: ['name', 'partition_name'],
+                    filters: [
+                        ['is_workspace', '=', 1],
+                        ['is_archived', '!=', 1]
+                    ],
+                    order_by: 'partition_name'
+                }
+            });
+            
+            if (response.message && response.message.length > 0) {
+                const $select = $('.pm-parent-workspace-select');
+                response.message.forEach(workspace => {
+                    $select.append(`<option value="${workspace.name}">${workspace.partition_name}</option>`);
+                });
+            }
+        } catch (error) {
+            // If loading fails, just keep the default "No parent" option
+        }
     }
 
     // Apply partition-specific column configuration

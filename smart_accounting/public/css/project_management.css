@@ -3378,3 +3378,148 @@ div.pm-table-header,
 .pm-software-selector-modal * {
     box-sizing: border-box;
 }
+
+/* Create dialog styles */
+.pm-create-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.pm-create-dialog {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    width: 400px;
+    max-width: 90vw;
+}
+
+.pm-create-dialog-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--monday-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pm-create-dialog-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--monday-text);
+}
+
+.pm-create-dialog-close {
+    background: none;
+    border: none;
+    font-size: 16px;
+    color: var(--monday-gray);
+    cursor: pointer;
+    padding: 4px;
+}
+
+.pm-create-dialog-close:hover {
+    color: var(--monday-text);
+}
+
+.pm-create-dialog-body {
+    padding: 20px 24px;
+}
+
+.pm-form-group {
+    margin-bottom: 16px;
+}
+
+.pm-form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: var(--monday-text);
+    font-size: 14px;
+}
+
+.pm-workspace-name-input,
+.pm-workspace-description-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--monday-border);
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.pm-workspace-name-input:focus,
+.pm-workspace-description-input:focus {
+    outline: none;
+    border-color: var(--monday-blue);
+    box-shadow: 0 0 0 2px rgba(0, 115, 234, 0.1);
+}
+
+.pm-workspace-description-input {
+    resize: vertical;
+    min-height: 60px;
+}
+
+.pm-create-dialog-footer {
+    padding: 16px 24px 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.pm-create-dialog-footer .pm-btn {
+    padding: 10px 20px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.pm-create-dialog-footer .pm-btn-secondary {
+    background: #f8f9fa;
+    color: var(--monday-text);
+}
+
+.pm-create-dialog-footer .pm-btn-secondary:hover {
+    background: #e9ecef;
+}
+
+.pm-create-dialog-footer .pm-btn-primary {
+    background: var(--monday-blue);
+    color: white;
+}
+
+.pm-create-dialog-footer .pm-btn-primary:hover {
+    background: #0073d1;
+}
+
+.pm-create-dialog-footer .pm-btn-primary:disabled {
+    background: var(--monday-gray);
+    cursor: not-allowed;
+}
+
+.pm-parent-workspace-select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--monday-border);
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+    box-sizing: border-box;
+    background: white;
+}
+
+.pm-parent-workspace-select:focus {
+    outline: none;
+    border-color: var(--monday-blue);
+    box-shadow: 0 0 0 2px rgba(0, 115, 234, 0.1);
+}

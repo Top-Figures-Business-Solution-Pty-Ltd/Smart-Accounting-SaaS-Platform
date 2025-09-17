@@ -53,22 +53,30 @@ def get_workspace_title(view):
 def get_available_views():
     """Get top-level partitions only (Monday.com style hierarchical)"""
     try:
-        # Get only top-level partitions (no parent)
+        # Get only top-level partitions (no parent) that are not archived
         top_partitions = frappe.db.get_all("Partition",
-            fields=["name", "partition_name", "parent_partition"],
-            filters={"parent_partition": ["is", "not set"]},
-            order_by="partition_name"
+            fields=["name", "partition_name", "parent_partition", "is_workspace"],
+            filters={
+                "parent_partition": ["is", "not set"],
+                "is_archived": ["!=", 1]
+            },
+            order_by="is_workspace desc, partition_name"  # Workspaces first, then boards
         )
         
         views = []
         
-        # Add top-level partitions only
+        # Add top-level partitions with proper icons
         for partition in top_partitions:
+            # Different icons for workspace vs board
+            icon = 'fa-th-large' if partition.is_workspace else 'fa-table'
+            type_name = 'workspace' if partition.is_workspace else 'board'
+            
             views.append({
                 'key': partition.name,
                 'label': partition.partition_name,
-                'icon': 'fa-cube',
-                'type': 'workspace',
+                'icon': icon,
+                'type': type_name,
+                'is_workspace': partition.is_workspace,
                 'has_children': has_child_partitions(partition.name)
             })
             
@@ -98,6 +106,106 @@ def get_child_partitions(parent_partition):
         )
     except:
         return []
+
+@frappe.whitelist()
+def create_partition(partition_name, is_workspace=False, parent_partition=None, description="", icon=""):
+    """
+    Create a new partition (workspace or board)
+    """
+    try:
+        if not partition_name or not partition_name.strip():
+            return {'success': False, 'error': 'Partition name is required'}
+        
+        partition_name = partition_name.strip()
+        
+        # Check if partition already exists with same name under same parent
+        existing_filters = {"partition_name": partition_name}
+        if parent_partition:
+            existing_filters["parent_partition"] = parent_partition
+        else:
+            existing_filters["parent_partition"] = ["is", "not set"]
+        
+        existing = frappe.db.exists("Partition", existing_filters)
+        if existing:
+            return {'success': False, 'error': f'A partition with name "{partition_name}" already exists'}
+        
+        # Create new partition
+        new_partition = frappe.new_doc("Partition")
+        new_partition.partition_name = partition_name
+        new_partition.is_workspace = 1 if is_workspace else 0
+        new_partition.description = description
+        new_partition.icon = icon
+        
+        if parent_partition:
+            # Validate parent exists
+            if not frappe.db.exists("Partition", parent_partition):
+                return {'success': False, 'error': f'Parent partition "{parent_partition}" not found'}
+            new_partition.parent_partition = parent_partition
+        
+        # Set default visible columns (inherit from parent or use default)
+        if parent_partition:
+            try:
+                parent_doc = frappe.get_doc("Partition", parent_partition)
+                if parent_doc.visible_columns:
+                    new_partition.visible_columns = parent_doc.visible_columns
+                    new_partition.column_config = parent_doc.column_config or "{}"
+                else:
+                    new_partition.visible_columns = '["client", "entity", "tf-tg", "software", "status", "target-month", "budget", "actual"]'
+                    new_partition.column_config = "{}"
+            except:
+                new_partition.visible_columns = '["client", "entity", "tf-tg", "software", "status", "target-month", "budget", "actual"]'
+                new_partition.column_config = "{}"
+        else:
+            # Default columns for new top-level partition
+            new_partition.visible_columns = '["client", "entity", "tf-tg", "software", "status", "target-month", "budget", "actual"]'
+            new_partition.column_config = "{}"
+        
+        new_partition.save()
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'message': f'{"Workspace" if is_workspace else "Board"} "{partition_name}" created successfully',
+            'partition_name': new_partition.name,
+            'partition_display_name': partition_name
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error creating partition: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def archive_partition(partition_name, archived=True):
+    """
+    Archive/unarchive a partition
+    """
+    try:
+        if not frappe.db.exists("Partition", partition_name):
+            return {'success': False, 'error': 'Partition not found'}
+        
+        # Check if partition has child partitions
+        child_count = frappe.db.count("Partition", {"parent_partition": partition_name})
+        if child_count > 0 and archived:
+            return {'success': False, 'error': 'Cannot archive partition with child partitions'}
+        
+        # Check if partition has projects assigned
+        project_count = frappe.db.count("Project", {"custom_partition": partition_name})
+        if project_count > 0 and archived:
+            return {'success': False, 'error': f'Cannot archive partition with {project_count} assigned projects'}
+        
+        # Archive the partition
+        frappe.db.set_value("Partition", partition_name, "is_archived", 1 if archived else 0)
+        frappe.db.commit()
+        
+        action = "archived" if archived else "unarchived"
+        return {
+            'success': True,
+            'message': f'Partition {action} successfully'
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error archiving partition: {str(e)}")
+        return {'success': False, 'error': str(e)}
 
 @frappe.whitelist()
 def get_child_partitions(parent_partition):
@@ -170,12 +278,90 @@ def load_partition_data(view='main'):
             'error': str(e)
         }
 
+def get_workspace_overview_data(workspace_name):
+    """
+    Get overview data for a workspace (shows child boards, not individual tasks)
+    """
+    try:
+        # Get child boards of this workspace
+        child_boards = frappe.get_all("Partition",
+            fields=["name", "partition_name", "description"],
+            filters={
+                "parent_partition": workspace_name,
+                "is_archived": ["!=", 1]
+            },
+            order_by="partition_name"
+        )
+        
+        # Get summary statistics for each child board
+        board_summaries = {}
+        total_projects = 0
+        total_tasks = 0
+        
+        for board in child_boards:
+            # Count projects in this board
+            project_count = frappe.db.count("Project", {
+                "custom_partition": board.name,
+                "status": ["!=", "Cancelled"]
+            })
+            
+            # Count tasks in this board (simplified count)
+            task_count = 0
+            if project_count > 0:
+                projects = frappe.get_all("Project", 
+                    filters={"custom_partition": board.name, "status": ["!=", "Cancelled"]},
+                    fields=["name"]
+                )
+                if projects:
+                    task_count = frappe.db.count("Task", {
+                        "project": ["in", [p.name for p in projects]],
+                        "status": ["!=", "Cancelled"]
+                    })
+            
+            board_summaries[board.partition_name] = {
+                'board_name': board.name,
+                'description': board.description or '',
+                'project_count': project_count,
+                'task_count': task_count,
+                'projects': []  # Empty for workspace view
+            }
+            
+            total_projects += project_count
+            total_tasks += task_count
+        
+        return {
+            'organized_data': board_summaries,
+            'total_projects': total_projects,
+            'total_tasks': total_tasks,
+            'is_workspace_view': True,
+            'workspace_name': workspace_name
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Workspace overview data error: {str(e)}")
+        return {
+            'organized_data': {},
+            'total_projects': 0,
+            'total_tasks': 0,
+            'is_workspace_view': True,
+            'error': str(e)
+        }
+
 def get_project_management_data(view='main'):
     """
     Get all projects and tasks organized by client with view filtering
     Based on user's data structure: Company → Client → Project → Task
     """
     try:
+        # Check if this is a workspace (should not show tasks, only overview)
+        if view != 'main':
+            try:
+                partition_doc = frappe.get_doc("Partition", view)
+                if partition_doc.is_workspace:
+                    # For workspaces, return child boards overview instead of tasks
+                    return get_workspace_overview_data(view)
+            except:
+                pass
         # Minimal cache clearing for better performance
         frappe.db.commit()  # 确保所有数据库操作都已提交
         
