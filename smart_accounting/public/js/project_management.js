@@ -14,6 +14,9 @@ class ProjectManagement {
         this.initializeColumnResizing();
         this.initializeAdvancedFilter();
         this.loadSystemOptions();
+        this.initializeWorkspaceSwitcher();
+        // TODO: Add Monday-style column add/remove interface
+        // this.applyPartitionColumnConfig();
     }
 
     bindEvents() {
@@ -581,6 +584,26 @@ class ProjectManagement {
         // Focus the input
         const $input = $cell.find('input, select');
         $input.focus();
+        
+        // For date inputs, trigger click to show date picker
+        if (fieldType === 'date' && $input.attr('type') === 'date') {
+            setTimeout(() => {
+                try {
+                    // Try different methods to trigger date picker
+                    if ($input[0].showPicker) {
+                        $input[0].showPicker();
+                    } else {
+                        // Fallback: trigger click event
+                        $input[0].click();
+                        $input[0].focus();
+                    }
+                } catch (e) {
+                    console.log('Date picker trigger failed:', e);
+                    // Just focus the input
+                    $input[0].focus();
+                }
+            }, 150);
+        }
         
         // Handle save/cancel
         $input.on('blur keydown', (e) => {
@@ -2074,6 +2097,9 @@ class ProjectManagement {
             const newWidth = $(`.pm-header-cell[data-column="${this.currentColumn}"]`).outerWidth();
             this.columnWidths[this.currentColumn] = newWidth;
             this.saveColumnWidths();
+            
+            // Immediately update table width to maintain consistency
+            this.updateTableWidth();
         }
         
         // Clean up
@@ -2180,11 +2206,12 @@ class ProjectManagement {
                                 console.log('✅ Loaded from localStorage fallback:', this.columnWidths);
                             } catch (e) {
                                 this.columnWidths = this.getDefaultColumnWidths();
+                                console.log('❌ localStorage parse failed, using defaults');
                             }
                         } else {
                             this.columnWidths = this.getDefaultColumnWidths();
+                            console.log('⚠️ No saved widths found, using defaults');
                         }
-                        console.log('⚠️ Using fallback column widths for:', frappe.session.user);
                     }
                     // Apply widths immediately after loading
                     this.applyColumnWidths();
@@ -2255,12 +2282,25 @@ class ProjectManagement {
     updateTableWidth() {
         // Calculate total width based on all column widths
         const totalWidth = Object.values(this.columnWidths).reduce((sum, width) => sum + width, 0);
-        const minTotalWidth = Math.max(totalWidth, 2000); // Minimum table width
+        const calculatedWidth = Math.max(totalWidth + 50, 1200); // Add padding and set minimum
         
-        // Update table container widths
-        $('.pm-project-table-header, .pm-task-row').css({
-            'width': minTotalWidth + 'px',
-            'min-width': minTotalWidth + 'px'
+        console.log('Updating table width to:', calculatedWidth);
+        
+        // Update all table elements to maintain consistency
+        $('.pm-project-table-header, .pm-task-row, .pm-project-group, .pm-add-task-row').css({
+            'width': calculatedWidth + 'px',
+            'min-width': calculatedWidth + 'px'
+        });
+        
+        // Update table body container
+        $('.pm-table-body').css({
+            'width': calculatedWidth + 'px',
+            'min-width': calculatedWidth + 'px'
+        });
+        
+        // Force table container to accommodate new width
+        $('.pm-table-container').css({
+            'overflow-x': 'auto'
         });
     }
     
@@ -4159,19 +4199,154 @@ class ProjectManagement {
     }
 
     createDateEditor($cell, currentValue) {
-        // Convert display value to date format if needed
+        // Very simple date editor
         let dateValue = '';
-        if (currentValue && currentValue !== '-') {
-            // If it's already in YYYY-MM-DD format, use as is
-            if (/^\d{4}-\d{2}-\d{2}$/.test(currentValue)) {
-                dateValue = currentValue;
-            } else if (/^\d{4}-\d{2}-\d{2}/.test(currentValue)) {
-                // Extract just the date part if it has time
-                dateValue = currentValue.split(' ')[0];
+        if (currentValue && currentValue !== '-' && currentValue.trim() !== '') {
+            const cleanValue = currentValue.trim();
+            // Only use value if it's already in YYYY-MM-DD format
+            if (/^\d{4}-\d{2}-\d{2}$/.test(cleanValue)) {
+                dateValue = cleanValue;
             }
         }
         
-        return `<input type="date" class="pm-inline-input" value="${dateValue}" lang="en" style="width: 100%; border: 2px solid var(--monday-blue); padding: 6px 8px; border-radius: 4px;">`;
+        return `<input type="date" value="${dateValue}" style="width: 100%; border: 2px solid var(--monday-blue); padding: 6px 8px; border-radius: 4px; font-size: 14px; z-index: 10000; position: relative; background: white;">`;
+    }
+
+    // Workspace Switcher - Monday.com style hierarchical
+    initializeWorkspaceSwitcher() {
+        // Toggle workspace menu
+        $(document).on('click', '.pm-workspace-btn', (e) => {
+            e.stopPropagation();
+            $('.pm-workspace-menu').toggle();
+        });
+        
+        // Handle workspace item clicks
+        $(document).on('click', '.pm-workspace-item:not(.pm-create-workspace)', (e) => {
+            e.stopPropagation();
+            const $item = $(e.currentTarget);
+            const hasChildren = $item.data('has-children');
+            const view = $item.data('view');
+            
+            if (hasChildren) {
+                // Show child partitions in a submenu
+                this.showChildPartitions($item, view);
+            } else if (view) {
+                console.log('Switching to partition:', view);
+                // Navigate to this partition with cache busting
+                const currentUrl = new URL(window.location);
+                currentUrl.searchParams.set('view', view);
+                currentUrl.searchParams.set('_t', Date.now()); // Cache busting
+                window.location.href = currentUrl.toString();
+            }
+        });
+        
+        // Close menu when clicking outside
+        $(document).on('click', (e) => {
+            if (!$(e.target).closest('.pm-workspace-switcher').length) {
+                $('.pm-workspace-menu').hide();
+                $('.pm-workspace-submenu').remove();
+            }
+        });
+    }
+
+    showChildPartitions($parentItem, parentPartition) {
+        // Remove existing submenus
+        $('.pm-workspace-submenu').remove();
+        
+        // Get child partitions
+        frappe.call({
+            method: 'smart_accounting.www.project_management.index.get_child_partitions',
+            args: { parent_partition: parentPartition },
+            callback: (r) => {
+                if (r.message && r.message.length > 0) {
+                    this.createSubmenu($parentItem, r.message, parentPartition);
+                } else {
+                    // If no children, treat as direct navigation
+                    console.log('No children, navigating to:', parentPartition);
+                    const currentUrl = new URL(window.location);
+                    currentUrl.searchParams.set('view', parentPartition);
+                    currentUrl.searchParams.set('_t', Date.now());
+                    window.location.href = currentUrl.toString();
+                }
+            }
+        });
+    }
+    
+    createSubmenu($parentItem, childPartitions, parentPartition) {
+        const submenuHtml = `
+            <div class="pm-workspace-submenu">
+                <div class="pm-submenu-header">
+                    <i class="fa fa-arrow-left pm-back-btn"></i>
+                    <span>${$parentItem.find('span').text()}</span>
+                </div>
+                ${childPartitions.map(child => `
+                    <div class="pm-workspace-item" data-view="${child.name}">
+                        <i class="fa fa-folder"></i>
+                        <span>${child.partition_name}</span>
+                    </div>
+                `).join('')}
+                <div class="pm-workspace-divider"></div>
+                <div class="pm-workspace-item pm-create-board" data-parent="${parentPartition}">
+                    <i class="fa fa-plus"></i>
+                    <span>Create new board</span>
+                </div>
+            </div>
+        `;
+        
+        $('.pm-workspace-menu').html(submenuHtml);
+        
+        // Handle back button
+        $('.pm-back-btn').on('click', (e) => {
+            e.stopPropagation();
+            this.showMainMenu();
+        });
+    }
+    
+    showMainMenu() {
+        // Reload the main menu
+        location.reload();
+    }
+
+    // Apply partition-specific column configuration
+    applyPartitionColumnConfig() {
+        // Get current partition from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentView = urlParams.get('view') || 'main';
+        
+        // Load column configuration for current partition
+        frappe.call({
+            method: 'smart_accounting.www.project_management.index.get_partition_column_config',
+            args: { partition_name: currentView },
+            callback: (r) => {
+                if (r.message && r.message.success) {
+                    this.hideUnwantedColumns(r.message.visible_columns);
+                    console.log('Applied column config for partition:', currentView, r.message.visible_columns);
+                }
+            }
+        });
+    }
+    
+    hideUnwantedColumns(visibleColumns) {
+        // All possible columns
+        const allColumns = [
+            'client', 'entity', 'tf-tg', 'software', 'status', 'target-month', 
+            'budget', 'actual', 'review-note', 'action-person', 'preparer', 
+            'reviewer', 'partner', 'lodgment-due', 'year-end', 'last-updated', 'priority'
+        ];
+        
+        // Hide columns not in visible list
+        allColumns.forEach(column => {
+            const shouldShow = visibleColumns.includes(column);
+            
+            // Hide/show header cells
+            $(`.pm-header-cell[data-column="${column}"]`).toggle(shouldShow);
+            
+            // Hide/show data cells
+            $(`.pm-cell-${column}`).toggle(shouldShow);
+        });
+        
+        // Recalculate table width after hiding columns
+        this.updateTableWidth();
     }
 
 }

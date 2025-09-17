@@ -269,7 +269,7 @@ fixtures = [
 	},
 	{
 		"doctype": "DocType",
-		"filters": [["name", "in", ["User Preferences"]]]
+		"filters": [["name", "in", ["User Preferences", "Partition", "Task Role Assignment", "Task Software", "Task Company Tag", "Board Column", "Board Cell"]]]
 	}
 	# 不导出 Dashboard Chart, Number Card 等可能包含标准内容的 DocType
 ]

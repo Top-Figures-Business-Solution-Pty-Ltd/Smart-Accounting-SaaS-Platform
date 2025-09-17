@@ -5,45 +5,234 @@ import re
 
 def get_context(context):
     """
-    Get context for project management page
+    Get context for project management page with multi-workspace support
     """
+    # Disable caching for real-time updates
+    frappe.response["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    frappe.response["Pragma"] = "no-cache"
+    frappe.response["Expires"] = "0"
+    
     # Check if user is logged in
     if frappe.session.user == 'Guest':
         frappe.throw("Please login to access this page", frappe.PermissionError)
     
-    # Set page context
-    context.title = "Project Management"
+    # Get view parameter for different workspaces
+    view = frappe.form_dict.get('view', 'main')
+    print(f"DEBUG: Current view parameter: {view}")
+    
+    # Set page context based on view
+    context.title = get_workspace_title(view)
     context.show_sidebar = False
     context.show_header = True
+    context.current_view = view
+    context.available_views = get_available_views()
     
-    # Get project management data
-    context.project_data = get_project_management_data()
+    # Disable page caching for real-time updates
+    context.no_cache = True
+    context.cache_key = f"pm_view_{view}_{frappe.utils.now()}"
+    
+    # Get data based on view
+    context.project_data = get_project_management_data(view)
     
     return context
 
-def get_project_management_data():
+def get_workspace_title(view):
+    """Get title based on partition view"""
+    if view == 'main':
+        return 'Top Figures / Top Grants Clients'
+    
+    try:
+        # Get partition name
+        partition_name = frappe.db.get_value("Partition", view, "partition_name")
+        print(f"DEBUG: Workspace title for {view}: {partition_name}")
+        return partition_name if partition_name else view.replace('_', ' ').title()
+    except Exception as e:
+        print(f"DEBUG: Error getting workspace title: {str(e)}")
+        return view.replace('_', ' ').title()
+
+def get_available_views():
+    """Get top-level partitions only (Monday.com style hierarchical)"""
+    try:
+        # Get only top-level partitions (no parent)
+        top_partitions = frappe.db.get_all("Partition",
+            fields=["name", "partition_name", "parent_partition"],
+            filters={"parent_partition": ["is", "not set"]},
+            order_by="partition_name"
+        )
+        
+        views = []
+        
+        # Add top-level partitions only
+        for partition in top_partitions:
+            views.append({
+                'key': partition.name,
+                'label': partition.partition_name,
+                'icon': 'fa-cube',
+                'type': 'workspace',
+                'has_children': has_child_partitions(partition.name)
+            })
+            
+        print(f"DEBUG: Top-level views: {[v['label'] for v in views]}")
+        return views
+        
+    except Exception as e:
+        print(f"DEBUG: Error getting partitions: {str(e)}")
+        # Fallback
+        return []
+
+def has_child_partitions(partition_name):
+    """Check if partition has child partitions"""
+    try:
+        count = frappe.db.count("Partition", {"parent_partition": partition_name})
+        return count > 0
+    except:
+        return False
+
+def get_child_partitions(parent_partition):
+    """Get child partitions for a parent"""
+    try:
+        return frappe.get_all("Partition",
+            fields=["name", "partition_name"],
+            filters={"parent_partition": parent_partition},
+            order_by="partition_name"
+        )
+    except:
+        return []
+
+@frappe.whitelist()
+def get_child_partitions(parent_partition):
+    """Get child partitions for workspace navigation"""
+    try:
+        children = frappe.get_all("Partition",
+            fields=["name", "partition_name"],
+            filters={"parent_partition": parent_partition},
+            order_by="partition_name"
+        )
+        return children
+    except Exception as e:
+        frappe.log_error(f"Error getting child partitions: {str(e)}")
+        return []
+
+@frappe.whitelist()
+def get_partition_column_config(partition_name):
+    """Get column configuration for a specific partition"""
+    try:
+        if partition_name == 'main':
+            # Default configuration for main view
+            return {
+                'success': True,
+                'visible_columns': ['client', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person'],
+                'column_config': {}
+            }
+        
+        # Get partition configuration
+        partition_doc = frappe.get_doc("Partition", partition_name)
+        
+        # Parse JSON configuration
+        import json
+        visible_columns = json.loads(partition_doc.visible_columns) if getattr(partition_doc, 'visible_columns', None) else []
+        column_config = json.loads(partition_doc.column_config) if getattr(partition_doc, 'column_config', None) else {}
+        
+        # If no configuration, use default
+        if not visible_columns:
+            visible_columns = ['client', 'status', 'target-month', 'budget']
+        
+        return {
+            'success': True,
+            'visible_columns': visible_columns,
+            'column_config': column_config
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting partition column config: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'visible_columns': ['client', 'status'],
+            'column_config': {}
+        }
+
+@frappe.whitelist()
+def load_partition_data(view='main'):
+    """Load project data for specific partition (called by JavaScript)"""
+    try:
+        data = get_project_management_data(view)
+        return {
+            'success': True,
+            'data': data,
+            'view': view,
+            'title': get_workspace_title(view)
+        }
+    except Exception as e:
+        frappe.log_error(f"Error loading partition data: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+def get_project_management_data(view='main'):
     """
-    Get all projects and tasks organized by client
+    Get all projects and tasks organized by client with view filtering
     Based on user's data structure: Company → Client → Project → Task
     """
     try:
-        # Clear any existing caches to ensure fresh data
-        frappe.clear_cache()
+        # Minimal cache clearing for better performance
         frappe.db.commit()  # 确保所有数据库操作都已提交
         
-        # First, let's get basic project data using frappe.get_all (simpler and safer)
-        projects = frappe.get_all("Project", 
-            fields=["name", "project_name", "customer", "status", "expected_end_date", "priority"],
-            filters={"status": ["!=", "Cancelled"]},
+        # Get projects filtered by partition
+        project_filters = {"status": ["!=", "Cancelled"]}
+        
+        # Add partition filter if not main view
+        if view != 'main':
+            try:
+                # Check if partition exists
+                if frappe.db.exists("Partition", view):
+                    project_filters["custom_partition"] = view
+                    print(f"DEBUG: Filtering projects by partition: {view}")
+                else:
+                    print(f"DEBUG: Partition {view} not found, showing empty results")
+                    # If partition doesn't exist, return empty data
+                    return {
+                        'organized_data': {},
+                        'total_projects': 0,
+                        'total_tasks': 0,
+                        'debug_info': {'message': f'Partition {view} not found'}
+                    }
+            except Exception as e:
+                print(f"DEBUG: Partition filtering error: {str(e)}")
+                # If Partition DocType doesn't exist, use all projects
+                pass
+        
+        # Get projects with partition filtering (no cache for real-time)
+        projects = frappe.db.get_all("Project", 
+            fields=["name", "project_name", "customer", "status", "expected_end_date", "priority", "custom_partition"],
+            filters=project_filters,
             order_by="customer, expected_end_date"
         )
         
-        # Get basic task data first, then try to get custom fields
-        tasks = frappe.get_all("Task",
+        print(f"DEBUG: Found {len(projects)} projects for view '{view}'")
+        print(f"DEBUG: Project filters used: {project_filters}")
+        for p in projects[:3]:  # Show first 3 projects
+            print(f"DEBUG: Project {p.name}: partition={getattr(p, 'custom_partition', 'None')}")
+        
+        # Get project IDs for task filtering
+        project_ids = [p.name for p in projects]
+        
+        # Get tasks only for the filtered projects
+        task_filters = {"status": ["!=", "Cancelled"]}
+        if project_ids:
+            task_filters["project"] = ["in", project_ids]
+        else:
+            # If no projects found, no tasks either
+            task_filters["project"] = ["in", []]
+        
+        tasks = frappe.db.get_all("Task",
             fields=["name", "subject", "status", "priority", "exp_end_date", "project", "description", "modified", "company"],
-            filters={"status": ["!=", "Cancelled"]},
+            filters=task_filters,
             order_by="exp_end_date"
         )
+        
+        print(f"DEBUG: Found {len(tasks)} tasks for {len(projects)} projects")
         
         # Enrich tasks with project and client information
         for task in tasks:
@@ -143,7 +332,7 @@ def get_project_management_data():
                 task.target_month = getattr(task_doc, 'custom_target_month', None) or ""
                 task.partner = getattr(task_doc, 'custom_partner', None) or ""
                 task.reviewer = getattr(task_doc, 'custom_reviewer', None) or ""
-                task.preparer = getattr(task_doc, 'custom_praparer', None) or getattr(task_doc, 'custom_preparer', None) or ""
+                task.preparer = getattr(task_doc, 'custom_preparer', None) or ""
                 task.lodgment_due_date = getattr(task_doc, 'custom_lodgement_due_date', None) or getattr(task_doc, 'custom_lodgment_due_date', None) or ""
                 
                 # Get action person (try custom_action_person first, fallback to assigned_to)
@@ -328,15 +517,18 @@ def update_task_field(task_id, field_name, new_value):
                 return {'success': False, 'error': f'Year End must be a valid month. Invalid value: {new_value}'}
             print(f"DEBUG: Year End validation passed for value: {new_value}")
         elif field_name in ['custom_lodgment_due_date', 'custom_lodgement_due_date']:
-            # Validate date format for lodgment due date
-            if new_value:
+            # Simple date validation for lodgment due date
+            if new_value and new_value.strip():
                 try:
                     from datetime import datetime
-                    # Try to parse the date to ensure it's valid
-                    datetime.strptime(new_value, '%Y-%m-%d')
-                    print(f"DEBUG: Lodgment due date validation passed for value: {new_value}")
+                    # Accept YYYY-MM-DD format
+                    if len(new_value) == 10 and new_value.count('-') == 2:
+                        datetime.strptime(new_value, '%Y-%m-%d')
+                        print(f"DEBUG: Lodgment due date validation passed for value: {new_value}")
+                    else:
+                        return {'success': False, 'error': f'Date must be in YYYY-MM-DD format.'}
                 except ValueError:
-                    return {'success': False, 'error': f'Invalid date format. Use YYYY-MM-DD format.'}
+                    return {'success': False, 'error': f'Invalid date format. Please use YYYY-MM-DD.'}
         elif field_name in ['custom_tftg', 'custom_tf_tg']:
             # For TF/TG field, try to find the company
             print(f"DEBUG: Trying to save TF/TG value: {new_value}")
