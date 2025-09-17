@@ -3196,21 +3196,8 @@ div.pm-table-header,
 }
 
 /* Fix double-click issue - only outer cell should be clickable */
-.pm-cell[data-field-type="person_selector"] .pm-user-avatars {
-    pointer-events: none; /* Disable clicks on inner container */
-}
-
 .pm-cell[data-field-type="person_selector"] {
     cursor: pointer; /* Only outer cell is clickable */
-}
-
-/* Re-enable hover effects for avatars (visual only) */
-.pm-user-avatars .pm-avatar {
-    pointer-events: none;
-}
-
-.pm-user-avatars .pm-avatar-more {
-    pointer-events: none;
 }
 
 /* Software selector modal styles */
@@ -3367,10 +3354,27 @@ div.pm-table-header,
 }
 
 /* Fix software cell click area */
-.pm-cell[data-field-type="software_selector"] .pm-software-tags {
-    pointer-events: none;
-}
-
 .pm-cell[data-field-type="software_selector"] {
     cursor: pointer;
+}
+
+/* Fix software selector positioning */
+.pm-software-selector-modal {
+    position: fixed !important;
+    z-index: 9999 !important;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--monday-border);
+    min-width: 280px;
+    max-width: 350px;
+    display: none;
+    /* Ensure it's not clipped by table container */
+    transform: translateZ(0);
+    will-change: transform;
+}
+
+/* Ensure modal appears above everything */
+.pm-software-selector-modal * {
+    box-sizing: border-box;
 }

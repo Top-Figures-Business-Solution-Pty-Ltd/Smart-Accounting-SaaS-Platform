@@ -39,7 +39,7 @@ def get_context(context):
 def get_workspace_title(view):
     """Get title based on partition view"""
     if view == 'main':
-        return 'Top Figures / Top Grants Clients'
+        return 'Main Dashboard'
     
     try:
         # Get partition name

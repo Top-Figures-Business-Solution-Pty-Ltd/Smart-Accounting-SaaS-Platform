@@ -522,57 +522,21 @@ class ProjectManagement {
         
         // Bind click events for editable fields
         $(document).on('click', '[data-editable="true"]', (e) => {
-            console.log('Editable field clicked:', e.currentTarget);
             e.stopPropagation();
             
-            const fieldType = $(e.currentTarget).data('field-type') || $(e.currentTarget).attr('data-field-type');
-            console.log('Field type detected:', fieldType);
-            console.log('Element attributes:', e.currentTarget.outerHTML.substring(0, 200));
-            
-            // Handle special selector fields differently
-            console.log('Checking field type:', fieldType, 'Type of:', typeof fieldType);
-            console.log('Is person_selector?', fieldType === 'person_selector');
-            console.log('Is software_selector?', fieldType === 'software_selector');
+            const fieldType = $(e.currentTarget).data('field-type');
+            const taskId = $(e.currentTarget).data('task-id');
+            const fieldName = $(e.currentTarget).data('field');
             
             if (fieldType === 'person_selector') {
-                console.log('Person selector branch');
-                const taskId = $(e.currentTarget).data('task-id');
-                const fieldName = $(e.currentTarget).data('field');
                 this.showMultiPersonSelector($(e.currentTarget), taskId, fieldName);
             } else if (fieldType === 'software_selector') {
-                console.log('Software selector branch - ENTERING!');
-                const taskId = $(e.currentTarget).data('task-id');
-                const fieldName = $(e.currentTarget).data('field');
                 this.showSoftwareSelector($(e.currentTarget), taskId, fieldName);
             } else {
-                console.log('Default makeEditable branch');
                 this.makeEditable(e.currentTarget);
             }
         });
 
-        // Also bind to editable-field class
-        $(document).on('click', '.editable-field', (e) => {
-            console.log('Editable field span clicked:', e.currentTarget);
-            e.stopPropagation();
-            const cell = $(e.currentTarget).closest('[data-editable="true"]')[0];
-            if (cell) {
-                const fieldType = $(cell).data('field-type');
-                
-                // Handle special selector fields differently
-                if (fieldType === 'person_selector') {
-                    const taskId = $(cell).data('task-id');
-                    const fieldName = $(cell).data('field');
-                    this.showMultiPersonSelector($(cell), taskId, fieldName);
-                } else if (fieldType === 'software_selector') {
-                    console.log('Software selector clicked (editable-field)!');
-                    const taskId = $(cell).data('task-id');
-                    const fieldName = $(cell).data('field');
-                    this.showSoftwareSelector($(cell), taskId, fieldName);
-                } else {
-                    this.makeEditable(cell);
-                }
-            }
-        });
 
         // Prevent row click when editing
         $(document).on('click', '.pm-task-row.editing', (e) => {
@@ -593,12 +557,8 @@ class ProjectManagement {
         const fieldType = $cell.data('field-type');
         
         // Don't allow text editing for special selector fields
-        if (fieldType === 'person_selector') {
-            this.showMultiPersonSelector($cell, taskId, field);
-            return;
-        } else if (fieldType === 'software_selector') {
-            console.log('Software selector in makeEditable!');
-            this.showSoftwareSelector($cell, taskId, field);
+        if (fieldType === 'person_selector' || fieldType === 'software_selector') {
+            // These are handled in the main click handler
             return;
         }
         
@@ -1341,8 +1301,16 @@ class ProjectManagement {
         $('body').append(selectorHTML);
         const $selector = $(`#pm-software-selector-${taskId}`);
         
-        // Position the modal
-        this.positionModalRelativeToCell($cell, $selector);
+        // Position above the cell using viewport coordinates
+        const cellRect = $cell[0].getBoundingClientRect();
+        
+        $selector.css({
+            position: 'fixed',
+            left: cellRect.left + 'px',
+            top: (cellRect.top - 350) + 'px',
+            zIndex: 9999,
+            width: '280px'
+        });
         
         // Show with animation
         $selector.fadeIn(200);
@@ -2989,6 +2957,92 @@ class ProjectManagement {
     }
     
     
+    positionSoftwareModal($cell, $modal) {
+        // Get actual modal dimensions after it's added to DOM
+        $modal.css({
+            position: 'fixed',
+            left: '-9999px',
+            top: '-9999px',
+            zIndex: 9999,
+            visibility: 'hidden',
+            display: 'block'
+        });
+        
+        const modalWidth = $modal.outerWidth();
+        const modalHeight = $modal.outerHeight();
+        
+        // Get cell and viewport info
+        const cellOffset = $cell.offset();
+        const cellHeight = $cell.outerHeight();
+        const cellWidth = $cell.outerWidth();
+        const windowWidth = $(window).width();
+        const windowHeight = $(window).height();
+        const scrollTop = $(window).scrollTop();
+        const scrollLeft = $(window).scrollLeft();
+        
+        // Calculate cell position relative to viewport center
+        const cellCenterY = cellOffset.top - scrollTop + (cellHeight / 2);
+        const viewportCenterY = windowHeight / 2;
+        const isInLowerHalf = cellCenterY > viewportCenterY;
+        
+        console.log('Smart positioning:', {
+            cellCenterY,
+            viewportCenterY,
+            isInLowerHalf,
+            cellOffset
+        });
+        
+        // Smart vertical positioning based on screen position
+        let top;
+        if (isInLowerHalf) {
+            // Cell in lower half → show modal above the cell
+            top = cellOffset.top - modalHeight - 10;
+            console.log('Positioning above cell (lower half)');
+        } else {
+            // Cell in upper half → show modal below the cell
+            top = cellOffset.top + cellHeight + 10;
+            console.log('Positioning below cell (upper half)');
+        }
+        
+        // Horizontal positioning - prefer right side, fallback to left
+        let left = cellOffset.left + cellWidth + 10;
+        
+        // If would go off right edge, position on left side
+        if (left + modalWidth > scrollLeft + windowWidth - 20) {
+            left = cellOffset.left - modalWidth - 10;
+        }
+        
+        // If still off left edge, center on cell
+        if (left < scrollLeft + 20) {
+            left = cellOffset.left - (modalWidth / 2) + (cellWidth / 2);
+        }
+        
+        // Final viewport boundary checks
+        if (top < scrollTop + 20) {
+            top = scrollTop + 20;
+        }
+        if (top + modalHeight > scrollTop + windowHeight - 20) {
+            top = scrollTop + windowHeight - modalHeight - 20;
+        }
+        if (left < scrollLeft + 20) {
+            left = scrollLeft + 20;
+        }
+        if (left + modalWidth > scrollLeft + windowWidth - 20) {
+            left = scrollLeft + windowWidth - modalWidth - 20;
+        }
+        
+        console.log('Final position:', { left, top });
+        
+        $modal.css({
+            position: 'fixed',
+            left: left + 'px',
+            top: top + 'px',
+            zIndex: 9999,
+            visibility: 'visible',
+            display: 'none' // Will be shown with fadeIn
+        });
+    }
+
     positionModalRelativeToCell($cell, $modal) {
         const cellOffset = $cell.offset();
         const cellHeight = $cell.outerHeight();
@@ -4200,12 +4254,21 @@ class ProjectManagement {
 
             const taskSubject = taskResponse.message ? taskResponse.message.subject : `Task ${taskId}`;
             
+            // Get client name from the task row for a more professional title
+            const $taskRow = $(`.pm-task-row[data-task-id="${taskId}"]`);
+            const clientName = $taskRow.find('.pm-cell-client .client-display').text().trim() || 'No Client';
+            
+            // Create professional title: "Updates - [Client Name] - [Project Name]"
+            const titleParts = taskSubject.split(' - ');
+            const projectName = titleParts.length > 1 ? titleParts.slice(1).join(' - ') : taskSubject;
+            const professionalTitle = `Updates - ${clientName} - ${projectName}`;
+            
             // Create modal HTML
             const modalHTML = `
                 <div class="pm-comment-modal" id="pm-comment-modal-${taskId}">
                     <div class="pm-comment-modal-content">
                         <div class="pm-comment-modal-header">
-                            <h3 class="pm-comment-modal-title">Updates - ${taskSubject}</h3>
+                            <h3 class="pm-comment-modal-title">${professionalTitle}</h3>
                             <div class="pm-comment-modal-tabs">
                                 <button class="pm-comment-tab active" data-tab="comments">
                                     <i class="fa fa-comment"></i> Comments
