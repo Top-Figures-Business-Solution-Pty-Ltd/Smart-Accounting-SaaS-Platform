@@ -3,6 +3,7 @@
 class ProjectManagement {
     constructor() {
         this.tooltipHideTimer = null;
+        this.userCache = {}; // Initialize user cache for better display
         this.init();
     }
 
@@ -523,7 +524,30 @@ class ProjectManagement {
         $(document).on('click', '[data-editable="true"]', (e) => {
             console.log('Editable field clicked:', e.currentTarget);
             e.stopPropagation();
-            this.makeEditable(e.currentTarget);
+            
+            const fieldType = $(e.currentTarget).data('field-type') || $(e.currentTarget).attr('data-field-type');
+            console.log('Field type detected:', fieldType);
+            console.log('Element attributes:', e.currentTarget.outerHTML.substring(0, 200));
+            
+            // Handle special selector fields differently
+            console.log('Checking field type:', fieldType, 'Type of:', typeof fieldType);
+            console.log('Is person_selector?', fieldType === 'person_selector');
+            console.log('Is software_selector?', fieldType === 'software_selector');
+            
+            if (fieldType === 'person_selector') {
+                console.log('Person selector branch');
+                const taskId = $(e.currentTarget).data('task-id');
+                const fieldName = $(e.currentTarget).data('field');
+                this.showMultiPersonSelector($(e.currentTarget), taskId, fieldName);
+            } else if (fieldType === 'software_selector') {
+                console.log('Software selector branch - ENTERING!');
+                const taskId = $(e.currentTarget).data('task-id');
+                const fieldName = $(e.currentTarget).data('field');
+                this.showSoftwareSelector($(e.currentTarget), taskId, fieldName);
+            } else {
+                console.log('Default makeEditable branch');
+                this.makeEditable(e.currentTarget);
+            }
         });
 
         // Also bind to editable-field class
@@ -532,7 +556,21 @@ class ProjectManagement {
             e.stopPropagation();
             const cell = $(e.currentTarget).closest('[data-editable="true"]')[0];
             if (cell) {
-                this.makeEditable(cell);
+                const fieldType = $(cell).data('field-type');
+                
+                // Handle special selector fields differently
+                if (fieldType === 'person_selector') {
+                    const taskId = $(cell).data('task-id');
+                    const fieldName = $(cell).data('field');
+                    this.showMultiPersonSelector($(cell), taskId, fieldName);
+                } else if (fieldType === 'software_selector') {
+                    console.log('Software selector clicked (editable-field)!');
+                    const taskId = $(cell).data('task-id');
+                    const fieldName = $(cell).data('field');
+                    this.showSoftwareSelector($(cell), taskId, fieldName);
+                } else {
+                    this.makeEditable(cell);
+                }
             }
         });
 
@@ -553,6 +591,17 @@ class ProjectManagement {
         const taskId = $cell.data('task-id');
         const field = $cell.data('field');
         const fieldType = $cell.data('field-type');
+        
+        // Don't allow text editing for special selector fields
+        if (fieldType === 'person_selector') {
+            this.showMultiPersonSelector($cell, taskId, field);
+            return;
+        } else if (fieldType === 'software_selector') {
+            console.log('Software selector in makeEditable!');
+            this.showSoftwareSelector($cell, taskId, field);
+            return;
+        }
+        
         const currentValue = $cell.find('.editable-field').text().trim();
         
         // Mark as editing
@@ -723,8 +772,6 @@ class ProjectManagement {
                     else if (value === 'Top Grants') displayValue = 'TG';
                     
                     $cell.html(`<span class="pm-tf-tg-badge editable-field">${displayValue}</span>`);
-                } else if (field === 'custom_software') {
-                    $cell.html(`<span class="pm-software-badge editable-field">${value}</span>`);
                 } else {
                     $cell.html(`<span class="editable-field">${value || '-'}</span>`);
                 }
@@ -847,9 +894,6 @@ class ProjectManagement {
         switch(fieldType) {
             case 'client_selector':
                 this.showClientSelector($cell);
-                break;
-            case 'person_selector':
-                this.showPersonSelector($cell, taskId, fieldName);
                 break;
             case 'select':
                 this.showSelectEditor($cell);
@@ -1148,8 +1192,6 @@ class ProjectManagement {
         // Handle different field types
         if (fieldName === 'custom_tftg') {
             this.showCompanySelector($cell);
-        } else if (fieldName === 'custom_software') {
-            this.showSoftwareSelector($cell);
         } else {
             // Regular select field
             const options = $cell.data('options');
@@ -1235,72 +1277,262 @@ class ProjectManagement {
         }
     }
 
-    showSoftwareSelector($cell) {
-        const taskId = $cell.data('task-id');
-        const currentValue = $cell.find('.editable-field').text().trim();
+    async showSoftwareSelector($cell, taskId, fieldName) {
+        try {
+            console.log('showSoftwareSelector called with:', taskId, fieldName);
+            
+            // Get software options from server (professional approach)
+            const optionsResponse = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_software_options'
+            });
+            
+            const softwareOptions = optionsResponse.message?.software_options || [
+                'Xero', 'MYOB', 'QuickBooks', 'Excel', 'Other'
+            ];
+            
+            console.log('Software options loaded:', softwareOptions);
+            
+            // Get current software assignments
+            const currentSoftwares = await this.getCurrentTaskSoftwares(taskId);
+            console.log('Current softwares:', currentSoftwares);
         
-        // Fixed software options - these are standard accounting platforms
-        const softwareOptions = [
-            'Xero', 'MYOB', 'QuickBooks', 'Excel', 'Other'
-        ];
+        // Create simple multi-select modal (Monday style)
+        const selectorHTML = `
+            <div class="pm-software-selector-modal" id="pm-software-selector-${taskId}">
+                <div class="pm-software-selector-content">
+                    <div class="pm-software-selector-header">
+                        <h4>Select Software</h4>
+                        <button class="pm-software-selector-close">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="pm-software-selector-body">
+                        <div class="pm-software-options">
+                            ${softwareOptions.map(software => {
+                                const isSelected = currentSoftwares.some(s => s.software === software);
+                                const isPrimary = currentSoftwares.find(s => s.software === software && s.is_primary);
+                                return `
+                                    <div class="pm-software-option ${isSelected ? 'selected' : ''}" data-software="${software}">
+                                        <div class="pm-software-checkbox">
+                                            <i class="fa fa-${isSelected ? 'check-' : ''}square-o"></i>
+                                        </div>
+                                        <span class="pm-software-name">${software}</span>
+                                        ${isPrimary ? '<span class="pm-primary-badge">Primary</span>' : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                        <div class="pm-software-selector-footer">
+                            <button class="pm-btn pm-btn-secondary pm-clear-all-software">Clear all</button>
+                            <button class="pm-btn pm-btn-primary pm-save-software">
+                                <i class="fa fa-check"></i>
+                                Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
         
-        let selectHTML = '<select class="pm-inline-select">';
-        softwareOptions.forEach(software => {
-            const selected = currentValue === software ? 'selected' : '';
-            selectHTML += `<option value="${software}" ${selected}>${software}</option>`;
-        });
-        selectHTML += '</select>';
+        // Remove existing selector
+        $('.pm-software-selector-modal').remove();
         
-        $cell.html(selectHTML);
-        const $select = $cell.find('.pm-inline-select');
-        $select.focus();
+        // Add to body
+        $('body').append(selectorHTML);
+        const $selector = $(`#pm-software-selector-${taskId}`);
         
-        // Handle selection change - use special software update method
-        $select.on('change blur', () => {
-            const newValue = $select.val();
-            this.saveSoftwareValue($cell, taskId, newValue);
-        });
+        // Position the modal
+        this.positionModalRelativeToCell($cell, $selector);
         
-        // Handle escape
-        $select.on('keydown', (e) => {
-            if (e.key === 'Escape') {
-                this.cancelFieldEditing($cell, currentValue);
-            }
-        });
+        // Show with animation
+        $selector.fadeIn(200);
+        
+            // Bind events
+            this.bindSoftwareSelectorEvents($selector, $cell, taskId);
+            
+        } catch (error) {
+            console.error('Error in showSoftwareSelector:', error);
+            frappe.show_alert({
+                message: 'Error opening software selector: ' + error.message,
+                indicator: 'red'
+            });
+        }
     }
 
-    async saveSoftwareValue($cell, taskId, newValue) {
+    bindSoftwareSelectorEvents($selector, $cell, taskId) {
+        // Toggle software selection
+        $selector.on('click', '.pm-software-option', (e) => {
+            e.stopPropagation();
+            const $option = $(e.currentTarget);
+            const software = $option.data('software');
+            
+            $option.toggleClass('selected');
+            
+            // Update checkbox icon
+            const $checkbox = $option.find('.pm-software-checkbox i');
+            if ($option.hasClass('selected')) {
+                $checkbox.removeClass('fa-square-o').addClass('fa-check-square-o');
+            } else {
+                $checkbox.removeClass('fa-check-square-o').addClass('fa-square-o');
+                // Remove primary badge if unselected
+                $option.find('.pm-primary-badge').remove();
+            }
+            
+            // Auto-set first selected as primary
+            const selectedOptions = $selector.find('.pm-software-option.selected');
+            if (selectedOptions.length === 1 && !selectedOptions.find('.pm-primary-badge').length) {
+                selectedOptions.append('<span class="pm-primary-badge">Primary</span>');
+            }
+        });
+        
+        // Set primary software
+        $selector.on('click', '.pm-software-option.selected .pm-software-name', (e) => {
+            e.stopPropagation();
+            
+            // Remove all primary badges
+            $selector.find('.pm-primary-badge').remove();
+            
+            // Add primary badge to clicked option
+            const $option = $(e.currentTarget).closest('.pm-software-option');
+            $option.append('<span class="pm-primary-badge">Primary</span>');
+        });
+        
+        // Clear all software
+        $selector.find('.pm-clear-all-software').on('click', (e) => {
+            e.stopPropagation();
+            $selector.find('.pm-software-option').removeClass('selected');
+            $selector.find('.pm-software-checkbox i').removeClass('fa-check-square-o').addClass('fa-square-o');
+            $selector.find('.pm-primary-badge').remove();
+        });
+        
+        // Save software selections
+        $selector.find('.pm-save-software').on('click', async (e) => {
+            e.stopPropagation();
+            await this.saveSoftwareSelections($selector, $cell, taskId);
+            $selector.remove();
+        });
+        
+        // Close button
+        $selector.find('.pm-software-selector-close').on('click', () => {
+            $selector.remove();
+            $cell.removeClass('editing');
+        });
+        
+        // Close on outside click
+        setTimeout(() => {
+            $(document).on('click.software-selector', (e) => {
+                if (!$(e.target).closest('.pm-software-selector-modal').length) {
+                    $('.pm-software-selector-modal').remove();
+                    $cell.removeClass('editing');
+                    $(document).off('click.software-selector');
+                }
+            });
+        }, 100);
+    }
+
+    async getCurrentTaskSoftwares(taskId) {
         try {
             const response = await frappe.call({
-                method: 'smart_accounting.www.project_management.index.update_task_software',
+                method: 'smart_accounting.www.project_management.index.get_task_softwares',
+                args: { task_id: taskId }
+            });
+            
+            if (response.message && response.message.success) {
+                return response.message.softwares || [];
+            }
+            return [];
+        } catch (error) {
+            console.error('Error getting current task softwares:', error);
+            return [];
+        }
+    }
+
+    async saveSoftwareSelections($selector, $cell, taskId) {
+        try {
+            // Get selected software options
+            const selectedSoftwares = [];
+            $selector.find('.pm-software-option.selected').each(function() {
+                const software = $(this).data('software');
+                const isPrimary = $(this).find('.pm-primary-badge').length > 0;
+                selectedSoftwares.push({
+                    software: software,
+                    is_primary: isPrimary
+                });
+            });
+            
+            // Ensure at least one is primary if any selected
+            if (selectedSoftwares.length > 0 && !selectedSoftwares.some(s => s.is_primary)) {
+                selectedSoftwares[0].is_primary = true;
+            }
+            
+            // Save to server
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.set_task_softwares',
                 args: {
                     task_id: taskId,
-                    software_value: newValue
+                    softwares_data: JSON.stringify(selectedSoftwares)
                 }
             });
             
             if (response.message && response.message.success) {
-                // Update display immediately with proper styling
-                $cell.html(`<span class="pm-software-badge editable-field">${newValue}</span>`);
-                $cell.removeClass('editing');
-                $cell[0].offsetHeight; // Force reflow
+                // Update cell display
+                await this.updateSoftwareCellDisplay($cell, selectedSoftwares);
                 
                 frappe.show_alert({
-                    message: 'Software updated successfully',
+                    message: `Software updated (${selectedSoftwares.length} selected)`,
                     indicator: 'green'
                 });
-            } else {
-                throw new Error(response.message?.error || 'Update failed');
             }
         } catch (error) {
-            console.error('Software update error:', error);
+            console.error('Error saving software selections:', error);
             frappe.show_alert({
-                message: 'Update failed: ' + error.message,
+                message: 'Error saving software',
                 indicator: 'red'
             });
-            this.cancelFieldEditing($cell, newValue);
         }
     }
+
+    async updateSoftwareCellDisplay($cell, softwares) {
+        try {
+            if (!softwares || softwares.length === 0) {
+                $cell.html(`
+                    <div class="pm-software-tags pm-empty-software">
+                        <span class="pm-software-badge pm-empty-badge">
+                            <i class="fa fa-plus"></i>
+                            Add software
+                        </span>
+                    </div>
+                `);
+                return;
+            }
+            
+            // Find primary software or use first one
+            const primarySoftware = softwares.find(s => s.is_primary) || softwares[0];
+            
+            let displayHTML = '';
+            if (softwares.length === 1) {
+                displayHTML = `
+                    <div class="pm-software-tags">
+                        <span class="pm-software-badge pm-primary-software">${primarySoftware.software}</span>
+                    </div>
+                `;
+            } else {
+                displayHTML = `
+                    <div class="pm-software-tags">
+                        <span class="pm-software-badge pm-primary-software">${primarySoftware.software}</span>
+                        <span class="pm-software-more">+${softwares.length - 1}</span>
+                    </div>
+                `;
+            }
+            
+            $cell.html(displayHTML);
+            $cell.removeClass('editing');
+            
+        } catch (error) {
+            console.error('Error updating software cell display:', error);
+        }
+    }
+
 
     showCurrencyEditor($cell) {
         const fieldName = $cell.data('field');
@@ -2446,8 +2678,13 @@ class ProjectManagement {
                 <div class="pm-cell pm-cell-tf-tg" style="width: ${currentWidths['tf-tg']}px; min-width: ${currentWidths['tf-tg']}px; flex: 0 0 ${currentWidths['tf-tg']}px;" data-editable="true" data-field="custom_tftg" data-task-id="${taskData.task_id}" data-field-type="select" data-options="TF,TG" data-backend-options="Top Figures,Top Grants">
                     <span class="pm-tf-tg-badge editable-field">TF</span>
                 </div>
-                <div class="pm-cell pm-cell-software" style="width: ${currentWidths.software}px; min-width: ${currentWidths.software}px; flex: 0 0 ${currentWidths.software}px;" data-editable="true" data-field="custom_software" data-task-id="${taskData.task_id}" data-field-type="select" data-options="Xero,MYOB,QuickBooks,Excel,Other">
-                    <span class="pm-software-badge editable-field">Xero</span>
+                <div class="pm-cell pm-cell-software" style="width: ${currentWidths.software}px; min-width: ${currentWidths.software}px; flex: 0 0 ${currentWidths.software}px;" data-editable="true" data-field="custom_softwares" data-task-id="${taskData.task_id}" data-field-type="software_selector">
+                    <div class="pm-software-tags pm-empty-software">
+                        <span class="pm-software-badge pm-empty-badge">
+                            <i class="fa fa-plus"></i>
+                            Add software
+                        </span>
+                    </div>
                 </div>
                 <div class="pm-cell pm-cell-status" style="width: ${currentWidths.status}px; min-width: ${currentWidths.status}px; flex: 0 0 ${currentWidths.status}px;">
                     <span class="pm-status-badge status-open">Open</span>
@@ -2468,28 +2705,28 @@ class ProjectManagement {
                                     </div>
                                 </div>
                 <div class="pm-cell pm-cell-action-person" style="width: ${currentWidths['action-person']}px; min-width: ${currentWidths['action-person']}px; flex: 0 0 ${currentWidths['action-person']}px;" data-editable="true" data-field="custom_action_person" data-task-id="${taskData.task_id}" data-field-type="person_selector">
-                    <div class="pm-user-avatars editable-field pm-empty-person">
+                    <div class="pm-user-avatars pm-empty-person">
                         <div class="pm-avatar pm-empty-avatar">
                             <i class="fa fa-user"></i>
                         </div>
                     </div>
                 </div>
                 <div class="pm-cell pm-cell-preparer" style="width: ${currentWidths.preparer}px; min-width: ${currentWidths.preparer}px; flex: 0 0 ${currentWidths.preparer}px;" data-editable="true" data-field="custom_preparer" data-task-id="${taskData.task_id}" data-field-type="person_selector">
-                    <div class="pm-user-avatars editable-field pm-empty-person">
+                    <div class="pm-user-avatars pm-empty-person">
                         <div class="pm-avatar pm-empty-avatar">
                             <i class="fa fa-user"></i>
                         </div>
                     </div>
                 </div>
                 <div class="pm-cell pm-cell-reviewer" style="width: ${currentWidths.reviewer}px; min-width: ${currentWidths.reviewer}px; flex: 0 0 ${currentWidths.reviewer}px;" data-editable="true" data-field="custom_reviewer" data-task-id="${taskData.task_id}" data-field-type="person_selector">
-                    <div class="pm-user-avatars editable-field pm-empty-person">
+                    <div class="pm-user-avatars pm-empty-person">
                         <div class="pm-avatar pm-empty-avatar">
                             <i class="fa fa-user"></i>
                         </div>
                     </div>
                 </div>
                 <div class="pm-cell pm-cell-partner" style="width: ${currentWidths.partner}px; min-width: ${currentWidths.partner}px; flex: 0 0 ${currentWidths.partner}px;" data-editable="true" data-field="custom_partner" data-task-id="${taskData.task_id}" data-field-type="person_selector">
-                    <div class="pm-user-avatars editable-field pm-empty-person">
+                    <div class="pm-user-avatars pm-empty-person">
                         <div class="pm-avatar pm-empty-avatar">
                             <i class="fa fa-user"></i>
                         </div>
@@ -2608,7 +2845,7 @@ class ProjectManagement {
     }
 
     // Person Selector and Tooltip Functions
-    showPersonSelector($cell, taskId, fieldName) {
+    showMultiPersonSelector($cell, taskId, fieldName) {
         // Get current person emails
         const currentEmails = [];
         $cell.find('.pm-avatar[data-email]').each(function() {
@@ -2663,6 +2900,12 @@ class ProjectManagement {
                         <div class="pm-person-list">
                             <!-- People will be loaded dynamically -->
                         </div>
+                        <div class="pm-person-selector-footer">
+                            <button class="pm-btn pm-btn-primary pm-done-selecting">
+                                <i class="fa fa-check"></i>
+                                Done
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2697,29 +2940,48 @@ class ProjectManagement {
             e.stopPropagation();
             const email = $(e.currentTarget).data('email');
             const name = $(e.currentTarget).data('name') || '';
-            this.selectPerson($cell, taskId, fieldName, email, name);
-            $selector.remove();
+            
+            if (email === '') {
+                // Clear all people for this role
+                this.clearRolePeople($cell, taskId, fieldName);
+                $selector.remove();
+            } else {
+                // Add person to role (multi-select)
+                this.addPersonToRole($cell, taskId, fieldName, email, name);
+                // Don't close selector - allow multiple selections
+                // Update current people display in selector
+                this.updateCurrentPeopleInSelector($selector, $cell);
+            }
         });
         
         $selector.find('.pm-person-selector-close').on('click', () => {
-            this.cancelPersonSelection($cell);
+            // Just close without clearing data
             $selector.remove();
+            $cell.removeClass('editing');
+        });
+        
+        // Done button to close selector
+        $selector.find('.pm-done-selecting').on('click', () => {
+            $selector.remove();
+            $cell.removeClass('editing');
         });
         
         // Remove person button
         $selector.on('click', '.pm-remove-person', (e) => {
             e.stopPropagation();
             const emailToRemove = $(e.currentTarget).data('email');
-            this.removePerson($cell, taskId, fieldName, emailToRemove);
-            $selector.remove();
+            this.removePersonFromRole($cell, taskId, fieldName, emailToRemove);
+            // Don't close selector - allow continued editing
+            this.updateCurrentPeopleInSelector($selector, $cell);
         });
         
-        // Close on outside click
+        // Close on outside click (without clearing data)
         setTimeout(() => {
             $(document).on('click.person-selector', (e) => {
                 if (!$(e.target).closest('.pm-person-selector-modal').length) {
-                    this.cancelPersonSelection($cell);
+                    // Just close the selector, don't clear data
                     $('.pm-person-selector-modal').remove();
+                    $cell.removeClass('editing');
                     $(document).off('click.person-selector');
                 }
             });
@@ -2777,7 +3039,7 @@ class ProjectManagement {
     
     async loadPeopleForSelector($container) {
         try {
-            // Get all enabled users with roles
+            // Get all enabled users with roles (exclude system users)
             const response = await frappe.call({
                 method: 'frappe.client.get_list',
                 args: {
@@ -2786,7 +3048,9 @@ class ProjectManagement {
                     filters: [
                         ['enabled', '=', 1],
                         ['user_type', '=', 'System User'],
-                        ['name', '!=', 'Guest']
+                        ['name', '!=', 'Guest'],
+                        ['name', '!=', 'Administrator'],
+                        ['email', '!=', 'admin@example.com']
                     ],
                     limit_page_length: 50,
                     order_by: 'full_name asc'
@@ -2794,9 +3058,18 @@ class ProjectManagement {
             });
             
             if (response.message && response.message.length > 0) {
+                // Build user cache while generating HTML
                 const peopleHTML = response.message.map(user => {
                     const displayName = user.full_name || user.email;
                     const role = user.role_profile_name || 'System User';
+                    
+                    // Cache user info
+                    this.userCache[user.email] = {
+                        full_name: displayName,
+                        email: user.email,
+                        user_image: user.user_image
+                    };
+                    
                     return `
                         <div class="pm-person-option" data-email="${user.email}" data-name="${displayName}">
                             <div class="pm-avatar" style="background: ${this.getAvatarColor(displayName)}">
@@ -2897,6 +3170,381 @@ class ProjectManagement {
         $cell.removeClass('editing');
     }
     
+    async addPersonToRole($cell, taskId, fieldName, email, name) {
+        try {
+            // Direct sub-table approach (no fallback needed after cleanup)
+            
+            // Get current roles for this task
+            const currentRoles = await this.getCurrentTaskRoles(taskId);
+            
+            // Get role type from field name and map to sub-table values
+            let roleType = fieldName.replace('custom_', '');
+            // Map frontend field names to sub-table role values
+            const roleMapping = {
+                'action_person': 'Action Person',
+                'preparer': 'Preparer',
+                'reviewer': 'Reviewer',
+                'partner': 'Partner'
+            };
+            roleType = roleMapping[roleType] || roleType;
+            
+            // Check if person already assigned to this role
+            const existingRole = currentRoles.find(r => r.role === roleType && r.user === email);
+            if (existingRole) {
+                frappe.show_alert({
+                    message: 'Person already assigned to this role',
+                    indicator: 'orange'
+                });
+                return;
+            }
+            
+            // Add new role assignment
+            currentRoles.push({
+                role: roleType,
+                user: email,
+                is_primary: currentRoles.filter(r => r.role === roleType).length === 0 // First person is primary
+            });
+            
+            // Save roles
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.set_task_roles',
+                args: {
+                    task_id: taskId,
+                    roles_data: JSON.stringify(currentRoles)
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                // Update cell display
+                await this.updatePersonCellDisplay($cell, taskId, roleType);
+                
+                frappe.show_alert({
+                    message: `${name} added as ${roleType}`,
+                    indicator: 'green'
+                });
+            }
+        } catch (error) {
+            console.error('Error adding person to role:', error);
+            frappe.show_alert({
+                message: 'Error adding person',
+                indicator: 'red'
+            });
+        }
+    }
+
+    async clearRolePeople($cell, taskId, fieldName) {
+        try {
+            // Get current roles for this task
+            const currentRoles = await this.getCurrentTaskRoles(taskId);
+            
+            // Get role type from field name and map to sub-table values
+            let roleType = fieldName.replace('custom_', '');
+            const roleMapping = {
+                'action_person': 'Action Person',
+                'preparer': 'Preparer',
+                'reviewer': 'Reviewer',
+                'partner': 'Partner'
+            };
+            roleType = roleMapping[roleType] || roleType;
+            
+            // Remove all assignments for this role
+            const filteredRoles = currentRoles.filter(r => r.role !== roleType);
+            
+            // Save roles
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.set_task_roles',
+                args: {
+                    task_id: taskId,
+                    roles_data: JSON.stringify(filteredRoles)
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                // Update cell display to empty
+                $cell.html(`
+                    <div class="pm-user-avatars pm-empty-person">
+                        <div class="pm-avatar pm-empty-avatar">
+                            <i class="fa fa-user"></i>
+                        </div>
+                    </div>
+                `);
+                
+                frappe.show_alert({
+                    message: 'All people removed from role',
+                    indicator: 'orange'
+                });
+            }
+        } catch (error) {
+            console.error('Error clearing role people:', error);
+            frappe.show_alert({
+                message: 'Error clearing people',
+                indicator: 'red'
+            });
+        }
+    }
+
+    async getCurrentTaskRoles(taskId) {
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_task_roles',
+                args: { task_id: taskId }
+            });
+            
+            if (response.message && response.message.success) {
+                return response.message.roles || [];
+            }
+            return [];
+        } catch (error) {
+            console.error('Error getting current task roles:', error);
+            return [];
+        }
+    }
+
+    async updatePersonCellDisplay($cell, taskId, roleType) {
+        try {
+            const roles = await this.getCurrentTaskRoles(taskId);
+            // roleType is already mapped to sub-table format (e.g., "Action Person")
+            const roleUsers = roles.filter(r => r.role === roleType);
+            
+            if (roleUsers.length === 0) {
+                $cell.html(`
+                    <div class="pm-user-avatars pm-empty-person">
+                        <div class="pm-avatar pm-empty-avatar">
+                            <i class="fa fa-user"></i>
+                        </div>
+                    </div>
+                `);
+                return;
+            }
+            
+            // Generate avatars - max 2 displayed, rest as "+N"
+            let avatarsHTML = '';
+            let moreHTML = '';
+            
+            if (roleUsers.length === 1) {
+                // Single user - show full avatar
+                const userInfo = await this.getRealUserInfo(roleUsers[0].user);
+                const initials = this.getInitials(userInfo?.full_name || roleUsers[0].user);
+                const isPrimary = roleUsers[0].is_primary ? ' pm-primary-user' : '';
+                
+                avatarsHTML = `<div class="pm-avatar${isPrimary}" title="${userInfo?.full_name || roleUsers[0].user}" data-email="${roleUsers[0].user}">${initials}</div>`;
+            } else if (roleUsers.length >= 2) {
+                // Multiple users - show first user + "+N" count
+                const firstUser = roleUsers[0];
+                const userInfo = await this.getRealUserInfo(firstUser.user);
+                const initials = this.getInitials(userInfo?.full_name || firstUser.user);
+                const isPrimary = firstUser.is_primary ? ' pm-primary-user' : '';
+                
+                avatarsHTML = `<div class="pm-avatar${isPrimary}" title="${userInfo?.full_name || firstUser.user}" data-email="${firstUser.user}">${initials}</div>`;
+                moreHTML = `<div class="pm-avatar-more" title="Total ${roleUsers.length} people assigned">+${roleUsers.length - 1}</div>`;
+            }
+            
+            $cell.html(`
+                <div class="pm-user-avatars">
+                    ${avatarsHTML}
+                    ${moreHTML}
+                </div>
+            `);
+            
+        } catch (error) {
+            console.error('Error updating person cell display:', error);
+        }
+    }
+
+    async getRealUserInfo(email) {
+        try {
+            // Initialize user cache if not exists
+            if (!this.userCache) {
+                this.userCache = {};
+            }
+            
+            // Return cached info if available
+            if (this.userCache[email]) {
+                return this.userCache[email];
+            }
+            
+            // Fetch real user info from server
+            const response = await frappe.call({
+                method: 'frappe.client.get',
+                args: {
+                    doctype: 'User',
+                    name: email
+                }
+            });
+            
+            if (response.message) {
+                const userInfo = {
+                    full_name: response.message.full_name || email,
+                    email: email,
+                    user_image: response.message.user_image
+                };
+                
+                // Cache the result
+                this.userCache[email] = userInfo;
+                return userInfo;
+            }
+            
+            // Fallback to email-based name
+            return this.getUserInfoSync(email);
+            
+        } catch (error) {
+            console.warn('Could not fetch user info for', email, error);
+            return this.getUserInfoSync(email);
+        }
+    }
+
+    getUserInfoSync(email) {
+        // Try to get real user info from cache or generate from email
+        try {
+            // Check if we have user info in our cache
+            if (this.userCache && this.userCache[email]) {
+                return this.userCache[email];
+            }
+            
+            // Generate from email as fallback
+            return {
+                full_name: email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                email: email
+            };
+        } catch (error) {
+            return {
+                full_name: email,
+                email: email
+            };
+        }
+    }
+
+    async legacySelectPerson($cell, taskId, fieldName, email, name) {
+        try {
+            // Use the original single-person assignment logic
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.update_task_field',
+                args: {
+                    task_id: taskId,
+                    field_name: fieldName,
+                    new_value: email
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                // Update UI
+                this.updatePersonFieldDisplay($cell, email, name);
+                
+                frappe.show_alert({
+                    message: `${name} assigned as ${fieldName.replace('custom_', '')}`,
+                    indicator: 'green'
+                });
+            } else {
+                frappe.show_alert({
+                    message: 'Failed to assign person: ' + (response.message?.error || 'Unknown error'),
+                    indicator: 'red'
+                });
+            }
+        } catch (error) {
+            console.error('Error in legacy person assignment:', error);
+            frappe.show_alert({
+                message: 'Error assigning person',
+                indicator: 'red'
+            });
+        }
+    }
+
+    async removePersonFromRole($cell, taskId, fieldName, emailToRemove) {
+        try {
+            // Get current roles for this task
+            const currentRoles = await this.getCurrentTaskRoles(taskId);
+            
+            // Get role type from field name and map to sub-table values
+            let roleType = fieldName.replace('custom_', '');
+            const roleMapping = {
+                'action_person': 'Action Person',
+                'preparer': 'Preparer',
+                'reviewer': 'Reviewer',
+                'partner': 'Partner'
+            };
+            roleType = roleMapping[roleType] || roleType;
+            
+            // Remove this specific person from this role
+            const filteredRoles = currentRoles.filter(r => !(r.role === roleType && r.user === emailToRemove));
+            
+            // If we removed the primary person, make the next person primary
+            const remainingInRole = filteredRoles.filter(r => r.role === roleType);
+            if (remainingInRole.length > 0 && !remainingInRole.some(r => r.is_primary)) {
+                remainingInRole[0].is_primary = true;
+            }
+            
+            // Save roles
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.set_task_roles',
+                args: {
+                    task_id: taskId,
+                    roles_data: JSON.stringify(filteredRoles)
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                // Update cell display
+                await this.updatePersonCellDisplay($cell, taskId, roleType);
+                
+                frappe.show_alert({
+                    message: 'Person removed from role',
+                    indicator: 'orange'
+                });
+            }
+        } catch (error) {
+            console.error('Error removing person from role:', error);
+            frappe.show_alert({
+                message: 'Error removing person',
+                indicator: 'red'
+            });
+        }
+    }
+
+    updateCurrentPeopleInSelector($selector, $cell) {
+        // Get current people from cell
+        const currentEmails = [];
+        $cell.find('.pm-avatar[data-email]').each(function() {
+            const email = $(this).data('email');
+            if (email) currentEmails.push(email);
+        });
+        
+        // Update the current people section in selector
+        const $currentSection = $selector.find('.pm-current-people');
+        if (currentEmails.length > 0) {
+            const currentHTML = `
+                <div class="pm-current-person-list">
+                    ${currentEmails.map(email => {
+                        const avatar = $cell.find(`[data-email="${email}"]`);
+                        const name = avatar.attr('title') || email;
+                        return `
+                            <div class="pm-current-person" data-email="${email}">
+                                <div class="pm-avatar" style="background: ${this.getAvatarColor(name)}">
+                                    ${this.getInitials(name)}
+                                </div>
+                                <span class="pm-person-name">${name.split(' ')[0]}</span>
+                                <button class="pm-remove-person" data-email="${email}">
+                                    <i class="fa fa-times"></i>
+                                </button>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+            
+            if ($currentSection.length === 0) {
+                $selector.find('.pm-person-selector-body').prepend(`
+                    <div class="pm-current-people">
+                        ${currentHTML}
+                    </div>
+                `);
+            } else {
+                $currentSection.html(currentHTML);
+            }
+        } else {
+            $currentSection.remove();
+        }
+    }
+
     async removePerson($cell, taskId, fieldName, emailToRemove) {
         try {
             // Update task field to remove this person
@@ -3239,7 +3887,7 @@ class ProjectManagement {
                     value = $row.find('.pm-cell-tf-tg .pm-tf-tg-badge').text().trim();
                     break;
                 case 'software':
-                    value = $row.find('.pm-cell-software .pm-software-badge').text().trim();
+                    value = $row.find('.pm-cell-software .pm-primary-software').text().trim();
                     break;
                 case 'status':
                     value = $row.find('.pm-cell-status .pm-status-badge').text().trim();
@@ -3328,7 +3976,7 @@ class ProjectManagement {
             case 'tf_tg':
                 return $row.find('.pm-cell-tf-tg .pm-tf-tg-badge').text().trim();
             case 'software':
-                return $row.find('.pm-cell-software .pm-software-badge').text().trim();
+                return $row.find('.pm-cell-software .pm-primary-software').text().trim();
             case 'status':
                 return $row.find('.pm-cell-status .pm-status-badge').text().trim();
             case 'target_month':
@@ -4183,7 +4831,7 @@ class ProjectManagement {
             'priority': 'Priority',
             'custom_client': 'Client',
             'custom_tftg': 'TF/TG',
-            'custom_software': 'Software',
+            'custom_softwares': 'Software',
             'custom_target_month': 'Target Month',
             'custom_budget_planning': 'Budget',
             'custom_actual_billing': 'Actual',

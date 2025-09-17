@@ -327,16 +327,18 @@ def get_project_management_data(view='main'):
                 else:
                     task.tf_tg = 'TF'
                 task.service_line = getattr(task_doc, 'custom_service_line', None) or ""
-                task.software = getattr(task_doc, 'custom_software', None) or ""
+                # Get software from sub-table (new clean approach)
+                task.software = get_primary_software(task_doc) or ""
                 task.year_end = getattr(task_doc, 'custom_year_end', None) or ""
                 task.target_month = getattr(task_doc, 'custom_target_month', None) or ""
-                task.partner = getattr(task_doc, 'custom_partner', None) or ""
-                task.reviewer = getattr(task_doc, 'custom_reviewer', None) or ""
-                task.preparer = getattr(task_doc, 'custom_preparer', None) or ""
-                task.lodgment_due_date = getattr(task_doc, 'custom_lodgement_due_date', None) or getattr(task_doc, 'custom_lodgment_due_date', None) or ""
+                # Get people - only from sub-table (new clean approach)
+                task.partner = get_primary_role_user(task_doc, 'partner') or ""
+                task.reviewer = get_primary_role_user(task_doc, 'reviewer') or ""
+                task.preparer = get_primary_role_user(task_doc, 'preparer') or ""
+                task.lodgment_due_date = getattr(task_doc, 'custom_lodgement_due_date', None) or ""
                 
-                # Get action person (try custom_action_person first, fallback to assigned_to)
-                task.action_person = getattr(task_doc, 'custom_action_person', None) or getattr(task_doc, 'assigned_to', None) or ""
+                # Get action person - only from sub-table
+                task.action_person = get_primary_role_user(task_doc, 'action_person') or ""
                 
                 # Get Budget and Actual Billing (newly added fields)
                 task.budget_planning = getattr(task_doc, 'custom_budget_planning', None) or 0
@@ -355,11 +357,14 @@ def get_project_management_data(view='main'):
                     task.review_notes = []
                     task.latest_review_note = ""
                 
-                # Convert email addresses to user info for avatar display
-                task.preparer_info = get_user_info(task.preparer)
-                task.reviewer_info = get_user_info(task.reviewer)
-                task.partner_info = get_user_info(task.partner)
-                task.action_person_info = get_user_info(task.action_person)
+                # Convert email addresses to user info for avatar display (from sub-table)
+                task.preparer_info = get_role_users_info(task_doc, 'preparer')
+                task.reviewer_info = get_role_users_info(task_doc, 'reviewer')
+                task.partner_info = get_role_users_info(task_doc, 'partner')
+                task.action_person_info = get_role_users_info(task_doc, 'action_person')
+                
+                # Get software info for display (from sub-table)
+                task.software_info = get_software_info(task_doc)
                 
                 # Format last updated date
                 if hasattr(task, 'modified') and task.modified:
@@ -392,11 +397,12 @@ def get_project_management_data(view='main'):
                 task.actual_billing = 0
                 task.review_notes = []
                 task.latest_review_note = ""
-                # Set empty user info for avatars
+                # Set empty user info for avatars (no sub-table data)
                 task.preparer_info = None
                 task.reviewer_info = None
                 task.partner_info = None
                 task.action_person_info = None
+                task.software_info = None
                 # Set default comment count - 实时计算
                 task.comment_count = frappe.db.count('Comment', {
                     'reference_doctype': 'Task',
@@ -491,13 +497,11 @@ def update_task_field(task_id, field_name, new_value):
         task = frappe.get_doc("Task", task_id)
         task.flags.ignore_version = True
         
-        # Validate field name (security check)
+        # Validate field name (security check) - removed person and software fields as they're now handled by sub-tables
         allowed_fields = [
-            'custom_tftg', 'custom_tf_tg', 'custom_software', 'custom_target_month',
-            'custom_budget_planning', 'custom_actual_billing', 'custom_preparer',
-            'custom_reviewer', 'custom_partner', 'custom_year_end', 'status',
-            'assigned_to', 'custom_action_person', 'custom_service_line',
-            'custom_client', 'custom_lodgment_due_date', 'custom_lodgement_due_date'
+            'custom_tftg', 'custom_tf_tg', 'custom_target_month',
+            'custom_budget_planning', 'custom_actual_billing', 'custom_year_end', 'status',
+            'custom_service_line', 'custom_client', 'custom_lodgement_due_date'
         ]
         
         if field_name not in allowed_fields:
@@ -639,7 +643,6 @@ def create_new_task(project_name, client_name=None):
                 new_task.custom_tftg = tg_companies[0].name
         
         # Set other defaults (empty, let user choose)
-        new_task.custom_software = ""
         new_task.custom_target_month = ""
         new_task.custom_budget_planning = 0
         new_task.custom_actual_billing = 0
@@ -843,54 +846,6 @@ def quick_create_customer(customer_name, customer_type="Company"):
         frappe.log_error(error_msg)
         return {'success': False, 'error': str(e)}
 
-@frappe.whitelist()
-def update_task_software(task_id, software_value):
-    """
-    Update task software and optionally sync to customer
-    """
-    try:
-        # Update task software directly using set_value to avoid full document validation
-        frappe.db.set_value("Task", task_id, "custom_software", software_value)
-        
-        # Force commit
-        frappe.db.commit()
-        
-        # Get task document for customer sync (without saving)
-        task = frappe.get_doc("Task", task_id)
-        
-        # Sync to customer's accounting platform if task has a client
-        customer_updated = False
-        if hasattr(task, 'custom_client') and task.custom_client:
-            try:
-                customer = frappe.get_doc("Customer", task.custom_client)
-                old_platform = customer.custom_accounting_platform
-                
-                # Update customer's platform
-                customer.custom_accounting_platform = software_value
-                customer.save()
-                customer_updated = True
-                
-                print(f"DEBUG: Updated customer {customer.customer_name} accounting platform: {old_platform} → {software_value}")
-            except Exception as e:
-                # Don't fail the task update if customer update fails
-                print(f"DEBUG: Could not update customer software: {str(e)}")
-        
-        # Prepare success message
-        message = 'Software updated successfully'
-        if customer_updated:
-            message += ' (Customer accounting platform also updated)'
-        
-        return {
-            'success': True, 
-            'message': message,
-            'software_value': software_value,
-            'customer_synced': customer_updated
-        }
-    
-    except Exception as e:
-        error_msg = f"Software update error: {str(e)}"
-        frappe.log_error(error_msg)
-        return {'success': False, 'error': str(e)}
 
 @frappe.whitelist()
 def update_task_client(task_id, customer_id):
@@ -919,6 +874,111 @@ def update_task_client(task_id, customer_id):
         error_msg = f"Task client update error: {str(e)}"
         frappe.log_error(error_msg)
         return {'success': False, 'error': str(e)}
+
+def get_primary_role_user(task_doc, role):
+    """
+    Get primary user for a specific role from sub-table
+    """
+    try:
+        if not hasattr(task_doc, 'custom_roles') or not task_doc.custom_roles:
+            return None
+        
+        # Map role names to sub-table format
+        role_mapping = {
+            'action_person': 'Action Person',
+            'preparer': 'Preparer',
+            'reviewer': 'Reviewer',
+            'partner': 'Partner'
+        }
+        mapped_role = role_mapping.get(role, role)
+        
+        # Look for primary user in this role
+        for role_assignment in task_doc.custom_roles:
+            if role_assignment.role == mapped_role and role_assignment.is_primary:
+                return role_assignment.user
+        
+        # If no primary found, return first user in this role
+        for role_assignment in task_doc.custom_roles:
+            if role_assignment.role == mapped_role:
+                return role_assignment.user
+        
+        return None
+    except:
+        return None
+
+def get_role_users_info(task_doc, role):
+    """
+    Get all users for a specific role from sub-table and return user info
+    """
+    try:
+        if not hasattr(task_doc, 'custom_roles') or not task_doc.custom_roles:
+            return None
+        
+        # Map role names to sub-table format
+        role_mapping = {
+            'action_person': 'Action Person',
+            'preparer': 'Preparer',
+            'reviewer': 'Reviewer',
+            'partner': 'Partner'
+        }
+        mapped_role = role_mapping.get(role, role)
+        
+        # Get all users in this role
+        role_users = []
+        for role_assignment in task_doc.custom_roles:
+            if role_assignment.role == mapped_role:
+                role_users.append(role_assignment.user)
+        
+        if not role_users:
+            return None
+        
+        # Convert to user info format
+        return get_user_info(','.join(role_users))
+        
+    except:
+        return None
+
+def get_primary_software(task_doc):
+    """
+    Get primary software from sub-table
+    """
+    try:
+        if not hasattr(task_doc, 'custom_softwares') or not task_doc.custom_softwares:
+            return None
+        
+        # Look for primary software
+        for software_assignment in task_doc.custom_softwares:
+            if software_assignment.is_primary:
+                return software_assignment.software
+        
+        # If no primary found, return first software
+        if task_doc.custom_softwares:
+            return task_doc.custom_softwares[0].software
+        
+        return None
+    except:
+        return None
+
+def get_software_info(task_doc):
+    """
+    Get all software assignments for display
+    """
+    try:
+        if not hasattr(task_doc, 'custom_softwares') or not task_doc.custom_softwares:
+            return None
+        
+        # Get all software assignments
+        softwares = []
+        for software_assignment in task_doc.custom_softwares:
+            softwares.append({
+                'software': software_assignment.software,
+                'is_primary': software_assignment.is_primary
+            })
+        
+        return softwares if softwares else None
+        
+    except:
+        return None
 
 def get_initials(name):
     """
@@ -1313,6 +1373,292 @@ def load_user_column_widths():
             'error': str(e)
         }
 
+
+@frappe.whitelist()
+def check_task_fields(task_id):
+    """
+    Check what fields actually exist in Task
+    """
+    try:
+        # Get Task meta to see actual fields
+        task_meta = frappe.get_meta("Task")
+        custom_fields = []
+        table_fields = []
+        
+        for field in task_meta.fields:
+            if field.fieldname.startswith('custom_'):
+                if field.fieldtype == 'Table':
+                    table_fields.append({
+                        'fieldname': field.fieldname,
+                        'options': field.options,
+                        'label': field.label
+                    })
+                else:
+                    custom_fields.append({
+                        'fieldname': field.fieldname,
+                        'fieldtype': field.fieldtype,
+                        'label': field.label
+                    })
+        
+        return {
+            'success': True,
+            'custom_fields': custom_fields,
+            'table_fields': table_fields
+        }
+        
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def test_task_subtables(task_id):
+    """
+    Test if Task sub-tables are properly configured
+    """
+    try:
+        if not task_id:
+            return {'success': False, 'error': 'Task ID is required'}
+        
+        # Get task document
+        task_doc = frappe.get_doc("Task", task_id)
+        
+        # Check sub-table fields
+        results = {}
+        
+        # Check custom_roles
+        if hasattr(task_doc, 'custom_roles'):
+            results['custom_roles'] = f"存在，当前有 {len(task_doc.custom_roles)} 条记录"
+        else:
+            results['custom_roles'] = "不存在"
+            
+        # Check custom_softwares  
+        if hasattr(task_doc, 'custom_softwares'):
+            results['custom_softwares'] = f"存在，当前有 {len(task_doc.custom_softwares)} 条记录"
+        else:
+            results['custom_softwares'] = "不存在"
+            
+        # Check custom_companies
+        if hasattr(task_doc, 'custom_companies'):
+            results['custom_companies'] = f"存在，当前有 {len(task_doc.custom_companies)} 条记录"
+        else:
+            results['custom_companies'] = "不存在"
+        
+        # Check if sub-table DocTypes exist
+        subtable_doctypes = {}
+        for doctype in ['Task Role Assignment', 'Task Software', 'Task Company Tag']:
+            exists = frappe.db.exists('DocType', doctype)
+            subtable_doctypes[doctype] = "存在" if exists else "不存在"
+        
+        return {
+            'success': True,
+            'task_id': task_id,
+            'subtable_fields': results,
+            'subtable_doctypes': subtable_doctypes
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error testing task subtables: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def get_task_roles(task_id):
+    """
+    Get task role assignments from sub-table
+    """
+    try:
+        if not task_id:
+            return {'success': False, 'error': 'Task ID is required'}
+        
+        # Get roles from sub-table
+        roles = frappe.get_all("Task Role Assignment",
+            filters={"parent": task_id},
+            fields=["role", "user", "is_primary"],
+            order_by="is_primary desc, role, user"
+        )
+        
+        return {
+            'success': True,
+            'roles': roles
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting task roles: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def set_task_roles(task_id, roles_data):
+    """
+    Set task role assignments and sync with legacy fields
+    roles_data: [{"role": "preparer", "user": "john@example.com", "is_primary": True}, ...]
+    """
+    try:
+        if not task_id:
+            return {'success': False, 'error': 'Task ID is required'}
+        
+        import json
+        if isinstance(roles_data, str):
+            roles_data = json.loads(roles_data)
+        
+        # Get task document
+        task_doc = frappe.get_doc("Task", task_id)
+        
+        # Check if custom_roles field exists
+        if not hasattr(task_doc, 'custom_roles'):
+            return {
+                'success': False, 
+                'error': 'Task Role Assignment sub-table not available. Please ensure custom_roles field is added to Task DocType.'
+            }
+        
+        # Clear existing roles
+        task_doc.custom_roles = []
+        
+        # Add new roles (clean sub-table only approach)
+        for role_data in roles_data:
+            role = role_data.get('role')
+            user = role_data.get('user')
+            is_primary = role_data.get('is_primary', False)
+            
+            if not role or not user:
+                continue
+            
+            # Validate user exists and is enabled
+            if not frappe.db.exists("User", user):
+                print(f"DEBUG: User {user} does not exist, skipping")
+                continue
+                
+            user_enabled = frappe.db.get_value("User", user, "enabled")
+            if not user_enabled:
+                print(f"DEBUG: User {user} is disabled, skipping")
+                continue
+                
+            # Add to sub-table
+            task_doc.append('custom_roles', {
+                'role': role,
+                'user': user,
+                'is_primary': is_primary
+            })
+        
+        task_doc.save()
+        frappe.db.commit()
+        
+        # Count actually added roles
+        actual_roles_added = len(task_doc.custom_roles)
+        
+        return {
+            'success': True,
+            'message': f'Task roles updated successfully. {actual_roles_added} roles assigned.',
+            'roles_count': actual_roles_added,
+            'requested_count': len(roles_data)
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error setting task roles: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def get_software_options():
+    """
+    Get available software options from Task Software DocType
+    """
+    try:
+        # Get software field options from Task Software DocType
+        task_software_meta = frappe.get_meta("Task Software")
+        software_field = None
+        
+        for field in task_software_meta.fields:
+            if field.fieldname == "software":
+                software_field = field
+                break
+        
+        if software_field and hasattr(software_field, 'options') and software_field.options:
+            # Split options by newline and clean them
+            options = [opt.strip() for opt in software_field.options.split('\n') if opt.strip()]
+            return {'success': True, 'software_options': options}
+        else:
+            # Fallback to default options if not configured
+            return {
+                'success': True, 
+                'software_options': ['Xero', 'MYOB', 'QuickBooks', 'Excel', 'Payroller', 'Oracle', 'Logdit', 'Other']
+            }
+            
+    except Exception as e:
+        frappe.log_error(f"Error getting software options: {str(e)}")
+        # Return default options on error
+        return {
+            'success': True,
+            'software_options': ['Xero', 'MYOB', 'QuickBooks', 'Excel', 'Other']
+        }
+
+@frappe.whitelist()
+def get_task_softwares(task_id):
+    """
+    Get task software assignments from sub-table
+    """
+    try:
+        if not task_id:
+            return {'success': False, 'error': 'Task ID is required'}
+        
+        # Get softwares from sub-table
+        softwares = frappe.get_all("Task Software",
+            filters={"parent": task_id},
+            fields=["software", "is_primary"],
+            order_by="is_primary desc, software"
+        )
+        
+        return {
+            'success': True,
+            'softwares': softwares
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting task softwares: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def set_task_softwares(task_id, softwares_data):
+    """
+    Set task software assignments and sync with legacy field
+    softwares_data: [{"software": "Xero", "is_primary": True}, ...]
+    """
+    try:
+        if not task_id:
+            return {'success': False, 'error': 'Task ID is required'}
+        
+        import json
+        if isinstance(softwares_data, str):
+            softwares_data = json.loads(softwares_data)
+        
+        # Get task document
+        task_doc = frappe.get_doc("Task", task_id)
+        
+        # Clear existing softwares
+        task_doc.custom_softwares = []
+        
+        # Add new softwares (clean sub-table only approach)
+        for software_data in softwares_data:
+            software = software_data.get('software')
+            is_primary = software_data.get('is_primary', False)
+            
+            if not software:
+                continue
+                
+            # Add to sub-table
+            task_doc.append('custom_softwares', {
+                'software': software,
+                'is_primary': is_primary
+            })
+        
+        task_doc.save()
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'message': 'Task softwares updated successfully',
+            'softwares_count': len(softwares_data)
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error setting task softwares: {str(e)}")
+        return {'success': False, 'error': str(e)}
 
 @frappe.whitelist()
 def get_task_activity_log(task_id):
