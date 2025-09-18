@@ -295,12 +295,15 @@
     top: 100%;
     left: 0;
     background: white;
-    border: 1px solid var(--monday-border);
-    border-radius: 6px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    border: 1px solid #e1e5e9;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
     z-index: 1000;
-    min-width: 200px;
-    margin-top: 4px;
+    min-width: 280px;
+    margin-top: 8px;
+    padding: 8px 0;
+    backdrop-filter: blur(10px);
+    animation: slideDown 0.2s ease-out;
 }
 
 .pm-workspace-item {
@@ -353,12 +356,15 @@
     top: 0;
     left: 100%;
     background: white;
-    border: 1px solid var(--monday-border);
-    border-radius: 6px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    border: 1px solid #e1e5e9;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
     z-index: 1001;
-    min-width: 200px;
-    margin-left: 4px;
+    min-width: 280px;
+    margin-left: 8px;
+    padding: 8px 0;
+    backdrop-filter: blur(10px);
+    animation: slideRight 0.2s ease-out;
 }
 
 .pm-submenu-header {
@@ -3395,10 +3401,12 @@ div.pm-table-header,
 
 .pm-create-dialog {
     background: white;
-    border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-    width: 400px;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    width: 480px;
     max-width: 90vw;
+    border: 1px solid #f0f3f7;
+    animation: scaleIn 0.3s ease-out;
 }
 
 .pm-create-dialog-header {

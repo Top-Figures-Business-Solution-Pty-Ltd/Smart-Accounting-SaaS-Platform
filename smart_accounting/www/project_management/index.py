@@ -27,6 +27,9 @@ def get_context(context):
     context.current_view = view
     context.available_views = get_available_views()
     
+    # Generate breadcrumb path for navigation
+    context.breadcrumb_path = get_breadcrumb_path(view)
+    
     # Disable page caching for real-time updates
     context.no_cache = True
     context.cache_key = f"pm_view_{view}_{frappe.utils.now()}"
@@ -166,8 +169,8 @@ def create_partition(partition_name, is_workspace=False, parent_partition=None, 
         return {
             'success': True,
             'message': f'{"Workspace" if is_workspace else "Board"} "{partition_name}" created successfully',
-            'partition_name': new_partition.name,
-            'partition_display_name': partition_name
+            'name': new_partition.name,
+            'partition_name': partition_name
         }
         
     except Exception as e:
@@ -212,14 +215,102 @@ def get_child_partitions(parent_partition):
     """Get child partitions for workspace navigation"""
     try:
         children = frappe.get_all("Partition",
-            fields=["name", "partition_name"],
-            filters={"parent_partition": parent_partition},
+            fields=["name", "partition_name", "is_workspace"],
+            filters={"parent_partition": parent_partition, "is_archived": ["!=", 1]},
             order_by="partition_name"
         )
+        
+        # Check if each child has its own children
+        for child in children:
+            child_count = frappe.db.count("Partition", {
+                "parent_partition": child.name,
+                "is_archived": ["!=", 1]
+            })
+            child['has_children'] = child_count > 0
+        
         return children
     except Exception as e:
         frappe.log_error(f"Error getting child partitions: {str(e)}")
         return []
+
+@frappe.whitelist()
+def get_available_workspaces():
+    """Get all available workspaces for selection"""
+    try:
+        workspaces = frappe.get_all("Partition",
+            fields=["name", "partition_name"],
+            filters={
+                "is_workspace": 1,
+                "is_archived": ["!=", 1]
+            },
+            order_by="partition_name"
+        )
+        
+        return workspaces
+    except Exception as e:
+        frappe.log_error(f"Error getting available workspaces: {str(e)}")
+        return []
+
+@frappe.whitelist()
+def get_partition_info(partition_name):
+    """Get partition information to determine if it's a workspace or board"""
+    try:
+        partition = frappe.get_doc("Partition", partition_name)
+        return {
+            'name': partition.name,
+            'partition_name': partition.partition_name,
+            'is_workspace': partition.is_workspace,
+            'description': partition.description or '',
+            'parent_partition': partition.parent_partition
+        }
+    except Exception as e:
+        frappe.log_error(f"Error getting partition info: {str(e)}")
+        return None
+
+def get_breadcrumb_path(view):
+    """Generate breadcrumb navigation path"""
+    if view == 'main':
+        return None
+    
+    try:
+        breadcrumb = []
+        current_partition = frappe.get_doc("Partition", view)
+        
+        # Build path from current to root
+        path = []
+        current = current_partition
+        while current:
+            icon = 'fa-th-large' if current.is_workspace else 'fa-table'
+            path.append({
+                'key': current.name,
+                'label': current.partition_name,
+                'icon': icon,
+                'type': 'workspace' if current.is_workspace else 'board'
+            })
+            
+            # Get parent if exists
+            if current.parent_partition:
+                current = frappe.get_doc("Partition", current.parent_partition)
+            else:
+                current = None
+        
+        # Reverse to get root-to-current order
+        path.reverse()
+        
+        # Add main dashboard at the beginning if not already there
+        if path and path[0]['key'] != 'main':
+            path.insert(0, {
+                'key': 'main',
+                'label': 'Main Dashboard',
+                'icon': 'fa-home',
+                'type': 'main'
+            })
+        
+        return path
+        
+    except Exception as e:
+        frappe.log_error(f"Error generating breadcrumb path: {str(e)}")
+        return None
 
 @frappe.whitelist()
 def get_partition_column_config(partition_name):

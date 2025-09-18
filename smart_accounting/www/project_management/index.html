@@ -10,10 +10,34 @@
                     <i class="fa fa-home"></i>
                 </a>
                 <i class="fa fa-tasks"></i>
-                {{ title }}
-                <small style="color: var(--monday-gray); font-size: 12px; font-weight: normal; margin-left: 8px;">
-                    (View: {{ current_view }} | Projects: {{ project_data.total_projects }} | Tasks: {{ project_data.total_tasks }})
-                </small>
+                <div class="pm-title-container">
+                    <div class="pm-breadcrumb-nav">
+                        {% if current_view != 'main' and breadcrumb_path %}
+                            {% for item in breadcrumb_path %}
+                                {% if not loop.last %}
+                                    <span class="pm-breadcrumb-item" data-view="{{ item.key }}" title="返回 {{ item.label }}">
+                                        <i class="fa {{ item.icon }}"></i>
+                                        {{ item.label }}
+                                    </span>
+                                    <i class="fa fa-chevron-right pm-breadcrumb-separator"></i>
+                                {% else %}
+                                    <span class="pm-breadcrumb-current">
+                                        <i class="fa {{ item.icon }}"></i>
+                                        {{ item.label }}
+                                    </span>
+                                {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            <span class="pm-breadcrumb-current">
+                                <i class="fa fa-tasks"></i>
+                                {{ title }}
+                            </span>
+                        {% endif %}
+                    </div>
+                    <small class="pm-view-info">
+                        (View: {{ current_view }} | Projects: {{ project_data.total_projects }} | Tasks: {{ project_data.total_tasks }})
+                    </small>
+                </div>
                 <!-- Workspace Switcher -->
                 <div class="pm-workspace-switcher">
                     <button class="pm-workspace-btn" title="切换工作区">
@@ -35,7 +59,8 @@
                              data-view="{{ view.key }}" data-type="{{ view.type }}" 
                              {% if view.has_children %}data-has-children="true"{% endif %}>
                             <i class="fa {{ view.icon }}"></i>
-                            <span>{{ view.label }}</span>
+                            <span class="pm-item-name">{{ view.label }}</span>
+                            <span class="pm-item-type">({{ view.type }})</span>
                             {% if view.has_children %}
                                 <i class="fa fa-chevron-right pm-workspace-arrow"></i>
                             {% endif %}
@@ -602,9 +627,21 @@
                     {% endfor %}
                 {% else %}
                     <div class="pm-empty-state">
-                        <i class="fa fa-tasks"></i>
-                        <h3>No projects found</h3>
-                        <p>Create your first project to get started</p>
+                        <i class="fa fa-folder-open"></i>
+                        <h3>{% if current_view != 'main' %}Empty Workspace{% else %}No projects found{% endif %}</h3>
+                        <p>{% if current_view != 'main' %}No boards or projects created yet. Create your first board to get started.{% else %}Create your first project to get started{% endif %}</p>
+                        {% if current_view != 'main' and breadcrumb_path and breadcrumb_path|length > 1 %}
+                        <div class="pm-empty-actions">
+                            <button class="pm-btn pm-btn-secondary pm-back-to-parent" data-view="{{ breadcrumb_path[-2].key }}">
+                                <i class="fa fa-arrow-left"></i>
+                                Back to {{ breadcrumb_path[-2].label }}
+                            </button>
+                            <button class="pm-btn pm-btn-primary pm-new-task-btn">
+                                <i class="fa fa-plus"></i>
+                                New Task
+                            </button>
+                        </div>
+                        {% endif %}
                     </div>
                 {% endif %}
             </div>
@@ -631,5 +668,6 @@
 {% endblock %}
 
 {% block style %}
-<link rel="stylesheet" href="/assets/smart_accounting/css/project_management.css">
+    <link rel="stylesheet" href="/assets/smart_accounting/css/project_management.css">
+    <link rel="stylesheet" href="/assets/smart_accounting/css/enhanced_workspace.css">
 {% endblock %}

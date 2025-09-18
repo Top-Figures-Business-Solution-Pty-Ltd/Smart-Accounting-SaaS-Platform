@@ -4931,10 +4931,11 @@ class ProjectManagement {
             $('.pm-workspace-menu').toggle();
         });
         
-        // Handle create workspace button (top-level)
+        // Handle create workspace button (top-level or in submenu)
         $(document).on('click', '.pm-create-workspace', (e) => {
             e.stopPropagation();
-            this.showCreateWorkspaceDialog();
+            const parentPartition = $(e.currentTarget).data('parent');
+            this.showCreateWorkspaceDialog(parentPartition);
         });
         
         // Handle create board button (can be top-level or under workspace)
@@ -4948,19 +4949,29 @@ class ProjectManagement {
         $(document).on('click', '.pm-workspace-item:not(.pm-create-workspace):not(.pm-create-board)', (e) => {
             e.stopPropagation();
             const $item = $(e.currentTarget);
-            const hasChildren = $item.data('has-children');
             const view = $item.data('view');
+            const isWorkspace = $item.find('i').hasClass('fa-sitemap') || $item.find('i').hasClass('fa-folder');
             
-            if (hasChildren) {
-                // Show child partitions in a submenu
-                this.showChildPartitions($item, view);
-            } else if (view) {
-                console.log('Switching to partition:', view);
-                // Navigate to this partition with cache busting
-                const currentUrl = new URL(window.location);
-                currentUrl.searchParams.set('view', view);
-                currentUrl.searchParams.set('_t', Date.now()); // Cache busting
-                window.location.href = currentUrl.toString();
+            if (view) {
+                // Check if this item represents a workspace (should show submenu)
+                // or a board (should navigate directly)
+                frappe.call({
+                    method: 'smart_accounting.www.project_management.index.get_partition_info',
+                    args: { partition_name: view },
+                    callback: (r) => {
+                        if (r.message && r.message.is_workspace) {
+                            // Always show submenu for workspaces
+                            this.showChildPartitions($item, view);
+                        } else {
+                            // Navigate directly for boards
+                            console.log('Switching to partition:', view);
+                            const currentUrl = new URL(window.location);
+                            currentUrl.searchParams.set('view', view);
+                            currentUrl.searchParams.set('_t', Date.now());
+                            window.location.href = currentUrl.toString();
+                        }
+                    }
+                });
             }
         });
         
@@ -4971,45 +4982,91 @@ class ProjectManagement {
                 $('.pm-workspace-submenu').remove();
             }
         });
+
+        // Handle breadcrumb navigation
+        $(document).on('click', '.pm-breadcrumb-item', (e) => {
+            e.preventDefault();
+            const targetView = $(e.currentTarget).data('view');
+            if (targetView) {
+                const currentUrl = new URL(window.location);
+                currentUrl.searchParams.set('view', targetView);
+                currentUrl.searchParams.set('_t', Date.now());
+                window.location.href = currentUrl.toString();
+            }
+        });
+
+        // Handle empty state back button
+        $(document).on('click', '.pm-back-to-parent', (e) => {
+            e.preventDefault();
+            const targetView = $(e.currentTarget).data('view');
+            if (targetView) {
+                const currentUrl = new URL(window.location);
+                currentUrl.searchParams.set('view', targetView);
+                currentUrl.searchParams.set('_t', Date.now());
+                window.location.href = currentUrl.toString();
+            }
+        });
     }
 
     showChildPartitions($parentItem, parentPartition) {
+        // Check if we're already in a submenu (going deeper)
+        const isGoingDeeper = $('.pm-workspace-submenu').length > 0;
+        
         // Remove existing submenus
         $('.pm-workspace-submenu').remove();
         
-        // Get child partitions
+        // Always show submenu for consistent UX, even if empty
         frappe.call({
             method: 'smart_accounting.www.project_management.index.get_child_partitions',
             args: { parent_partition: parentPartition },
             callback: (r) => {
-                if (r.message && r.message.length > 0) {
-                    this.createSubmenu($parentItem, r.message, parentPartition);
-                } else {
-                    // If no children, treat as direct navigation
-                    console.log('No children, navigating to:', parentPartition);
-                    const currentUrl = new URL(window.location);
-                    currentUrl.searchParams.set('view', parentPartition);
-                    currentUrl.searchParams.set('_t', Date.now());
-                    window.location.href = currentUrl.toString();
-                }
+                const childPartitions = r.message || [];
+                this.createSubmenu($parentItem, childPartitions, parentPartition, isGoingDeeper);
             }
         });
     }
     
-    createSubmenu($parentItem, childPartitions, parentPartition) {
+    createSubmenu($parentItem, childPartitions, parentPartition, isGoingDeeper = false) {
+        const parentName = $parentItem.find('span').text();
+        const isEmpty = childPartitions.length === 0;
+        
+        // Determine if we should show parent menu or main menu based on depth
+        const backTarget = isGoingDeeper ? 'parent' : 'main';
+        
         const submenuHtml = `
-            <div class="pm-workspace-submenu">
+            <div class="pm-workspace-submenu" data-parent="${parentPartition}" data-back-target="${backTarget}">
                 <div class="pm-submenu-header">
-                    <i class="fa fa-arrow-left pm-back-btn"></i>
-                    <span>${$parentItem.find('span').text()}</span>
+                    <button class="pm-back-btn" title="返回上级菜单" data-back-target="${backTarget}">
+                        <i class="fa fa-arrow-left"></i>
+                        <span>Back</span>
+                    </button>
+                    <span class="pm-submenu-title">Currently in: ${parentName}</span>
                 </div>
-                ${childPartitions.map(child => `
-                    <div class="pm-workspace-item" data-view="${child.name}">
-                        <i class="fa fa-folder"></i>
-                        <span>${child.partition_name}</span>
+                ${isEmpty ? `
+                    <div class="pm-empty-workspace">
+                        <i class="fa fa-folder-open"></i>
+                        <h4>Empty Workspace</h4>
+                        <p>No boards created yet. Create your first board below.</p>
+                        <div class="pm-empty-workspace-actions">
+                            <button class="pm-btn-secondary pm-back-to-main" onclick="this.closest('.pm-workspace-submenu').querySelector('.pm-back-btn').click()">
+                                <i class="fa fa-arrow-left"></i>
+                                ${backTarget === 'main' ? 'Back to Main Menu' : 'Back to Parent'}
+                            </button>
+                        </div>
+                    </div>
+                ` : childPartitions.map(child => `
+                    <div class="pm-workspace-item" data-view="${child.name}" data-has-children="${child.has_children || false}">
+                        <i class="fa fa-${child.is_workspace ? 'sitemap' : 'folder'}"></i>
+                        <span class="pm-item-name">${child.partition_name}</span>
+                        <span class="pm-item-type">(${child.is_workspace ? 'workspace' : 'board'})</span>
+                        ${child.has_children ? '<i class="fa fa-chevron-right pm-workspace-arrow"></i>' : ''}
                     </div>
                 `).join('')}
                 <div class="pm-workspace-divider"></div>
+                <div class="pm-workspace-item pm-create-workspace" data-parent="${parentPartition}">
+                    <i class="fa fa-plus-circle"></i>
+                    <span>Create new workspace</span>
+                </div>
                 <div class="pm-workspace-item pm-create-board" data-parent="${parentPartition}">
                     <i class="fa fa-folder-plus"></i>
                     <span>Create new board</span>
@@ -5017,21 +5074,96 @@ class ProjectManagement {
             </div>
         `;
         
-        $('.pm-workspace-menu').html(submenuHtml);
+        $('.pm-workspace-menu').after(submenuHtml);
         
         // Handle back button
         $('.pm-back-btn').on('click', (e) => {
             e.stopPropagation();
-            this.showMainMenu();
+            const backTarget = $(e.currentTarget).data('back-target');
+            const parentPartition = $(e.currentTarget).closest('.pm-workspace-submenu').data('parent');
+            
+            console.log('Back button clicked - target:', backTarget, 'parent:', parentPartition);
+            
+            if (backTarget === 'main') {
+                // Return to main menu
+                this.showMainMenu();
+            } else {
+                // Return to parent submenu
+                this.showParentSubmenu(parentPartition);
+            }
         });
     }
     
     showMainMenu() {
-        // Reload the main menu
-        location.reload();
+        console.log('Showing main menu - removing submenu');
+        // Remove submenu and show main menu
+        $('.pm-workspace-submenu').remove();
+        $('.pm-workspace-menu').show();
+        console.log('Main menu should now be visible');
     }
 
-    showCreateWorkspaceDialog() {
+    showParentSubmenu(currentPartition) {
+        console.log('Showing parent submenu for:', currentPartition);
+        
+        // Get parent partition info
+        frappe.call({
+            method: 'smart_accounting.www.project_management.index.get_partition_info',
+            args: { partition_name: currentPartition },
+            callback: (r) => {
+                if (r.message && r.message.parent_partition) {
+                    const parentPartition = r.message.parent_partition;
+                    console.log('Found parent partition:', parentPartition);
+                    
+                    // First try to find parent in main menu
+                    let $parentItem = $(`.pm-workspace-menu .pm-workspace-item[data-view="${parentPartition}"]`);
+                    
+                    if ($parentItem.length) {
+                        // Parent is in main menu, hide main menu and show parent's submenu
+                        $('.pm-workspace-menu').hide();
+                        this.showChildPartitions($parentItem, parentPartition);
+                    } else {
+                        // Parent might be in a deeper level, need to reconstruct the path
+                        this.reconstructParentPath(parentPartition);
+                    }
+                } else {
+                    // No parent, show main menu
+                    console.log('No parent found, showing main menu');
+                    this.showMainMenu();
+                }
+            }
+        });
+    }
+
+    reconstructParentPath(parentPartition) {
+        console.log('Reconstructing path for:', parentPartition);
+        
+        // Get parent info to build the correct menu hierarchy
+        frappe.call({
+            method: 'smart_accounting.www.project_management.index.get_partition_info',
+            args: { partition_name: parentPartition },
+            callback: (r) => {
+                if (r.message) {
+                    // Create a virtual parent item for the submenu
+                    const $virtualParentItem = $(`
+                        <div class="pm-workspace-item" data-view="${r.message.name}">
+                            <span>${r.message.partition_name}</span>
+                        </div>
+                    `);
+                    
+                    // Show the parent's submenu
+                    this.showChildPartitions($virtualParentItem, parentPartition);
+                } else {
+                    // Fallback to main menu
+                    this.showMainMenu();
+                }
+            }
+        });
+    }
+
+    showCreateWorkspaceDialog(parentPartition = null) {
+        const currentView = parentPartition || new URLSearchParams(window.location.search).get('view');
+        const contextText = currentView ? `Creating workspace in: ${currentView}` : 'Creating top-level workspace';
+        
         const dialogHTML = `
             <div class="pm-create-dialog-overlay">
                 <div class="pm-create-dialog">
@@ -5042,14 +5174,27 @@ class ProjectManagement {
                         </button>
                     </div>
                     <div class="pm-create-dialog-body">
+                        <div class="pm-context-indicator">
+                            <i class="fa fa-info-circle"></i>
+                            <span>${contextText}</span>
+                        </div>
                         <div class="pm-form-group">
                             <label>Workspace Name</label>
                             <input type="text" class="pm-workspace-name-input" placeholder="Enter workspace name..." maxlength="50">
                         </div>
+                        ${!parentPartition ? `
+                        <div class="pm-form-group">
+                            <label>Parent Workspace (Optional)</label>
+                            <select class="pm-parent-workspace-select">
+                                <option value="">No parent (top-level workspace)</option>
+                            </select>
+                        </div>
+                        ` : ''}
                         <div class="pm-form-group">
                             <label>Description (Optional)</label>
                             <textarea class="pm-workspace-description-input" placeholder="Brief description..." rows="2" maxlength="200"></textarea>
                         </div>
+                        ${parentPartition ? `<input type="hidden" class="pm-parent-partition" value="${parentPartition}">` : ''}
                     </div>
                     <div class="pm-create-dialog-footer">
                         <button class="pm-btn pm-btn-secondary pm-cancel-create">Cancel</button>
@@ -5066,12 +5211,18 @@ class ProjectManagement {
         $('.pm-create-dialog-overlay').fadeIn(200);
         $('.pm-workspace-name-input').focus();
         
-        this.bindCreateDialogEvents(true); // true = workspace
+        // Load available workspaces if creating standalone workspace
+        if (!parentPartition) {
+            this.loadAvailableWorkspaces();
+        }
+        
+        this.bindCreateDialogEvents(true, parentPartition); // true = workspace
     }
 
     showCreateBoardDialog(parentPartition) {
         const isUnderWorkspace = !!parentPartition;
-        const dialogTitle = isUnderWorkspace ? `Create New Board in Workspace` : `Create New Board`;
+        const dialogTitle = isUnderWorkspace ? `Create New Board` : `Create New Board`;
+        const contextText = parentPartition ? `Creating board in workspace: ${parentPartition}` : 'Creating standalone board';
         
         const dialogHTML = `
             <div class="pm-create-dialog-overlay">
@@ -5083,6 +5234,10 @@ class ProjectManagement {
                         </button>
                     </div>
                     <div class="pm-create-dialog-body">
+                        <div class="pm-context-indicator">
+                            <i class="fa fa-info-circle"></i>
+                            <span>${contextText}</span>
+                        </div>
                         <div class="pm-form-group">
                             <label>Board Name</label>
                             <input type="text" class="pm-workspace-name-input" placeholder="Enter board name..." maxlength="50">
@@ -5122,6 +5277,20 @@ class ProjectManagement {
         }
         
         this.bindCreateDialogEvents(false, parentPartition); // false = board, not workspace
+    }
+
+    loadAvailableWorkspaces() {
+        frappe.call({
+            method: 'smart_accounting.www.project_management.index.get_available_workspaces',
+            callback: (r) => {
+                if (r.message) {
+                    const select = $('.pm-parent-workspace-select');
+                    r.message.forEach(workspace => {
+                        select.append(`<option value="${workspace.name}">${workspace.partition_name}</option>`);
+                    });
+                }
+            }
+        });
     }
 
     bindCreateDialogEvents(isWorkspace, parentPartition = null) {
@@ -5187,7 +5356,7 @@ class ProjectManagement {
                     
                     // Navigate to new partition
                     const currentUrl = new URL(window.location);
-                    currentUrl.searchParams.set('view', response.message.partition_name);
+                    currentUrl.searchParams.set('view', response.message.name);
                     currentUrl.searchParams.set('_t', Date.now());
                     window.location.href = currentUrl.toString();
                     
