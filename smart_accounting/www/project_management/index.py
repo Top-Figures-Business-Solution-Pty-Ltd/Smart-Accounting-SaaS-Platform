@@ -623,11 +623,27 @@ def get_project_management_data(view='main'):
                 
                 # Try to get Review Notes (child table)
                 try:
-                    review_notes = frappe.get_all("Review Note", 
-                        filters={"parent": task.name, "parenttype": "Task"},
-                        fields=["note", "creation", "owner"],
-                        order_by="creation desc"
-                    )
+                    # Get review notes from the custom_review_notes child table
+                    task_doc = frappe.get_doc("Task", task.name)
+                    review_notes = []
+                    
+                    if hasattr(task_doc, 'custom_review_notes') and task_doc.custom_review_notes:
+                        for i, review_note in enumerate(task_doc.custom_review_notes):
+                            # Only get the note field, which definitely exists
+                            note_text = ''
+                            if hasattr(review_note, 'note'):
+                                note_text = review_note.note
+                            elif isinstance(review_note, dict):
+                                note_text = review_note.get('note', '')
+                            
+                            if note_text:  # Only add non-empty notes
+                                review_notes.append({
+                                    'name': f"{task.name}-review-{i}",
+                                    'note': note_text,
+                                    'creation': task_doc.creation,
+                                    'owner': task_doc.owner
+                                })
+                    
                     task.review_notes = review_notes
                     task.latest_review_note = review_notes[0].note if review_notes else ""
                 except:
@@ -1371,6 +1387,9 @@ def add_task_comment(task_id, comment_content):
         
         comment_doc.insert(ignore_permissions=False)
         
+        # Handle @mentions and send notifications
+        handle_comment_mentions(comment_content, task_id, comment_doc.name)
+        
         # 立即提交并清除缓存
         frappe.db.commit()
         frappe.clear_cache()
@@ -1505,6 +1524,76 @@ def update_task_comment(comment_id, new_content):
             'error': str(e)
         }
 
+
+def handle_comment_mentions(comment_content, task_id, comment_id):
+    """
+    Handle @mentions in comments and send notifications
+    """
+    import re
+    
+    # Extract @mentions from comment content
+    mentions = re.findall(r'@(\w+(?:\.\w+)*)', comment_content)
+    
+    if not mentions:
+        return
+    
+    # Get task info for context
+    task = frappe.get_doc('Task', task_id)
+    current_user = frappe.get_cached_value('User', frappe.session.user, 'full_name') or frappe.session.user
+    
+    for mention in mentions:
+        try:
+            # Find user by email or full name
+            user_email = None
+            
+            # First try to find by email
+            if frappe.db.exists('User', mention):
+                user_email = mention
+            else:
+                # Try to find by full name or username
+                users = frappe.get_all('User', 
+                    filters={'full_name': ['like', f'%{mention}%']}, 
+                    fields=['name', 'full_name']
+                )
+                if users:
+                    user_email = users[0].name
+            
+            if user_email and user_email != frappe.session.user:
+                # Create notification
+                frappe.get_doc({
+                    'doctype': 'Notification Log',
+                    'for_user': user_email,
+                    'type': 'Mention',
+                    'document_type': 'Task',
+                    'document_name': task_id,
+                    'subject': f'{current_user} mentioned you in a comment on task: {task.subject}',
+                    'email_content': f'''
+                    <p>{current_user} mentioned you in a comment:</p>
+                    <blockquote>{comment_content}</blockquote>
+                    <p>Task: <a href="/app/task/{task_id}">{task.subject}</a></p>
+                    ''',
+                    'read': 0
+                }).insert(ignore_permissions=True)
+                
+                # Also send email notification
+                frappe.sendmail(
+                    recipients=[user_email],
+                    subject=f'You were mentioned in a comment on task: {task.subject}',
+                    message=f'''
+                    <p>Hi,</p>
+                    <p>{current_user} mentioned you in a comment on task "{task.subject}":</p>
+                    <blockquote style="border-left: 3px solid #0073ea; padding-left: 15px; margin: 15px 0; font-style: italic;">
+                        {comment_content}
+                    </blockquote>
+                    <p><a href="{frappe.utils.get_url()}/app/task/{task_id}" style="background: #0073ea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Task</a></p>
+                    <p>Best regards,<br>Smart Accounting Team</p>
+                    ''',
+                    now=True
+                )
+                
+        except Exception as e:
+            frappe.log_error(f"Error sending mention notification: {str(e)}")
+            continue
 
 @frappe.whitelist()
 def sync_comment_counts():
@@ -2017,3 +2106,164 @@ def get_task_activity_log(task_id):
             'success': False,
             'error': str(e)
         }
+
+@frappe.whitelist()
+def get_review_notes(task_id):
+    """Get all review notes for a task"""
+    try:
+        if not task_id:
+            return {'success': False, 'error': 'Task ID is required'}
+        
+        # Get review notes from the custom_review_notes child table
+        task_doc = frappe.get_doc('Task', task_id)
+        review_notes = []
+        
+        if hasattr(task_doc, 'custom_review_notes') and task_doc.custom_review_notes:
+            for i, review_note in enumerate(task_doc.custom_review_notes):
+                # Handle both dict and object formats safely
+                note_text = ''
+                if hasattr(review_note, 'note'):
+                    note_text = review_note.note
+                elif isinstance(review_note, dict):
+                    note_text = review_note.get('note', '')
+                else:
+                    note_text = str(review_note)
+                
+                review_notes.append({
+                    'name': f"{task_id}-review-{i}",
+                    'note': note_text,
+                    'creation': frappe.utils.now(),
+                    'owner': frappe.session.user,
+                    'modified': frappe.utils.now(),
+                    'created_by': frappe.get_cached_value('User', frappe.session.user, 'full_name') or frappe.session.user
+                })
+        
+        return {
+            'success': True,
+            'review_notes': review_notes
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting review notes: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def add_review_note(task_id, note):
+    """Add a new review note to a task"""
+    try:
+        if not task_id or not note:
+            return {'success': False, 'error': 'Task ID and note are required'}
+        
+        # Check permissions
+        if not can_add_review_note(task_id):
+            return {'success': False, 'error': 'You do not have permission to add review notes'}
+        
+        # Get task document
+        task_doc = frappe.get_doc('Task', task_id)
+        
+        # Add review note to child table - only use fields that exist in the child table
+        task_doc.append('custom_review_notes', {
+            'note': note
+        })
+        
+        # Save task
+        task_doc.save()
+        frappe.db.commit()
+        
+        # Get updated count
+        review_count = len(task_doc.custom_review_notes)
+        
+        return {
+            'success': True,
+            'message': 'Review note added successfully',
+            'review_count': review_count
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error adding review note: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def check_review_permissions(task_id):
+    """Check if current user can add review notes"""
+    try:
+        can_add = can_add_review_note(task_id)
+        return {'can_add_review': can_add}
+    except Exception as e:
+        frappe.log_error(f"Error checking review permissions: {str(e)}")
+        return {'can_add_review': False}
+
+def can_add_review_note(task_id):
+    """Check if user has permission to add review notes"""
+    try:
+        # Check if user is Administrator
+        if 'Administrator' in frappe.get_roles():
+            return True
+        
+        # Check if user has System Manager role
+        if 'System Manager' in frappe.get_roles():
+            return True
+            
+        # Check if user has a reviewer role (you can customize this)
+        user_roles = frappe.get_roles()
+        reviewer_roles = ['Reviewer', 'Project Manager', 'Partner']  # Add your reviewer roles here
+        
+        if any(role in user_roles for role in reviewer_roles):
+            return True
+            
+        # Check if user is assigned to the task in reviewer capacity
+        task_doc = frappe.get_doc('Task', task_id)
+        if hasattr(task_doc, 'custom_roles'):
+            for role_assignment in task_doc.custom_roles:
+                if role_assignment.user == frappe.session.user and role_assignment.role in ['Reviewer', 'Partner']:
+                    return True
+        
+        return False
+        
+    except Exception as e:
+        frappe.log_error(f"Error checking review permissions: {str(e)}")
+        return False
+
+@frappe.whitelist()
+def get_bulk_review_counts(task_ids):
+    """Get review note counts for multiple tasks at once"""
+    try:
+        if not task_ids:
+            return {'success': False, 'error': 'Task IDs are required'}
+        
+        # Parse task_ids if it's a string
+        if isinstance(task_ids, str):
+            import json
+            task_ids = json.loads(task_ids)
+        
+        review_counts = {}
+        
+        for task_id in task_ids:
+            try:
+                task_doc = frappe.get_doc('Task', task_id)
+                count = 0
+                
+                if hasattr(task_doc, 'custom_review_notes') and task_doc.custom_review_notes:
+                    # Count non-empty review notes
+                    for review_note in task_doc.custom_review_notes:
+                        note_text = ''
+                        if hasattr(review_note, 'note'):
+                            note_text = review_note.note
+                        elif isinstance(review_note, dict):
+                            note_text = review_note.get('note', '')
+                        
+                        if note_text and note_text.strip():
+                            count += 1
+                
+                review_counts[task_id] = count
+            except:
+                review_counts[task_id] = 0
+        
+        return {
+            'success': True,
+            'review_counts': review_counts
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting bulk review counts: {str(e)}")
+        return {'success': False, 'error': str(e)}

@@ -16,6 +16,7 @@ class ProjectManagement {
         this.initializeAdvancedFilter();
         this.loadSystemOptions();
         this.initializeWorkspaceSwitcher();
+        this.refreshReviewNoteCounts();
         // TODO: Add Monday-style column add/remove interface
         // this.applyPartitionColumnConfig();
     }
@@ -47,7 +48,9 @@ class ProjectManagement {
             if ($(e.target).hasClass('pm-status-badge') || 
                 $(e.target).hasClass('pm-priority-badge') ||
                 $(e.target).hasClass('editable-field') ||
-                $(e.target).closest('[data-editable="true"]').length > 0) {
+                $(e.target).closest('[data-editable="true"]').length > 0 ||
+                $(e.target).closest('.pm-comment-indicator').length > 0 ||
+                $(e.target).closest('.pm-review-note-indicator').length > 0) {
                 return;
             }
             this.openTaskDetails(e.currentTarget);
@@ -167,6 +170,15 @@ class ProjectManagement {
             e.stopPropagation();
             const taskId = $(e.currentTarget).data('task-id');
             this.showCommentModal(taskId);
+        });
+
+        // Review Note indicator click
+        $(document).on('click', '.pm-review-note-indicator', (e) => {
+            e.stopPropagation();
+            const taskId = $(e.currentTarget).data('task-id');
+            if (taskId) {
+                this.showReviewNoteModal(taskId);
+            }
         });
 
         // Comment modal events
@@ -2667,10 +2679,17 @@ class ProjectManagement {
                     <span class="pm-no-amount editable-field">-</span>
                 </div>
                                 <div class="pm-cell pm-cell-review-note" style="width: ${currentWidths['review-note']}px; min-width: ${currentWidths['review-note']}px; flex: 0 0 ${currentWidths['review-note']}px;">
-                                    <div class="pm-review-note-indicator no-notes">
-                                        <i class="fa fa-times-circle"></i>
-                                        <span>none</span>
-                                    </div>
+                                    ${taskData.review_notes && taskData.review_notes.length > 0 ? `
+                                        <div class="pm-review-note-indicator has-notes" data-task-id="${taskData.task_id}" title="点击查看所有Review Notes">
+                                            <i class="fa fa-check-circle"></i>
+                                            <span>${taskData.review_notes.length} note${taskData.review_notes.length !== 1 ? 's' : ''}</span>
+                                        </div>
+                                    ` : `
+                                        <div class="pm-review-note-indicator no-notes" data-task-id="${taskData.task_id}">
+                                            <i class="fa fa-times-circle"></i>
+                                            <span>none</span>
+                                        </div>
+                                    `}
                                 </div>
                 <div class="pm-cell pm-cell-action-person" style="width: ${currentWidths['action-person']}px; min-width: ${currentWidths['action-person']}px; flex: 0 0 ${currentWidths['action-person']}px;" data-editable="true" data-field="custom_action_person" data-task-id="${taskData.task_id}" data-field-type="person_selector">
                     <div class="pm-user-avatars pm-empty-person">
@@ -4565,6 +4584,352 @@ class ProjectManagement {
         $('.pm-comment-modal').fadeOut(200, function() {
             $(this).remove();
         });
+    }
+
+    showReviewNoteModal(taskId) {
+        if (!taskId) {
+            frappe.show_alert({message: 'Task ID not found', indicator: 'red'});
+            return;
+        }
+
+        const professionalTitle = `Review Notes - Task ${taskId}`;
+        
+        const modalHTML = `
+            <div class="pm-review-modal-overlay">
+                <div class="pm-review-modal" id="pm-review-modal-${taskId}">
+                    <div class="pm-review-modal-content">
+                        <div class="pm-review-modal-header">
+                            <h3 class="pm-review-modal-title">${professionalTitle}</h3>
+                            <div class="pm-review-modal-tabs">
+                                <button class="pm-review-tab active" data-tab="reviews">
+                                    <i class="fa fa-clipboard"></i> Review Notes
+                                </button>
+                                <button class="pm-review-tab" data-tab="activity">
+                                    <i class="fa fa-history"></i> Activity Log
+                                </button>
+                            </div>
+                            <button class="pm-review-modal-close">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="pm-review-modal-body">
+                            <div class="pm-tab-content">
+                                <div class="pm-review-list pm-tab-panel active" id="pm-review-list-${taskId}" data-tab="reviews">
+                                    <div class="pm-review-loading">
+                                        <i class="fa fa-spinner fa-spin"></i> Loading review notes...
+                                    </div>
+                                </div>
+                                <div class="pm-activity-log pm-tab-panel" id="pm-activity-log-${taskId}" data-tab="activity">
+                                    <div class="pm-activity-loading">
+                                        <i class="fa fa-spinner fa-spin"></i> Loading activity log...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="pm-review-input-section" id="pm-review-input-${taskId}">
+                            <div class="pm-review-input-area">
+                                <div class="pm-review-input-container">
+                                    <textarea class="pm-review-input" placeholder="Add a review note..." data-task-id="${taskId}"></textarea>
+                                </div>
+                                <div class="pm-review-input-footer">
+                                    <div class="pm-review-input-info">
+                                        Press Ctrl+Enter to send
+                                    </div>
+                                    <button class="pm-review-submit" data-task-id="${taskId}">
+                                        Add Review Note
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing modals
+        $('.pm-review-modal-overlay').remove();
+        
+        // Add modal to body
+        $('body').append(modalHTML);
+
+        // Show modal
+        $(`#pm-review-modal-${taskId}`).fadeIn(200);
+        
+        // Load review notes and check permissions
+        this.loadReviewNotes(taskId);
+        this.checkReviewPermissions(taskId);
+        
+        // Focus on input
+        $('.pm-review-input').focus();
+        
+        // Bind events
+        this.bindReviewModalEvents(taskId);
+    }
+
+    async getTaskInfo(taskId) {
+        try {
+            const response = await frappe.call({
+                method: 'frappe.client.get',
+                args: {
+                    doctype: 'Task',
+                    name: taskId
+                }
+            });
+            return response.message;
+        } catch (error) {
+            console.error('Error fetching task info:', error);
+            return null;
+        }
+    }
+
+    async loadReviewNotes(taskId) {
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_review_notes',
+                args: { task_id: taskId }
+            });
+
+            if (response.message && response.message.success) {
+                this.displayReviewNotes(taskId, response.message.review_notes);
+            } else {
+                this.showReviewNotesError(taskId, response.message?.error || 'Failed to load review notes');
+            }
+        } catch (error) {
+            console.error('Error loading review notes:', error);
+            this.showReviewNotesError(taskId, 'Network error occurred');
+        }
+    }
+
+    displayReviewNotes(taskId, reviewNotes) {
+        const $reviewList = $(`#pm-review-list-${taskId}`);
+        
+        if (!reviewNotes || reviewNotes.length === 0) {
+            $reviewList.html(`
+                <div class="pm-review-empty">
+                    <i class="fa fa-clipboard"></i>
+                    <h4>No review notes yet</h4>
+                    <p>Add the first review note below!</p>
+                </div>
+            `);
+            return;
+        }
+
+        const reviewsHTML = reviewNotes.map(review => {
+            const timeAgo = this.formatTimeAgo(review.creation);
+            const avatarColor = this.getAvatarColor(review.owner);
+            const initials = this.getInitials(review.created_by || review.owner);
+            
+            return `
+                <div class="pm-review-item" data-review-id="${review.name}">
+                    <div class="pm-review-avatar" style="background: ${avatarColor}">
+                        ${initials}
+                    </div>
+                    <div class="pm-review-content">
+                        <div class="pm-review-header">
+                            <span class="pm-review-author">${review.created_by || review.owner}</span>
+                            <span class="pm-review-time">${timeAgo}</span>
+                        </div>
+                        <div class="pm-review-text">${this.escapeHtml(review.note)}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        $reviewList.html(reviewsHTML);
+    }
+
+    showReviewNotesError(taskId, error) {
+        const $reviewList = $(`#pm-review-list-${taskId}`);
+        $reviewList.html(`
+            <div class="pm-review-empty">
+                <i class="fa fa-exclamation-triangle"></i>
+                <h4>Failed to load review notes</h4>
+                <p>${error}</p>
+            </div>
+        `);
+    }
+
+    async checkReviewPermissions(taskId) {
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.check_review_permissions',
+                args: { task_id: taskId }
+            });
+
+            const canAddReview = response.message && response.message.can_add_review;
+            const $inputSection = $(`#pm-review-input-${taskId}`);
+            
+            if (!canAddReview) {
+                $inputSection.hide();
+            } else {
+                $inputSection.show();
+            }
+        } catch (error) {
+            console.error('Error checking permissions:', error);
+            // Default to hiding input section if error
+            $(`#pm-review-input-${taskId}`).hide();
+        }
+    }
+
+    bindReviewModalEvents(taskId) {
+        // Close modal events
+        $('.pm-review-modal-close').on('click', () => {
+            this.closeReviewModal();
+        });
+
+        $('.pm-review-modal-overlay').on('click', (e) => {
+            if (e.target === e.currentTarget) {
+                this.closeReviewModal();
+            }
+        });
+
+        // Tab switching
+        $('.pm-review-tab').on('click', (e) => {
+            const tab = $(e.currentTarget).data('tab');
+            this.switchReviewTab(taskId, tab);
+        });
+
+        // Submit review note
+        $('.pm-review-submit').on('click', () => {
+            this.submitReviewNote(taskId);
+        });
+
+        // Ctrl+Enter to submit
+        $('.pm-review-input').on('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                this.submitReviewNote(taskId);
+            }
+        });
+    }
+
+    closeReviewModal() {
+        $('.pm-review-modal-overlay').fadeOut(200, function() {
+            $(this).remove();
+        });
+    }
+
+    switchReviewTab(taskId, tab) {
+        // Update tab buttons
+        $('.pm-review-tab').removeClass('active');
+        $(`.pm-review-tab[data-tab="${tab}"]`).addClass('active');
+        
+        // Update tab panels
+        $('.pm-tab-panel').removeClass('active');
+        $(`#pm-${tab === 'reviews' ? 'review-list' : 'activity-log'}-${taskId}`).addClass('active');
+        
+        // Load activity log if needed
+        if (tab === 'activity' && !$(`#pm-activity-log-${taskId}`).hasClass('loaded')) {
+            this.loadActivityLog(taskId);
+        }
+    }
+
+    async submitReviewNote(taskId) {
+        const $input = $('.pm-review-input');
+        const content = $input.val().trim();
+        
+        if (!content) {
+            frappe.show_alert({
+                message: 'Please enter a review note',
+                indicator: 'red'
+            });
+            return;
+        }
+
+        try {
+            const $submitBtn = $('.pm-review-submit');
+            $submitBtn.prop('disabled', true).text('Adding...');
+            
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.add_review_note',
+                args: {
+                    task_id: taskId,
+                    note: content
+                }
+            });
+
+            if (response.message && response.message.success) {
+                // Clear input
+                $input.val('');
+                
+                // Reload review notes
+                await this.loadReviewNotes(taskId);
+                
+                // Update review count in table
+                this.updateReviewCount(taskId, response.message.review_count);
+                
+                frappe.show_alert({
+                    message: 'Review note added successfully',
+                    indicator: 'green'
+                });
+            } else {
+                throw new Error(response.message?.error || 'Failed to add review note');
+            }
+        } catch (error) {
+            console.error('Error submitting review note:', error);
+            frappe.show_alert({
+                message: 'Error: ' + error.message,
+                indicator: 'red'
+            });
+        } finally {
+            $('.pm-review-submit').prop('disabled', false).text('Add Review Note');
+        }
+    }
+
+    updateReviewCount(taskId, count) {
+        // Find all review note indicators for this task (both in HTML template and dynamic rows)
+        const $indicators = $(`.pm-review-note-indicator[data-task-id="${taskId}"]`);
+        
+        console.log(`Updating review count for task ${taskId}: ${count} notes, found ${$indicators.length} indicators`);
+        
+        $indicators.each(function() {
+            const $indicator = $(this);
+            if (count > 0) {
+                $indicator.removeClass('no-notes').addClass('has-notes');
+                $indicator.find('i').removeClass('fa-times-circle').addClass('fa-check-circle');
+                $indicator.find('span').text(`${count} note${count !== 1 ? 's' : ''}`);
+                $indicator.attr('title', '点击查看所有Review Notes');
+            } else {
+                $indicator.removeClass('has-notes').addClass('no-notes');
+                $indicator.find('i').removeClass('fa-check-circle').addClass('fa-times-circle');
+                $indicator.find('span').text('none');
+                $indicator.attr('title', '点击添加Review Note');
+            }
+        });
+    }
+
+    async refreshReviewNoteCounts() {
+        // Get all task IDs from the page
+        const taskIds = [];
+        $('.pm-task-row[data-task-id]').each(function() {
+            const taskId = $(this).data('task-id');
+            if (taskId) {
+                taskIds.push(taskId);
+            }
+        });
+
+        if (taskIds.length === 0) return;
+
+        try {
+            // Get review counts for all tasks at once
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_bulk_review_counts',
+                args: { task_ids: taskIds }
+            });
+
+            if (response.message && response.message.success) {
+                const reviewCounts = response.message.review_counts;
+                
+                // Update each task's review note display
+                Object.keys(reviewCounts).forEach(taskId => {
+                    this.updateReviewCount(taskId, reviewCounts[taskId]);
+                });
+                
+                console.log('Review note counts refreshed for', Object.keys(reviewCounts).length, 'tasks');
+            }
+        } catch (error) {
+            console.warn('Could not refresh review note counts:', error);
+        }
     }
     
     updateCommentCount(taskId, count) {

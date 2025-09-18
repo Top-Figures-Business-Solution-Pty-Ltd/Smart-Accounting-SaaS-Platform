@@ -459,12 +459,12 @@
                                             </div>
                                             <div class="pm-cell pm-cell-review-note">
                                                 {% if task.review_notes and task.review_notes|length > 0 %}
-                                                    <div class="pm-review-note-indicator has-notes" title="点击查看所有Review Notes">
+                                                    <div class="pm-review-note-indicator has-notes" data-task-id="{{ task.task_id }}" title="点击查看所有Review Notes">
                                                         <i class="fa fa-check-circle"></i>
                                                         <span>{{ task.review_notes|length }} note{{ 's' if task.review_notes|length != 1 else '' }}</span>
                                                     </div>
                                                 {% else %}
-                                                    <div class="pm-review-note-indicator no-notes">
+                                                    <div class="pm-review-note-indicator no-notes" data-task-id="{{ task.task_id }}">
                                                         <i class="fa fa-times-circle"></i>
                                                         <span>none</span>
                                                     </div>
