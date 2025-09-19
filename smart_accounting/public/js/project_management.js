@@ -17,8 +17,12 @@ class ProjectManagement {
         this.loadSystemOptions();
         this.initializeWorkspaceSwitcher();
         this.refreshReviewNoteCounts();
-        // TODO: Add Monday-style column add/remove interface
-        // this.applyPartitionColumnConfig();
+        
+        // Apply partition column configuration after DOM is ready
+        setTimeout(() => {
+            this.applyPartitionColumnConfig();
+            this.addColumnManagementButton();
+        }, 500);
     }
 
     bindEvents() {
@@ -2270,6 +2274,7 @@ class ProjectManagement {
         // Right-click context menu for column headers
         $(document).on('contextmenu', '.pm-header-cell', (e) => {
             e.preventDefault();
+            console.log('Right-click detected on column header');
             this.showColumnContextMenu(e);
         });
     }
@@ -2544,6 +2549,11 @@ class ProjectManagement {
         
         const menu = $(`
             <div class="pm-column-context-menu">
+                <div class="pm-context-menu-item" data-action="manage-columns">
+                    <i class="fa fa-columns"></i>
+                    Manage columns...
+                </div>
+                <div class="pm-context-menu-divider"></div>
                 <div class="pm-context-menu-item" data-action="reset-widths">
                     <i class="fa fa-refresh"></i>
                     Reset all column widths
@@ -2570,6 +2580,9 @@ class ProjectManagement {
             const action = $(event.currentTarget).data('action');
             
             switch(action) {
+                case 'manage-columns':
+                    this.showColumnManagementDialog();
+                    break;
                 case 'reset-widths':
                     this.resetColumnWidths();
                     break;
@@ -5772,17 +5785,51 @@ class ProjectManagement {
         const urlParams = new URLSearchParams(window.location.search);
         const currentView = urlParams.get('view') || 'main';
         
+        console.log('Loading column config for view:', currentView);
+        
         // Load column configuration for current partition
         frappe.call({
             method: 'smart_accounting.www.project_management.index.get_partition_column_config',
             args: { partition_name: currentView },
             callback: (r) => {
+                console.log('Column config response:', r);
                 if (r.message && r.message.success) {
-                    this.hideUnwantedColumns(r.message.visible_columns);
+                    this.applyColumnConfiguration(r.message);
                     console.log('Applied column config for partition:', currentView, r.message.visible_columns);
+                } else {
+                    console.error('Failed to load column config:', r);
                 }
+            },
+            error: (error) => {
+                console.error('Error loading column config:', error);
             }
         });
+    }
+
+    applyColumnConfiguration(config) {
+        const visibleColumns = config.visible_columns || [];
+        const columnConfig = config.column_config || {};
+        
+        // Apply column visibility
+        this.hideUnwantedColumns(visibleColumns);
+        
+        // Apply column order if specified
+        if (columnConfig.column_order && columnConfig.column_order.length > 0) {
+            this.applyColumnOrder(columnConfig.column_order, visibleColumns);
+        }
+    }
+
+    applyColumnOrder(columnOrder, visibleColumns) {
+        // This is a more complex feature that would require reordering DOM elements
+        // For now, we'll focus on visibility. Column order can be implemented later
+        // when we have more time to handle the DOM manipulation complexity
+        console.log('Column order configuration:', columnOrder);
+        
+        // TODO: Implement actual column reordering
+        // This would involve:
+        // 1. Reordering header cells in all project groups
+        // 2. Reordering data cells in all task rows
+        // 3. Maintaining the responsive table structure
     }
     
     hideUnwantedColumns(visibleColumns) {
@@ -5806,6 +5853,272 @@ class ProjectManagement {
         
         // Recalculate table width after hiding columns
         this.updateTableWidth();
+    }
+
+    showColumnManagementDialog() {
+        // Get current view
+        const currentView = this.getCurrentView();
+        
+        // Get current column configuration
+        this.getPartitionColumnConfig(currentView).then((config) => {
+            this.createColumnManagementDialog(config, currentView);
+        }).catch((error) => {
+            console.error('Error loading column config:', error);
+            frappe.msgprint('Error loading column configuration');
+        });
+    }
+
+    createColumnManagementDialog(config, currentView) {
+        // Define all available columns with their display names
+        const allColumns = {
+            'client': 'Client Name',
+            'entity': 'Entity',
+            'tf-tg': 'TF/TG',
+            'software': 'Software',
+            'status': 'Status',
+            'target-month': 'Target Month',
+            'budget': 'Budget',
+            'actual': 'Actual',
+            'review-note': 'Review Note',
+            'action-person': 'Action Person',
+            'preparer': 'Preparer',
+            'reviewer': 'Reviewer',
+            'partner': 'Partner',
+            'lodgment-due': 'Lodgement Due',
+            'year-end': 'Year End',
+            'last-updated': 'Last Updated',
+            'priority': 'Priority'
+        };
+
+        const visibleColumns = config.visible_columns || Object.keys(allColumns);
+
+        // Create dialog HTML
+        const dialogHtml = `
+            <div class="pm-column-management-dialog">
+                <div class="pm-dialog-overlay"></div>
+                <div class="pm-dialog-content">
+                    <div class="pm-dialog-header">
+                        <h3><i class="fa fa-columns"></i> Manage Columns</h3>
+                        <button class="pm-dialog-close" type="button">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="pm-dialog-body">
+                        <p class="pm-dialog-description">
+                            Choose which columns to display and drag to reorder them.
+                        </p>
+                        <div class="pm-column-list" id="pm-sortable-columns">
+                            ${Object.entries(allColumns).map(([columnKey, displayName]) => {
+                                const isVisible = visibleColumns.includes(columnKey);
+                                console.log(`Column: ${columnKey}, Display: ${displayName}, Visible: ${isVisible}`);
+                                return `
+                                    <div class="pm-column-item ${isVisible ? 'visible' : 'hidden'}" data-column="${columnKey}">
+                                        <div class="pm-column-drag-handle">
+                                            <i class="fa fa-bars"></i>
+                                        </div>
+                                        <label class="pm-column-checkbox">
+                                            <input type="checkbox" ${isVisible ? 'checked' : ''} data-column="${columnKey}">
+                                            <span class="checkmark"></span>
+                                            <span class="pm-column-name">${displayName}</span>
+                                        </label>
+                                        <div class="pm-column-status">
+                                            <i class="fa ${isVisible ? 'fa-eye' : 'fa-eye-slash'}"></i>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                    <div class="pm-dialog-footer">
+                        <button class="pm-btn pm-btn-secondary pm-dialog-cancel">Cancel</button>
+                        <button class="pm-btn pm-btn-primary pm-dialog-save">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing dialog
+        $('.pm-column-management-dialog').remove();
+        
+        // Add dialog to body
+        $('body').append(dialogHtml);
+
+        // Make columns sortable
+        this.initializeSortableColumns();
+
+        // Bind dialog events
+        this.bindColumnDialogEvents(currentView);
+    }
+
+    initializeSortableColumns() {
+        // Check if jQuery UI sortable is available
+        if (typeof $.fn.sortable === 'undefined') {
+            console.warn('jQuery UI sortable not available. Column reordering disabled.');
+            return;
+        }
+        
+        // Initialize sortable functionality for column reordering
+        $('#pm-sortable-columns').sortable({
+            handle: '.pm-column-drag-handle',
+            placeholder: 'pm-column-placeholder',
+            axis: 'y',
+            tolerance: 'pointer',
+            update: (event, ui) => {
+                // Update visual order
+                this.updateColumnOrder();
+            }
+        });
+    }
+
+    bindColumnDialogEvents(currentView) {
+        const dialog = $('.pm-column-management-dialog');
+
+        // Close dialog events
+        dialog.on('click', '.pm-dialog-close, .pm-dialog-cancel, .pm-dialog-overlay', () => {
+            this.closeColumnDialog();
+        });
+
+        // Prevent dialog content clicks from closing dialog
+        dialog.on('click', '.pm-dialog-content', (e) => {
+            e.stopPropagation();
+        });
+
+        // Checkbox change events - only update visual state, don't apply to table yet
+        dialog.on('change', 'input[type="checkbox"]', (e) => {
+            const checkbox = $(e.target);
+            const columnKey = checkbox.data('column');
+            const columnItem = checkbox.closest('.pm-column-item');
+            const statusIcon = columnItem.find('.pm-column-status i');
+
+            if (checkbox.is(':checked')) {
+                columnItem.addClass('visible').removeClass('hidden');
+                statusIcon.removeClass('fa-eye-slash').addClass('fa-eye');
+            } else {
+                columnItem.addClass('hidden').removeClass('visible');
+                statusIcon.removeClass('fa-eye').addClass('fa-eye-slash');
+            }
+            
+            // Note: Don't apply changes to table immediately - wait for save
+        });
+
+        // Save button
+        dialog.on('click', '.pm-dialog-save', () => {
+            this.saveColumnConfiguration(currentView);
+        });
+
+        // Escape key to close
+        $(document).on('keydown.column-dialog', (e) => {
+            if (e.keyCode === 27) { // ESC key
+                this.closeColumnDialog();
+            }
+        });
+    }
+
+    updateColumnOrder() {
+        // This method can be used to provide visual feedback during sorting
+        // The actual order is determined when saving
+    }
+
+    saveColumnConfiguration(currentView) {
+        // Get the current order and visibility from the dialog
+        const columnOrder = [];
+        const visibleColumns = [];
+
+        $('#pm-sortable-columns .pm-column-item').each(function() {
+            const columnKey = $(this).data('column');
+            const isVisible = $(this).find('input[type="checkbox"]').is(':checked');
+            
+            columnOrder.push(columnKey);
+            if (isVisible) {
+                visibleColumns.push(columnKey);
+            }
+        });
+
+        // Save to backend
+        frappe.call({
+            method: 'smart_accounting.www.project_management.index.save_partition_column_config',
+            args: {
+                partition_name: currentView,
+                visible_columns: JSON.stringify(visibleColumns),
+                column_config: JSON.stringify({
+                    column_order: columnOrder
+                })
+            },
+            callback: (response) => {
+                if (response.message && response.message.success) {
+                    frappe.show_alert({
+                        message: 'Column configuration saved successfully',
+                        indicator: 'green'
+                    });
+                    
+                    // Apply the new configuration
+                    this.applyColumnConfiguration({
+                        visible_columns: visibleColumns,
+                        column_config: { column_order: columnOrder }
+                    });
+                    
+                    this.closeColumnDialog();
+                } else {
+                    frappe.msgprint('Error saving column configuration: ' + (response.message?.error || 'Unknown error'));
+                }
+            },
+            error: (error) => {
+                console.error('Error saving column config:', error);
+                frappe.msgprint('Error saving column configuration');
+            }
+        });
+    }
+
+    closeColumnDialog() {
+        $('.pm-column-management-dialog').remove();
+        $(document).off('keydown.column-dialog');
+    }
+
+    getCurrentView() {
+        // Get current view from URL parameters or default to 'main'
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('view') || 'main';
+    }
+
+    getPartitionColumnConfig(partitionName) {
+        return new Promise((resolve, reject) => {
+            frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_partition_column_config',
+                args: {
+                    partition_name: partitionName
+                },
+                callback: (response) => {
+                    if (response.message && response.message.success) {
+                        resolve(response.message);
+                    } else {
+                        reject(response.message?.error || 'Failed to load configuration');
+                    }
+                },
+                error: (error) => {
+                    reject(error);
+                }
+            });
+        });
+    }
+
+    addColumnManagementButton() {
+        // Add column management button to the header actions
+        if ($('.pm-column-management-btn').length > 0) return; // Already added
+        
+        const columnBtn = $(`
+            <button class="pm-btn pm-btn-secondary pm-column-management-btn" style="margin-right: 10px;">
+                <i class="fa fa-columns"></i>
+                Manage Columns
+            </button>
+        `);
+        
+        $('.pm-actions').prepend(columnBtn);
+        
+        columnBtn.on('click', (e) => {
+            e.preventDefault();
+            console.log('Column management button clicked');
+            this.showColumnManagementDialog();
+        });
     }
 
 }

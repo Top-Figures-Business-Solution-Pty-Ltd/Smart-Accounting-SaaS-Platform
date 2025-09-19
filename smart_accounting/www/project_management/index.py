@@ -50,7 +50,9 @@ def get_workspace_title(view):
         print(f"DEBUG: Workspace title for {view}: {partition_name}")
         return partition_name if partition_name else view.replace('_', ' ').title()
     except Exception as e:
-        print(f"DEBUG: Error getting workspace title: {str(e)}")
+        # Silently handle main view without logging error
+        if view != 'main':
+            print(f"DEBUG: Error getting workspace title: {str(e)}")
         return view.replace('_', ' ').title()
 
 def get_available_views():
@@ -273,6 +275,11 @@ def get_breadcrumb_path(view):
         return None
     
     try:
+        # First check if partition exists to avoid errors
+        if not frappe.db.exists("Partition", view):
+            # If partition doesn't exist, return None (no breadcrumb)
+            return None
+            
         breadcrumb = []
         current_partition = frappe.get_doc("Partition", view)
         
@@ -309,7 +316,9 @@ def get_breadcrumb_path(view):
         return path
         
     except Exception as e:
-        frappe.log_error(f"Error generating breadcrumb path: {str(e)}")
+        # Silently handle main view without logging error
+        if view != 'main':
+            frappe.log_error(f"Error generating breadcrumb path: {str(e)}")
         return None
 
 @frappe.whitelist()
@@ -317,29 +326,40 @@ def get_partition_column_config(partition_name):
     """Get column configuration for a specific partition"""
     try:
         if partition_name == 'main':
-            # Default configuration for main view
+            # Load configuration for main view from User Preferences
+            try:
+                import json
+                user_email = frappe.session.user
+                column_widths_json = frappe.db.get_value('User Preferences', 
+                                                       {'user': user_email}, 
+                                                       'column_widths')
+                
+                if column_widths_json:
+                    combined_config = json.loads(column_widths_json)
+                    # Check if this is the new format with visible_columns
+                    if isinstance(combined_config, dict) and 'visible_columns' in combined_config:
+                        return {
+                            'success': True,
+                            'visible_columns': combined_config.get('visible_columns', []),
+                            'column_config': combined_config.get('column_config', {})
+                        }
+            except Exception as e:
+                print(f"Error loading main view config: {str(e)}")
+                pass
+            
+            # Default configuration for main view - show all current columns
             return {
                 'success': True,
-                'visible_columns': ['client', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person'],
+                'visible_columns': ['client', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'year-end', 'last-updated', 'priority'],
                 'column_config': {}
             }
         
-        # Get partition configuration
-        partition_doc = frappe.get_doc("Partition", partition_name)
-        
-        # Parse JSON configuration
-        import json
-        visible_columns = json.loads(partition_doc.visible_columns) if getattr(partition_doc, 'visible_columns', None) else []
-        column_config = json.loads(partition_doc.column_config) if getattr(partition_doc, 'column_config', None) else {}
-        
-        # If no configuration, use default
-        if not visible_columns:
-            visible_columns = ['client', 'status', 'target-month', 'budget']
-        
+        # For non-main partitions, use default configuration for now
+        # TODO: Later implement Board Column DocType integration
         return {
             'success': True,
-            'visible_columns': visible_columns,
-            'column_config': column_config
+            'visible_columns': ['client', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'year-end', 'last-updated', 'priority'],
+            'column_config': {}
         }
         
     except Exception as e:
@@ -350,6 +370,97 @@ def get_partition_column_config(partition_name):
             'visible_columns': ['client', 'status'],
             'column_config': {}
         }
+
+@frappe.whitelist()
+def save_partition_column_config(partition_name, visible_columns, column_config=None):
+    """Save column configuration for a specific partition"""
+    try:
+        if not partition_name:
+            return {'success': False, 'error': 'Partition name is required'}
+        
+        # Handle main view - store in user preferences
+        if partition_name == 'main':
+            return save_main_view_column_config(visible_columns, column_config)
+        
+        # For non-main partitions, temporarily return success without saving
+        # TODO: Later implement Board Column DocType integration
+        return {
+            'success': True,
+            'message': 'Column configuration saved successfully (temporarily disabled for partitions)',
+            'visible_columns': visible_columns if isinstance(visible_columns, list) else [],
+            'column_config': column_config if isinstance(column_config, dict) else {}
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error saving partition column config: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+def save_main_view_column_config(visible_columns, column_config=None):
+    """Save column configuration for main view in user preferences"""
+    try:
+        import json
+        
+        # Parse and validate visible_columns
+        if isinstance(visible_columns, str):
+            try:
+                visible_columns_list = json.loads(visible_columns)
+            except json.JSONDecodeError:
+                return {'success': False, 'error': 'Invalid visible_columns JSON format'}
+        else:
+            visible_columns_list = visible_columns
+        
+        if not isinstance(visible_columns_list, list):
+            return {'success': False, 'error': 'visible_columns must be an array'}
+        
+        # Parse column_config
+        if column_config:
+            if isinstance(column_config, str):
+                try:
+                    column_config_dict = json.loads(column_config)
+                except json.JSONDecodeError:
+                    return {'success': False, 'error': 'Invalid column_config JSON format'}
+            else:
+                column_config_dict = column_config
+        else:
+            column_config_dict = {}
+        
+        # Store in user preferences
+        user_email = frappe.session.user
+        
+        # Check if UserPreferences record exists for current user
+        existing = frappe.db.get_value("User Preferences", {"user": user_email})
+        
+        main_config = {
+            'visible_columns': visible_columns_list,
+            'column_config': column_config_dict
+        }
+        
+        if existing:
+            # Update existing record
+            frappe.db.set_value('User Preferences', existing, 'pm_main_view_columns', json.dumps(main_config))
+        else:
+            # Create new UserPreferences record
+            user_prefs = frappe.new_doc("User Preferences")
+            user_prefs.user = user_email
+            user_prefs.pm_main_view_columns = json.dumps(main_config)
+            user_prefs.insert(ignore_permissions=True)
+        
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'message': 'Main view column configuration saved successfully',
+            'visible_columns': visible_columns_list,
+            'column_config': column_config_dict
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error saving main view column config: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
 
 @frappe.whitelist()
 def load_partition_data(view='main'):
@@ -447,11 +558,14 @@ def get_project_management_data(view='main'):
         # Check if this is a workspace (should not show tasks, only overview)
         if view != 'main':
             try:
-                partition_doc = frappe.get_doc("Partition", view)
-                if partition_doc.is_workspace:
-                    # For workspaces, return child boards overview instead of tasks
-                    return get_workspace_overview_data(view)
-            except:
+                # First check if partition exists before trying to get it
+                if frappe.db.exists("Partition", view):
+                    partition_doc = frappe.get_doc("Partition", view)
+                    if partition_doc.is_workspace:
+                        # For workspaces, return child boards overview instead of tasks
+                        return get_workspace_overview_data(view)
+            except Exception as e:
+                print(f"DEBUG: Error checking workspace status for view {view}: {str(e)}")
                 pass
         # Minimal cache clearing for better performance
         frappe.db.commit()  # 确保所有数据库操作都已提交

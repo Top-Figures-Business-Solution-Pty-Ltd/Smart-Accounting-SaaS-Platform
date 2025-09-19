@@ -3536,3 +3536,234 @@ div.pm-table-header,
     border-color: var(--monday-blue);
     box-shadow: 0 0 0 2px rgba(0, 115, 234, 0.1);
 }
+
+/* Column Management Dialog Styles */
+.pm-column-management-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pm-dialog-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+}
+
+.pm-dialog-content {
+    position: relative;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    width: 500px;
+    max-width: 90vw;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    z-index: 1;
+}
+
+.pm-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid #e1e5e9;
+}
+
+.pm-dialog-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #323338;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pm-dialog-close {
+    background: none;
+    border: none;
+    color: #676879;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.pm-dialog-close:hover {
+    background: #f5f6f8;
+    color: #323338;
+}
+
+.pm-dialog-body {
+    flex: 1;
+    padding: 20px 24px;
+    overflow-y: auto;
+}
+
+.pm-dialog-description {
+    margin: 0 0 20px 0;
+    color: #676879;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.pm-column-list {
+    border: 1px solid #e1e5e9;
+    border-radius: 6px;
+    background: #fafbfc;
+}
+
+.pm-column-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    background: white;
+    border-bottom: 1px solid #e1e5e9;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.pm-column-item:last-child {
+    border-bottom: none;
+}
+
+.pm-column-item:hover {
+    background: #f8f9fb;
+}
+
+.pm-column-item.hidden {
+    opacity: 0.6;
+    background: #f8f9fb;
+}
+
+.pm-column-item.hidden .pm-column-name {
+    color: #9ca3af;
+    text-decoration: none;
+}
+
+.pm-column-drag-handle {
+    color: #c5c7d0;
+    cursor: grab;
+    margin-right: 12px;
+    padding: 4px;
+}
+
+.pm-column-drag-handle:hover {
+    color: #676879;
+}
+
+.pm-column-drag-handle:active {
+    cursor: grabbing;
+}
+
+.pm-column-checkbox {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    margin: 0;
+}
+
+.pm-column-checkbox input[type="checkbox"] {
+    margin: 0 12px 0 0;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.pm-column-name {
+    font-size: 14px;
+    color: #323338;
+    font-weight: 500;
+}
+
+.pm-column-status {
+    color: #676879;
+    margin-left: 12px;
+}
+
+.pm-column-item.visible .pm-column-status {
+    color: var(--monday-blue);
+}
+
+.pm-column-placeholder {
+    background: #e1e5e9 !important;
+    border: 2px dashed #c5c7d0 !important;
+    height: 48px !important;
+    margin: 4px 0 !important;
+}
+
+.pm-dialog-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px 20px;
+    border-top: 1px solid #e1e5e9;
+}
+
+.pm-dialog-footer .pm-btn {
+    min-width: 80px;
+}
+
+/* Context Menu Divider */
+.pm-context-menu-divider {
+    height: 1px;
+    background: #e1e5e9;
+    margin: 4px 0;
+}
+
+/* Sortable UI Enhancements */
+.ui-sortable-helper {
+    background: white !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    border-radius: 4px !important;
+    transform: rotate(2deg);
+}
+
+.ui-sortable-placeholder {
+    visibility: visible !important;
+}
+
+/* Animation for dialog appearance */
+.pm-column-management-dialog {
+    animation: dialogFadeIn 0.2s ease-out;
+}
+
+@keyframes dialogFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.pm-dialog-content {
+    animation: dialogSlideIn 0.3s ease-out;
+}
+
+@keyframes dialogSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
