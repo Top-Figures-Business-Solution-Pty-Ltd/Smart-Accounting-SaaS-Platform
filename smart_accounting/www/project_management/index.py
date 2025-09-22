@@ -326,27 +326,6 @@ def get_partition_column_config(partition_name):
     """Get column configuration for a specific partition"""
     try:
         if partition_name == 'main':
-            # Load configuration for main view from User Preferences
-            try:
-                import json
-                user_email = frappe.session.user
-                column_widths_json = frappe.db.get_value('User Preferences', 
-                                                       {'user': user_email}, 
-                                                       'column_widths')
-                
-                if column_widths_json:
-                    combined_config = json.loads(column_widths_json)
-                    # Check if this contains main view config
-                    if isinstance(combined_config, dict) and 'main_view_visible_columns' in combined_config:
-                        return {
-                            'success': True,
-                            'visible_columns': combined_config.get('main_view_visible_columns', []),
-                            'column_config': combined_config.get('main_view_column_config', {})
-                        }
-            except Exception as e:
-                print(f"Error loading main view config: {str(e)}")
-                pass
-            
             # Default configuration for main view - show all current columns
             return {
                 'success': True,
@@ -354,12 +333,31 @@ def get_partition_column_config(partition_name):
                 'column_config': {}
             }
         
-        # For non-main partitions, use default configuration for now
-        # TODO: Later implement Board Column DocType integration
+        # Get partition configuration
+        if not frappe.db.exists("Partition", partition_name):
+            return {
+                'success': False,
+                'error': f'Partition "{partition_name}" not found'
+            }
+        
+        partition_doc = frappe.get_doc("Partition", partition_name)
+        
+        # Parse JSON configuration
+        import json
+        visible_columns_raw = getattr(partition_doc, 'visible_columns', None)
+        column_config_raw = getattr(partition_doc, 'column_config', None)
+        
+        visible_columns = json.loads(visible_columns_raw) if visible_columns_raw else []
+        column_config = json.loads(column_config_raw) if column_config_raw else {}
+        
+        # If no configuration, use default
+        if not visible_columns:
+            visible_columns = ['client', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'year-end', 'last-updated', 'priority']
+        
         return {
             'success': True,
-            'visible_columns': ['client', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'year-end', 'last-updated', 'priority'],
-            'column_config': {}
+            'visible_columns': visible_columns,
+            'column_config': column_config
         }
         
     except Exception as e:
@@ -378,32 +376,22 @@ def save_partition_column_config(partition_name, visible_columns, column_config=
         if not partition_name:
             return {'success': False, 'error': 'Partition name is required'}
         
-        # Handle main view - store in user preferences
+        # Handle main view - don't save, always use default
         if partition_name == 'main':
-            return save_main_view_column_config(visible_columns, column_config)
+            return {
+                'success': True,
+                'message': 'Main view uses default configuration (not saved)',
+                'visible_columns': ['client', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'year-end', 'last-updated', 'priority'],
+                'column_config': {}
+            }
         
-        # For non-main partitions, temporarily return success without saving
-        # TODO: Later implement Board Column DocType integration
-        return {
-            'success': True,
-            'message': 'Column configuration saved successfully (temporarily disabled for partitions)',
-            'visible_columns': visible_columns if isinstance(visible_columns, list) else [],
-            'column_config': column_config if isinstance(column_config, dict) else {}
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error saving partition column config: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-def save_main_view_column_config(visible_columns, column_config=None):
-    """Save column configuration for main view in user preferences"""
-    try:
-        import json
+        # For non-main partitions, save to Partition record
+        # Validate partition exists
+        if not frappe.db.exists("Partition", partition_name):
+            return {'success': False, 'error': f'Partition "{partition_name}" not found'}
         
         # Parse and validate visible_columns
+        import json
         if isinstance(visible_columns, str):
             try:
                 visible_columns_list = json.loads(visible_columns)
@@ -427,51 +415,28 @@ def save_main_view_column_config(visible_columns, column_config=None):
         else:
             column_config_dict = {}
         
-        # Store in User Preferences using column_widths field with structured data
-        user_email = frappe.session.user
-        
-        # Check if UserPreferences record exists for current user
-        existing = frappe.db.get_value("User Preferences", {"user": user_email})
-        
-        # Get existing column_widths data to preserve width settings
-        existing_data = {}
-        if existing:
-            try:
-                existing_json = frappe.db.get_value('User Preferences', existing, 'column_widths')
-                if existing_json:
-                    existing_data = json.loads(existing_json)
-            except:
-                pass
-        
-        # Merge with new column visibility config
-        combined_config = existing_data.copy() if isinstance(existing_data, dict) else {}
-        combined_config.update({
-            'main_view_visible_columns': visible_columns_list,
-            'main_view_column_config': column_config_dict
-        })
-        
-        if existing:
-            # Update existing record using column_widths field
-            frappe.db.set_value('User Preferences', existing, 'column_widths', json.dumps(combined_config))
-        else:
-            # Create new UserPreferences record
-            user_prefs = frappe.new_doc("User Preferences")
-            user_prefs.user = user_email
-            user_prefs.column_widths = json.dumps(combined_config)
-            user_prefs.insert(ignore_permissions=True)
+        # Update partition document
+        partition_doc = frappe.get_doc("Partition", partition_name)
+        partition_doc.visible_columns = json.dumps(visible_columns_list)
+        partition_doc.column_config = json.dumps(column_config_dict)
+        partition_doc.save()
         
         frappe.db.commit()
         
         return {
             'success': True,
-            'message': 'Main view column configuration saved successfully',
+            'message': 'Column configuration saved successfully',
             'visible_columns': visible_columns_list,
             'column_config': column_config_dict
         }
         
     except Exception as e:
-        frappe.log_error(f"Error saving main view column config: {str(e)}")
-        return {'success': False, 'error': str(e)}
+        frappe.log_error(f"Error saving partition column config: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
 
 
 @frappe.whitelist()
@@ -561,12 +526,89 @@ def get_workspace_overview_data(workspace_name):
             'error': str(e)
         }
 
+def get_main_dashboard_data():
+    """
+    Get overview data for main dashboard - show all workspaces and top-level boards
+    """
+    try:
+        # Get all top-level partitions (workspaces and boards)
+        top_partitions = frappe.get_all("Partition",
+            fields=["name", "partition_name", "description", "is_workspace", "icon"],
+            filters={
+                "parent_partition": ["is", "not set"],
+                "is_archived": ["!=", 1]
+            },
+            order_by="is_workspace desc, partition_name"
+        )
+        
+        # Organize into workspaces and boards
+        workspaces = []
+        boards = []
+        
+        for partition in top_partitions:
+            # Count projects and tasks for each partition
+            project_count = frappe.db.count("Project", {
+                "custom_partition": partition.name,
+                "status": ["!=", "Cancelled"]
+            })
+            
+            task_count = 0
+            if project_count > 0:
+                projects = frappe.get_all("Project", 
+                    filters={"custom_partition": partition.name, "status": ["!=", "Cancelled"]},
+                    fields=["name"]
+                )
+                if projects:
+                    task_count = frappe.db.count("Task", {
+                        "project": ["in", [p.name for p in projects]],
+                        "status": ["!=", "Cancelled"]
+                    })
+            
+            partition_data = {
+                'name': partition.name,
+                'partition_name': partition.partition_name,
+                'description': partition.description or '',
+                'icon': partition.icon or ('fa-th-large' if partition.is_workspace else 'fa-table'),
+                'project_count': project_count,
+                'task_count': task_count,
+                'is_workspace': partition.is_workspace
+            }
+            
+            if partition.is_workspace:
+                workspaces.append(partition_data)
+            else:
+                boards.append(partition_data)
+        
+        return {
+            'organized_data': {
+                'workspaces': workspaces,
+                'boards': boards
+            },
+            'total_projects': sum(p['project_count'] for p in workspaces + boards),
+            'total_tasks': sum(p['task_count'] for p in workspaces + boards),
+            'is_main_dashboard': True
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Main dashboard data error: {str(e)}")
+        return {
+            'organized_data': {'workspaces': [], 'boards': []},
+            'total_projects': 0,
+            'total_tasks': 0,
+            'is_main_dashboard': True,
+            'error': str(e)
+        }
+
 def get_project_management_data(view='main'):
     """
     Get all projects and tasks organized by client with view filtering
     Based on user's data structure: Company → Client → Project → Task
     """
     try:
+        # Main view now shows workspace overview instead of all tasks
+        if view == 'main':
+            return get_main_dashboard_data()
+        
         # Check if this is a workspace (should not show tasks, only overview)
         if view != 'main':
             try:

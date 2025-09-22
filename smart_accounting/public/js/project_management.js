@@ -27,6 +27,7 @@ class ProjectManagement {
         // Remove the setTimeout to prevent interference with filters
         this.applyPartitionColumnConfig();
         this.addColumnManagementButton();
+        this.bindMainDashboardEvents();
     }
 
     bindEvents() {
@@ -365,11 +366,8 @@ class ProjectManagement {
     }
 
     reapplyActiveFilters() {
-        console.log('Reapplying active filters:', this.activeFilters);
-        
         // If no active filters, show all tasks
         if (!this.activeFilters.person && !this.activeFilters.client && !this.activeFilters.status) {
-            console.log('No active filters - showing all tasks');
             $('.pm-task-row').show().css('display', '');
             $('.pm-project-group').show().css('display', '');
             return;
@@ -377,15 +375,12 @@ class ProjectManagement {
 
         // Reapply active filters (can have multiple active)
         if (this.activeFilters.person) {
-            console.log('Reapplying person filter:', this.activeFilters.person);
             this.applyPersonFilter(this.activeFilters.person.email, this.activeFilters.person.name);
         }
         if (this.activeFilters.client) {
-            console.log('Reapplying client filter:', this.activeFilters.client);
             this.applyClientFilter(this.activeFilters.client);
         }
         if (this.activeFilters.status) {
-            console.log('Reapplying status filter:', this.activeFilters.status);
             this.applyStatusFilter(this.activeFilters.status);
         }
     }
@@ -540,7 +535,6 @@ class ProjectManagement {
     }
 
     initializeInlineEditing() {
-        console.log('Initializing inline editing...');
         
         // Bind click events for editable fields
         $(document).on('click', '[data-editable="true"]', (e) => {
@@ -565,7 +559,6 @@ class ProjectManagement {
             e.stopPropagation();
         });
         
-        console.log('Inline editing initialized. Found', $('[data-editable="true"]').length, 'editable fields');
     }
 
     makeEditable(cell) {
@@ -629,7 +622,6 @@ class ProjectManagement {
                         $input[0].focus();
                     }
                 } catch (e) {
-                    console.log('Date picker trigger failed:', e);
                     // Just focus the input
                     $input[0].focus();
                 }
@@ -712,7 +704,6 @@ class ProjectManagement {
                 // Update display based on field type
                 this.updateCellDisplay($cell, displayValue, fieldType);
                 
-                console.log(`Updated ${fieldType} field with value: ${displayValue}`);
                 
                 frappe.show_alert({
                     message: 'Field updated successfully',
@@ -1730,7 +1721,6 @@ class ProjectManagement {
         const $personList = $('.pm-person-list');
         
         try {
-            console.log('Loading all people...');
             
             // Get all people from tasks - simplified approach
             const people = new Map();
@@ -1754,16 +1744,14 @@ class ProjectManagement {
                         }
                     }
                 } catch (e) {
-                    console.log('Error processing avatar:', e);
+                    // Silently skip invalid avatars
                 }
             });
             
-            console.log('Found people:', people);
             
             // Convert to array and sort
             const peopleArray = Array.from(people.values()).sort((a, b) => a.name.localeCompare(b.name));
             
-            console.log('People array:', peopleArray);
             
             // Generate HTML
             let html = '';
@@ -1862,14 +1850,10 @@ class ProjectManagement {
     }
 
     applyPersonFilter(personEmail, personName) {
-        console.log('Applying person filter:', personEmail, personName);
-        
         // Record active filter
         this.activeFilters.person = { email: personEmail, name: personName };
         this.activeFilters.client = null;
         this.activeFilters.status = null;
-        
-        console.log('Active filters after setting:', this.activeFilters);
         
         let visibleTasks = 0;
         
@@ -1888,10 +1872,8 @@ class ProjectManagement {
             if (isInvolved) {
                 $row.show().css('display', '').addClass('filter-visible');
                 visibleTasks++;
-                console.log(`Task ${taskId}: SHOWING (person involved)`);
             } else {
                 $row.hide().css('display', 'none !important').removeClass('filter-visible');
-                console.log(`Task ${taskId}: HIDING (person not involved)`);
             }
         });
         
@@ -1906,7 +1888,6 @@ class ProjectManagement {
             indicator: 'blue'
         });
         
-        console.log(`Filter applied: ${visibleTasks} tasks should be visible`);
     }
 
     isPersonInvolvedInTask($row, personEmail, personName) {
@@ -1939,7 +1920,6 @@ class ProjectManagement {
             
             return false;
         } catch (error) {
-            console.log('Error checking person involvement:', error);
             return false;
         }
     }
@@ -2309,7 +2289,6 @@ class ProjectManagement {
         // Right-click context menu for column headers
         $(document).on('contextmenu', '.pm-header-cell', (e) => {
             e.preventDefault();
-            console.log('Right-click detected on column header');
             this.showColumnContextMenu(e);
         });
     }
@@ -2533,10 +2512,13 @@ class ProjectManagement {
     
     updateTableWidth() {
         // Calculate total width based on all column widths
+        if (!this.columnWidths || typeof this.columnWidths !== 'object') {
+            return;
+        }
+        
         const totalWidth = Object.values(this.columnWidths).reduce((sum, width) => sum + width, 0);
         const calculatedWidth = Math.max(totalWidth + 50, 1200); // Add padding and set minimum
         
-        console.log('Updating table width to:', calculatedWidth);
         
         // Update all table elements to maintain consistency, preserving display property
         $('.pm-project-table-header, .pm-task-row, .pm-project-group, .pm-add-task-row').each(function() {
@@ -5829,28 +5811,19 @@ class ProjectManagement {
 
     // Apply partition-specific column configuration
     applyPartitionColumnConfig() {
-        // Get current partition from URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const currentView = urlParams.get('view') || 'main';
+        // Get current partition from URL (properly decoded)
+        const currentView = this.getCurrentView();
         
-        console.log('Loading column config for view:', currentView);
         
         // Load column configuration for current partition
         frappe.call({
             method: 'smart_accounting.www.project_management.index.get_partition_column_config',
             args: { partition_name: currentView },
             callback: (r) => {
-                console.log('Column config response:', r);
                 if (r.message && r.message.success) {
                     this.applyColumnConfiguration(r.message);
-                    console.log('Applied column config for partition:', currentView, r.message.visible_columns);
-                } else {
-                    console.error('Failed to load column config:', r);
                 }
             },
-            error: (error) => {
-                console.error('Error loading column config:', error);
-            }
         });
     }
 
@@ -5892,7 +5865,6 @@ class ProjectManagement {
         allColumns.forEach(column => {
             const shouldShow = visibleColumns.includes(column);
             
-            console.log(`Column ${column}: shouldShow = ${shouldShow}`);
             
             if (shouldShow) {
                 // Show header cells
@@ -5967,8 +5939,7 @@ class ProjectManagement {
                         </p>
                         <div class="pm-column-list" id="pm-sortable-columns">
                             ${Object.entries(allColumns).map(([columnKey, displayName]) => {
-                                const isVisible = visibleColumns.includes(columnKey);
-                                console.log(`Column: ${columnKey}, Display: ${displayName}, Visible: ${isVisible}`);
+                const isVisible = visibleColumns.includes(columnKey);
                                 return `
                                     <div class="pm-column-item ${isVisible ? 'visible' : 'hidden'}" data-column="${columnKey}">
                                         <div class="pm-column-drag-handle">
@@ -6140,7 +6111,15 @@ class ProjectManagement {
     getCurrentView() {
         // Get current view from URL parameters or default to 'main'
         const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get('view') || 'main';
+        const view = urlParams.get('view') || 'main';
+        
+        // Decode URL-encoded partition names
+        try {
+            return decodeURIComponent(view);
+        } catch (e) {
+            console.warn('Error decoding view parameter:', e);
+            return view;
+        }
     }
 
     getPartitionColumnConfig(partitionName) {
@@ -6179,8 +6158,25 @@ class ProjectManagement {
         
         columnBtn.on('click', (e) => {
             e.preventDefault();
-            console.log('Column management button clicked');
             this.showColumnManagementDialog();
+        });
+    }
+
+    bindMainDashboardEvents() {
+        // Set body class for main dashboard styling
+        const currentView = this.getCurrentView();
+        if (currentView === 'main') {
+            $('body').addClass('main-dashboard-view');
+        } else {
+            $('body').removeClass('main-dashboard-view');
+        }
+        
+        // Handle workspace/board card clicks
+        $(document).on('click', '.pm-workspace-card, .pm-board-card', (e) => {
+            const view = $(e.currentTarget).data('view');
+            if (view) {
+                window.location.href = `/project_management?view=${view}`;
+            }
         });
     }
 

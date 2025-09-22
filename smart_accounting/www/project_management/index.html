@@ -79,12 +79,15 @@
                     </div>
                 </div>
             </h1>
+            {% if not project_data.is_main_dashboard %}
             <div class="pm-tabs">
-                <button class="pm-tab active" data-view="main" data-url="/project_management">Main table</button>
+                <button class="pm-tab active" data-view="main" data-url="/project_management?view={{ current_view }}">Main table</button>
                 <button class="pm-tab" data-view="gantt">Gantt</button>
                 <button class="pm-tab" data-view="calendar">Calendar</button>
             </div>
+            {% endif %}
         </div>
+        {% if not project_data.is_main_dashboard %}
         <div class="pm-header-right">
             <div class="pm-new-task-dropdown">
                 <button class="pm-btn pm-btn-primary pm-new-task-btn">
@@ -266,6 +269,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
     </div>
 
 
@@ -277,7 +281,61 @@
 
             <!-- Table Body -->
             <div class="pm-table-body" id="pm-table-body">
-                {% if project_data and project_data.organized_data %}
+                {% if project_data and project_data.is_main_dashboard %}
+                    <!-- Main Dashboard - Workspace/Board Selection -->
+                    <div class="pm-main-dashboard">
+                        <div class="pm-dashboard-header">
+                            <h2><i class="fa fa-th-large"></i> Choose Your Workspace or Board</h2>
+                            <p>Select a workspace to see its boards, or go directly to a specific board to manage tasks.</p>
+                        </div>
+                        
+                        {% if project_data.organized_data.workspaces %}
+                        <div class="pm-section">
+                            <h3><i class="fa fa-th-large"></i> Workspaces</h3>
+                            <div class="pm-cards-grid">
+                                {% for workspace in project_data.organized_data.workspaces %}
+                                <div class="pm-workspace-card" data-view="{{ workspace.name }}">
+                                    <div class="pm-card-icon">
+                                        <i class="fa {{ workspace.icon }}"></i>
+                                    </div>
+                                    <div class="pm-card-content">
+                                        <h4>{{ workspace.partition_name }}</h4>
+                                        <p>{{ workspace.description or 'No description' }}</p>
+                                        <div class="pm-card-stats">
+                                            <span><i class="fa fa-folder"></i> {{ workspace.project_count }} Projects</span>
+                                            <span><i class="fa fa-tasks"></i> {{ workspace.task_count }} Tasks</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if project_data.organized_data.boards %}
+                        <div class="pm-section">
+                            <h3><i class="fa fa-table"></i> Boards</h3>
+                            <div class="pm-cards-grid">
+                                {% for board in project_data.organized_data.boards %}
+                                <div class="pm-board-card" data-view="{{ board.name }}">
+                                    <div class="pm-card-icon">
+                                        <i class="fa {{ board.icon }}"></i>
+                                    </div>
+                                    <div class="pm-card-content">
+                                        <h4>{{ board.partition_name }}</h4>
+                                        <p>{{ board.description or 'No description' }}</p>
+                                        <div class="pm-card-stats">
+                                            <span><i class="fa fa-folder"></i> {{ board.project_count }} Projects</span>
+                                            <span><i class="fa fa-tasks"></i> {{ board.task_count }} Tasks</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                {% elif project_data and project_data.organized_data %}
                     {% for client_name, projects in project_data.organized_data.items() %}
                         {% for project_name, tasks in projects.items() %}
                             <!-- Project Group Header -->
