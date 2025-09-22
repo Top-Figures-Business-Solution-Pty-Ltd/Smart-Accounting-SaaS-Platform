@@ -336,12 +336,12 @@ def get_partition_column_config(partition_name):
                 
                 if column_widths_json:
                     combined_config = json.loads(column_widths_json)
-                    # Check if this is the new format with visible_columns
-                    if isinstance(combined_config, dict) and 'visible_columns' in combined_config:
+                    # Check if this contains main view config
+                    if isinstance(combined_config, dict) and 'main_view_visible_columns' in combined_config:
                         return {
                             'success': True,
-                            'visible_columns': combined_config.get('visible_columns', []),
-                            'column_config': combined_config.get('column_config', {})
+                            'visible_columns': combined_config.get('main_view_visible_columns', []),
+                            'column_config': combined_config.get('main_view_column_config', {})
                         }
             except Exception as e:
                 print(f"Error loading main view config: {str(e)}")
@@ -427,25 +427,37 @@ def save_main_view_column_config(visible_columns, column_config=None):
         else:
             column_config_dict = {}
         
-        # Store in user preferences
+        # Store in User Preferences using column_widths field with structured data
         user_email = frappe.session.user
         
         # Check if UserPreferences record exists for current user
         existing = frappe.db.get_value("User Preferences", {"user": user_email})
         
-        main_config = {
-            'visible_columns': visible_columns_list,
-            'column_config': column_config_dict
-        }
+        # Get existing column_widths data to preserve width settings
+        existing_data = {}
+        if existing:
+            try:
+                existing_json = frappe.db.get_value('User Preferences', existing, 'column_widths')
+                if existing_json:
+                    existing_data = json.loads(existing_json)
+            except:
+                pass
+        
+        # Merge with new column visibility config
+        combined_config = existing_data.copy() if isinstance(existing_data, dict) else {}
+        combined_config.update({
+            'main_view_visible_columns': visible_columns_list,
+            'main_view_column_config': column_config_dict
+        })
         
         if existing:
-            # Update existing record
-            frappe.db.set_value('User Preferences', existing, 'pm_main_view_columns', json.dumps(main_config))
+            # Update existing record using column_widths field
+            frappe.db.set_value('User Preferences', existing, 'column_widths', json.dumps(combined_config))
         else:
             # Create new UserPreferences record
             user_prefs = frappe.new_doc("User Preferences")
             user_prefs.user = user_email
-            user_prefs.pm_main_view_columns = json.dumps(main_config)
+            user_prefs.column_widths = json.dumps(combined_config)
             user_prefs.insert(ignore_permissions=True)
         
         frappe.db.commit()

@@ -4,6 +4,11 @@ class ProjectManagement {
     constructor() {
         this.tooltipHideTimer = null;
         this.userCache = {}; // Initialize user cache for better display
+        this.activeFilters = {
+            person: null,
+            client: null,
+            status: null
+        };
         this.init();
     }
 
@@ -19,10 +24,9 @@ class ProjectManagement {
         this.refreshReviewNoteCounts();
         
         // Apply partition column configuration after DOM is ready
-        setTimeout(() => {
-            this.applyPartitionColumnConfig();
-            this.addColumnManagementButton();
-        }, 500);
+        // Remove the setTimeout to prevent interference with filters
+        this.applyPartitionColumnConfig();
+        this.addColumnManagementButton();
     }
 
     bindEvents() {
@@ -288,23 +292,37 @@ class ProjectManagement {
     }
 
     initializeFilters() {
-        // Populate client filter
+        // Modern filters are implemented via dropdown menus, not select elements
+        // This method is kept for compatibility but the actual filtering
+        // is handled by toggleClientFilter(), toggleStatusFilter(), etc.
+        
+        // Load client list for dropdown filter
+        this.loadClientList();
+    }
+
+    loadClientList() {
+        // Populate client filter dropdown
         const clients = new Set();
         $('.pm-task-row').each(function() {
-            const client = $(this).find('.pm-cell-client').text().trim();
-            if (client && client !== 'Unassigned') {
+            const client = $(this).find('.pm-cell-client .client-display').text().trim();
+            if (client && client !== 'No Client' && client !== 'Unassigned') {
                 clients.add(client);
             }
         });
 
-        const $clientFilter = $('#client-filter');
+        const $clientList = $('.pm-client-list');
+        $clientList.empty();
+        
+        // Add client options
         clients.forEach(client => {
-            $clientFilter.append(`<option value="${client}">${client}</option>`);
-        });
-
-        // Bind filter events
-        $('#client-filter, #status-filter').on('change', () => {
-            this.applyFilters();
+            $clientList.append(`
+                <div class="pm-filter-option" data-client-name="${client}">
+                    <div class="pm-filter-icon">
+                        <i class="fa fa-building"></i>
+                    </div>
+                    <span>${client}</span>
+                </div>
+            `);
         });
     }
 
@@ -322,69 +340,57 @@ class ProjectManagement {
         const searchTerm = query.toLowerCase().trim();
         
         if (!searchTerm) {
-            $('.pm-project-group, .pm-task-row').show();
+            // Only show all tasks if no filters are active
+            if (!this.activeFilters.person && !this.activeFilters.client && !this.activeFilters.status) {
+                $('.pm-project-group, .pm-task-row').show().css('display', '');
+            }
             return;
         }
 
-        $('.pm-task-row').each(function() {
+        $('.pm-task-row:not(.pm-add-task-row)').each(function() {
             const $row = $(this);
             const taskName = $row.find('.pm-task-name').text().toLowerCase();
-            const client = $row.find('.pm-cell-client').text().toLowerCase();
+            const client = $row.find('.pm-cell-client .client-display').text().toLowerCase();
             
             if (taskName.includes(searchTerm) || client.includes(searchTerm)) {
-                $row.show();
+                $row.show().css('display', '');
                 $row.closest('.pm-project-group').show();
             } else {
-                $row.hide();
+                $row.hide().css('display', 'none');
             }
         });
 
-        // Hide empty project groups
-        $('.pm-project-group').each(function() {
-            const $group = $(this);
-            const visibleTasks = $group.find('.pm-task-row:visible').length;
-            if (visibleTasks === 0) {
-                $group.hide();
-            }
-        });
+        // Update project visibility
+        this.updateProjectVisibility();
     }
 
-    applyFilters() {
-        const clientFilter = $('#client-filter').val();
-        const statusFilter = $('#status-filter').val();
+    reapplyActiveFilters() {
+        console.log('Reapplying active filters:', this.activeFilters);
+        
+        // If no active filters, show all tasks
+        if (!this.activeFilters.person && !this.activeFilters.client && !this.activeFilters.status) {
+            console.log('No active filters - showing all tasks');
+            $('.pm-task-row').show().css('display', '');
+            $('.pm-project-group').show().css('display', '');
+            return;
+        }
 
-        $('.pm-task-row').each(function() {
-            const $row = $(this);
-            const client = $row.find('.pm-cell-client').text().trim();
-            const status = $row.find('.pm-status-badge').text().trim();
-
-            let show = true;
-
-            if (clientFilter && client !== clientFilter) {
-                show = false;
-            }
-
-            if (statusFilter && status.toLowerCase() !== statusFilter.toLowerCase()) {
-                show = false;
-            }
-
-            if (show) {
-                $row.show();
-                $row.closest('.pm-project-group').show();
-            } else {
-                $row.hide();
-            }
-        });
-
-        // Hide empty project groups
-        $('.pm-project-group').each(function() {
-            const $group = $(this);
-            const visibleTasks = $group.find('.pm-task-row:visible').length;
-            if (visibleTasks === 0) {
-                $group.hide();
-            }
-        });
+        // Reapply active filters (can have multiple active)
+        if (this.activeFilters.person) {
+            console.log('Reapplying person filter:', this.activeFilters.person);
+            this.applyPersonFilter(this.activeFilters.person.email, this.activeFilters.person.name);
+        }
+        if (this.activeFilters.client) {
+            console.log('Reapplying client filter:', this.activeFilters.client);
+            this.applyClientFilter(this.activeFilters.client);
+        }
+        if (this.activeFilters.status) {
+            console.log('Reapplying status filter:', this.activeFilters.status);
+            this.applyStatusFilter(this.activeFilters.status);
+        }
     }
+
+    // Legacy applyFilters method removed - modern filtering uses dropdown menus
 
     showStatusMenu(statusBadge) {
         const $badge = $(statusBadge);
@@ -1729,8 +1735,8 @@ class ProjectManagement {
             // Get all people from tasks - simplified approach
             const people = new Map();
             
-            // Find all avatars on the page
-            $('.pm-avatar').each((index, avatar) => {
+            // Find all avatars on the page, including hidden ones
+            $('.pm-avatar, .pm-cell[data-field-type="person_selector"] .pm-avatar').each((index, avatar) => {
                 try {
                     const $avatar = $(avatar);
                     const fullName = $avatar.attr('title');
@@ -1856,6 +1862,15 @@ class ProjectManagement {
     }
 
     applyPersonFilter(personEmail, personName) {
+        console.log('Applying person filter:', personEmail, personName);
+        
+        // Record active filter
+        this.activeFilters.person = { email: personEmail, name: personName };
+        this.activeFilters.client = null;
+        this.activeFilters.status = null;
+        
+        console.log('Active filters after setting:', this.activeFilters);
+        
         let visibleTasks = 0;
         
         $('.pm-task-row').each((index, row) => {
@@ -1868,14 +1883,20 @@ class ProjectManagement {
             
             // Check if person is involved in this task
             const isInvolved = this.isPersonInvolvedInTask($row, personEmail, personName);
+            const taskId = $row.data('task-id');
             
             if (isInvolved) {
-                $row.show();
+                $row.show().css('display', '').addClass('filter-visible');
                 visibleTasks++;
+                console.log(`Task ${taskId}: SHOWING (person involved)`);
             } else {
-                $row.hide();
+                $row.hide().css('display', 'none !important').removeClass('filter-visible');
+                console.log(`Task ${taskId}: HIDING (person not involved)`);
             }
         });
+        
+        // Mark body as filtering active
+        $('body').addClass('filtering-active');
         
         // Update projects visibility
         this.updateProjectVisibility();
@@ -1884,11 +1905,13 @@ class ProjectManagement {
             message: `Filtered by ${personName} - ${visibleTasks} tasks shown`,
             indicator: 'blue'
         });
+        
+        console.log(`Filter applied: ${visibleTasks} tasks should be visible`);
     }
 
     isPersonInvolvedInTask($row, personEmail, personName) {
         try {
-            // Check all people-related cells
+            // Check all people-related cells, including hidden ones
             const peopleCells = [
                 '.pm-cell-action-person',
                 '.pm-cell-preparer', 
@@ -1899,11 +1922,16 @@ class ProjectManagement {
             for (let cellSelector of peopleCells) {
                 const $cell = $row.find(cellSelector);
                 
-                // Check avatar titles
+                // Check avatar titles and emails
                 const $avatars = $cell.find('.pm-avatar');
                 for (let i = 0; i < $avatars.length; i++) {
-                    const title = $($avatars[i]).attr('title');
-                    if (title && title.toLowerCase().includes(personName.toLowerCase())) {
+                    const $avatar = $($avatars[i]);
+                    const title = $avatar.attr('title');
+                    const email = $avatar.attr('data-email');
+                    
+                    // Check by both name and email (more precise matching)
+                    if ((title && title.toLowerCase() === personName.toLowerCase()) ||
+                        (email && email.toLowerCase() === personEmail.toLowerCase())) {
                         return true;
                     }
                 }
@@ -1917,11 +1945,18 @@ class ProjectManagement {
     }
 
     clearPersonFilter() {
+        // Clear active filter
+        this.activeFilters.person = null;
+        
+        // Remove filtering active state
+        $('body').removeClass('filtering-active');
+        $('.pm-task-row').removeClass('filter-visible');
+        
         const $btn = $('.pm-person-filter-btn');
         
-        // Show all tasks
-        $('.pm-task-row').show();
-        $('.pm-project-group').show();
+        // Show all tasks with explicit display style
+        $('.pm-task-row').show().css('display', '');
+        $('.pm-project-group').show().css('display', '');
         
         // Reset button state
         $btn.removeClass('has-filter');
@@ -2060,10 +2095,10 @@ class ProjectManagement {
             const rowClientName = $row.find('.pm-cell-client .client-display').text().trim();
             
             if (rowClientName === clientName) {
-                $row.show();
+                $row.show().css('display', '');
                 visibleTasks++;
             } else {
-                $row.hide();
+                $row.hide().css('display', 'none');
             }
         });
         
@@ -2079,9 +2114,9 @@ class ProjectManagement {
     clearClientFilter() {
         const $btn = $('.pm-client-filter-btn');
         
-        // Show all tasks
-        $('.pm-task-row').show();
-        $('.pm-project-group').show();
+        // Show all tasks with explicit display style
+        $('.pm-task-row').show().css('display', '');
+        $('.pm-project-group').show().css('display', '');
         
         // Reset button state
         $btn.removeClass('has-filter');
@@ -2162,10 +2197,10 @@ class ProjectManagement {
             const rowStatus = $row.find('.pm-status-badge').text().trim();
             
             if (rowStatus.toLowerCase() === status.toLowerCase()) {
-                $row.show();
+                $row.show().css('display', '');
                 visibleTasks++;
             } else {
-                $row.hide();
+                $row.hide().css('display', 'none');
             }
         });
         
@@ -2181,9 +2216,9 @@ class ProjectManagement {
     clearStatusFilter() {
         const $btn = $('.pm-status-filter-btn');
         
-        // Show all tasks
-        $('.pm-task-row').show();
-        $('.pm-project-group').show();
+        // Show all tasks with explicit display style
+        $('.pm-task-row').show().css('display', '');
+        $('.pm-project-group').show().css('display', '');
         
         // Reset button state
         $btn.removeClass('has-filter');
@@ -2503,10 +2538,21 @@ class ProjectManagement {
         
         console.log('Updating table width to:', calculatedWidth);
         
-        // Update all table elements to maintain consistency
-        $('.pm-project-table-header, .pm-task-row, .pm-project-group, .pm-add-task-row').css({
-            'width': calculatedWidth + 'px',
-            'min-width': calculatedWidth + 'px'
+        // Update all table elements to maintain consistency, preserving display property
+        $('.pm-project-table-header, .pm-task-row, .pm-project-group, .pm-add-task-row').each(function() {
+            const $element = $(this);
+            const currentDisplay = $element.css('display');
+            const isHidden = $element.hasClass('column-hidden') || currentDisplay === 'none';
+            
+            $element.css({
+                'width': calculatedWidth + 'px',
+                'min-width': calculatedWidth + 'px'
+            });
+            
+            // Preserve the original display value
+            if (isHidden) {
+                $element.css('display', 'none');
+            }
         });
         
         // Update table body container
@@ -3900,7 +3946,7 @@ class ProjectManagement {
 
     // Advanced Filter Functionality
     initializeAdvancedFilter() {
-        this.activeFilters = [];
+        this.advancedFilters = [];
         this.bindAdvancedFilterEvents();
         this.updateTaskCount();
     }
@@ -4142,9 +4188,11 @@ class ProjectManagement {
             </div>
         `);
         
-        this.activeFilters = [];
-        $('.pm-task-row').show();
-        this.updateProjectVisibility();
+        // Clear advanced filters (different from dropdown filters)
+        this.advancedFilters = [];
+        
+        // Don't automatically show all tasks - respect dropdown filters
+        this.reapplyActiveFilters();
         this.updateTaskCount();
     }
 
@@ -4154,7 +4202,7 @@ class ProjectManagement {
         
         $('#total-tasks').text(totalTasks);
         
-        if (this.activeFilters.length > 0) {
+        if (this.advancedFilters.length > 0) {
             $('.pm-filter-count').html(`Showing ${visibleTasks} of ${totalTasks} tasks`);
         } else {
             $('.pm-filter-count').html(`Showing all of ${totalTasks} tasks`);
@@ -5844,15 +5892,25 @@ class ProjectManagement {
         allColumns.forEach(column => {
             const shouldShow = visibleColumns.includes(column);
             
-            // Hide/show header cells
-            $(`.pm-header-cell[data-column="${column}"]`).toggle(shouldShow);
+            console.log(`Column ${column}: shouldShow = ${shouldShow}`);
             
-            // Hide/show data cells
-            $(`.pm-cell-${column}`).toggle(shouldShow);
+            if (shouldShow) {
+                // Show header cells
+                $(`.pm-header-cell[data-column="${column}"]`).show().css('display', '').removeClass('column-hidden');
+                // Show data cells
+                $(`.pm-cell-${column}`).show().css('display', '').removeClass('column-hidden');
+            } else {
+                // Hide header cells with strong CSS
+                $(`.pm-header-cell[data-column="${column}"]`).hide().css('display', 'none !important').addClass('column-hidden');
+                // Hide data cells with strong CSS
+                $(`.pm-cell-${column}`).hide().css('display', 'none !important').addClass('column-hidden');
+            }
         });
         
         // Recalculate table width after hiding columns
         this.updateTableWidth();
+        
+        // Don't automatically reapply filters - let user control when to filter
     }
 
     showColumnManagementDialog() {
@@ -5917,9 +5975,9 @@ class ProjectManagement {
                                             <i class="fa fa-bars"></i>
                                         </div>
                                         <label class="pm-column-checkbox">
-                                            <input type="checkbox" ${isVisible ? 'checked' : ''} data-column="${columnKey}">
+                                            <input type="checkbox" ${isVisible ? 'checked' : ''} data-column="${columnKey}" ${columnKey === 'client' ? 'disabled' : ''}>
                                             <span class="checkmark"></span>
-                                            <span class="pm-column-name">${displayName}</span>
+                                            <span class="pm-column-name">${displayName}${columnKey === 'client' ? ' (Required)' : ''}</span>
                                         </label>
                                         <div class="pm-column-status">
                                             <i class="fa ${isVisible ? 'fa-eye' : 'fa-eye-slash'}"></i>
@@ -6029,10 +6087,15 @@ class ProjectManagement {
             const isVisible = $(this).find('input[type="checkbox"]').is(':checked');
             
             columnOrder.push(columnKey);
-            if (isVisible) {
+            if (isVisible || columnKey === 'client') {
                 visibleColumns.push(columnKey);
             }
         });
+        
+        // Ensure client column is always visible
+        if (!visibleColumns.includes('client')) {
+            visibleColumns.unshift('client');
+        }
 
         // Save to backend
         frappe.call({
