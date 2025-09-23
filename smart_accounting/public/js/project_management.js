@@ -234,15 +234,13 @@ class ProjectManagement {
             this.openReviewNoteModal(taskId);
         });
 
-        // Engagement cell clicks - direct popup, no editing mode
-        $(document).on('click', '.pm-clickable-engagement', (e) => {
+        // Engagement indicator clicks
+        $(document).on('click', '.pm-engagement-indicator', (e) => {
             e.stopPropagation();
-            const $cell = $(e.currentTarget);
-            const taskId = $cell.data('task-id');
-            const currentEngagement = $cell.data('current-engagement') || '';
-            
-            this.openEngagementModal(taskId, currentEngagement);
+            const taskId = $(e.currentTarget).data('task-id');
+            this.openEngagementModal(taskId);
         });
+
 
         // Unified dropdown management - close all when clicking outside
         $(document).on('click', (e) => {
@@ -2736,10 +2734,9 @@ class ProjectManagement {
                         <i class="fa fa-edit pm-edit-icon"></i>
                     </div>
                 </div>
-                <div class="pm-cell pm-cell-engagement pm-clickable-engagement" style="width: ${currentWidths.engagement}px; min-width: ${currentWidths.engagement}px; flex: 0 0 ${currentWidths.engagement}px;" data-task-id="${taskData.task_id}" data-current-engagement="">
+                <div class="pm-cell pm-cell-engagement pm-engagement-indicator" style="width: ${currentWidths.engagement}px; min-width: ${currentWidths.engagement}px; flex: 0 0 ${currentWidths.engagement}px;" data-task-id="${taskData.task_id}" data-current-engagement="">
                     <div class="pm-engagement-content">
                         <span class="pm-engagement-display no-engagement">No engagement</span>
-                        <i class="fa fa-external-link pm-engagement-icon"></i>
                     </div>
                 </div>
                 <div class="pm-cell pm-cell-entity" style="width: ${currentWidths.entity}px; min-width: ${currentWidths.entity}px; flex: 0 0 ${currentWidths.entity}px;">
@@ -6331,53 +6328,228 @@ class ProjectManagement {
     }
 
 
-    async openEngagementModal(taskId, currentEngagement) {
-        try {
-            // Load engagement data first
-            const response = await frappe.call({
-                method: 'smart_accounting.www.project_management.index.get_engagement_info',
-                args: { 
-                    task_id: taskId,
-                    engagement_id: currentEngagement 
-                }
-            });
+    openEngagementModal(taskId) {
+        // Get current engagement for this task
+        const $taskRow = $(`.pm-task-row[data-task-id="${taskId}"]`);
+        const currentEngagement = $taskRow.find('.pm-engagement-indicator').data('current-engagement') || '';
+        
+        if (currentEngagement) {
+            // Has engagement - show info and options
+            this.showEngagementInfo(taskId, currentEngagement);
+        } else {
+            // No engagement - show selector
+            this.showEngagementSelector(taskId);
+        }
+    }
 
-            // Create modal HTML
-            const modalHtml = `
-                <div class="pm-engagement-modal" style="display: block;">
-                    <div class="pm-modal-overlay"></div>
-                    <div class="pm-modal-container">
-                        <div class="pm-modal-header">
-                            <h3><i class="fa fa-handshake-o"></i> Engagement Information</h3>
-                            <button class="pm-modal-close" type="button">
-                                <i class="fa fa-times"></i>
+    showEngagementInfo(taskId, engagementId) {
+        // Show loading modal first
+        const loadingHtml = `
+            <div class="pm-engagement-modal" style="display: block;">
+                <div class="pm-modal-overlay"></div>
+                <div class="pm-modal-container">
+                    <div class="pm-modal-header">
+                        <h3><i class="fa fa-handshake-o"></i> Engagement Details</h3>
+                        <button class="pm-modal-close" type="button">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="pm-modal-body">
+                        <div class="pm-loading">
+                            <i class="fa fa-spinner fa-spin"></i>
+                            Loading engagement information...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        $('.pm-engagement-modal').remove();
+        $('body').append(loadingHtml);
+
+        // Fetch engagement details from backend
+        frappe.call({
+            method: 'smart_accounting.www.project_management.index.get_engagement_info',
+            args: {
+                task_id: taskId,
+                engagement_id: engagementId
+            },
+            callback: (response) => {
+                if (response.message && response.message.success) {
+                    this.renderEngagementDetails(taskId, response.message);
+                } else {
+                    this.showEngagementError(taskId, response.message.error || 'Failed to load engagement information');
+                }
+            },
+            error: (error) => {
+                console.error('Error fetching engagement info:', error);
+                this.showEngagementError(taskId, 'Failed to load engagement information');
+            }
+        });
+
+        // Bind close event
+        this.bindEngagementModalEvents(taskId, engagementId);
+    }
+
+    renderEngagementDetails(taskId, data) {
+        const { engagement_info, engagement_letters, el_count } = data;
+        
+        // Build engagement details HTML
+        const modalHtml = `
+            <div class="pm-engagement-modal" style="display: block;">
+                <div class="pm-modal-overlay"></div>
+                <div class="pm-modal-container">
+                    <div class="pm-modal-header">
+                        <h3><i class="fa fa-handshake-o"></i> Engagement Details</h3>
+                        <div class="pm-el-badge">${el_count} EL${el_count !== 1 ? 's' : ''}</div>
+                        <button class="pm-modal-close" type="button">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="pm-modal-body">
+                        <div class="pm-engagement-details">
+                            <div class="pm-detail-row">
+                                <label>Customer:</label>
+                                <span>${engagement_info.customer_name || 'Not specified'}</span>
+                            </div>
+                            <div class="pm-detail-row">
+                                <label>Company:</label>
+                                <span>${engagement_info.company_name || 'Not specified'}</span>
+                            </div>
+                            <div class="pm-detail-row">
+                                <label>Service Line:</label>
+                                <span>${engagement_info.service_line_name || 'Not specified'}</span>
+                            </div>
+                            <div class="pm-detail-row">
+                                <label>Frequency:</label>
+                                <span>${engagement_info.frequency || 'Not specified'}</span>
+                            </div>
+                            <div class="pm-detail-row">
+                                <label>Fiscal Year:</label>
+                                <span>${engagement_info.fiscal_year_name || 'Not specified'}</span>
+                            </div>
+                            <div class="pm-detail-row">
+                                <label>Owner Partner:</label>
+                                <span>${engagement_info.owner_partner_name || 'Not assigned'}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="pm-engagement-files">
+                            <h5><i class="fa fa-file-pdf-o"></i> Engagement Letters</h5>
+                            ${this.renderEngagementFiles(engagement_letters)}
+                        </div>
+                        
+                        <div class="pm-engagement-actions">
+                            <button class="pm-btn pm-btn-primary pm-open-engagement" data-engagement-id="${engagement_info.name}">
+                                <i class="fa fa-external-link"></i> Open Engagement
+                            </button>
+                            <button class="pm-btn pm-btn-secondary pm-upload-file" data-engagement-id="${engagement_info.name}">
+                                <i class="fa fa-upload"></i> Upload File
+                            </button>
+                            <button class="pm-btn pm-btn-secondary pm-change-engagement">
+                                <i class="fa fa-exchange"></i> Change Engagement
+                            </button>
+                            <button class="pm-btn pm-btn-danger pm-unlink-engagement">
+                                <i class="fa fa-unlink"></i> Remove Link
                             </button>
                         </div>
-                        <div class="pm-modal-body">
-                            <div class="pm-engagement-content-area">
-                                ${this.generateEngagementContent(response.message, taskId)}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        $('.pm-engagement-modal').remove();
+        $('body').append(modalHtml);
+        this.bindEngagementModalEvents(taskId, engagement_info.name);
+    }
+
+    renderEngagementFiles(files) {
+        if (!files || files.length === 0) {
+            return '<div class="pm-no-files">No engagement letters uploaded yet.</div>';
+        }
+
+        return files.map(file => `
+            <div class="pm-file-item">
+                <i class="fa fa-file-pdf-o"></i>
+                <a href="${file.file_url}" target="_blank">${file.file_name}</a>
+                <button class="pm-btn pm-btn-sm pm-btn-danger pm-delete-file" 
+                        data-file-name="${file.file_name}" 
+                        style="margin-left: auto; padding: 4px 8px;">
+                    <i class="fa fa-trash"></i>
+                </button>
+            </div>
+        `).join('');
+    }
+
+    showEngagementError(taskId, errorMessage) {
+        const errorHtml = `
+            <div class="pm-engagement-modal" style="display: block;">
+                <div class="pm-modal-overlay"></div>
+                <div class="pm-modal-container">
+                    <div class="pm-modal-header">
+                        <h3><i class="fa fa-handshake-o"></i> Engagement</h3>
+                        <button class="pm-modal-close" type="button">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="pm-modal-body">
+                        <div class="pm-error">
+                            <i class="fa fa-exclamation-triangle"></i>
+                            <p>${errorMessage}</p>
+                            <div class="pm-engagement-actions">
+                                <button class="pm-btn pm-btn-secondary pm-change-engagement">
+                                    <i class="fa fa-exchange"></i> Select Different Engagement
+                                </button>
                             </div>
                         </div>
                     </div>
                 </div>
-            `;
+            </div>
+        `;
 
-            // Remove existing modal
-            $('.pm-engagement-modal').remove();
-            
-            // Add modal to body
-            $('body').append(modalHtml);
+        $('.pm-engagement-modal').remove();
+        $('body').append(errorHtml);
+        this.bindEngagementModalEvents(taskId, null);
+    }
 
-            // Bind modal events
-            this.bindEngagementModalEvents(taskId);
+    showEngagementSelector(taskId) {
+        // Show engagement selector dialog
+        const modalHtml = `
+            <div class="pm-engagement-modal" style="display: block;">
+                <div class="pm-modal-overlay"></div>
+                <div class="pm-modal-container">
+                    <div class="pm-modal-header">
+                        <h3><i class="fa fa-handshake-o"></i> Select Engagement</h3>
+                        <button class="pm-modal-close" type="button">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="pm-modal-body">
+                        <div class="pm-engagement-selector">
+                            <div class="pm-search-box">
+                                <input type="text" class="pm-engagement-search" placeholder="Search engagements..." />
+                                <i class="fa fa-search"></i>
+                            </div>
+                            <div class="pm-engagement-list">
+                                <div class="pm-loading">
+                                    <i class="fa fa-spinner fa-spin"></i> Loading engagements...
+                                </div>
+                            </div>
+                            <div class="pm-selector-actions">
+                                <button class="pm-btn pm-btn-secondary pm-create-new-engagement">
+                                    <i class="fa fa-plus"></i> Create New Engagement
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
 
-        } catch (error) {
-            console.error('Load engagement error:', error);
-            frappe.show_alert({
-                message: 'Failed to load engagement information',
-                indicator: 'red'
-            });
-        }
+        $('.pm-engagement-modal').remove();
+        $('body').append(modalHtml);
+        this.bindEngagementSelectorEvents(taskId);
+        this.loadEngagementOptions();
     }
 
     generateEngagementContent(data, taskId) {
@@ -6443,7 +6615,73 @@ class ProjectManagement {
         }
     }
 
-    bindEngagementModalEvents(taskId) {
+    bindEngagementModalEvents(taskId, engagementId) {
+        const modal = $('.pm-engagement-modal');
+
+        // Remove any existing event handlers to prevent conflicts
+        modal.off();
+
+        // Close modal
+        modal.on('click.engagement-modal', '.pm-modal-close, .pm-modal-overlay', (e) => {
+            e.stopPropagation();
+            this.closeEngagementModal();
+        });
+
+        // Prevent modal content clicks from closing
+        modal.on('click.engagement-modal', '.pm-modal-container', (e) => {
+            e.stopPropagation();
+        });
+
+        // Open engagement in new tab
+        modal.on('click.engagement-modal', '.pm-open-engagement', (e) => {
+            e.stopPropagation();
+            const id = $(e.target).closest('.pm-open-engagement').data('engagement-id');
+            if (id) {
+                window.open(`/app/engagement/${id}`, '_blank');
+            }
+        });
+
+        // Link/change engagement - show selector instead of opening new tab
+        modal.on('click.engagement-modal', '.pm-link-engagement, .pm-change-engagement', (e) => {
+            e.stopPropagation();
+            this.closeEngagementModal();
+            this.showEngagementSelector(taskId);
+        });
+
+        // Unlink engagement
+        modal.on('click.engagement-modal', '.pm-unlink-engagement', (e) => {
+            e.stopPropagation();
+            this.unlinkEngagement(taskId);
+        });
+
+        // Upload file
+        modal.on('click.engagement-modal', '.pm-upload-file', (e) => {
+            e.stopPropagation();
+            const id = $(e.target).closest('.pm-upload-file').data('engagement-id');
+            this.showFileUploadDialog(taskId, id);
+        });
+
+        // Delete file
+        modal.on('click.engagement-modal', '.pm-delete-file', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const fileName = $(e.target).closest('.pm-delete-file').data('file-name');
+            this.deleteEngagementFile(taskId, engagementId, fileName);
+        });
+
+        // Create new engagement
+        modal.on('click.engagement-modal', '.pm-create-engagement, .pm-create-new-engagement', (e) => {
+            e.stopPropagation();
+            window.open('/app/engagement/new', '_blank');
+        });
+    }
+
+    closeEngagementModal() {
+        // Clean up events and remove modal
+        $('.pm-engagement-modal').off('.engagement-modal').remove();
+    }
+
+    bindEngagementInfoEvents(taskId, engagementId) {
         const modal = $('.pm-engagement-modal');
 
         // Close modal
@@ -6451,36 +6689,198 @@ class ProjectManagement {
             this.closeEngagementModal();
         });
 
-        // Prevent modal content clicks from closing
-        modal.on('click', '.pm-modal-container', (e) => {
-            e.stopPropagation();
-        });
-
-        // Open engagement in new tab
+        // Open engagement
         modal.on('click', '.pm-open-engagement', () => {
-            const engagementId = $('.pm-engagement-info').data('engagement-id');
-            if (engagementId) {
-                window.open(`/app/engagement/${engagementId}`, '_blank');
-            }
+            const id = $(event.target).closest('.pm-open-engagement').data('engagement-id');
+            window.open(`/app/engagement/${id}`, '_blank');
         });
 
-        // Link/change engagement
-        modal.on('click', '.pm-link-engagement, .pm-change-engagement', () => {
-            window.open('/app/engagement', '_blank');
-            frappe.show_alert({
-                message: 'Select an engagement to link to this task',
-                indicator: 'blue'
-            });
+        // Change engagement
+        modal.on('click', '.pm-change-engagement', () => {
+            this.closeEngagementModal();
+            this.showEngagementSelector(taskId);
+        });
+
+        // Unlink engagement
+        modal.on('click', '.pm-unlink-engagement', () => {
+            this.unlinkEngagement(taskId);
+        });
+    }
+
+    bindEngagementSelectorEvents(taskId) {
+        const modal = $('.pm-engagement-modal');
+
+        // Close modal
+        modal.on('click', '.pm-modal-close, .pm-modal-overlay', () => {
+            this.closeEngagementModal();
+        });
+
+        // Search functionality
+        modal.on('input', '.pm-engagement-search', (e) => {
+            const query = $(e.target).val();
+            this.filterEngagementList(query);
+        });
+
+        // Engagement selection
+        modal.on('click', '.pm-engagement-option', (e) => {
+            const engagementId = $(e.currentTarget).data('engagement-id');
+            const engagementName = $(e.currentTarget).data('engagement-name');
+            this.linkEngagement(taskId, engagementId, engagementName);
         });
 
         // Create new engagement
-        modal.on('click', '.pm-create-engagement', () => {
+        modal.on('click', '.pm-create-new-engagement', () => {
             window.open('/app/engagement/new', '_blank');
         });
     }
 
-    closeEngagementModal() {
-        $('.pm-engagement-modal').remove();
+    async loadEngagementOptions() {
+        try {
+            const response = await frappe.call({
+                method: 'frappe.client.get_list',
+                args: {
+                    doctype: 'Engagement',
+                    fields: ['name', 'customer', 'service_line'],
+                    limit_page_length: 50,
+                    order_by: 'modified desc'
+                }
+            });
+
+            const engagements = response.message || [];
+            let html = '';
+
+            if (engagements.length === 0) {
+                html = '<div class="pm-no-engagements">No engagements found</div>';
+            } else {
+                engagements.forEach(engagement => {
+                    html += `
+                        <div class="pm-engagement-option" data-engagement-id="${engagement.name}" data-engagement-name="${engagement.customer}">
+                            <div class="pm-engagement-info">
+                                <strong>${engagement.customer}</strong>
+                                <small>${engagement.service_line || 'No service line'}</small>
+                            </div>
+                            <i class="fa fa-chevron-right"></i>
+                        </div>
+                    `;
+                });
+            }
+
+            $('.pm-engagement-list').html(html);
+        } catch (error) {
+            console.error('Load engagements error:', error);
+            $('.pm-engagement-list').html('<div class="pm-error">Failed to load engagements</div>');
+        }
+    }
+
+    filterEngagementList(query) {
+        const $options = $('.pm-engagement-option');
+        $options.each(function() {
+            const text = $(this).text().toLowerCase();
+            if (text.includes(query.toLowerCase())) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    }
+
+    async linkEngagement(taskId, engagementId, engagementName) {
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.update_task_field',
+                args: {
+                    task_id: taskId,
+                    field_name: 'custom_engagement',
+                    new_value: engagementId
+                }
+            });
+
+            if (response.message && response.message.success) {
+                // Update UI
+                this.updateEngagementDisplay(taskId, engagementId, engagementName);
+                this.closeEngagementModal();
+                
+                frappe.show_alert({
+                    message: 'Engagement linked successfully',
+                    indicator: 'green'
+                });
+            }
+        } catch (error) {
+            console.error('Link engagement error:', error);
+            frappe.show_alert({
+                message: 'Failed to link engagement',
+                indicator: 'red'
+            });
+        }
+    }
+
+    async unlinkEngagement(taskId) {
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.update_task_field',
+                args: {
+                    task_id: taskId,
+                    field_name: 'custom_engagement',
+                    new_value: ''
+                }
+            });
+
+            if (response.message && response.message.success) {
+                // Update UI
+                this.updateEngagementDisplay(taskId, '', '');
+                this.closeEngagementModal();
+                
+                frappe.show_alert({
+                    message: 'Engagement unlinked successfully',
+                    indicator: 'green'
+                });
+            }
+        } catch (error) {
+            console.error('Unlink engagement error:', error);
+            frappe.show_alert({
+                message: 'Failed to unlink engagement',
+                indicator: 'red'
+            });
+        }
+    }
+
+    updateEngagementDisplay(taskId, engagementId, engagementName) {
+        const $engagementCell = $(`.pm-task-row[data-task-id="${taskId}"] .pm-engagement-indicator`);
+        $engagementCell.data('current-engagement', engagementId);
+        
+        if (engagementId) {
+            // Get EL count for this engagement
+            frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_engagement_info',
+                args: {
+                    task_id: taskId,
+                    engagement_id: engagementId
+                },
+                callback: (response) => {
+                    if (response.message && response.message.success) {
+                        const elCount = response.message.el_count || 0;
+                        $engagementCell.html(`
+                            <div class="pm-engagement-content">
+                                <span class="pm-engagement-display">${elCount} EL${elCount !== 1 ? 's' : ''}</span>
+                            </div>
+                        `);
+                    } else {
+                        // Fallback display
+                        $engagementCell.html(`
+                            <div class="pm-engagement-content">
+                                <span class="pm-engagement-display">0 ELs</span>
+                            </div>
+                        `);
+                    }
+                }
+            });
+        } else {
+            $engagementCell.html(`
+                <div class="pm-engagement-content">
+                    <span class="pm-engagement-display no-engagement">No engagement</span>
+                </div>
+            `);
+        }
     }
 
     async updateGroupDisplay(taskId, customerId) {
@@ -6565,6 +6965,14 @@ class ProjectManagement {
         // Add column management button to the header actions
         if ($('.pm-column-management-btn').length > 0) return; // Already added
         
+        // Add Manage Clients button first (to the left)
+        const clientsBtn = $(`
+            <button class="pm-btn pm-btn-secondary pm-clients-management-btn" style="margin-right: 10px;">
+                <i class="fa fa-users"></i>
+                Manage Clients
+            </button>
+        `);
+        
         const columnBtn = $(`
             <button class="pm-btn pm-btn-secondary pm-column-management-btn" style="margin-right: 10px;">
                 <i class="fa fa-columns"></i>
@@ -6573,10 +6981,66 @@ class ProjectManagement {
         `);
         
         $('.pm-actions').prepend(columnBtn);
+        $('.pm-actions').prepend(clientsBtn);
+        
+        // Bind events
+        clientsBtn.on('click', (e) => {
+            e.preventDefault();
+            this.showClientsManagementDialog();
+        });
         
         columnBtn.on('click', (e) => {
             e.preventDefault();
             this.showColumnManagementDialog();
+        });
+    }
+
+    showClientsManagementDialog() {
+        // Simple placeholder dialog showing "Under Development"
+        const dialogHtml = `
+            <div class="pm-clients-management-dialog" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10000; display: flex; align-items: center; justify-content: center;">
+                <div class="pm-dialog-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(2px);"></div>
+                <div class="pm-dialog-content" style="position: relative; background: white; border-radius: 8px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); width: 500px; max-width: 90vw; max-height: 80vh; display: flex; flex-direction: column; z-index: 1;">
+                    <div class="pm-dialog-header" style="display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid #e1e5e9;">
+                        <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #323338; display: flex; align-items: center; gap: 8px;">
+                            <i class="fa fa-users"></i> Manage Clients
+                        </h3>
+                        <button class="pm-dialog-close" type="button" style="background: none; border: none; color: #676879; cursor: pointer; padding: 4px; border-radius: 4px; transition: all 0.2s ease;">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="pm-dialog-body" style="flex: 1; padding: 40px 24px; overflow-y: auto; text-align: center;">
+                        <div class="pm-coming-soon">
+                            <i class="fa fa-cogs" style="font-size: 48px; margin-bottom: 16px; color: var(--monday-blue);"></i>
+                            <h3 style="margin: 0 0 8px 0; color: var(--monday-dark);">Under Development</h3>
+                            <p style="color: var(--monday-gray); margin: 0;">Client management feature is coming soon!</p>
+                        </div>
+                    </div>
+                    <div class="pm-dialog-footer" style="display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 16px 24px 20px; border-top: 1px solid #e1e5e9;">
+                        <button class="pm-btn pm-btn-secondary pm-close-dialog" style="min-width: 80px; padding: 10px 20px; border-radius: 4px; border: none; cursor: pointer; font-weight: 500; font-size: 14px; background: #f8f9fa; color: #323338;">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        $('body').append(dialogHtml);
+
+        // Bind close events
+        const dialog = $('.pm-clients-management-dialog');
+        
+        dialog.on('click', '.pm-dialog-close, .pm-close-dialog', () => {
+            dialog.remove();
+        });
+
+        dialog.on('click', '.pm-dialog-overlay', () => {
+            dialog.remove();
+        });
+
+        // Prevent dialog content clicks from closing
+        dialog.on('click', '.pm-dialog-content', (e) => {
+            e.stopPropagation();
         });
     }
 
@@ -6596,6 +7060,81 @@ class ProjectManagement {
                 window.location.href = `/project_management?view=${view}`;
             }
         });
+    }
+
+    unlinkEngagement(taskId) {
+        if (confirm('Are you sure you want to unlink this engagement from the task?')) {
+            frappe.call({
+                method: 'smart_accounting.www.project_management.index.update_task_field',
+                args: {
+                    task_id: taskId,
+                    field_name: 'custom_engagement',
+                    new_value: ''
+                },
+                callback: (response) => {
+                    if (response.message && response.message.success) {
+                        this.closeEngagementModal();
+                        frappe.show_alert('Engagement unlinked successfully', 'green');
+                        
+                        // Update the engagement display in the table
+                        this.updateEngagementDisplay(taskId, '', '');
+                    } else {
+                        frappe.show_alert('Failed to unlink engagement', 'red');
+                    }
+                },
+                error: (error) => {
+                    console.error('Error unlinking engagement:', error);
+                    frappe.show_alert('Failed to unlink engagement', 'red');
+                }
+            });
+        }
+    }
+
+    showFileUploadDialog(taskId, engagementId) {
+        // Use ERPNext's native file upload dialog
+        new frappe.ui.FileUploader({
+            doctype: 'Engagement',
+            docname: engagementId,
+            folder: 'Home/Attachments',
+            on_success: (file_doc) => {
+                frappe.show_alert('File uploaded successfully', 'green');
+                console.log('File uploaded:', file_doc);
+                
+                // Refresh the engagement modal to show the new file
+                setTimeout(() => {
+                    this.showEngagementInfo(taskId, engagementId);
+                }, 1000);
+            },
+            restrictions: {
+                allowed_file_types: ['.pdf', '.doc', '.docx', '.txt', '.xlsx', '.xls']
+            }
+        });
+    }
+
+    deleteEngagementFile(taskId, engagementId, fileName) {
+        if (confirm(`Are you sure you want to delete "${fileName}"?`)) {
+            frappe.call({
+                method: 'smart_accounting.www.project_management.index.delete_engagement_file',
+                args: {
+                    file_name: fileName,
+                    engagement_id: engagementId
+                },
+                callback: (response) => {
+                    if (response.message && response.message.success) {
+                        frappe.show_alert('File deleted successfully', 'green');
+                        
+                        // Refresh the engagement modal to reflect the change
+                        this.showEngagementInfo(taskId, engagementId);
+                    } else {
+                        frappe.show_alert('Failed to delete file: ' + (response.message.error || 'Unknown error'), 'red');
+                    }
+                },
+                error: (error) => {
+                    console.error('Error deleting file:', error);
+                    frappe.show_alert('Failed to delete file', 'red');
+                }
+            });
+        }
     }
 
 }

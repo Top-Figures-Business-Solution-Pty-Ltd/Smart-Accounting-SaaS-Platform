@@ -464,7 +464,7 @@ def get_workspace_overview_data(workspace_name):
     try:
         # Get child boards of this workspace
         child_boards = frappe.get_all("Partition",
-            fields=["name", "partition_name", "description"],
+            fields=["name", "partition_name", "description", "icon"],
             filters={
                 "parent_partition": workspace_name,
                 "is_archived": ["!=", 1]
@@ -502,27 +502,49 @@ def get_workspace_overview_data(workspace_name):
                 'description': board.description or '',
                 'project_count': project_count,
                 'task_count': task_count,
+                'icon': board.icon or 'fa-table',
                 'projects': []  # Empty for workspace view
             }
             
             total_projects += project_count
             total_tasks += task_count
         
+        # Convert board_summaries to the format expected by main dashboard template
+        boards_list = []
+        for board_name, board_data in board_summaries.items():
+            boards_list.append({
+                'name': board_data['board_name'],
+                'partition_name': board_name,
+                'description': board_data['description'],
+                'project_count': board_data['project_count'],
+                'task_count': board_data['task_count'],
+                'icon': board_data.get('icon', 'fa-table'),  # Default board icon
+                'is_workspace': False  # These are boards under a workspace
+            })
+        
         return {
-            'organized_data': board_summaries,
+            'organized_data': {
+                'workspaces': [],  # No sub-workspaces in a workspace view
+                'boards': boards_list
+            },
             'total_projects': total_projects,
             'total_tasks': total_tasks,
             'is_workspace_view': True,
+            'is_main_dashboard': True,  # Use main dashboard template
             'workspace_name': workspace_name
         }
         
     except Exception as e:
         frappe.log_error(f"Workspace overview data error: {str(e)}")
         return {
-            'organized_data': {},
+            'organized_data': {
+                'workspaces': [],
+                'boards': []
+            },
             'total_projects': 0,
             'total_tasks': 0,
             'is_workspace_view': True,
+            'is_main_dashboard': True,  # Use main dashboard template even for errors
             'error': str(e)
         }
 
@@ -999,7 +1021,8 @@ def update_task_field(task_id, field_name, new_value):
         allowed_fields = [
             'custom_tftg', 'custom_tf_tg', 'custom_target_month',
             'custom_budget_planning', 'custom_actual_billing', 'custom_year_end', 'status',
-            'custom_service_line', 'custom_client', 'custom_lodgement_due_date', 'subject'
+            'custom_service_line', 'custom_client', 'custom_lodgement_due_date', 'subject',
+            'custom_engagement'
         ]
         
         if field_name not in allowed_fields:
@@ -2525,14 +2548,62 @@ def get_engagement_info(task_id, engagement_id=None):
             # If file access fails, just set count to 0
             el_count = 0
         
-        # Prepare engagement info - only use basic fields that definitely exist
+        # Prepare engagement info - dynamically get all fields for extensibility
         engagement_info = {
             'name': engagement.name,
-            'customer': getattr(engagement, 'customer', 'Unknown Customer'),
-            'service_line': 'Service Line',  # Simplified for now
-            'frequency': 'Not specified',
-            'fiscal_year': 'Not specified'
+            'customer': getattr(engagement, 'customer', None),
+            'customer_name': '',
+            'company': getattr(engagement, 'company', None),
+            'company_name': '',
+            'service_line': getattr(engagement, 'service_line', None),
+            'service_line_name': '',
+            'frequency': getattr(engagement, 'frequency', None),
+            'fiscal_year': getattr(engagement, 'fiscal_year', None),
+            'fiscal_year_name': '',
+            'engagement_letter': getattr(engagement, 'engagement_letter', None),
+            'owner_partner': getattr(engagement, 'owner_partner', None),
+            'owner_partner_name': '',
+            'primary_contact': getattr(engagement, 'primary_contact', None),
+            'accounting_contact': getattr(engagement, 'accounting_contact', None),
+            'tax_contact': getattr(engagement, 'tax_contact', None),
+            'grants_contact': getattr(engagement, 'grants_contact', None)
         }
+        
+        # Get display names for linked fields
+        try:
+            if engagement_info['customer']:
+                customer_doc = frappe.get_doc("Customer", engagement_info['customer'])
+                engagement_info['customer_name'] = customer_doc.customer_name
+        except:
+            engagement_info['customer_name'] = engagement_info['customer'] or 'Unknown Customer'
+        
+        try:
+            if engagement_info['company']:
+                company_doc = frappe.get_doc("Company", engagement_info['company'])
+                engagement_info['company_name'] = company_doc.company_name
+        except:
+            engagement_info['company_name'] = engagement_info['company'] or 'Unknown Company'
+        
+        try:
+            if engagement_info['service_line']:
+                service_line_doc = frappe.get_doc("Service Line", engagement_info['service_line'])
+                engagement_info['service_line_name'] = service_line_doc.service_line_name if hasattr(service_line_doc, 'service_line_name') else engagement_info['service_line']
+        except:
+            engagement_info['service_line_name'] = engagement_info['service_line'] or 'Not specified'
+        
+        try:
+            if engagement_info['fiscal_year']:
+                fiscal_year_doc = frappe.get_doc("Fiscal Year", engagement_info['fiscal_year'])
+                engagement_info['fiscal_year_name'] = fiscal_year_doc.year if hasattr(fiscal_year_doc, 'year') else engagement_info['fiscal_year']
+        except:
+            engagement_info['fiscal_year_name'] = engagement_info['fiscal_year'] or 'Not specified'
+        
+        try:
+            if engagement_info['owner_partner']:
+                user_doc = frappe.get_doc("User", engagement_info['owner_partner'])
+                engagement_info['owner_partner_name'] = user_doc.full_name or user_doc.name
+        except:
+            engagement_info['owner_partner_name'] = engagement_info['owner_partner'] or 'Not assigned'
         
         return {
             'success': True,
@@ -2543,6 +2614,96 @@ def get_engagement_info(task_id, engagement_id=None):
         
     except Exception as e:
         frappe.log_error(f"Error getting engagement info: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def upload_engagement_file(engagement_id, file_content, file_name):
+    """
+    Upload a file to an engagement and attach it
+    """
+    try:
+        if not engagement_id or not file_content or not file_name:
+            return {
+                'success': False,
+                'error': 'Engagement ID, file content and file name are required'
+            }
+        
+        # Verify engagement exists
+        if not frappe.db.exists('Engagement', engagement_id):
+            return {
+                'success': False,
+                'error': 'Engagement not found'
+            }
+        
+        # Create file record
+        file_doc = frappe.get_doc({
+            'doctype': 'File',
+            'file_name': file_name,
+            'attached_to_doctype': 'Engagement',
+            'attached_to_name': engagement_id,
+            'content': file_content,
+            'is_private': 0
+        })
+        
+        file_doc.insert(ignore_permissions=False)
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'file_url': file_doc.file_url,
+            'file_name': file_doc.file_name,
+            'message': 'File uploaded successfully'
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error uploading engagement file: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def delete_engagement_file(file_name, engagement_id):
+    """
+    Delete a file attached to an engagement
+    """
+    try:
+        if not file_name or not engagement_id:
+            return {
+                'success': False,
+                'error': 'File name and engagement ID are required'
+            }
+        
+        # Find the file by name and attachment info
+        files = frappe.get_all("File", 
+            filters={
+                'file_name': file_name,
+                'attached_to_doctype': 'Engagement',
+                'attached_to_name': engagement_id
+            },
+            fields=['name']
+        )
+        
+        if files:
+            file_name_to_delete = files[0].name
+            frappe.delete_doc("File", file_name_to_delete)
+            frappe.db.commit()
+            
+            return {
+                'success': True,
+                'message': 'File deleted successfully'
+            }
+        else:
+            return {
+                'success': False,
+                'error': 'File not found'
+            }
+        
+    except Exception as e:
+        frappe.log_error(f"Error deleting engagement file: {str(e)}")
         return {
             'success': False,
             'error': str(e)

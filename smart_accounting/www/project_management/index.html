@@ -1,6 +1,9 @@
 {% extends "templates/web.html" %}
 
 {% block page_content %}
+{% if project_data.is_main_dashboard %}
+<script>document.body.classList.add('main-dashboard-view');</script>
+{% endif %}
 <div class="project-management-container">
     <!-- Header Section - Monday.com Style -->
     <div class="pm-header">
@@ -652,20 +655,15 @@
                                                     {% endif %}
                                                 </span>
                                             </div>
-                                            <div class="pm-cell pm-cell-engagement pm-clickable-engagement"
-                                                 data-editable="true"
-                                                 data-field-type="engagement_editor"
+                                            <div class="pm-cell pm-cell-engagement pm-engagement-indicator"
                                                  data-task-id="{{ task.task_id }}"
                                                  data-current-engagement="{{ task.custom_engagement or '' }}">
                                                 <div class="pm-engagement-content">
-                                                    {% if task.custom_engagement and task.engagement_el_count > 0 %}
-                                                        <span class="pm-engagement-display">{{ task.engagement_el_count }} EL{{ 's' if task.engagement_el_count != 1 else '' }}</span>
-                                                    {% elif task.custom_engagement %}
-                                                        <span class="pm-engagement-display">Engagement</span>
+                                                    {% if task.custom_engagement %}
+                                                        <span class="pm-engagement-display">{{ task.engagement_el_count or 0 }} EL{{ 's' if (task.engagement_el_count or 0) != 1 else '' }}</span>
                                                     {% else %}
                                                         <span class="pm-engagement-display no-engagement">No engagement</span>
                                                     {% endif %}
-                                                    <i class="fa fa-external-link pm-engagement-icon"></i>
                                                 </div>
                                             </div>
                                             <div class="pm-cell pm-cell-group">
