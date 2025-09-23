@@ -639,6 +639,9 @@ div.pm-table-header,
 .pm-cell-client,
 .pm-header-cell.pm-cell-client { width: 150px; min-width: 150px; flex: 0 0 150px; }
 
+.pm-cell-task-name,
+.pm-header-cell.pm-cell-task-name { width: 120px; min-width: 120px; flex: 0 0 120px; }
+
 .pm-cell-tf-tg,
 .pm-header-cell.pm-cell-tf-tg { width: 80px; min-width: 80px; flex: 0 0 80px; }
 
@@ -677,6 +680,12 @@ div.pm-table-header,
 
 .pm-cell-lodgment-due,
 .pm-header-cell.pm-cell-lodgment-due { width: 120px; min-width: 120px; flex: 0 0 120px; }
+
+.pm-cell-engagement,
+.pm-header-cell.pm-cell-engagement { width: 120px; min-width: 120px; flex: 0 0 120px; }
+
+.pm-cell-group,
+.pm-header-cell.pm-cell-group { width: 100px; min-width: 100px; flex: 0 0 100px; }
 
 .pm-cell-year-end,
 .pm-header-cell.pm-cell-year-end { width: 100px; min-width: 100px; flex: 0 0 100px; }
@@ -3537,7 +3546,333 @@ div.pm-table-header,
     box-shadow: 0 0 0 2px rgba(0, 115, 234, 0.1);
 }
 
+/* Task Name Editor Styles - inherit from system defaults */
+
+.pm-task-name-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    min-height: 32px;
+}
+
+.task-name-display {
+    flex: 1;
+    color: #333;
+    font-weight: 500;
+    word-break: break-word;
+}
+
+.pm-edit-icon {
+    color: #666;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    margin-left: 8px;
+    font-size: 12px;
+}
+
+.pm-cell-task-name:hover .pm-edit-icon {
+    opacity: 1;
+}
+
+.task-name-editor-container {
+    display: flex;
+    align-items: center;
+    padding: 4px;
+    background: white;
+    border: 2px solid #007bff;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.task-name-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    padding: 6px 8px;
+    font-size: 14px;
+    font-weight: 500;
+    background: transparent;
+    color: #333;
+}
+
+.task-name-input::placeholder {
+    color: #999;
+    font-weight: normal;
+}
+
+.task-name-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: 8px;
+}
+
+.task-name-save-btn,
+.task-name-cancel-btn {
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    transition: all 0.2s ease;
+}
+
+.task-name-save-btn {
+    background: #28a745;
+    color: white;
+}
+
+.task-name-save-btn:hover {
+    background: #218838;
+    transform: scale(1.05);
+}
+
+.task-name-cancel-btn {
+    background: #dc3545;
+    color: white;
+}
+
+.task-name-cancel-btn:hover {
+    background: #c82333;
+    transform: scale(1.05);
+}
+
+.pm-cell-task-name.editing {
+    background-color: #fff;
+    box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+}
+
 /* Column Management Dialog Styles */
+/* Engagement Editor Styles */
+.pm-cell-engagement {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.pm-cell-engagement:hover {
+    background-color: #f8f9fa;
+}
+
+.pm-engagement-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    min-height: 32px;
+}
+
+.pm-engagement-display {
+    flex: 1;
+    color: #333;
+    font-weight: 500;
+}
+
+.pm-engagement-display.no-engagement {
+    color: #999;
+    font-style: italic;
+}
+
+.pm-engagement-icon {
+    color: #666;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    margin-left: 8px;
+    font-size: 12px;
+}
+
+.pm-cell-engagement:hover .pm-engagement-icon {
+    opacity: 1;
+}
+
+/* Engagement Modal Styles - Similar to Comment Modal */
+.pm-engagement-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1050;
+    background: rgba(0,0,0,0.5);
+}
+
+.pm-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.pm-modal-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    width: 500px;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow: hidden;
+}
+
+.pm-modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8f9fa;
+}
+
+.pm-modal-header h3 {
+    margin: 0;
+    color: #333;
+    font-size: 18px;
+}
+
+.pm-modal-close {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: #666;
+    cursor: pointer;
+    padding: 5px;
+}
+
+.pm-modal-close:hover {
+    color: #333;
+}
+
+.pm-modal-body {
+    padding: 20px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.pm-engagement-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.pm-engagement-header h4 {
+    margin: 0;
+    color: #333;
+}
+
+.pm-el-badge {
+    background: #007bff;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.pm-engagement-details {
+    margin-bottom: 20px;
+}
+
+.pm-detail-row {
+    display: flex;
+    margin-bottom: 12px;
+    align-items: center;
+}
+
+.pm-detail-row label {
+    font-weight: 600;
+    color: #666;
+    width: 120px;
+    flex-shrink: 0;
+}
+
+.pm-detail-row span {
+    color: #333;
+}
+
+.pm-engagement-files h5 {
+    margin-bottom: 15px;
+    color: #333;
+    font-size: 14px;
+}
+
+.pm-file-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    background: #f8f9fa;
+}
+
+.pm-file-item:last-child {
+    margin-bottom: 0;
+}
+
+.pm-file-item i {
+    color: #dc3545;
+    margin-right: 10px;
+    font-size: 16px;
+}
+
+.pm-file-item a {
+    color: #007bff;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.pm-file-item a:hover {
+    text-decoration: underline;
+}
+
+.pm-no-engagement-info {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.pm-no-engagement-icon i {
+    font-size: 48px;
+    color: #ccc;
+    margin-bottom: 20px;
+    display: block;
+}
+
+.pm-no-engagement-info h4 {
+    margin: 0 0 10px 0;
+    color: #666;
+}
+
+.pm-no-engagement-info p {
+    color: #999;
+    margin-bottom: 20px;
+}
+
+.pm-engagement-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.pm-no-files {
+    color: #999;
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
 .pm-column-management-dialog {
     position: fixed;
     top: 0;

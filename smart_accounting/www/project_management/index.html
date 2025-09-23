@@ -355,6 +355,10 @@
                                         <span>Client Name</span>
                                         <div class="pm-column-resizer"></div>
                                     </div>
+                                    <div class="pm-header-cell pm-cell-task-name" data-column="task-name">
+                                        <span>Task Name</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
                                     <div class="pm-header-cell pm-cell-entity" data-column="entity">
                                         <span>Entity</span>
                                         <div class="pm-column-resizer"></div>
@@ -407,6 +411,14 @@
                                         <span>Lodgement Due</span>
                                         <div class="pm-column-resizer"></div>
                                     </div>
+                                    <div class="pm-header-cell pm-cell-engagement" data-column="engagement">
+                                        <span>Engagement</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
+                                    <div class="pm-header-cell pm-cell-group" data-column="group">
+                                        <span>Group</span>
+                                        <div class="pm-column-resizer"></div>
+                                    </div>
                                     <div class="pm-header-cell pm-cell-year-end" data-column="year-end">
                                         <span>Year End</span>
                                         <div class="pm-column-resizer"></div>
@@ -440,6 +452,17 @@
                                                         <i class="fa fa-comment-o"></i>
                                                         <span class="pm-comment-count">{{ task.comment_count or 0 }}</span>
                                                     </div>
+                                                </div>
+                                            </div>
+                                            <div class="pm-cell pm-cell-task-name pm-editable-task-name"
+                                                 data-editable="true"
+                                                 data-field="subject"
+                                                 data-task-id="{{ task.task_id }}"
+                                                 data-field-type="task_name_editor"
+                                                 data-current-task-name="{{ task.task_name or task.subject or '' }}">
+                                                <div class="pm-task-name-content">
+                                                    <span class="editable-field task-name-display">{{ task.task_name or task.subject or 'Untitled Task' }}</span>
+                                                    <i class="fa fa-edit pm-edit-icon"></i>
                                                 </div>
                                             </div>
                                             <div class="pm-cell pm-cell-entity">
@@ -628,6 +651,27 @@
                                                         -
                                                     {% endif %}
                                                 </span>
+                                            </div>
+                                            <div class="pm-cell pm-cell-engagement pm-clickable-engagement"
+                                                 data-editable="true"
+                                                 data-field-type="engagement_editor"
+                                                 data-task-id="{{ task.task_id }}"
+                                                 data-current-engagement="{{ task.custom_engagement or '' }}">
+                                                <div class="pm-engagement-content">
+                                                    {% if task.custom_engagement and task.engagement_el_count > 0 %}
+                                                        <span class="pm-engagement-display">{{ task.engagement_el_count }} EL{{ 's' if task.engagement_el_count != 1 else '' }}</span>
+                                                    {% elif task.custom_engagement %}
+                                                        <span class="pm-engagement-display">Engagement</span>
+                                                    {% else %}
+                                                        <span class="pm-engagement-display no-engagement">No engagement</span>
+                                                    {% endif %}
+                                                    <i class="fa fa-external-link pm-engagement-icon"></i>
+                                                </div>
+                                            </div>
+                                            <div class="pm-cell pm-cell-group">
+                                                <div class="pm-group-content">
+                                                    <span class="pm-group-display">{{ task.client_group or '-' }}</span>
+                                                </div>
                                             </div>
                                             <div class="pm-cell pm-cell-year-end"
                                                  data-editable="true"

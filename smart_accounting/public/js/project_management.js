@@ -59,7 +59,8 @@ class ProjectManagement {
                 $(e.target).hasClass('editable-field') ||
                 $(e.target).closest('[data-editable="true"]').length > 0 ||
                 $(e.target).closest('.pm-comment-indicator').length > 0 ||
-                $(e.target).closest('.pm-review-note-indicator').length > 0) {
+                $(e.target).closest('.pm-review-note-indicator').length > 0 ||
+                $(e.target).closest('.pm-clickable-engagement').length > 0) {
                 return;
             }
             this.openTaskDetails(e.currentTarget);
@@ -217,6 +218,30 @@ class ProjectManagement {
             e.stopPropagation();
             const commentId = $(e.currentTarget).data('comment-id');
             this.deleteComment(commentId);
+        });
+
+        // Comment indicator clicks
+        $(document).on('click', '.pm-comment-indicator', (e) => {
+            e.stopPropagation();
+            const taskId = $(e.currentTarget).data('task-id');
+            this.openCommentModal(taskId);
+        });
+
+        // Review note indicator clicks
+        $(document).on('click', '.pm-review-note-indicator', (e) => {
+            e.stopPropagation();
+            const taskId = $(e.currentTarget).data('task-id');
+            this.openReviewNoteModal(taskId);
+        });
+
+        // Engagement cell clicks - direct popup, no editing mode
+        $(document).on('click', '.pm-clickable-engagement', (e) => {
+            e.stopPropagation();
+            const $cell = $(e.currentTarget);
+            const taskId = $cell.data('task-id');
+            const currentEngagement = $cell.data('current-engagement') || '';
+            
+            this.openEngagementModal(taskId, currentEngagement);
         });
 
         // Unified dropdown management - close all when clicking outside
@@ -868,6 +893,9 @@ class ProjectManagement {
             case 'client_selector':
                 this.showClientSelector($cell);
                 break;
+            case 'task_name_editor':
+                this.showTaskNameEditor($cell);
+                break;
             case 'select':
                 this.showSelectEditor($cell);
                 break;
@@ -1054,6 +1082,9 @@ class ProjectManagement {
                 
                 // Remove event listener
                 $(document).off('click.client-selector');
+                
+                // Update group display based on new customer
+                this.updateGroupDisplay(taskId, customerId);
                 
                 frappe.show_alert({
                     message: 'Client updated successfully',
@@ -2378,6 +2409,7 @@ class ProjectManagement {
         // Set width for corresponding data cells - map column names to CSS classes
         const columnClassMap = {
             'client': 'pm-cell-client',
+            'task-name': 'pm-cell-task-name',
             'entity': 'pm-cell-entity',
             'tf-tg': 'pm-cell-tf-tg',
             'software': 'pm-cell-software',
@@ -2391,6 +2423,8 @@ class ProjectManagement {
             'reviewer': 'pm-cell-reviewer',
             'partner': 'pm-cell-partner',
             'lodgment-due': 'pm-cell-lodgment-due',
+            'engagement': 'pm-cell-engagement',
+            'group': 'pm-cell-group',
             'year-end': 'pm-cell-year-end',
             'last-updated': 'pm-cell-last-updated',
             'priority': 'pm-cell-priority'
@@ -2461,6 +2495,7 @@ class ProjectManagement {
         // Default column widths
         return {
             'client': 150,
+            'task-name': 120,
             'entity': 100,
             'tf-tg': 80,
             'software': 120,
@@ -2474,6 +2509,8 @@ class ProjectManagement {
             'reviewer': 120,
             'partner': 120,
             'lodgment-due': 130,
+            'engagement': 120,
+            'group': 100,
             'year-end': 100,
             'last-updated': 130,
             'priority': 100
@@ -2691,6 +2728,18 @@ class ProjectManagement {
                             <i class="fa fa-comment-o"></i>
                             <span class="pm-comment-count">0</span>
                         </div>
+                    </div>
+                </div>
+                <div class="pm-cell pm-cell-task-name pm-editable-task-name" style="width: ${currentWidths['task-name']}px; min-width: ${currentWidths['task-name']}px; flex: 0 0 ${currentWidths['task-name']}px;" data-editable="true" data-field="subject" data-task-id="${taskData.task_id}" data-field-type="task_name_editor" data-current-task-name="${taskData.task_subject || ''}">
+                    <div class="pm-task-name-content">
+                        <span class="editable-field task-name-display">${taskData.task_subject || 'Untitled Task'}</span>
+                        <i class="fa fa-edit pm-edit-icon"></i>
+                    </div>
+                </div>
+                <div class="pm-cell pm-cell-engagement pm-clickable-engagement" style="width: ${currentWidths.engagement}px; min-width: ${currentWidths.engagement}px; flex: 0 0 ${currentWidths.engagement}px;" data-task-id="${taskData.task_id}" data-current-engagement="">
+                    <div class="pm-engagement-content">
+                        <span class="pm-engagement-display no-engagement">No engagement</span>
+                        <i class="fa fa-external-link pm-engagement-icon"></i>
                     </div>
                 </div>
                 <div class="pm-cell pm-cell-entity" style="width: ${currentWidths.entity}px; min-width: ${currentWidths.entity}px; flex: 0 0 ${currentWidths.entity}px;">
@@ -5856,9 +5905,9 @@ class ProjectManagement {
     hideUnwantedColumns(visibleColumns) {
         // All possible columns
         const allColumns = [
-            'client', 'entity', 'tf-tg', 'software', 'status', 'target-month', 
+            'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 
             'budget', 'actual', 'review-note', 'action-person', 'preparer', 
-            'reviewer', 'partner', 'lodgment-due', 'year-end', 'last-updated', 'priority'
+            'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority'
         ];
         
         // Hide columns not in visible list
@@ -5902,6 +5951,7 @@ class ProjectManagement {
         // Define all available columns with their display names
         const allColumns = {
             'client': 'Client Name',
+            'task-name': 'Task Name',
             'entity': 'Entity',
             'tf-tg': 'TF/TG',
             'software': 'Software',
@@ -5915,6 +5965,8 @@ class ProjectManagement {
             'reviewer': 'Reviewer',
             'partner': 'Partner',
             'lodgment-due': 'Lodgement Due',
+            'engagement': 'Engagement',
+            'group': 'Group',
             'year-end': 'Year End',
             'last-updated': 'Last Updated',
             'priority': 'Priority'
@@ -6106,6 +6158,372 @@ class ProjectManagement {
     closeColumnDialog() {
         $('.pm-column-management-dialog').remove();
         $(document).off('keydown.column-dialog');
+    }
+
+    showTaskNameEditor($cell) {
+        const currentTaskName = $cell.data('current-task-name') || '';
+        const taskId = $cell.data('task-id');
+        
+        // Create task name editor HTML with confirmation dialog
+        const editorHTML = `
+            <div class="task-name-editor-container">
+                <input type="text" class="task-name-input" 
+                       value="${currentTaskName}"
+                       placeholder="Enter task name..." 
+                       data-task-id="${taskId}"
+                       maxlength="140">
+                <div class="task-name-actions">
+                    <button class="task-name-save-btn" type="button" title="Save">
+                        <i class="fa fa-check"></i>
+                    </button>
+                    <button class="task-name-cancel-btn" type="button" title="Cancel">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        // Replace cell content with editor
+        $cell.html(editorHTML);
+        
+        // Focus and select text
+        const $input = $cell.find('.task-name-input');
+        $input.focus().select();
+        
+        // Handle save button click
+        $cell.find('.task-name-save-btn').on('click', (e) => {
+            e.stopPropagation();
+            const newTaskName = $input.val().trim();
+            this.saveTaskName($cell, taskId, newTaskName);
+        });
+        
+        // Handle cancel button click
+        $cell.find('.task-name-cancel-btn').on('click', (e) => {
+            e.stopPropagation();
+            this.cancelTaskNameEditing($cell, currentTaskName);
+        });
+        
+        // Handle Enter/Escape keys
+        $input.on('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const newTaskName = $input.val().trim();
+                this.saveTaskName($cell, taskId, newTaskName);
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                this.cancelTaskNameEditing($cell, currentTaskName);
+            }
+        });
+        
+        // Handle click outside (blur)
+        $input.on('blur', (e) => {
+            // Small delay to allow button clicks to register
+            setTimeout(() => {
+                if (!$cell.find('.task-name-actions button:hover').length) {
+                    const newTaskName = $input.val().trim();
+                    if (newTaskName !== currentTaskName) {
+                        this.saveTaskName($cell, taskId, newTaskName);
+                    } else {
+                        this.cancelTaskNameEditing($cell, currentTaskName);
+                    }
+                }
+            }, 150);
+        });
+    }
+
+    saveTaskName($cell, taskId, newTaskName) {
+        // Prevent multiple simultaneous saves
+        if ($cell.data('saving')) {
+            return;
+        }
+        
+        $cell.data('saving', true);
+        
+        // Show confirmation dialog
+        frappe.confirm(
+            `Are you sure you want to change the task name to "${newTaskName || 'Untitled Task'}"?<br><br>
+             <small class="text-muted">This will update the task's subject field and may affect reports and references.</small>`,
+            () => {
+                // User confirmed, close dialog immediately and proceed with save
+                this.closeConfirmDialog();
+                this.performTaskNameSave($cell, taskId, newTaskName);
+            },
+            () => {
+                // User cancelled, close dialog immediately and restore original name
+                this.closeConfirmDialog();
+                $cell.removeData('saving');
+                const originalName = $cell.data('current-task-name') || '';
+                this.cancelTaskNameEditing($cell, originalName);
+            }
+        );
+    }
+
+    closeConfirmDialog() {
+        // Close any open confirmation dialogs
+        $('.modal.fade.in, .modal.show').modal('hide');
+        $('.modal-backdrop').remove();
+        $('body').removeClass('modal-open');
+        
+        // Also try Frappe's dialog close methods
+        if (frappe.cur_dialog) {
+            frappe.cur_dialog.hide();
+        }
+    }
+
+    async performTaskNameSave($cell, taskId, newTaskName) {
+        try {
+            // Show loading state
+            $cell.html('<i class="fa fa-spinner fa-spin"></i> Saving...');
+            
+            // Call backend to update task subject
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.update_task_field',
+                args: {
+                    task_id: taskId,
+                    field_name: 'subject',
+                    new_value: newTaskName || 'Untitled Task'
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                // Update the cell display
+                const displayName = newTaskName || 'Untitled Task';
+                $cell.data('current-task-name', displayName);
+                $cell.html(`
+                    <div class="pm-task-name-content">
+                        <span class="editable-field task-name-display">${displayName}</span>
+                        <i class="fa fa-edit pm-edit-icon"></i>
+                    </div>
+                `);
+                
+                $cell.removeClass('editing');
+                $cell.removeData('saving');
+                
+                frappe.show_alert({
+                    message: 'Task name updated successfully',
+                    indicator: 'green'
+                });
+            } else {
+                throw new Error('Update failed');
+            }
+        } catch (error) {
+            console.error('Save task name error:', error);
+            const originalName = $cell.data('current-task-name') || '';
+            this.cancelTaskNameEditing($cell, originalName);
+            $cell.removeData('saving');
+            
+            frappe.show_alert({
+                message: 'Failed to update task name',
+                indicator: 'red'
+            });
+        }
+    }
+
+    cancelTaskNameEditing($cell, originalName) {
+        const displayName = originalName || 'Untitled Task';
+        $cell.html(`
+            <div class="pm-task-name-content">
+                <span class="editable-field task-name-display">${displayName}</span>
+                <i class="fa fa-edit pm-edit-icon"></i>
+            </div>
+        `);
+        $cell.removeClass('editing');
+    }
+
+
+    async openEngagementModal(taskId, currentEngagement) {
+        try {
+            // Load engagement data first
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_engagement_info',
+                args: { 
+                    task_id: taskId,
+                    engagement_id: currentEngagement 
+                }
+            });
+
+            // Create modal HTML
+            const modalHtml = `
+                <div class="pm-engagement-modal" style="display: block;">
+                    <div class="pm-modal-overlay"></div>
+                    <div class="pm-modal-container">
+                        <div class="pm-modal-header">
+                            <h3><i class="fa fa-handshake-o"></i> Engagement Information</h3>
+                            <button class="pm-modal-close" type="button">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="pm-modal-body">
+                            <div class="pm-engagement-content-area">
+                                ${this.generateEngagementContent(response.message, taskId)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Remove existing modal
+            $('.pm-engagement-modal').remove();
+            
+            // Add modal to body
+            $('body').append(modalHtml);
+
+            // Bind modal events
+            this.bindEngagementModalEvents(taskId);
+
+        } catch (error) {
+            console.error('Load engagement error:', error);
+            frappe.show_alert({
+                message: 'Failed to load engagement information',
+                indicator: 'red'
+            });
+        }
+    }
+
+    generateEngagementContent(data, taskId) {
+        if (data && data.success) {
+            const info = data.engagement_info;
+            const elCount = data.el_count || 0;
+            
+            return `
+                <div class="pm-engagement-info">
+                    <div class="pm-engagement-header">
+                        <h4>${info.customer} - ${info.service_line}</h4>
+                        <span class="pm-el-badge">${elCount} EL${elCount !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="pm-engagement-details">
+                        <div class="pm-detail-row">
+                            <label>Customer:</label>
+                            <span>${info.customer}</span>
+                        </div>
+                        <div class="pm-detail-row">
+                            <label>Service Line:</label>
+                            <span>${info.service_line}</span>
+                        </div>
+                        <div class="pm-detail-row">
+                            <label>Frequency:</label>
+                            <span>${info.frequency || 'Not specified'}</span>
+                        </div>
+                        <div class="pm-detail-row">
+                            <label>Fiscal Year:</label>
+                            <span>${info.fiscal_year || 'Not specified'}</span>
+                        </div>
+                    </div>
+                    ${elCount > 0 ? `
+                        <div class="pm-engagement-files">
+                            <h5>Engagement Letters:</h5>
+                            ${data.engagement_letters.map(file => `
+                                <div class="pm-file-item">
+                                    <i class="fa fa-file-pdf-o"></i>
+                                    <a href="${file.file_url}" target="_blank">${file.file_name}</a>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : '<div class="pm-no-files">No engagement letters</div>'}
+                    <div class="pm-engagement-actions">
+                        <button class="pm-btn pm-btn-primary pm-open-engagement">Open Engagement</button>
+                        <button class="pm-btn pm-btn-secondary pm-change-engagement">Change Engagement</button>
+                    </div>
+                </div>
+            `;
+        } else {
+            return `
+                <div class="pm-no-engagement-info">
+                    <div class="pm-no-engagement-icon">
+                        <i class="fa fa-handshake-o"></i>
+                    </div>
+                    <h4>No Engagement</h4>
+                    <p>This task is not linked to any engagement.</p>
+                    <div class="pm-engagement-actions">
+                        <button class="pm-btn pm-btn-primary pm-link-engagement">Link Engagement</button>
+                        <button class="pm-btn pm-btn-secondary pm-create-engagement">Create New</button>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    bindEngagementModalEvents(taskId) {
+        const modal = $('.pm-engagement-modal');
+
+        // Close modal
+        modal.on('click', '.pm-modal-close, .pm-modal-overlay', () => {
+            this.closeEngagementModal();
+        });
+
+        // Prevent modal content clicks from closing
+        modal.on('click', '.pm-modal-container', (e) => {
+            e.stopPropagation();
+        });
+
+        // Open engagement in new tab
+        modal.on('click', '.pm-open-engagement', () => {
+            const engagementId = $('.pm-engagement-info').data('engagement-id');
+            if (engagementId) {
+                window.open(`/app/engagement/${engagementId}`, '_blank');
+            }
+        });
+
+        // Link/change engagement
+        modal.on('click', '.pm-link-engagement, .pm-change-engagement', () => {
+            window.open('/app/engagement', '_blank');
+            frappe.show_alert({
+                message: 'Select an engagement to link to this task',
+                indicator: 'blue'
+            });
+        });
+
+        // Create new engagement
+        modal.on('click', '.pm-create-engagement', () => {
+            window.open('/app/engagement/new', '_blank');
+        });
+    }
+
+    closeEngagementModal() {
+        $('.pm-engagement-modal').remove();
+    }
+
+    async updateGroupDisplay(taskId, customerId) {
+        try {
+            // Get client group ID for this customer
+            const response = await frappe.call({
+                method: 'frappe.client.get_value',
+                args: {
+                    doctype: 'Customer',
+                    name: customerId,
+                    fieldname: 'custom_client_group'
+                }
+            });
+
+            const clientGroupId = response.message?.custom_client_group || '';
+            let clientGroupName = '';
+            
+            if (clientGroupId) {
+                // Get the group name from Client Group DocType
+                const groupResponse = await frappe.call({
+                    method: 'frappe.client.get_value',
+                    args: {
+                        doctype: 'Client Group',
+                        name: clientGroupId,
+                        fieldname: 'group_name'
+                    }
+                });
+                clientGroupName = groupResponse.message?.group_name || '';
+            }
+            
+            // Update group cell display
+            const $groupCell = $(`.pm-task-row[data-task-id="${taskId}"] .pm-cell-group`);
+            if ($groupCell.length > 0) {
+                $groupCell.html(`
+                    <div class="pm-group-content">
+                        <span class="pm-group-display">${clientGroupName || '-'}</span>
+                    </div>
+                `);
+            }
+        } catch (error) {
+            console.error('Error updating group display:', error);
+            // Silently fail - not critical
+        }
     }
 
     getCurrentView() {

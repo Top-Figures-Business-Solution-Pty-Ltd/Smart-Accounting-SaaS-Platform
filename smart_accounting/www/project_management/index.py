@@ -155,14 +155,14 @@ def create_partition(partition_name, is_workspace=False, parent_partition=None, 
                     new_partition.visible_columns = parent_doc.visible_columns
                     new_partition.column_config = parent_doc.column_config or "{}"
                 else:
-                    new_partition.visible_columns = '["client", "entity", "tf-tg", "software", "status", "target-month", "budget", "actual"]'
+                    new_partition.visible_columns = '["client", "task-name", "entity", "tf-tg", "software", "status", "target-month", "budget", "actual"]'
                     new_partition.column_config = "{}"
             except:
-                new_partition.visible_columns = '["client", "entity", "tf-tg", "software", "status", "target-month", "budget", "actual"]'
+                new_partition.visible_columns = '["client", "task-name", "entity", "tf-tg", "software", "status", "target-month", "budget", "actual"]'
                 new_partition.column_config = "{}"
         else:
             # Default columns for new top-level partition
-            new_partition.visible_columns = '["client", "entity", "tf-tg", "software", "status", "target-month", "budget", "actual"]'
+            new_partition.visible_columns = '["client", "task-name", "entity", "tf-tg", "software", "status", "target-month", "budget", "actual"]'
             new_partition.column_config = "{}"
         
         new_partition.save()
@@ -329,7 +329,7 @@ def get_partition_column_config(partition_name):
             # Default configuration for main view - show all current columns
             return {
                 'success': True,
-                'visible_columns': ['client', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'year-end', 'last-updated', 'priority'],
+                'visible_columns': ['client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority'],
                 'column_config': {}
             }
         
@@ -352,7 +352,7 @@ def get_partition_column_config(partition_name):
         
         # If no configuration, use default
         if not visible_columns:
-            visible_columns = ['client', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'year-end', 'last-updated', 'priority']
+            visible_columns = ['client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'year-end', 'last-updated', 'priority']
         
         return {
             'success': True,
@@ -365,7 +365,7 @@ def get_partition_column_config(partition_name):
         return {
             'success': False,
             'error': str(e),
-            'visible_columns': ['client', 'status'],
+            'visible_columns': ['client', 'task-name', 'status'],
             'column_config': {}
         }
 
@@ -381,7 +381,7 @@ def save_partition_column_config(partition_name, visible_columns, column_config=
             return {
                 'success': True,
                 'message': 'Main view uses default configuration (not saved)',
-                'visible_columns': ['client', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'year-end', 'last-updated', 'priority'],
+                'visible_columns': ['client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority'],
                 'column_config': {}
             }
         
@@ -839,6 +839,43 @@ def get_project_management_data(view='main'):
                     'reference_name': task.name,
                     'comment_type': 'Comment'
                 })
+                
+                # Get engagement information safely
+                try:
+                    custom_engagement = getattr(task_doc, 'custom_engagement', None)
+                    if custom_engagement:
+                        task.custom_engagement = custom_engagement
+                        # Count engagement letters safely
+                        try:
+                            el_count = frappe.db.count('File', {
+                                'attached_to_doctype': 'Engagement',
+                                'attached_to_name': custom_engagement
+                            })
+                            task.engagement_el_count = el_count
+                        except:
+                            task.engagement_el_count = 0
+                    else:
+                        task.custom_engagement = None
+                        task.engagement_el_count = 0
+                except:
+                    task.custom_engagement = None
+                    task.engagement_el_count = 0
+                
+                # Get client group information from customer
+                try:
+                    if hasattr(task_doc, 'custom_client') and task_doc.custom_client:
+                        # Get the client group ID from customer
+                        client_group_id = frappe.db.get_value('Customer', task_doc.custom_client, 'custom_client_group')
+                        if client_group_id:
+                            # Get the group name from Client Group DocType
+                            client_group_name = frappe.db.get_value('Client Group', client_group_id, 'group_name')
+                            task.client_group = client_group_name or ''
+                        else:
+                            task.client_group = ''
+                    else:
+                        task.client_group = ''
+                except:
+                    task.client_group = ''
                     
             except:
                 # If custom fields don't exist, use empty values
@@ -962,7 +999,7 @@ def update_task_field(task_id, field_name, new_value):
         allowed_fields = [
             'custom_tftg', 'custom_tf_tg', 'custom_target_month',
             'custom_budget_planning', 'custom_actual_billing', 'custom_year_end', 'status',
-            'custom_service_line', 'custom_client', 'custom_lodgement_due_date'
+            'custom_service_line', 'custom_client', 'custom_lodgement_due_date', 'subject'
         ]
         
         if field_name not in allowed_fields:
@@ -1827,12 +1864,12 @@ def save_user_column_widths(column_widths):
         
         if existing:
             # Update existing record
-            frappe.db.set_value('User Preferences', existing, 'pm_column_widths', column_widths_json)
+            frappe.db.set_value('User Preferences', existing, 'column_widths', column_widths_json)
         else:
             # Create new UserPreferences record
             user_prefs = frappe.new_doc("User Preferences")
             user_prefs.user = frappe.session.user
-            user_prefs.pm_column_widths = column_widths_json
+            user_prefs.column_widths = column_widths_json
             user_prefs.insert(ignore_permissions=True)
         
         frappe.db.commit()
@@ -1861,7 +1898,7 @@ def load_user_column_widths():
         # Get column widths from UserPreferences document
         column_widths_json = frappe.db.get_value('User Preferences', 
                                                 {'user': frappe.session.user}, 
-                                                'pm_column_widths')
+                                                'column_widths')
         
         if column_widths_json:
             try:
@@ -2435,3 +2472,78 @@ def get_bulk_review_counts(task_ids):
     except Exception as e:
         frappe.log_error(f"Error getting bulk review counts: {str(e)}")
         return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def get_engagement_info(task_id, engagement_id=None):
+    """
+    Get engagement information for a task
+    """
+    try:
+        # Get task document
+        task = frappe.get_doc("Task", task_id)
+        
+        # If engagement_id provided, use it; otherwise get from task
+        engagement_id = engagement_id or getattr(task, 'custom_engagement', None)
+        
+        if not engagement_id:
+            return {
+                'success': False,
+                'message': 'No engagement linked to this task'
+            }
+        
+        # Get engagement document with minimal field access
+        try:
+            engagement = frappe.get_doc("Engagement", engagement_id)
+        except:
+            return {
+                'success': False,
+                'error': 'Engagement not found or no access permission'
+            }
+        
+        # Count engagement letters (assuming they are stored as attachments)
+        engagement_letters = []
+        el_count = 0
+        
+        try:
+            # Get file attachments for this engagement
+            files = frappe.get_all("File", 
+                filters={
+                    "attached_to_doctype": "Engagement",
+                    "attached_to_name": engagement_id
+                },
+                fields=["file_name", "file_url"]
+            )
+            
+            for file in files:
+                engagement_letters.append({
+                    'file_name': file.file_name,
+                    'file_url': file.file_url
+                })
+            
+            el_count = len(engagement_letters)
+        except:
+            # If file access fails, just set count to 0
+            el_count = 0
+        
+        # Prepare engagement info - only use basic fields that definitely exist
+        engagement_info = {
+            'name': engagement.name,
+            'customer': getattr(engagement, 'customer', 'Unknown Customer'),
+            'service_line': 'Service Line',  # Simplified for now
+            'frequency': 'Not specified',
+            'fiscal_year': 'Not specified'
+        }
+        
+        return {
+            'success': True,
+            'engagement_info': engagement_info,
+            'engagement_letters': engagement_letters,
+            'el_count': el_count
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting engagement info: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
