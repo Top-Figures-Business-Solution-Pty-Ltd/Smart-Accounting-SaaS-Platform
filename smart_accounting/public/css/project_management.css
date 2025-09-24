@@ -2043,11 +2043,322 @@
 }
 
 
+/* Multi-Select Column Styles */
+.pm-cell-select {
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    padding: 8px 12px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    position: sticky !important;
+    left: 0 !important;
+    background: white !important;
+    z-index: 10 !important;
+    border-right: 1px solid var(--monday-border) !important;
+}
+
+.pm-header-cell.pm-cell-select {
+    background: #f8f9fb !important;
+    font-weight: 600 !important;
+    border-bottom: 2px solid var(--monday-border) !important;
+}
+
+.pm-task-checkbox,
+.pm-select-all-checkbox {
+    width: 16px !important;
+    height: 16px !important;
+    cursor: pointer !important;
+    accent-color: var(--monday-blue) !important;
+    border-radius: 3px !important;
+    border: 1px solid #c5c7d0 !important;
+    transition: all 0.2s ease !important;
+    margin: 0 !important;
+}
+
+.pm-task-checkbox:hover,
+.pm-select-all-checkbox:hover {
+    border-color: var(--monday-blue) !important;
+    transform: scale(1.1) !important;
+}
+
+.pm-task-checkbox:checked,
+.pm-select-all-checkbox:checked {
+    background: var(--monday-blue) !important;
+    border-color: var(--monday-blue) !important;
+}
+
+/* Selected row styling */
+.pm-task-row.selected {
+    background: rgba(0, 115, 234, 0.05) !important;
+    border-left: 3px solid var(--monday-blue) !important;
+}
+
+.pm-task-row.selected .pm-cell-select {
+    background: rgba(0, 115, 234, 0.1) !important;
+}
+
+/* Multi-Select Action Menu */
+.pm-multiselect-menu {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    border: 1px solid var(--monday-border);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    padding: 12px 16px;
+    display: none;
+    align-items: center;
+    gap: 16px;
+    z-index: 10000;
+    animation: slideUpFadeIn 0.3s ease-out;
+    min-width: 300px;
+}
+
+.pm-multiselect-menu.show {
+    display: flex;
+}
+
+@keyframes slideUpFadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+.pm-multiselect-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--monday-dark);
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.pm-multiselect-count {
+    background: var(--monday-blue);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.pm-multiselect-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pm-multiselect-action {
+    background: none;
+    border: 1px solid var(--monday-border);
+    color: var(--monday-dark);
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pm-multiselect-action:hover {
+    background: var(--monday-hover);
+    border-color: var(--monday-blue);
+}
+
+.pm-multiselect-action.archive {
+    color: var(--monday-orange);
+    border-color: var(--monday-orange);
+}
+
+.pm-multiselect-action.archive:hover {
+    background: var(--monday-orange-light);
+    color: var(--monday-orange);
+}
+
+.pm-multiselect-action.delete {
+    color: var(--monday-red);
+    border-color: var(--monday-red);
+}
+
+.pm-multiselect-action.delete:hover {
+    background: var(--monday-red-light);
+    color: var(--monday-red);
+}
+
+.pm-multiselect-close {
+    background: none;
+    border: none;
+    color: var(--monday-gray);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    font-size: 16px;
+    transition: all 0.2s ease;
+}
+
+.pm-multiselect-close:hover {
+    background: var(--monday-hover);
+    color: var(--monday-dark);
+}
+
+/* Confirmation Dialog Styles */
+.pm-confirmation-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+}
+
+.pm-confirmation-content {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    width: 400px;
+    max-width: 90vw;
+    animation: dialogSlideIn 0.3s ease-out;
+}
+
+@keyframes dialogSlideIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.pm-confirmation-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--monday-border);
+}
+
+.pm-confirmation-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--monday-dark);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pm-confirmation-body {
+    padding: 20px 24px;
+}
+
+.pm-confirmation-message {
+    color: var(--monday-gray);
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0 0 16px 0;
+}
+
+.pm-confirmation-task-list {
+    background: #f8f9fb;
+    border: 1px solid var(--monday-border);
+    border-radius: 6px;
+    padding: 12px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.pm-confirmation-task-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 13px;
+    color: var(--monday-dark);
+}
+
+.pm-confirmation-task-item i {
+    color: var(--monday-blue);
+    width: 12px;
+}
+
+.pm-confirmation-footer {
+    padding: 16px 24px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    border-top: 1px solid var(--monday-border);
+}
+
+.pm-confirmation-btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid var(--monday-border);
+    background: white;
+    color: var(--monday-dark);
+}
+
+.pm-confirmation-btn:hover {
+    background: var(--monday-hover);
+}
+
+.pm-confirmation-btn.primary {
+    background: var(--monday-blue);
+    border-color: var(--monday-blue);
+    color: white;
+}
+
+.pm-confirmation-btn.primary:hover {
+    background: var(--monday-blue-dark);
+}
+
+.pm-confirmation-btn.danger {
+    background: var(--monday-red);
+    border-color: var(--monday-red);
+    color: white;
+}
+
+.pm-confirmation-btn.danger:hover {
+    background: var(--monday-red-dark);
+}
+
 /* Responsive Design for Project Management */
 @media (max-width: 768px) {
     .pm-toolbar {
         flex-direction: column;
         gap: 12px;
         align-items: stretch;
+    }
+    
+    .pm-multiselect-menu {
+        left: 10px;
+        right: 10px;
+        transform: none;
+        min-width: auto;
+    }
+    
+    .pm-confirmation-content {
+        width: 90vw;
+        margin: 0 20px;
     }
 }

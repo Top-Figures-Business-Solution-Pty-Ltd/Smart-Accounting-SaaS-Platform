@@ -73,6 +73,9 @@
                             
                             <!-- Project Table Header -->
                             <div class="pm-project-table-header pm-responsive-table">
+                                <div class="pm-header-cell pm-cell-select" data-column="select">
+                                    <input type="checkbox" class="pm-select-all-checkbox" title="Select all tasks in this project">
+                                </div>
                                 <div class="pm-header-cell pm-cell-client" data-column="client">
                                     <span>Client Name</span>
                                     <div class="pm-column-resizer"></div>
@@ -159,6 +162,9 @@
                             <div class="pm-task-group">
                                 {% for task in tasks %}
                                     <div class="pm-task-row pm-responsive-table" data-task-id="{{ task.task_id }}" data-task-name="{{ task.task_name }}">
+                                        <div class="pm-cell pm-cell-select">
+                                            <input type="checkbox" class="pm-task-checkbox" data-task-id="{{ task.task_id }}" title="Select this task">
+                                        </div>
                                         <div class="pm-cell pm-cell-client pm-client-with-comments"
                                              data-editable="true"
                                              data-field="custom_client"
@@ -420,6 +426,7 @@
                                 
                                 <!-- Add Task Row - Integrated Table Row -->
                                 <div class="pm-task-row pm-add-task-row pm-responsive-table" data-project="{{ project_name }}" data-client="{{ client_name }}">
+                                    <div class="pm-cell pm-cell-select"></div>
                                     <div class="pm-cell pm-cell-client">
                                         <button class="pm-add-task-btn">
                                             <i class="fa fa-plus"></i>
@@ -467,5 +474,27 @@
                 </div>
             {% endif %}
         </div>
+    </div>
+    
+    <!-- Multi-Select Action Menu -->
+    <div class="pm-multiselect-menu" id="pm-multiselect-menu">
+        <div class="pm-multiselect-info">
+            <i class="fa fa-check-square"></i>
+            <span class="pm-multiselect-count">0</span>
+            <span>tasks selected</span>
+        </div>
+        <div class="pm-multiselect-actions">
+            <button class="pm-multiselect-action archive" data-action="archive">
+                <i class="fa fa-archive"></i>
+                Archive
+            </button>
+            <button class="pm-multiselect-action delete" data-action="delete">
+                <i class="fa fa-trash"></i>
+                Delete
+            </button>
+        </div>
+        <button class="pm-multiselect-close" title="Clear selection">
+            <i class="fa fa-times"></i>
+        </button>
     </div>
 </div>

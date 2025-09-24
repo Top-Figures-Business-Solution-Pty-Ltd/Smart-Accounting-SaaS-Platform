@@ -683,8 +683,12 @@ def get_project_management_data(view='main'):
         # Get project IDs for task filtering
         project_ids = [p.name for p in projects]
         
-        # Get tasks only for the filtered projects
-        task_filters = {"status": ["!=", "Cancelled"]}
+        # Get tasks only for the filtered projects (excluding archived tasks and subtasks)
+        task_filters = {
+            "status": ["!=", "Cancelled"],
+            "custom_is_archived": ["!=", 1],  # Exclude archived tasks
+            "parent_task": ["is", "not set"]  # Only show top-level tasks, not subtasks
+        }
         if project_ids:
             task_filters["project"] = ["in", project_ids]
         else:
@@ -1148,7 +1152,11 @@ def get_subtasks(parent_task_id):
     """Get all subtasks for a parent task with role assignments"""
     try:
         subtasks = frappe.get_all("Task",
-            filters={"parent_task": parent_task_id, "status": ["!=", "Cancelled"]},
+            filters={
+                "parent_task": parent_task_id, 
+                "status": ["!=", "Cancelled"],
+                "custom_is_archived": ["!=", 1]  # Exclude archived subtasks
+            },
             fields=["name", "subject", "status", "priority", "creation", "modified", 
                    "custom_due_date", "description"],
             order_by="creation asc"  # New subtasks appear at bottom
@@ -1223,7 +1231,8 @@ def get_bulk_subtask_counts(task_ids):
             try:
                 count = frappe.db.count("Task", {
                     "parent_task": task_id,
-                    "status": ["!=", "Cancelled"]
+                    "status": ["!=", "Cancelled"],
+                    "custom_is_archived": ["!=", 1]  # Exclude archived subtasks from count
                 })
                 subtask_counts[task_id] = count
             except:
@@ -2871,3 +2880,101 @@ def delete_engagement_file(file_name, engagement_id):
             'success': False,
             'error': str(e)
         }
+
+@frappe.whitelist()
+def batch_delete_tasks(task_ids):
+    """
+    Batch delete multiple tasks
+    """
+    if not task_ids:
+        return {'success': False, 'error': 'No task IDs provided'}
+    
+    if isinstance(task_ids, str):
+        import json
+        try:
+            task_ids = json.loads(task_ids)
+        except:
+            task_ids = [task_ids]
+    
+    if not isinstance(task_ids, list):
+        task_ids = [task_ids]
+    
+    success_count = 0
+    errors = []
+    
+    for task_id in task_ids:
+        try:
+            # Check if task exists and user has permission
+            if not frappe.db.exists("Task", task_id):
+                errors.append(f"Task {task_id} not found")
+                continue
+                
+            # Check permissions
+            if not frappe.has_permission("Task", "delete", task_id):
+                errors.append(f"No permission to delete task {task_id}")
+                continue
+            
+            # Delete the task
+            frappe.delete_doc("Task", task_id, ignore_permissions=False)
+            success_count += 1
+            
+        except Exception as e:
+            errors.append(f"Error deleting task {task_id}: {str(e)}")
+    
+    frappe.db.commit()
+    
+    return {
+        'success': True,
+        'success_count': success_count,
+        'errors': errors,
+        'total_processed': len(task_ids)
+    }
+
+@frappe.whitelist()
+def batch_archive_tasks(task_ids):
+    """
+    Batch archive multiple tasks by setting custom_is_archived = 1
+    """
+    if not task_ids:
+        return {'success': False, 'error': 'No task IDs provided'}
+    
+    if isinstance(task_ids, str):
+        import json
+        try:
+            task_ids = json.loads(task_ids)
+        except:
+            task_ids = [task_ids]
+    
+    if not isinstance(task_ids, list):
+        task_ids = [task_ids]
+    
+    success_count = 0
+    errors = []
+    
+    for task_id in task_ids:
+        try:
+            # Check if task exists and user has permission
+            if not frappe.db.exists("Task", task_id):
+                errors.append(f"Task {task_id} not found")
+                continue
+                
+            # Check permissions
+            if not frappe.has_permission("Task", "write", task_id):
+                errors.append(f"No permission to modify task {task_id}")
+                continue
+            
+            # Archive the task by setting custom_is_archived = 1
+            frappe.db.set_value("Task", task_id, "custom_is_archived", 1)
+            success_count += 1
+            
+        except Exception as e:
+            errors.append(f"Error archiving task {task_id}: {str(e)}")
+    
+    frappe.db.commit()
+    
+    return {
+        'success': True,
+        'success_count': success_count,
+        'errors': errors,
+        'total_processed': len(task_ids)
+    }

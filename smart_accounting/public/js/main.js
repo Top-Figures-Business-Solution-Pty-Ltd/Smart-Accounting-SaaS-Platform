@@ -24,6 +24,7 @@ class ProjectManagement {
         this.softwareSelectorManager = window.SoftwareSelectorManager;
         this.workspaceManager = window.WorkspaceManager;
         this.subtaskManager = window.SubtaskManager;
+        this.multiSelectManager = window.MultiSelectManager;
         
         this.init();
     }
@@ -39,12 +40,20 @@ class ProjectManagement {
         this.initializeWorkspaceSwitcher();
         this.refreshReviewNoteCounts();
         this.initializeSubtasks();
+        this.initializeMultiSelect();
         
         // Apply partition column configuration after DOM is ready
         // Remove the setTimeout to prevent interference with filters
         this.applyPartitionColumnConfig();
         this.addColumnManagementButton();
         this.bindMainDashboardEvents();
+    }
+
+    initializeMultiSelect() {
+        // Initialize multi-select functionality
+        if (this.multiSelectManager && typeof this.multiSelectManager === 'function') {
+            this.multiSelectInstance = new this.multiSelectManager();
+        }
     }
 
     bindEvents() {
