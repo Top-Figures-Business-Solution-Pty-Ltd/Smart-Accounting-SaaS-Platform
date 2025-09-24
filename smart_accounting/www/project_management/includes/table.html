@@ -1,0 +1,471 @@
+<!-- Main Content Area - Monday.com Table Style -->
+<div class="pm-content">
+    <div class="pm-table-container pm-full-width-table">
+        <!-- Table Body -->
+        <div class="pm-table-body" id="pm-table-body">
+            {% if project_data and project_data.is_main_dashboard %}
+                <!-- Main Dashboard - Workspace/Board Selection -->
+                <div class="pm-main-dashboard">
+                    <div class="pm-dashboard-header">
+                        <h2><i class="fa fa-th-large"></i> Choose Your Workspace or Board</h2>
+                        <p>Select a workspace to see its boards, or go directly to a specific board to manage tasks.</p>
+                    </div>
+                    
+                    {% if project_data.organized_data.workspaces %}
+                    <div class="pm-section">
+                        <h3><i class="fa fa-th-large"></i> Workspaces</h3>
+                        <div class="pm-cards-grid">
+                            {% for workspace in project_data.organized_data.workspaces %}
+                            <div class="pm-workspace-card" data-view="{{ workspace.name }}">
+                                <div class="pm-card-icon">
+                                    <i class="fa {{ workspace.icon }}"></i>
+                                </div>
+                                <div class="pm-card-content">
+                                    <h4>{{ workspace.partition_name }}</h4>
+                                    <p>{{ workspace.description or 'No description' }}</p>
+                                    <div class="pm-card-stats">
+                                        <span><i class="fa fa-folder"></i> {{ workspace.project_count }} Projects</span>
+                                        <span><i class="fa fa-tasks"></i> {{ workspace.task_count }} Tasks</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if project_data.organized_data.boards %}
+                    <div class="pm-section">
+                        <h3><i class="fa fa-table"></i> Boards</h3>
+                        <div class="pm-cards-grid">
+                            {% for board in project_data.organized_data.boards %}
+                            <div class="pm-board-card" data-view="{{ board.name }}">
+                                <div class="pm-card-icon">
+                                    <i class="fa {{ board.icon }}"></i>
+                                </div>
+                                <div class="pm-card-content">
+                                    <h4>{{ board.partition_name }}</h4>
+                                    <p>{{ board.description or 'No description' }}</p>
+                                    <div class="pm-card-stats">
+                                        <span><i class="fa fa-folder"></i> {{ board.project_count }} Projects</span>
+                                        <span><i class="fa fa-tasks"></i> {{ board.task_count }} Tasks</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            {% elif project_data and project_data.organized_data %}
+                {% for client_name, projects in project_data.organized_data.items() %}
+                    {% for project_name, tasks in projects.items() %}
+                        <!-- Project Group Header -->
+                        <div class="pm-project-group" data-client="{{ client_name }}" data-project="{{ project_name }}">
+                            <div class="pm-project-header">
+                                <div class="pm-project-title">
+                                    <i class="fa fa-chevron-down pm-expand-icon"></i>
+                                    <div class="pm-project-color-bar project-color-{{ loop.index0 % 6 }}"></div>
+                                    <span class="pm-project-name">{{ project_name }}</span>
+                                    <span class="pm-task-count">{{ tasks|length }} Task{{ 's' if tasks|length != 1 else '' }}</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Project Table Header -->
+                            <div class="pm-project-table-header pm-responsive-table">
+                                <div class="pm-header-cell pm-cell-client" data-column="client">
+                                    <span>Client Name</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-task-name" data-column="task-name">
+                                    <span>Task Name</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-entity" data-column="entity">
+                                    <span>Entity</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-tf-tg" data-column="tf-tg">
+                                    <span>TF/TG</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-software" data-column="software">
+                                    <span>Software</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-status" data-column="status">
+                                    <span>Status</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-target-month" data-column="target-month">
+                                    <span>Target Month</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-budget" data-column="budget">
+                                    <span>Budget</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-actual" data-column="actual">
+                                    <span>Actual</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-review-note" data-column="review-note">
+                                    <span>Review Note</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-action-person" data-column="action-person">
+                                    <span>Action Person</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-preparer" data-column="preparer">
+                                    <span>Preparer</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-reviewer" data-column="reviewer">
+                                    <span>Reviewer</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-partner" data-column="partner">
+                                    <span>Partner</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-lodgment-due" data-column="lodgment-due">
+                                    <span>Lodgement Due</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-engagement" data-column="engagement">
+                                    <span>Engagement</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-group" data-column="group">
+                                    <span>Group</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-year-end" data-column="year-end">
+                                    <span>Year End</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-last-updated" data-column="last-updated">
+                                    <span>Last Updated</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-priority" data-column="priority">
+                                    <span>Priority</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Project Tasks -->
+                            <div class="pm-task-group">
+                                {% for task in tasks %}
+                                    <div class="pm-task-row pm-responsive-table" data-task-id="{{ task.task_id }}" data-task-name="{{ task.task_name }}">
+                                        <div class="pm-cell pm-cell-client pm-client-with-comments"
+                                             data-editable="true"
+                                             data-field="custom_client"
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="client_selector"
+                                             data-current-client-id="{{ task.custom_client or '' }}"
+                                             data-current-client-name="{{ task.client_name or 'No Client' }}">
+                                            <div class="pm-client-content">
+                                                <button class="pm-subtask-toggle" data-task-id="{{ task.task_id }}" title="Show/hide subtasks">
+                                                    <i class="fa fa-chevron-right"></i>
+                                                </button>
+                                                <span class="editable-field client-display">{{ task.client_name or 'No Client' }}</span>
+                                            </div>
+                                            <div class="pm-client-comments">
+                                                <div class="pm-comment-indicator" data-task-id="{{ task.task_id }}" title="点击查看或添加评论">
+                                                    <i class="fa fa-comment-o"></i>
+                                                    <span class="pm-comment-count">{{ task.comment_count or 0 }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="pm-cell pm-cell-task-name pm-editable-task-name"
+                                             data-editable="true"
+                                             data-field="subject"
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="task_name_editor"
+                                             data-current-task-name="{{ task.task_name or task.subject or '' }}">
+                                            <div class="pm-task-name-content">
+                                                <span class="editable-field task-name-display">{{ task.task_name or task.subject or 'Untitled Task' }}</span>
+                                                <i class="fa fa-edit pm-edit-icon"></i>
+                                            </div>
+                                        </div>
+                                        <div class="pm-cell pm-cell-entity">
+                                            <span class="pm-entity-badge entity-{{ task.entity_type.lower() if task.entity_type else 'company' }}">
+                                                {{ task.entity_type or 'Company' }}
+                                            </span>
+                                        </div>
+                                        <div class="pm-cell pm-cell-tf-tg" 
+                                             data-editable="true" 
+                                             data-field="custom_tftg" 
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="select"
+                                             data-options="TF,TG"
+                                             data-backend-options="Top Figures,Top Grants">
+                                            <span class="pm-tf-tg-badge editable-field">{{ task.tf_tg or 'TF' }}</span>
+                                        </div>
+                                        <div class="pm-cell pm-cell-software"
+                                             data-editable="true"
+                                             data-field="custom_softwares" 
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="software_selector">
+                                            {% if task.software_info %}
+                                                <div class="pm-software-tags">
+                                                    {% if task.software_info|length == 1 %}
+                                                        <span class="pm-software-badge pm-primary-software">{{ task.software_info[0].software }}</span>
+                                                    {% elif task.software_info|length > 1 %}
+                                                        {% set primary_software = task.software_info|selectattr('is_primary')|first or task.software_info[0] %}
+                                                        <span class="pm-software-badge pm-primary-software">{{ primary_software.software }}</span>
+                                                        <span class="pm-software-more">+{{ task.software_info|length - 1 }}</span>
+                                                    {% endif %}
+                                                </div>
+                                            {% else %}
+                                                <div class="pm-software-tags pm-empty-software">
+                                                    <span class="pm-software-badge pm-empty-badge">
+                                                        <i class="fa fa-plus"></i>
+                                                        Add software
+                                                    </span>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="pm-cell pm-cell-status">
+                                            <span class="pm-status-badge status-{{ task.status.lower() if task.status else 'open' }}">
+                                                {{ task.status or 'Open' }}
+                                            </span>
+                                        </div>
+                                        <div class="pm-cell pm-cell-target-month"
+                                             data-editable="true"
+                                             data-field="custom_target_month"
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="select"
+                                             data-options="January,February,March,April,May,June,July,August,September,October,November,December">
+                                            <span class="editable-field">{{ task.target_month or '-' }}</span>
+                                        </div>
+                                        <div class="pm-cell pm-cell-budget"
+                                             data-editable="true"
+                                             data-field="custom_budget_planning"
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="currency">
+                                            {% if task.budget_planning and task.budget_planning > 0 %}
+                                                <span class="pm-currency editable-field">${{ "%.2f"|format(task.budget_planning) }}</span>
+                                            {% else %}
+                                                <span class="pm-no-amount editable-field">-</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="pm-cell pm-cell-actual"
+                                             data-editable="true"
+                                             data-field="custom_actual_billing"
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="currency">
+                                            {% if task.actual_billing and task.actual_billing > 0 %}
+                                                <span class="pm-currency editable-field">${{ "%.2f"|format(task.actual_billing) }}</span>
+                                            {% else %}
+                                                <span class="pm-no-amount editable-field">-</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="pm-cell pm-cell-review-note">
+                                            {% if task.review_notes and task.review_notes|length > 0 %}
+                                                <div class="pm-review-note-indicator has-notes" data-task-id="{{ task.task_id }}" title="点击查看所有Review Notes">
+                                                    <i class="fa fa-check-circle"></i>
+                                                    <span>{{ task.review_notes|length }} note{{ 's' if task.review_notes|length != 1 else '' }}</span>
+                                                </div>
+                                            {% else %}
+                                                <div class="pm-review-note-indicator no-notes" data-task-id="{{ task.task_id }}">
+                                                    <i class="fa fa-times-circle"></i>
+                                                    <span>none</span>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="pm-cell pm-cell-action-person" 
+                                             data-editable="true" 
+                                             data-field="custom_action_person" 
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="person_selector">
+                                            {% if task.action_person_info %}
+                                                <div class="pm-user-avatars">
+                                                    {% if task.action_person_info|length == 1 %}
+                                                        <div class="pm-avatar pm-primary-user" title="{{ task.action_person_info[0].full_name }}" data-email="{{ task.action_person_info[0].email }}">{{ task.action_person_info[0].initials }}</div>
+                                                    {% elif task.action_person_info|length > 1 %}
+                                                        <div class="pm-avatar pm-primary-user" title="{{ task.action_person_info[0].full_name }}" data-email="{{ task.action_person_info[0].email }}">{{ task.action_person_info[0].initials }}</div>
+                                                        <div class="pm-avatar-more" title="Total {{ task.action_person_info|length }} people assigned">+{{ task.action_person_info|length - 1 }}</div>
+                                                    {% endif %}
+                                                </div>
+                                            {% else %}
+                                                <div class="pm-user-avatars pm-empty-person">
+                                                    <div class="pm-avatar pm-empty-avatar">
+                                                        <i class="fa fa-user"></i>
+                                                    </div>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="pm-cell pm-cell-preparer"
+                                             data-editable="true" 
+                                             data-field="custom_preparer" 
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="person_selector">
+                                            {% if task.preparer_info %}
+                                                <div class="pm-user-avatars">
+                                                    {% if task.preparer_info|length == 1 %}
+                                                        <div class="pm-avatar pm-primary-user" title="{{ task.preparer_info[0].full_name }}" data-email="{{ task.preparer_info[0].email }}">{{ task.preparer_info[0].initials }}</div>
+                                                    {% elif task.preparer_info|length > 1 %}
+                                                        <div class="pm-avatar pm-primary-user" title="{{ task.preparer_info[0].full_name }}" data-email="{{ task.preparer_info[0].email }}">{{ task.preparer_info[0].initials }}</div>
+                                                        <div class="pm-avatar-more" title="Total {{ task.preparer_info|length }} people assigned">+{{ task.preparer_info|length - 1 }}</div>
+                                                    {% endif %}
+                                                </div>
+                                            {% else %}
+                                                <div class="pm-user-avatars pm-empty-person">
+                                                    <div class="pm-avatar pm-empty-avatar">
+                                                        <i class="fa fa-user"></i>
+                                                    </div>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="pm-cell pm-cell-reviewer"
+                                             data-editable="true" 
+                                             data-field="custom_reviewer" 
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="person_selector">
+                                            {% if task.reviewer_info %}
+                                                <div class="pm-user-avatars">
+                                                    {% if task.reviewer_info|length == 1 %}
+                                                        <div class="pm-avatar pm-primary-user" title="{{ task.reviewer_info[0].full_name }}" data-email="{{ task.reviewer_info[0].email }}">{{ task.reviewer_info[0].initials }}</div>
+                                                    {% elif task.reviewer_info|length > 1 %}
+                                                        <div class="pm-avatar pm-primary-user" title="{{ task.reviewer_info[0].full_name }}" data-email="{{ task.reviewer_info[0].email }}">{{ task.reviewer_info[0].initials }}</div>
+                                                        <div class="pm-avatar-more" title="Total {{ task.reviewer_info|length }} people assigned">+{{ task.reviewer_info|length - 1 }}</div>
+                                                    {% endif %}
+                                                </div>
+                                            {% else %}
+                                                <div class="pm-user-avatars pm-empty-person">
+                                                    <div class="pm-avatar pm-empty-avatar">
+                                                        <i class="fa fa-user"></i>
+                                                    </div>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="pm-cell pm-cell-partner"
+                                             data-editable="true" 
+                                             data-field="custom_partner" 
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="person_selector">
+                                            {% if task.partner_info %}
+                                                <div class="pm-user-avatars">
+                                                    {% if task.partner_info|length == 1 %}
+                                                        <div class="pm-avatar pm-primary-user" title="{{ task.partner_info[0].full_name }}" data-email="{{ task.partner_info[0].email }}">{{ task.partner_info[0].initials }}</div>
+                                                    {% elif task.partner_info|length > 1 %}
+                                                        <div class="pm-avatar pm-primary-user" title="{{ task.partner_info[0].full_name }}" data-email="{{ task.partner_info[0].email }}">{{ task.partner_info[0].initials }}</div>
+                                                        <div class="pm-avatar-more" title="Total {{ task.partner_info|length }} people assigned">+{{ task.partner_info|length - 1 }}</div>
+                                                    {% endif %}
+                                                </div>
+                                            {% else %}
+                                                <div class="pm-user-avatars pm-empty-person">
+                                                    <div class="pm-avatar pm-empty-avatar">
+                                                        <i class="fa fa-user"></i>
+                                                    </div>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="pm-cell pm-cell-lodgment-due"
+                                             data-editable="true"
+                                             data-field="custom_lodgement_due_date"
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="date">
+                                            <span class="editable-field">
+                                                {% if task.lodgment_due_date %}
+                                                    {{ task.lodgment_due_date }}
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                        <div class="pm-cell pm-cell-engagement pm-engagement-indicator"
+                                             data-task-id="{{ task.task_id }}"
+                                             data-current-engagement="{{ task.custom_engagement or '' }}">
+                                            <div class="pm-engagement-content">
+                                                {% if task.custom_engagement %}
+                                                    <span class="pm-engagement-display">{{ task.engagement_el_count or 0 }} EL{{ 's' if (task.engagement_el_count or 0) != 1 else '' }}</span>
+                                                {% else %}
+                                                    <span class="pm-engagement-display no-engagement">No engagement</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="pm-cell pm-cell-group">
+                                            <div class="pm-group-content">
+                                                <span class="pm-group-display">{{ task.client_group or '-' }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="pm-cell pm-cell-year-end"
+                                             data-editable="true"
+                                             data-field="custom_year_end"
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="select"
+                                             data-options="January,February,March,April,May,June,July,August,September,October,November,December">
+                                            <span class="editable-field">{{ task.year_end or '-' }}</span>
+                                        </div>
+                                        <div class="pm-cell pm-cell-last-updated">
+                                            {% if task.last_updated %}
+                                                <span class="pm-last-updated">{{ task.last_updated }}</span>
+                                            {% else %}
+                                                <span class="pm-no-date">-</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="pm-cell pm-cell-priority">
+                                            {% if task.priority %}
+                                                <span class="pm-priority-badge priority-{{ task.priority.lower() }}">{{ task.priority }}</span>
+                                            {% else %}
+                                                <span class="pm-priority-badge priority-medium">Medium</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                                
+                                <!-- Add Task Row - Integrated Table Row -->
+                                <div class="pm-task-row pm-add-task-row pm-responsive-table" data-project="{{ project_name }}" data-client="{{ client_name }}">
+                                    <div class="pm-cell pm-cell-client">
+                                        <button class="pm-add-task-btn">
+                                            <i class="fa fa-plus"></i>
+                                            <span>Add new task</span>
+                                        </button>
+                                    </div>
+                                    <div class="pm-cell pm-cell-entity"></div>
+                                    <div class="pm-cell pm-cell-tf-tg"></div>
+                                    <div class="pm-cell pm-cell-software"></div>
+                                    <div class="pm-cell pm-cell-status"></div>
+                                    <div class="pm-cell pm-cell-target-month"></div>
+                                    <div class="pm-cell pm-cell-budget"></div>
+                                    <div class="pm-cell pm-cell-actual"></div>
+                                    <div class="pm-cell pm-cell-review-note"></div>
+                                    <div class="pm-cell pm-cell-action-person"></div>
+                                    <div class="pm-cell pm-cell-preparer"></div>
+                                    <div class="pm-cell pm-cell-reviewer"></div>
+                                    <div class="pm-cell pm-cell-partner"></div>
+                                    <div class="pm-cell pm-cell-lodgment-due"></div>
+                                    <div class="pm-cell pm-cell-year-end"></div>
+                                    <div class="pm-cell pm-cell-last-updated"></div>
+                                    <div class="pm-cell pm-cell-priority"></div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% endfor %}
+            {% else %}
+                <div class="pm-empty-state">
+                    <i class="fa fa-folder-open"></i>
+                    <h3>{% if current_view != 'main' %}Empty Workspace{% else %}No projects found{% endif %}</h3>
+                    <p>{% if current_view != 'main' %}No boards or projects created yet. Create your first board to get started.{% else %}Create your first project to get started{% endif %}</p>
+                    {% if current_view != 'main' and breadcrumb_path and breadcrumb_path|length > 1 %}
+                    <div class="pm-empty-actions">
+                        <button class="pm-btn pm-btn-secondary pm-back-to-parent" data-view="{{ breadcrumb_path[-2].key }}">
+                            <i class="fa fa-arrow-left"></i>
+                            Back to {{ breadcrumb_path[-2].label }}
+                        </button>
+                        <button class="pm-btn pm-btn-primary pm-new-task-btn">
+                            <i class="fa fa-plus"></i>
+                            New Task
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>

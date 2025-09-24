@@ -18,7 +18,6 @@ def get_context(context):
     
     # Get view parameter for different workspaces
     view = frappe.form_dict.get('view', 'main')
-    print(f"DEBUG: Current view parameter: {view}")
     
     # Set page context based on view
     context.title = get_workspace_title(view)
@@ -563,6 +562,7 @@ def get_main_dashboard_data():
             order_by="is_workspace desc, partition_name"
         )
         
+        
         # Organize into workspaces and boards
         workspaces = []
         boards = []
@@ -655,9 +655,7 @@ def get_project_management_data(view='main'):
                 # Check if partition exists
                 if frappe.db.exists("Partition", view):
                     project_filters["custom_partition"] = view
-                    print(f"DEBUG: Filtering projects by partition: {view}")
                 else:
-                    print(f"DEBUG: Partition {view} not found, showing empty results")
                     # If partition doesn't exist, return empty data
                     return {
                         'organized_data': {},
@@ -1022,7 +1020,7 @@ def update_task_field(task_id, field_name, new_value):
             'custom_tftg', 'custom_tf_tg', 'custom_target_month',
             'custom_budget_planning', 'custom_actual_billing', 'custom_year_end', 'status',
             'custom_service_line', 'custom_client', 'custom_lodgement_due_date', 'subject',
-            'custom_engagement'
+            'custom_engagement', 'custom_roles', 'custom_due_date', 'description'
         ]
         
         if field_name not in allowed_fields:
@@ -1041,15 +1039,15 @@ def update_task_field(task_id, field_name, new_value):
             if new_value and new_value not in valid_months:
                 return {'success': False, 'error': f'Year End must be a valid month. Invalid value: {new_value}'}
             print(f"DEBUG: Year End validation passed for value: {new_value}")
-        elif field_name in ['custom_lodgment_due_date', 'custom_lodgement_due_date']:
-            # Simple date validation for lodgment due date
+        elif field_name in ['custom_lodgment_due_date', 'custom_lodgement_due_date', 'custom_due_date']:
+            # Simple date validation for date fields
             if new_value and new_value.strip():
                 try:
                     from datetime import datetime
                     # Accept YYYY-MM-DD format
                     if len(new_value) == 10 and new_value.count('-') == 2:
                         datetime.strptime(new_value, '%Y-%m-%d')
-                        print(f"DEBUG: Lodgment due date validation passed for value: {new_value}")
+                        print(f"DEBUG: Date validation passed for {field_name}: {new_value}")
                     else:
                         return {'success': False, 'error': f'Date must be in YYYY-MM-DD format.'}
                 except ValueError:
@@ -1097,6 +1095,151 @@ def update_task_field(task_id, field_name, new_value):
         print(f"DEBUG: {error_msg}")  # Console debugging
         print(f"DEBUG: task_id={task_id}, field_name={field_name}, new_value={new_value}")
         return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def create_subtask(parent_task_id, subtask_name=None):
+    """Create a new subtask under a parent task"""
+    try:
+        # Get parent task info
+        parent_task = frappe.get_doc("Task", parent_task_id)
+        
+        # Create new subtask with inherited properties
+        new_task = frappe.new_doc("Task")
+        # Use provided name or generate default
+        if subtask_name and subtask_name.strip():
+            new_task.subject = subtask_name.strip()
+        else:
+            new_task.subject = f"Subtask of {parent_task.subject}"
+        new_task.project = parent_task.project
+        new_task.parent_task = parent_task_id
+        new_task.status = "Open"
+        new_task.priority = parent_task.priority or "Medium"
+        
+        # Inherit custom fields from parent
+        custom_fields = [
+            'custom_client', 'custom_tftg', 'custom_target_month', 
+            'custom_budget_planning', 'custom_actual_billing',
+            'custom_action_person', 'custom_preparer', 'custom_reviewer', 'custom_partner',
+            'custom_engagement', 'custom_partition'
+        ]
+        
+        for field in custom_fields:
+            if hasattr(parent_task, field):
+                setattr(new_task, field, getattr(parent_task, field))
+        
+        new_task.insert()
+        
+        return {
+            'success': True,
+            'task_id': new_task.name,
+            'task_subject': new_task.subject,
+            'parent_task_id': parent_task_id
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error creating subtask: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def get_subtasks(parent_task_id):
+    """Get all subtasks for a parent task with role assignments"""
+    try:
+        subtasks = frappe.get_all("Task",
+            filters={"parent_task": parent_task_id, "status": ["!=", "Cancelled"]},
+            fields=["name", "subject", "status", "priority", "creation", "modified", 
+                   "custom_due_date", "description"],
+            order_by="creation asc"  # New subtasks appear at bottom
+        )
+        
+        # Enrich subtasks with role assignments
+        for subtask in subtasks:
+            # Get role assignments for this subtask
+            role_assignments = frappe.get_all("Task Role Assignment",
+                filters={"parent": subtask.name},
+                fields=["role", "user", "is_primary"],
+                order_by="is_primary desc, role, user"
+            )
+            
+            # Add user details to role assignments
+            enriched_assignments = []
+            for assignment in role_assignments:
+                try:
+                    user_info = frappe.get_cached_value("User", assignment.user, 
+                                                       ["full_name", "email", "user_image"], as_dict=True)
+                    if user_info:
+                        # Generate initials
+                        full_name = user_info.get('full_name') or assignment.user
+                        name_parts = full_name.split()
+                        initials = ''.join([part[0].upper() for part in name_parts[:2]]) if name_parts else assignment.user[:2].upper()
+                        
+                        enriched_assignments.append({
+                            'role': assignment.role,
+                            'user': assignment.user,
+                            'is_primary': assignment.is_primary,
+                            'full_name': full_name,
+                            'email': user_info.get('email', assignment.user),
+                            'initials': initials,
+                            'user_image': user_info.get('user_image')
+                        })
+                except Exception as e:
+                    # If user info fails, still include basic assignment
+                    enriched_assignments.append({
+                        'role': assignment.role,
+                        'user': assignment.user,
+                        'is_primary': assignment.is_primary,
+                        'full_name': assignment.user,
+                        'email': assignment.user,
+                        'initials': assignment.user[:2].upper()
+                    })
+            
+            subtask['role_assignments'] = enriched_assignments
+        
+        return {
+            'success': True,
+            'subtasks': subtasks,
+            'count': len(subtasks)
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting subtasks: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def get_bulk_subtask_counts(task_ids):
+    """Get subtask counts for multiple tasks"""
+    try:
+        if isinstance(task_ids, str):
+            task_ids = frappe.parse_json(task_ids)
+        
+        subtask_counts = {}
+        
+        for task_id in task_ids:
+            try:
+                count = frappe.db.count("Task", {
+                    "parent_task": task_id,
+                    "status": ["!=", "Cancelled"]
+                })
+                subtask_counts[task_id] = count
+            except:
+                subtask_counts[task_id] = 0
+        
+        return {
+            'success': True,
+            'subtask_counts': subtask_counts
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting bulk subtask counts: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
 
 @frappe.whitelist()
 def create_new_task(project_name, client_name=None):
@@ -1865,10 +2008,11 @@ def sync_comment_counts():
 
 
 @frappe.whitelist()
-def save_user_column_widths(column_widths):
+def save_user_column_widths(column_widths, column_type="main_tasks"):
     """
     Save user's column width preferences to UserPreferences document
     High performance: uses dedicated DocType for user preferences
+    Supports both main_tasks and subtasks column types
     """
     try:
         import json
@@ -1885,43 +2029,53 @@ def save_user_column_widths(column_widths):
         # Check if UserPreferences record exists for current user
         existing = frappe.db.get_value("User Preferences", {"user": frappe.session.user})
         
+        # Determine which field to update based on column_type
+        field_name = 'subtask_column_widths' if column_type == 'subtasks' else 'column_widths'
+        
         if existing:
             # Update existing record
-            frappe.db.set_value('User Preferences', existing, 'column_widths', column_widths_json)
+            frappe.db.set_value('User Preferences', existing, field_name, column_widths_json)
         else:
             # Create new UserPreferences record
             user_prefs = frappe.new_doc("User Preferences")
             user_prefs.user = frappe.session.user
-            user_prefs.column_widths = column_widths_json
+            if column_type == 'subtasks':
+                user_prefs.subtask_column_widths = column_widths_json
+            else:
+                user_prefs.column_widths = column_widths_json
             user_prefs.insert(ignore_permissions=True)
         
         frappe.db.commit()
         
         return {
             'success': True,
-            'message': 'Column widths saved successfully'
+            'message': f'{column_type.title()} column widths saved successfully'
         }
         
     except Exception as e:
-        frappe.log_error(f"Error saving user column widths: {str(e)}")
+        frappe.log_error(f"Error saving user {column_type} column widths: {str(e)}")
         return {
             'success': False,
             'error': str(e)
         }
 
 @frappe.whitelist()
-def load_user_column_widths():
+def load_user_column_widths(column_type="main_tasks"):
     """
     Load user's column width preferences from UserPreferences document
     High performance: dedicated DocType for user preferences
+    Supports both main_tasks and subtasks column types
     """
     try:
         import json
         
+        # Determine which field to load based on column_type
+        field_name = 'subtask_column_widths' if column_type == 'subtasks' else 'column_widths'
+        
         # Get column widths from UserPreferences document
         column_widths_json = frappe.db.get_value('User Preferences', 
                                                 {'user': frappe.session.user}, 
-                                                'column_widths')
+                                                field_name)
         
         if column_widths_json:
             try:
@@ -1934,26 +2088,35 @@ def load_user_column_widths():
                 # If JSON is corrupted, return default
                 pass
         
-        # Return default widths if no saved preferences
-        default_widths = {
-            'client': 150,
-            'entity': 100,
-            'tf-tg': 80,
-            'software': 120,
-            'status': 100,
-            'target-month': 120,
-            'budget': 120,
-            'actual': 120,
-            'review-note': 120,
-            'action-person': 130,
-            'preparer': 120,
-            'reviewer': 120,
-            'partner': 120,
-            'lodgment-due': 130,
-            'year-end': 100,
-            'last-updated': 130,
-            'priority': 100
-        }
+        # Return default widths based on column type
+        if column_type == 'subtasks':
+            default_widths = {
+                'name': 250,      # Task Name column
+                'owner': 120,     # Owner column
+                'status': 100,    # Status column  
+                'due': 120,       # Due Date column
+                'note': 180       # Note column
+            }
+        else:
+            default_widths = {
+                'client': 150,
+                'entity': 100,
+                'tf-tg': 80,
+                'software': 120,
+                'status': 100,
+                'target-month': 120,
+                'budget': 120,
+                'actual': 120,
+                'review-note': 120,
+                'action-person': 130,
+                'preparer': 120,
+                'reviewer': 120,
+                'partner': 120,
+                'lodgment-due': 130,
+                'year-end': 100,
+                'last-updated': 130,
+                'priority': 100
+            }
         
         return {
             'success': True,

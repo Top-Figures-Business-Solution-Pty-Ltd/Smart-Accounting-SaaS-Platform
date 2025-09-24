@@ -305,22 +305,6 @@
  },
  {
   "default_value": null,
-  "doc_type": "Task",
-  "docstatus": 0,
-  "doctype": "Property Setter",
-  "doctype_or_field": "DocType",
-  "field_name": null,
-  "is_system_generated": 0,
-  "modified": "2025-09-22 15:14:42.954880",
-  "module": null,
-  "name": "Task-main-field_order",
-  "property": "field_order",
-  "property_type": "Data",
-  "row_name": null,
-  "value": "[\"subject\", \"project\", \"custom_client\", \"custom_tftg\", \"custom_service_line\", \"custom_target_month\", \"custom_lodgement_due_date\", \"custom_year_end\", \"custom_review_notes\", \"custom_due_date_source\", \"custom_override_reason\", \"issue\", \"type\", \"color\", \"is_group\", \"is_template\", \"custom_budget_planning\", \"custom_actual_billing\", \"custom_comment_count\", \"custom_is_archived\", \"custom_roles\", \"custom_softwares\", \"custom_companies\", \"custom_sequence\", \"engagement\", \"column_break0\", \"status\", \"priority\", \"task_weight\", \"parent_task\", \"completed_by\", \"completed_on\", \"sb_timeline\", \"exp_start_date\", \"expected_time\", \"start\", \"column_break_11\", \"exp_end_date\", \"progress\", \"duration\", \"is_milestone\", \"sb_details\", \"description\", \"sb_depends_on\", \"depends_on\", \"depends_on_tasks\", \"sb_actual\", \"act_start_date\", \"actual_time\", \"column_break_15\", \"act_end_date\", \"sb_costing\", \"total_costing_amount\", \"column_break_20\", \"total_billing_amount\", \"sb_more_info\", \"review_date\", \"closing_date\", \"column_break_22\", \"department\", \"company\", \"lft\", \"rgt\", \"old_parent\", \"template_task\"]"
- },
- {
-  "default_value": null,
   "doc_type": "Customer",
   "docstatus": 0,
   "doctype": "Property Setter",
@@ -334,5 +318,21 @@
   "property_type": "Data",
   "row_name": null,
   "value": "[\"basic_info\", \"naming_series\", \"salutation\", \"customer_name\", \"custom_company\", \"custom_entity_type\", \"custom_year_end\", \"client_group\", \"customer_type\", \"customer_group\", \"column_break0\", \"territory\", \"gender\", \"lead_name\", \"opportunity_name\", \"prospect_name\", \"account_manager\", \"image\", \"defaults_tab\", \"default_currency\", \"default_bank_account\", \"column_break_14\", \"default_price_list\", \"internal_customer_section\", \"is_internal_customer\", \"represents_company\", \"column_break_70\", \"companies\", \"more_info\", \"market_segment\", \"industry\", \"customer_pos_id\", \"website\", \"language\", \"column_break_45\", \"customer_details\", \"dashboard_tab\", \"contact_and_address_tab\", \"address_contacts\", \"address_html\", \"column_break1\", \"contact_html\", \"primary_address_and_contact_detail\", \"column_break_26\", \"customer_primary_address\", \"primary_address\", \"column_break_nwor\", \"customer_primary_contact\", \"mobile_no\", \"email_id\", \"tax_tab\", \"taxation_section\", \"tax_id\", \"column_break_21\", \"tax_category\", \"tax_withholding_category\", \"accounting_tab\", \"credit_limit_section\", \"payment_terms\", \"credit_limits\", \"default_receivable_accounts\", \"accounts\", \"loyalty_points_tab\", \"loyalty_program\", \"column_break_54\", \"loyalty_program_tier\", \"sales_team_tab\", \"sales_team\", \"sales_team_section\", \"default_sales_partner\", \"column_break_66\", \"default_commission_rate\", \"settings_tab\", \"so_required\", \"dn_required\", \"column_break_53\", \"is_frozen\", \"disabled\", \"portal_users_tab\", \"portal_users\"]"
+ },
+ {
+  "default_value": null,
+  "doc_type": "Task",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocType",
+  "field_name": null,
+  "is_system_generated": 0,
+  "modified": "2025-09-24 13:14:32.726921",
+  "module": null,
+  "name": "Task-main-field_order",
+  "property": "field_order",
+  "property_type": "Data",
+  "row_name": null,
+  "value": "[\"subject\", \"project\", \"custom_client\", \"custom_tftg\", \"custom_service_line\", \"custom_target_month\", \"custom_lodgement_due_date\", \"custom_year_end\", \"custom_review_notes\", \"custom_due_date_source\", \"custom_override_reason\", \"issue\", \"type\", \"color\", \"is_group\", \"is_template\", \"custom_budget_planning\", \"custom_actual_billing\", \"custom_comment_count\", \"custom_is_archived\", \"custom_roles\", \"custom_softwares\", \"custom_companies\", \"custom_sequence\", \"custom_engagement\", \"custom_due_date\", \"custom_note\", \"column_break0\", \"status\", \"priority\", \"task_weight\", \"parent_task\", \"completed_by\", \"completed_on\", \"sb_timeline\", \"exp_start_date\", \"expected_time\", \"start\", \"column_break_11\", \"exp_end_date\", \"progress\", \"duration\", \"is_milestone\", \"sb_details\", \"description\", \"sb_depends_on\", \"depends_on\", \"depends_on_tasks\", \"sb_actual\", \"act_start_date\", \"actual_time\", \"column_break_15\", \"act_end_date\", \"sb_costing\", \"total_costing_amount\", \"column_break_20\", \"total_billing_amount\", \"sb_more_info\", \"review_date\", \"closing_date\", \"column_break_22\", \"department\", \"company\", \"lft\", \"rgt\", \"old_parent\", \"template_task\"]"
  }
 ]

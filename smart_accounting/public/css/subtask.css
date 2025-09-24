@@ -1,0 +1,592 @@
+/* Project Management - Subtask Styles */
+
+/* Subtask Controls in Client Cell */
+.pm-subtask-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-right: 8px;
+}
+
+.pm-subtask-toggle,
+.pm-add-subtask {
+    background: none;
+    border: none;
+    color: #8b9dc3;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    font-size: 12px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.8;
+    min-width: 24px;
+    flex-shrink: 0;
+}
+
+.pm-subtask-toggle:hover,
+.pm-add-subtask:hover {
+    background: rgba(0, 115, 234, 0.1);
+    color: var(--monday-blue);
+    opacity: 1;
+}
+
+.pm-subtask-toggle.has-subtasks {
+    color: var(--monday-blue);
+    opacity: 1;
+}
+
+.pm-client-content {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+/* Subtask Container - Monday.com style */
+.pm-subtask-container {
+    background: #f8f9fb;
+    border-left: 3px solid var(--monday-blue);
+    margin: 4px 0 8px 16px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+        max-height: 0;
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+        max-height: 500px;
+    }
+}
+
+.pm-subtask-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: white;
+    border-bottom: 1px solid #e1e5e9;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.pm-subtask-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--monday-dark);
+    font-size: 14px;
+}
+
+.pm-add-subtask-inline {
+    background: var(--monday-blue);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.pm-add-subtask-inline:hover {
+    background: var(--monday-blue-dark);
+    transform: translateY(-1px);
+}
+
+/* Subtask Table Structure - Monday.com style */
+.pm-subtask-table {
+    width: 100%;
+    border: 1px solid #e1e5e9;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.pm-subtask-table-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    background: #f8f9fb;
+    border-bottom: 2px solid #e1e5e9;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--monday-dark);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-height: 40px;
+}
+
+.pm-subtask-table-header .pm-subtask-col {
+    border-right: 1px solid #d1d5db;
+    position: relative;
+}
+
+.pm-subtask-table-header .pm-subtask-col:last-child {
+    border-right: none;
+}
+
+.pm-subtask-col {
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    border-right: 1px solid #e1e5e9;
+    position: relative;
+}
+
+.pm-subtask-col:last-child {
+    border-right: none;
+}
+
+.pm-subtask-col-name {
+    flex: 2;
+    min-width: 200px;
+}
+
+.pm-subtask-col-owner {
+    flex: 1;
+    min-width: 100px;
+}
+
+.pm-subtask-col-status {
+    flex: 1;
+    min-width: 100px;
+}
+
+.pm-subtask-col-due {
+    flex: 1;
+    min-width: 120px;
+}
+
+.pm-subtask-col-note {
+    flex: 1.5;
+    min-width: 150px;
+}
+
+/* Subtask List */
+.pm-subtask-list {
+    padding: 0;
+}
+
+/* Subtask Row Structure */
+.pm-subtask-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.pm-subtask-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--monday-gray);
+    font-style: italic;
+}
+
+.pm-subtask-empty i {
+    margin-right: 8px;
+    color: var(--monday-blue);
+}
+
+/* Subtask Items - Monday.com table style */
+.pm-subtask-item {
+    padding: 8px 16px;
+    background: white;
+    border-bottom: 1px solid #f0f1f3;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.pm-subtask-item .pm-subtask-col {
+    border-right: 1px solid #f0f1f3;
+}
+
+.pm-subtask-item .pm-subtask-col:last-child {
+    border-right: none;
+}
+
+.pm-subtask-item:hover {
+    background: #f8f9fb;
+}
+
+.pm-subtask-item:last-of-type:not(.pm-add-subtask-item) {
+    border-bottom: 1px solid #f0f1f3;
+}
+
+.pm-subtask-item:before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: transparent;
+    transition: background 0.2s ease;
+}
+
+.pm-subtask-item:hover:before {
+    background: var(--monday-blue);
+}
+
+/* Subtask Cell Styles */
+.pm-subtask-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.pm-subtask-name {
+    font-weight: 500;
+    color: var(--monday-dark);
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.pm-subtask-name:hover {
+    color: var(--monday-blue);
+}
+
+.pm-subtask-owner-cell,
+.pm-subtask-status-cell,
+.pm-subtask-due-cell,
+.pm-subtask-note-cell {
+    width: 100%;
+    cursor: pointer;
+}
+
+.pm-subtask-note {
+    color: var(--monday-gray);
+    font-style: italic;
+    font-size: 13px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pm-subtask-note:not(:empty) {
+    color: var(--monday-dark);
+    font-style: normal;
+}
+
+.pm-subtask-checkbox {
+    margin-right: 12px;
+}
+
+.pm-subtask-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--monday-green);
+    border-radius: 3px;
+    transition: all 0.2s ease;
+}
+
+.pm-subtask-checkbox input[type="checkbox"]:hover {
+    transform: scale(1.1);
+}
+
+.pm-subtask-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.pm-subtask-name {
+    display: block;
+    font-weight: 500;
+    color: var(--monday-dark);
+    margin-bottom: 4px;
+    word-wrap: break-word;
+    line-height: 1.4;
+    font-size: 14px;
+}
+
+.pm-subtask-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+}
+
+.pm-subtask-status {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 500;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+}
+
+.pm-subtask-status.status-open {
+    background: var(--monday-orange-light);
+    color: var(--monday-orange);
+}
+
+.pm-subtask-status.status-working {
+    background: var(--monday-blue-light);
+    color: var(--monday-blue);
+}
+
+.pm-subtask-status.status-completed {
+    background: var(--monday-green-light);
+    color: var(--monday-green);
+}
+
+.pm-subtask-time {
+    color: var(--monday-gray);
+}
+
+/* Subtask Actions */
+.pm-subtask-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.pm-subtask-item:hover .pm-subtask-actions {
+    opacity: 1;
+}
+
+.pm-subtask-action {
+    background: none;
+    border: none;
+    color: var(--monday-gray);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+    font-size: 12px;
+}
+
+.pm-subtask-action:hover {
+    background: var(--monday-hover);
+    color: var(--monday-dark);
+}
+
+.pm-subtask-action[data-action="delete"]:hover {
+    color: var(--monday-red);
+}
+
+/* Parent Task with Expanded Subtasks */
+.pm-task-row.has-expanded-subtasks {
+    background: #f8f9fb;
+    border-left: 3px solid var(--monday-blue);
+}
+
+/* Add Subtask Row - Monday.com style inline adding */
+.pm-add-subtask-item {
+    border-bottom: 1px solid #f0f1f3;
+}
+
+.pm-add-subtask-item .pm-subtask-placeholder-checkbox {
+    width: 16px;
+    height: 16px;
+    border: 2px dashed #ddd;
+    border-radius: 3px;
+    opacity: 0.5;
+}
+
+.pm-add-subtask-btn-inline {
+    background: none;
+    border: none;
+    color: var(--monday-gray);
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    width: 100%;
+    text-align: left;
+    justify-content: flex-start;
+}
+
+.pm-add-subtask-btn-inline:hover {
+    background: var(--monday-hover);
+    color: var(--monday-blue);
+}
+
+.pm-add-subtask-btn-inline i {
+    font-size: 11px;
+    opacity: 0.7;
+}
+
+/* Inline Subtask Editor */
+.pm-subtask-inline-editor {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 4px 0;
+}
+
+.pm-subtask-name-input {
+    flex: 1;
+    border: 1px solid var(--monday-blue);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    background: white;
+    transition: all 0.2s ease;
+}
+
+.pm-subtask-name-input:focus {
+    border-color: var(--monday-blue);
+    box-shadow: 0 0 0 2px rgba(0, 115, 234, 0.1);
+}
+
+.pm-subtask-name-input::placeholder {
+    color: var(--monday-gray);
+    font-style: italic;
+}
+
+.pm-subtask-editor-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.pm-subtask-save-btn,
+.pm-subtask-cancel-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+    font-size: 12px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pm-subtask-save-btn {
+    color: var(--monday-green);
+}
+
+.pm-subtask-save-btn:hover {
+    background: var(--monday-green-light);
+}
+
+.pm-subtask-cancel-btn {
+    color: var(--monday-gray);
+}
+
+.pm-subtask-cancel-btn:hover {
+    background: var(--monday-hover);
+    color: var(--monday-red);
+}
+
+/* Saving state */
+.pm-subtask-saving {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--monday-blue);
+    font-size: 13px;
+    padding: 6px 10px;
+}
+
+.pm-subtask-saving i {
+    font-size: 12px;
+}
+
+/* Status Selector for Subtasks */
+.pm-status-select {
+    width: 100%;
+    border: 1px solid var(--monday-blue);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    background: white;
+    cursor: pointer;
+}
+
+.pm-status-select:focus {
+    border-color: var(--monday-blue);
+    box-shadow: 0 0 0 2px rgba(0, 115, 234, 0.1);
+}
+
+/* Editing state for subtask cells */
+.pm-subtask-item.editing {
+    background: #f0f7ff;
+    border-left: 3px solid var(--monday-blue);
+}
+
+.pm-subtask-item.editing .pm-subtask-col {
+    pointer-events: none;
+}
+
+.pm-subtask-item.editing .pm-subtask-col.editing {
+    pointer-events: auto;
+}
+
+/* Subtask Column Resizers */
+.pm-subtask-col-resizer {
+    position: absolute;
+    right: -2px;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    cursor: col-resize;
+    background: transparent;
+    z-index: 10;
+    transition: all 0.2s ease;
+    border-radius: 2px;
+}
+
+.pm-subtask-col-resizer:hover {
+    background: var(--monday-blue);
+    width: 6px;
+    right: -3px;
+    box-shadow: 0 0 4px rgba(0, 115, 234, 0.3);
+}
+
+/* Make resizers more discoverable */
+.pm-subtask-table-header:hover .pm-subtask-col-resizer {
+    background: rgba(0, 115, 234, 0.1);
+}
+
+.pm-subtask-col-resizer:active {
+    background: var(--monday-blue-dark);
+}
+
+/* Resizing state */
+.pm-resizing-subtask-column {
+    cursor: col-resize !important;
+    user-select: none;
+}
+
+.pm-resizing-subtask-column * {
+    cursor: col-resize !important;
+    user-select: none;
+}
+
+.pm-resizing-subtask-column .pm-subtask-col-resizer {
+    background: var(--monday-blue);
+}
