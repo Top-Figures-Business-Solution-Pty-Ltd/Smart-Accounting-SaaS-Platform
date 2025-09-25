@@ -57,8 +57,7 @@ app_license = "mit"
 # ----------
 
 # application home page (will override Website Settings)
-#home_page = "/app"
-home_page = "workspace/smart-accounting"
+home_page = "/app"
 
 
 # website user home page (by Role)
