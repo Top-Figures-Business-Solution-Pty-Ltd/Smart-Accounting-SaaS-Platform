@@ -171,6 +171,7 @@ class TableManager {
         
         // Set width for corresponding data cells - map column names to CSS classes
         const columnClassMap = {
+            'select': 'pm-cell-select',  // Fixed width column, not user-resizable
             'client': 'pm-cell-client',
             'task-name': 'pm-cell-task-name',
             'entity': 'pm-cell-entity',
@@ -189,18 +190,29 @@ class TableManager {
             'engagement': 'pm-cell-engagement',
             'group': 'pm-cell-group',
             'year-end': 'pm-cell-year-end',
+            'note': 'pm-cell-note',
             'last-updated': 'pm-cell-last-updated',
             'priority': 'pm-cell-priority'
         };
         
         const cellClass = `.${columnClassMap[column]}`;
         if (cellClass !== '.undefined') {
-            $(cellClass).css({
-                'width': minWidth + 'px',
-                'min-width': minWidth + 'px',
-                'max-width': minWidth + 'px',
-                'flex': `0 0 ${minWidth}px`
-            });
+            // Special handling for select column - always fixed width
+            if (column === 'select') {
+                $(cellClass).css({
+                    'width': '40px',
+                    'min-width': '40px',
+                    'max-width': '40px',
+                    'flex': '0 0 40px'
+                });
+            } else {
+                $(cellClass).css({
+                    'width': minWidth + 'px',
+                    'min-width': minWidth + 'px',
+                    'max-width': minWidth + 'px',
+                    'flex': `0 0 ${minWidth}px`
+                });
+            }
         }
         
         // Update total table width
@@ -208,9 +220,11 @@ class TableManager {
     }
     
     applyColumnWidths() {
+        // Apply widths to all columns
         Object.keys(this.columnWidths).forEach(column => {
             this.setColumnWidth(column, this.columnWidths[column]);
         });
+        
         // Update total table width after applying all column widths
         this.updateTableWidth();
     }
@@ -255,17 +269,18 @@ class TableManager {
     }
     
     getDefaultColumnWidths() {
-        // Default column widths
+        // Simplified default column widths (temporarily restore sync version)
         return {
+            'select': 40,
             'client': 150,
-            'task-name': 120,
+            'task-name': 200,
             'entity': 100,
             'tf-tg': 80,
             'software': 120,
-            'status': 100,
+            'status': 120,
             'target-month': 120,
-            'budget': 120,
-            'actual': 120,
+            'budget': 100,
+            'actual': 100,
             'review-note': 120,
             'action-person': 130,
             'preparer': 120,
@@ -275,6 +290,7 @@ class TableManager {
             'engagement': 120,
             'group': 100,
             'year-end': 100,
+            'note': 150,
             'last-updated': 130,
             'priority': 100
         };
@@ -481,12 +497,16 @@ class TableManager {
 
     // Column visibility management
     hideUnwantedColumns(visibleColumns) {
-        // All possible columns
+        // All possible columns (excluding select which is always visible)
         const allColumns = [
             'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 
             'budget', 'actual', 'review-note', 'action-person', 'preparer', 
-            'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority'
+            'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'note', 'last-updated', 'priority'
         ];
+        
+        // Always ensure select column is visible (it's not user-configurable)
+        $(`.pm-header-cell[data-column="select"]`).show().css('display', '').removeClass('column-hidden');
+        $(`.pm-cell-select`).show().css('display', '').removeClass('column-hidden');
         
         // Hide columns not in visible list
         allColumns.forEach(column => {

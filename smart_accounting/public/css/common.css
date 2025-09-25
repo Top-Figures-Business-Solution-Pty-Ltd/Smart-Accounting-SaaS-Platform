@@ -127,6 +127,27 @@
     text-transform: capitalize;
 }
 
+.status-not-started { background: #fff4e6; color: var(--monday-orange); }
+.status-working-on-it { background: #e6f7ff; color: var(--monday-blue); }
+.status-stuck { background: #ffe6e6; color: var(--monday-red); }
+.status-ready-for-manager-review { background: #f0f9ff; color: #1e40af; }
+.status-ready-for-partner-review { background: #fef3c7; color: #d97706; }
+.status-review-points-to-be-actioned { background: #fce7f3; color: #be185d; }
+.status-ready-to-send-to-client { background: #ecfdf5; color: #059669; }
+.status-sent-to-client-for-signature { background: #f3e8ff; color: #7c3aed; }
+.status-ready-to-lodge { background: #e0f2fe; color: #0284c7; }
+.status-lodged { background: #dcfce7; color: #16a34a; }
+.status-question-book-sent { background: #fef2f2; color: #dc2626; }
+.status-annual-gst { background: #f9fafb; color: #374151; }
+.status-wait-for-payment { background: #fef3c7; color: #d97706; }
+.status-waiting-on-payroll { background: #fef3c7; color: #d97706; }
+.status-waiting-on-client { background: #fef3c7; color: #d97706; }
+.status-hold { background: #f3f4f6; color: #6b7280; }
+.status-not-trading { background: #f3f4f6; color: #6b7280; }
+.status-r-d { background: #f0f9ff; color: #1e40af; }
+.status-for-invoicing { background: #fdf4ff; color: #a21caf; }
+
+/* Legacy status classes for backward compatibility */
 .status-open { background: #fff4e6; color: var(--monday-orange); }
 .status-working { background: #e6f7ff; color: var(--monday-blue); }
 .status-completed { background: #e6f7e6; color: var(--monday-green); }

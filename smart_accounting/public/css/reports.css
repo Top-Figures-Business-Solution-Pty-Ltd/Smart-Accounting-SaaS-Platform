@@ -245,6 +245,9 @@ div.pm-table-header,
 .pm-cell-year-end,
 .pm-header-cell.pm-cell-year-end { width: 100px; min-width: 100px; flex: 0 0 100px; }
 
+.pm-cell-note,
+.pm-header-cell.pm-cell-note { width: 150px; min-width: 150px; flex: 0 0 150px; }
+
 .pm-cell-last-updated,
 .pm-header-cell.pm-cell-last-updated { width: 120px; min-width: 120px; flex: 0 0 120px; }
 

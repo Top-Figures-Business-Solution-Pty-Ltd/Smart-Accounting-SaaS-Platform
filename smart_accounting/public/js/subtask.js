@@ -199,10 +199,11 @@ class SubtaskManager {
                 <div class="pm-subtask-col pm-subtask-col-status">
                     <div class="pm-subtask-status-cell"
                          data-editable="true"
-                         data-field="status"
+                         data-field="custom_task_status"
                          data-task-id="${subtask.name}"
-                         data-field-type="status_selector">
-                        <span class="pm-status-badge status-${subtask.status.toLowerCase()}">${subtask.status}</span>
+                         data-field-type="select"
+                         data-options-source="custom_task_status">
+                        <span class="pm-status-badge status-${(subtask.custom_task_status || subtask.status || 'Not Started').toLowerCase().replace(/\s+/g, '-')}">${subtask.custom_task_status || subtask.status || 'Not Started'}</span>
                     </div>
                 </div>
                 <div class="pm-subtask-col pm-subtask-col-due">
@@ -217,10 +218,10 @@ class SubtaskManager {
                 <div class="pm-subtask-col pm-subtask-col-note">
                     <div class="pm-subtask-note-cell"
                          data-editable="true"
-                         data-field="description"
+                         data-field="custom_note"
                          data-task-id="${subtask.name}"
                          data-field-type="text">
-                        <span class="pm-subtask-note editable-field">${subtask.description || '-'}</span>
+                        <span class="pm-subtask-note editable-field">${subtask.note || '-'}</span>
                     </div>
                 </div>
             </div>
@@ -309,34 +310,49 @@ class SubtaskManager {
         });
 
         // Subtask checkbox change
-        $container.on('change', '.pm-subtask-checkbox input', (e) => {
+        $container.on('change', '.pm-subtask-checkbox input', async (e) => {
             const subtaskId = $(e.target).closest('.pm-subtask-item').data('subtask-id');
             const isCompleted = $(e.target).is(':checked');
-            this.updateSubtaskStatus(subtaskId, isCompleted ? 'Completed' : 'Open');
+            
+            // Get available status options dynamically
+            let completedStatus = 'Completed';
+            let notStartedStatus = 'Not Started';
+            
+            try {
+                const response = await frappe.call({
+                    method: 'smart_accounting.www.project_management.index.get_task_status_options'
+                });
+                
+                if (response.message && response.message.success) {
+                    const statusOptions = response.message.status_options;
+                    // Try to find appropriate status values
+                    const completedOption = statusOptions.find(s => s.toLowerCase().includes('completed') || s.toLowerCase().includes('lodged'));
+                    const notStartedOption = statusOptions.find(s => s.toLowerCase().includes('not started') || s.toLowerCase() === 'open');
+                    
+                    if (completedOption) completedStatus = completedOption;
+                    if (notStartedOption) notStartedStatus = notStartedOption;
+                }
+            } catch (error) {
+                console.warn('Could not load status options, using defaults');
+            }
+            
+            this.updateSubtaskStatus(subtaskId, isCompleted ? completedStatus : notStartedStatus);
         });
 
-        // Bind editable field events for subtasks (similar to main task editing)
+        // Bind editable field events for subtasks - use main editing system
         $container.on('click', '[data-editable="true"]', (e) => {
             e.stopPropagation();
             const $cell = $(e.currentTarget);
-            const taskId = $cell.data('task-id');
-            const field = $cell.data('field');
-            const fieldType = $cell.data('field-type');
             
-            // Use the existing editor system from main project management
-            if (fieldType === 'person_selector') {
-                if (window.PersonSelectorManager) {
-                    window.PersonSelectorManager.showMultiPersonSelector($cell, taskId, field);
-                }
-            } else if (fieldType === 'software_selector') {
-                if (window.SoftwareSelectorManager) {
-                    window.SoftwareSelectorManager.showSoftwareSelector($cell, taskId, field);
-                }
-            } else if (fieldType === 'status_selector') {
-                // Handle status editing specifically
-                this.showStatusSelector($cell, taskId, field);
-            } else if (window.EditorsManager) {
-                window.EditorsManager.makeEditable($cell[0]);
+            // Direct delegation to main editing system
+            if (window.EditorsManager && window.EditorsManager.startFieldEditing) {
+                window.EditorsManager.startFieldEditing($cell[0]);
+            } else {
+                console.error('EditorsManager not available');
+                frappe.show_alert({
+                    message: 'Editor not available',
+                    indicator: 'red'
+                });
             }
         });
 
@@ -501,7 +517,7 @@ class SubtaskManager {
     }
 
     // Status selector for subtasks
-    showStatusSelector($cell, taskId, field) {
+    async showStatusSelector($cell, taskId, field) {
         // Prevent multiple editing
         if ($cell.hasClass('editing')) return;
         
@@ -511,13 +527,32 @@ class SubtaskManager {
         $cell.addClass('editing');
         $cell.closest('.pm-subtask-item').addClass('editing');
         
-        // Status options
-        const statusOptions = [
-            { value: 'Open', label: 'Open', class: 'status-open' },
-            { value: 'Working', label: 'Working', class: 'status-working' },
-            { value: 'Completed', label: 'Completed', class: 'status-completed' },
-            { value: 'Cancelled', label: 'Cancelled', class: 'status-cancelled' }
-        ];
+        // Get status options from backend (same as main tasks)
+        let statusOptions = [];
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_task_status_options'
+            });
+            
+            if (response.message && response.message.success) {
+                statusOptions = response.message.status_options.map(status => ({
+                    value: status,
+                    label: status,
+                    class: `status-${status.toLowerCase().replace(/\s+/g, '-')}`
+                }));
+            }
+        } catch (error) {
+            console.warn('Failed to load status options, using fallback');
+        }
+        
+        // Fallback options if API fails - use minimal fallback
+        if (statusOptions.length === 0) {
+            console.warn('No status options available from API, using minimal fallback');
+            statusOptions = [
+                { value: 'Open', label: 'Open', class: 'status-open' },
+                { value: 'Completed', label: 'Completed', class: 'status-completed' }
+            ];
+        }
         
         // Create status selector
         const selectHTML = `

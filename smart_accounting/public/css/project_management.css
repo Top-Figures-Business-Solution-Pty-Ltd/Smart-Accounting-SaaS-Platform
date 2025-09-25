@@ -341,20 +341,17 @@
     border-left: 3px solid var(--monday-blue);
 }
 
-/* Monday.com Style Add Task Row - Integrated in Table */
+/* Simplified Add Task Row - Single Button Design */
 .pm-add-task-row {
-    background: #ffffff !important;
-    border-bottom: 1px solid var(--monday-border) !important;
-    transition: all 0.2s ease !important;
-    min-height: 52px !important;
-    height: 52px !important;
-    display: flex !important;
-    align-items: center !important;
-    border: none !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    background: #ffffff;
+    border-bottom: 1px solid var(--monday-border);
+    transition: all 0.2s ease;
+    min-height: 52px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    margin: 0;
 }
 
 .pm-add-task-row:hover {
@@ -362,29 +359,25 @@
 }
 
 .pm-add-task-btn {
-    background: transparent !important;
-    border: none !important;
-    color: #676879 !important;
-    font-size: 14px !important;
-    font-weight: 400 !important;
-    cursor: pointer !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 8px !important;
-    padding: 8px 12px !important;
-    width: 100% !important;
-    height: 100% !important;
-    text-align: left !important;
-    border-radius: 0 !important;
-    transition: all 0.2s ease !important;
-    font-family: inherit !important;
-    min-height: 40px !important;
-    box-shadow: none !important;
-    margin: 0 !important;
+    background: transparent;
+    border: none;
+    color: #676879;
+    font-size: 14px;
+    font-weight: 400;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    text-align: left;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    outline: none;
 }
 
 .pm-add-task-btn:hover {
-    background: transparent;
+    background: rgba(0, 115, 234, 0.05);
     color: #323338;
 }
 
@@ -396,46 +389,6 @@
 
 .pm-add-task-btn:hover i {
     opacity: 1;
-}
-
-/* Make sure add task row cells have the same styling as regular cells */
-.pm-add-task-row .pm-cell {
-    background: transparent !important;
-    border-right: 1px solid var(--monday-border) !important;
-    display: flex !important;
-    align-items: center !important;
-    padding: 0 !important;
-    min-height: 52px !important;
-    height: 52px !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    margin: 0 !important;
-}
-
-.pm-add-task-row .pm-cell:last-child {
-    border-right: none !important;
-}
-
-/* Override any default button styles */
-.pm-add-task-row button,
-.pm-add-task-row .pm-add-task-btn {
-    background: transparent !important;
-    border: none !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    margin: 0 !important;
-    outline: none !important;
-}
-
-/* Ensure the add task row looks exactly like a table row */
-.pm-add-task-row {
-    width: 2000px !important;
-    min-width: 2000px !important;
-    flex-wrap: nowrap !important;
-}
-
-.pm-add-task-row .pm-cell:first-child {
-    border-left: none !important;
 }
 
 /* Client Selector Styles */

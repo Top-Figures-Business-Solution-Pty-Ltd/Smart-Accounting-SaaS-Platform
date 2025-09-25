@@ -685,7 +685,6 @@ def get_project_management_data(view='main'):
         
         # Get tasks only for the filtered projects (excluding archived tasks and subtasks)
         task_filters = {
-            "status": ["!=", "Cancelled"],
             "custom_is_archived": ["!=", 1],  # Exclude archived tasks
             "parent_task": ["is", "not set"]  # Only show top-level tasks, not subtasks
         }
@@ -696,7 +695,7 @@ def get_project_management_data(view='main'):
             task_filters["project"] = ["in", []]
         
         tasks = frappe.db.get_all("Task",
-            fields=["name", "subject", "status", "priority", "exp_end_date", "project", "description", "modified", "company"],
+            fields=["name", "subject", "custom_task_status", "priority", "exp_end_date", "project", "description", "modified", "company", "custom_note"],
             filters=task_filters,
             order_by="exp_end_date"
         )
@@ -707,6 +706,12 @@ def get_project_management_data(view='main'):
         for task in tasks:
             task.task_id = task.name
             task.task_name = task.subject
+            
+            # Map custom_task_status to status for frontend compatibility
+            task.status = task.custom_task_status or 'Not Started'
+            
+            # Map custom_note to note for frontend compatibility
+            task.note = task.custom_note or ''
             
             # Get project information
             if task.project:
@@ -996,7 +1001,7 @@ def update_task_status(task_id, new_status):
     try:
         task = frappe.get_doc("Task", task_id)
         task.flags.ignore_version = True
-        task.status = new_status
+        task.custom_task_status = new_status
         task.save()
         
         # Force commit and clear cache
@@ -1022,9 +1027,9 @@ def update_task_field(task_id, field_name, new_value):
         # Validate field name (security check) - removed person and software fields as they're now handled by sub-tables
         allowed_fields = [
             'custom_tftg', 'custom_tf_tg', 'custom_target_month',
-            'custom_budget_planning', 'custom_actual_billing', 'custom_year_end', 'status',
+            'custom_budget_planning', 'custom_actual_billing', 'custom_year_end', 'custom_task_status',
             'custom_service_line', 'custom_client', 'custom_lodgement_due_date', 'subject',
-            'custom_engagement', 'custom_roles', 'custom_due_date', 'description'
+            'custom_engagement', 'custom_roles', 'custom_due_date', 'description', 'custom_note'
         ]
         
         if field_name not in allowed_fields:
@@ -1116,7 +1121,7 @@ def create_subtask(parent_task_id, subtask_name=None):
             new_task.subject = f"Subtask of {parent_task.subject}"
         new_task.project = parent_task.project
         new_task.parent_task = parent_task_id
-        new_task.status = "Open"
+        new_task.custom_task_status = "Not Started"
         new_task.priority = parent_task.priority or "Medium"
         
         # Inherit custom fields from parent
@@ -1154,16 +1159,21 @@ def get_subtasks(parent_task_id):
         subtasks = frappe.get_all("Task",
             filters={
                 "parent_task": parent_task_id, 
-                "status": ["!=", "Cancelled"],
                 "custom_is_archived": ["!=", 1]  # Exclude archived subtasks
             },
-            fields=["name", "subject", "status", "priority", "creation", "modified", 
-                   "custom_due_date", "description"],
+            fields=["name", "subject", "custom_task_status", "priority", "creation", "modified", 
+                   "custom_due_date", "description", "custom_note"],
             order_by="creation asc"  # New subtasks appear at bottom
         )
         
         # Enrich subtasks with role assignments
         for subtask in subtasks:
+            # Map custom_task_status to status for frontend compatibility
+            subtask.status = subtask.custom_task_status or 'Not Started'
+            
+            # Map custom_note to note for frontend compatibility
+            subtask.note = subtask.custom_note or ''
+            
             # Get role assignments for this subtask
             role_assignments = frappe.get_all("Task Role Assignment",
                 filters={"parent": subtask.name},
@@ -1231,7 +1241,6 @@ def get_bulk_subtask_counts(task_ids):
             try:
                 count = frappe.db.count("Task", {
                     "parent_task": task_id,
-                    "status": ["!=", "Cancelled"],
                     "custom_is_archived": ["!=", 1]  # Exclude archived subtasks from count
                 })
                 subtask_counts[task_id] = count
@@ -1284,7 +1293,7 @@ def create_new_task(project_name, client_name=None):
         new_task = frappe.new_doc("Task")
         new_task.subject = auto_subject
         new_task.project = project_id
-        new_task.status = "Open"
+        new_task.custom_task_status = "Not Started"
         new_task.priority = "Medium"
         
         # Set default custom fields based on project/client
@@ -1394,12 +1403,12 @@ def get_task_status_options():
     Get available status options for Task doctype
     """
     try:
-        # Get Task doctype meta to fetch status field options
+        # Get Task doctype meta to fetch custom_task_status field options
         task_meta = frappe.get_meta("Task")
         status_field = None
         
         for field in task_meta.fields:
-            if field.fieldname == "status":
+            if field.fieldname == "custom_task_status":
                 status_field = field
                 break
         
@@ -1408,8 +1417,25 @@ def get_task_status_options():
             options = [opt.strip() for opt in status_field.options.split('\n') if opt.strip()]
             return {'success': True, 'status_options': options}
         else:
-            # Fallback to default options
-            return {'success': True, 'status_options': ['Open', 'Working', 'Completed', 'Cancelled']}
+            # Fallback: Get existing values from database as options
+            try:
+                existing_statuses = frappe.db.sql("""
+                    SELECT DISTINCT custom_task_status 
+                    FROM `tabTask` 
+                    WHERE custom_task_status IS NOT NULL 
+                    AND custom_task_status != ''
+                    ORDER BY custom_task_status
+                """, as_list=True)
+                
+                if existing_statuses:
+                    options = [status[0] for status in existing_statuses]
+                    return {'success': True, 'status_options': options}
+                else:
+                    # Ultimate fallback if no data exists
+                    return {'success': True, 'status_options': ['Not Started']}
+            except Exception as fallback_error:
+                frappe.log_error(f"Error getting existing status values: {str(fallback_error)}")
+                return {'success': True, 'status_options': ['Not Started']}
             
     except Exception as e:
         frappe.log_error(f"Error getting task status options: {str(e)}")
@@ -2930,6 +2956,28 @@ def batch_delete_tasks(task_ids):
         'total_processed': len(task_ids)
     }
 
+def get_excluded_task_statuses():
+    """
+    Get list of task statuses that should be excluded from main view
+    This function can be easily modified to change exclusion logic
+    """
+    # You can modify this list based on your business requirements
+    # These statuses will be hidden from the main table view
+    excluded_statuses = ["Hold", "Not Trading"]
+    
+    # Future enhancement: Make this configurable via Custom Settings
+    # This way users can modify excluded statuses without code changes
+    try:
+        # Example of how to make this configurable:
+        # custom_settings = frappe.get_single("Project Management Settings")
+        # if hasattr(custom_settings, 'excluded_task_statuses') and custom_settings.excluded_task_statuses:
+        #     excluded_statuses = [s.strip() for s in custom_settings.excluded_task_statuses.split('\n') if s.strip()]
+        pass
+    except:
+        pass
+    
+    return excluded_statuses
+
 @frappe.whitelist()
 def batch_archive_tasks(task_ids):
     """
@@ -2978,3 +3026,25 @@ def batch_archive_tasks(task_ids):
         'errors': errors,
         'total_processed': len(task_ids)
     }
+
+def get_excluded_task_statuses():
+    """
+    Get list of task statuses that should be excluded from main view
+    This function can be easily modified to change exclusion logic
+    """
+    # You can modify this list based on your business requirements
+    # These statuses will be hidden from the main table view
+    excluded_statuses = ["Hold", "Not Trading"]
+    
+    # Future enhancement: Make this configurable via Custom Settings
+    # This way users can modify excluded statuses without code changes
+    try:
+        # Example of how to make this configurable:
+        # custom_settings = frappe.get_single("Project Management Settings")
+        # if hasattr(custom_settings, 'excluded_task_statuses') and custom_settings.excluded_task_statuses:
+        #     excluded_statuses = [s.strip() for s in custom_settings.excluded_task_statuses.split('\n') if s.strip()]
+        pass
+    except:
+        pass
+    
+    return excluded_statuses

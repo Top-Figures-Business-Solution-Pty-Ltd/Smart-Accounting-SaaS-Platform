@@ -277,7 +277,8 @@ class EditorsManager {
     // Field-specific editors
     startFieldEditing(fieldElement) {
         const $field = $(fieldElement);
-        const $cell = $field.closest('.pm-cell');
+        // Support both main task cells and subtask cells
+        const $cell = $field.closest('.pm-cell, .pm-subtask-status-cell, .pm-subtask-due-cell, .pm-subtask-note-cell, [data-editable="true"]');
         const fieldType = $cell.data('field-type');
         const taskId = $cell.data('task-id');
         const fieldName = $cell.data('field');
@@ -770,7 +771,14 @@ class EditorsManager {
         } else {
             // Regular select field
             const options = $cell.data('options');
+            const optionsSource = $cell.data('options-source');
             const backendOptions = $cell.data('backend-options');
+            
+            // Handle dynamic options loading
+            if (optionsSource === 'custom_task_status') {
+                this.showTaskStatusSelector($cell);
+                return;
+            }
             
             if (!options) {
                 console.log('No options available for select field');
@@ -934,6 +942,112 @@ class EditorsManager {
     cancelFieldEditing($cell, originalValue) {
         $cell.html(`<span class="editable-field">${originalValue || '-'}</span>`);
         $cell.removeClass('editing');
+    }
+
+    async showTaskStatusSelector($cell) {
+        // Support both main task and subtask status badge formats
+        const currentValue = $cell.find('.editable-field, .pm-status-badge').text().trim();
+        
+        try {
+            // Get status options from backend (no hardcoding!)
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_task_status_options'
+            });
+            
+            if (response.message && response.message.success) {
+                const statusOptions = response.message.status_options;
+                
+                let selectHTML = '<select class="pm-inline-select">';
+                statusOptions.forEach(status => {
+                    const selected = currentValue === status ? 'selected' : '';
+                    selectHTML += `<option value="${status}" ${selected}>${status}</option>`;
+                });
+                selectHTML += '</select>';
+                
+                $cell.html(selectHTML);
+                
+                const $select = $cell.find('.pm-inline-select');
+                $select.focus();
+                
+                this.bindSelectEvents($cell, $select, currentValue);
+            } else {
+                frappe.show_alert({
+                    message: 'Failed to load status options',
+                    indicator: 'red'
+                });
+            }
+        } catch (error) {
+            console.error('Error loading status options:', error);
+            frappe.show_alert({
+                message: 'Failed to load status options',
+                indicator: 'red'
+            });
+        }
+    }
+
+    bindSelectEvents($cell, $select, originalValue) {
+        const fieldName = $cell.data('field');
+        const taskId = $cell.data('task-id');
+        
+        // Handle selection change
+        $select.on('change blur', async (e) => {
+            if (e.type === 'change' || e.type === 'blur') {
+                const newValue = $select.val();
+                
+                if (newValue !== originalValue) {
+                    try {
+                        // Save the field change
+                        const response = await frappe.call({
+                            method: 'smart_accounting.www.project_management.index.update_task_field',
+                            args: {
+                                task_id: taskId,
+                                field_name: fieldName,
+                                new_value: newValue
+                            }
+                        });
+                        
+                        if (response.message && response.message.success) {
+                            // Update display with proper status badge styling
+                            const statusClass = newValue.toLowerCase().replace(/\s+/g, '-');
+                            $cell.html(`<span class="pm-status-badge status-${statusClass}">${newValue}</span>`);
+                            
+                            frappe.show_alert({
+                                message: 'Status updated successfully',
+                                indicator: 'green'
+                            });
+                        } else {
+                            throw new Error(response.message?.error || 'Update failed');
+                        }
+                    } catch (error) {
+                        console.error('Status update error:', error);
+                        frappe.show_alert({
+                            message: 'Failed to update status: ' + error.message,
+                            indicator: 'red'
+                        });
+                        // Restore original value
+                        const originalStatusClass = originalValue.toLowerCase().replace(/\s+/g, '-');
+                        $cell.html(`<span class="pm-status-badge status-${originalStatusClass}">${originalValue}</span>`);
+                    }
+                } else {
+                    // No change, restore original display
+                    const originalStatusClass = originalValue.toLowerCase().replace(/\s+/g, '-');
+                    $cell.html(`<span class="pm-status-badge status-${originalStatusClass}">${originalValue}</span>`);
+                }
+                
+                // Remove editing state
+                $cell.removeClass('editing');
+            }
+        });
+        
+        // Handle escape key
+        $select.on('keydown', (e) => {
+            if (e.key === 'Escape') {
+                // Restore original value
+                const originalStatusClass = originalValue.toLowerCase().replace(/\s+/g, '-');
+                $cell.html(`<span class="pm-status-badge status-${originalStatusClass}">${originalValue}</span>`);
+                $cell.removeClass('editing');
+            }
+        });
     }
 }
 

@@ -74,19 +74,46 @@ class ProjectManager {
         const projectName = $addRow.data('project');
         const clientName = $addRow.data('client');
         
-        // Get current column widths and generate HTML
-        const currentWidths = window.TableManager ? window.TableManager.getCurrentColumnWidths() : {};
-        const totalWidth = Object.values(currentWidths).reduce((sum, width) => sum + width, 0);
-        const newTaskRowHTML = this.generateNewTaskRowHTML(taskData, clientName, currentWidths, totalWidth);
+        // Generate HTML with current column configuration
+        const newTaskRowHTML = this.generateNewTaskRowHTML(taskData, clientName);
         
         // Insert the new row before the add task row
         $addRow.before(newTaskRowHTML);
+        
+        // Apply current column configuration to the new row
+        let $newRow = $addRow.prev();
+        
+        // Apply column widths if TableManager exists
+        if (window.TableManager && window.TableManager.getCurrentColumnWidths) {
+            const currentWidths = window.TableManager.getCurrentColumnWidths();
+            
+            // Apply widths to each cell in the new row
+            Object.keys(currentWidths).forEach(column => {
+                const width = currentWidths[column];
+                const $cell = $newRow.find(`.pm-cell-${column}`);
+                if ($cell.length && width) {
+                    $cell.css({
+                        'width': `${width}px`,
+                        'min-width': `${width}px`,
+                        'flex': `0 0 ${width}px`
+                    });
+                }
+            });
+        }
+        
+        // Apply current column visibility configuration
+        if (window.TableManager && window.TableManager.applyColumnConfigurationToRow) {
+            window.TableManager.applyColumnConfigurationToRow($newRow);
+        } else {
+            // Fallback: manually apply current column visibility
+            this.applyCurrentColumnVisibility($newRow);
+        }
         
         // Restore the add task button
         $(addTaskBtn).html('<i class="fa fa-plus"></i><span>Add new task</span>');
         
         // Add a subtle animation to highlight the new row
-        const $newRow = $addRow.prev();
+        $newRow = $addRow.prev();
         $newRow.css('background-color', '#e8f5e8');
         
         setTimeout(() => {
@@ -95,110 +122,145 @@ class ProjectManager {
     }
 
     generateNewTaskRowHTML(taskData, clientName, currentWidths, totalWidth, additionalClasses = '') {
-        // Generate new task row HTML with current column widths
-        return `
-            <div class="pm-task-row ${additionalClasses}" data-task-id="${taskData.task_id}" data-task-name="${taskData.task_subject}" style="display: flex; width: 2000px; min-width: 2000px;">
-                <div class="pm-cell pm-cell-client pm-client-with-comments" style="width: ${currentWidths.client || 150}px; min-width: ${currentWidths.client || 150}px; flex: 0 0 ${currentWidths.client || 150}px;" data-editable="true" data-field="custom_client" data-task-id="${taskData.task_id}" data-field-type="client_selector" data-current-client-id="" data-current-client-name="${clientName || 'No Client'}">
-                    <div class="pm-client-content">
-                        <span class="editable-field client-display">${clientName || 'No Client'}</span>
+        // Generate new task row HTML that matches the template structure exactly
+        // IMPORTANT: Always generate ALL columns, let CSS control visibility (for dynamic column management)
+        const statusValue = taskData.status || 'Not Started';
+        const statusClass = statusValue.toLowerCase().replace(/\s+/g, '-');
+        
+        return `<div class="pm-task-row pm-responsive-table ${additionalClasses}" data-task-id="${taskData.task_id}" data-task-name="${taskData.task_subject}">
+            <div class="pm-cell pm-cell-select">
+                <input type="checkbox" class="pm-task-checkbox" data-task-id="${taskData.task_id}" title="Select this task">
+            </div>
+            <div class="pm-cell pm-cell-client pm-client-with-comments" data-editable="true" data-field="custom_client" data-task-id="${taskData.task_id}" data-field-type="client_selector" data-current-client-id="" data-current-client-name="${clientName || 'No Client'}">
+                <div class="pm-client-content">
+                    <button class="pm-subtask-toggle" data-task-id="${taskData.task_id}" title="Show/hide subtasks">
+                        <i class="fa fa-chevron-right"></i>
+                    </button>
+                    <span class="editable-field client-display">${clientName || 'No Client'}</span>
+                </div>
+                <div class="pm-client-comments">
+                    <div class="pm-comment-indicator" data-task-id="${taskData.task_id}" title="点击查看或添加评论">
+                        <i class="fa fa-comment-o"></i>
+                        <span class="pm-comment-count">0</span>
                     </div>
-                    <div class="pm-client-comments">
-                        <div class="pm-comment-indicator" data-task-id="${taskData.task_id}">
-                            <i class="fa fa-comment-o"></i>
-                            <span class="pm-comment-count">0</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="pm-cell pm-cell-task-name pm-editable-task-name" style="width: ${currentWidths['task-name'] || 120}px; min-width: ${currentWidths['task-name'] || 120}px; flex: 0 0 ${currentWidths['task-name'] || 120}px;" data-editable="true" data-field="subject" data-task-id="${taskData.task_id}" data-field-type="task_name_editor" data-current-task-name="${taskData.task_subject || ''}">
-                    <div class="pm-task-name-content">
-                        <span class="editable-field task-name-display">${taskData.task_subject || 'Untitled Task'}</span>
-                        <i class="fa fa-edit pm-edit-icon"></i>
-                    </div>
-                </div>
-                <div class="pm-cell pm-cell-engagement pm-engagement-indicator" style="width: ${currentWidths.engagement || 120}px; min-width: ${currentWidths.engagement || 120}px; flex: 0 0 ${currentWidths.engagement || 120}px;" data-task-id="${taskData.task_id}" data-current-engagement="">
-                    <div class="pm-engagement-content">
-                        <span class="pm-engagement-display no-engagement">No engagement</span>
-                    </div>
-                </div>
-                <div class="pm-cell pm-cell-entity" style="width: ${currentWidths.entity || 100}px; min-width: ${currentWidths.entity || 100}px; flex: 0 0 ${currentWidths.entity || 100}px;">
-                    <span class="pm-entity-badge entity-company">Company</span>
-                </div>
-                <div class="pm-cell pm-cell-tf-tg" style="width: ${currentWidths['tf-tg'] || 80}px; min-width: ${currentWidths['tf-tg'] || 80}px; flex: 0 0 ${currentWidths['tf-tg'] || 80}px;" data-editable="true" data-field="custom_tftg" data-task-id="${taskData.task_id}" data-field-type="select" data-options="TF,TG" data-backend-options="Top Figures,Top Grants">
-                    <span class="pm-tf-tg-badge editable-field">TF</span>
-                </div>
-                <div class="pm-cell pm-cell-software" style="width: ${currentWidths.software || 120}px; min-width: ${currentWidths.software || 120}px; flex: 0 0 ${currentWidths.software || 120}px;" data-editable="true" data-field="custom_softwares" data-task-id="${taskData.task_id}" data-field-type="software_selector">
-                    <div class="pm-software-tags pm-empty-software">
-                        <span class="pm-software-badge pm-empty-badge">
-                            <i class="fa fa-plus"></i>
-                            Add software
-                        </span>
-                    </div>
-                </div>
-                <div class="pm-cell pm-cell-status" style="width: ${currentWidths.status || 100}px; min-width: ${currentWidths.status || 100}px; flex: 0 0 ${currentWidths.status || 100}px;">
-                    <span class="pm-status-badge status-open">Open</span>
-                </div>
-                <div class="pm-cell pm-cell-target-month" style="width: ${currentWidths['target-month'] || 120}px; min-width: ${currentWidths['target-month'] || 120}px; flex: 0 0 ${currentWidths['target-month'] || 120}px;" data-editable="true" data-field="custom_target_month" data-task-id="${taskData.task_id}" data-field-type="select" data-options="January,February,March,April,May,June,July,August,September,October,November,December">
-                    <span class="editable-field">-</span>
-                </div>
-                <div class="pm-cell pm-cell-budget" style="width: ${currentWidths.budget || 120}px; min-width: ${currentWidths.budget || 120}px; flex: 0 0 ${currentWidths.budget || 120}px;" data-editable="true" data-field="custom_budget_planning" data-task-id="${taskData.task_id}" data-field-type="currency">
-                    <span class="pm-no-amount editable-field">-</span>
-                </div>
-                <div class="pm-cell pm-cell-actual" style="width: ${currentWidths.actual || 120}px; min-width: ${currentWidths.actual || 120}px; flex: 0 0 ${currentWidths.actual || 120}px;" data-editable="true" data-field="custom_actual_billing" data-task-id="${taskData.task_id}" data-field-type="currency">
-                    <span class="pm-no-amount editable-field">-</span>
-                </div>
-                <div class="pm-cell pm-cell-review-note" style="width: ${currentWidths['review-note'] || 120}px; min-width: ${currentWidths['review-note'] || 120}px; flex: 0 0 ${currentWidths['review-note'] || 120}px;">
-                    ${taskData.review_notes && taskData.review_notes.length > 0 ? `
-                        <div class="pm-review-note-indicator has-notes" data-task-id="${taskData.task_id}" title="点击查看所有Review Notes">
-                            <i class="fa fa-check-circle"></i>
-                            <span>${taskData.review_notes.length} note${taskData.review_notes.length !== 1 ? 's' : ''}</span>
-                        </div>
-                    ` : `
-                        <div class="pm-review-note-indicator no-notes" data-task-id="${taskData.task_id}">
-                            <i class="fa fa-times-circle"></i>
-                            <span>none</span>
-                        </div>
-                    `}
-                </div>
-                <div class="pm-cell pm-cell-action-person" style="width: ${currentWidths['action-person'] || 130}px; min-width: ${currentWidths['action-person'] || 130}px; flex: 0 0 ${currentWidths['action-person'] || 130}px;" data-editable="true" data-field="custom_action_person" data-task-id="${taskData.task_id}" data-field-type="person_selector">
-                    <div class="pm-user-avatars pm-empty-person">
-                        <div class="pm-avatar pm-empty-avatar">
-                            <i class="fa fa-user"></i>
-                        </div>
-                    </div>
-                </div>
-                <div class="pm-cell pm-cell-preparer" style="width: ${currentWidths.preparer || 120}px; min-width: ${currentWidths.preparer || 120}px; flex: 0 0 ${currentWidths.preparer || 120}px;" data-editable="true" data-field="custom_preparer" data-task-id="${taskData.task_id}" data-field-type="person_selector">
-                    <div class="pm-user-avatars pm-empty-person">
-                        <div class="pm-avatar pm-empty-avatar">
-                            <i class="fa fa-user"></i>
-                        </div>
-                    </div>
-                </div>
-                <div class="pm-cell pm-cell-reviewer" style="width: ${currentWidths.reviewer || 120}px; min-width: ${currentWidths.reviewer || 120}px; flex: 0 0 ${currentWidths.reviewer || 120}px;" data-editable="true" data-field="custom_reviewer" data-task-id="${taskData.task_id}" data-field-type="person_selector">
-                    <div class="pm-user-avatars pm-empty-person">
-                        <div class="pm-avatar pm-empty-avatar">
-                            <i class="fa fa-user"></i>
-                        </div>
-                    </div>
-                </div>
-                <div class="pm-cell pm-cell-partner" style="width: ${currentWidths.partner || 120}px; min-width: ${currentWidths.partner || 120}px; flex: 0 0 ${currentWidths.partner || 120}px;" data-editable="true" data-field="custom_partner" data-task-id="${taskData.task_id}" data-field-type="person_selector">
-                    <div class="pm-user-avatars pm-empty-person">
-                        <div class="pm-avatar pm-empty-avatar">
-                            <i class="fa fa-user"></i>
-                        </div>
-                    </div>
-                </div>
-                <div class="pm-cell pm-cell-lodgment-due" style="width: ${currentWidths['lodgment-due'] || 130}px; min-width: ${currentWidths['lodgment-due'] || 130}px; flex: 0 0 ${currentWidths['lodgment-due'] || 130}px;">
-                    <span class="pm-no-date">-</span>
-                </div>
-                <div class="pm-cell pm-cell-year-end" style="width: ${currentWidths['year-end'] || 100}px; min-width: ${currentWidths['year-end'] || 100}px; flex: 0 0 ${currentWidths['year-end'] || 100}px;">-</div>
-                <div class="pm-cell pm-cell-last-updated" style="width: ${currentWidths['last-updated'] || 130}px; min-width: ${currentWidths['last-updated'] || 130}px; flex: 0 0 ${currentWidths['last-updated'] || 130}px;">
-                    <span class="pm-last-updated">Just now</span>
-                </div>
-                <div class="pm-cell pm-cell-priority" style="width: ${currentWidths.priority || 100}px; min-width: ${currentWidths.priority || 100}px; flex: 0 0 ${currentWidths.priority || 100}px;">
-                    <span class="pm-priority-badge priority-medium">Medium</span>
                 </div>
             </div>
-        `;
+            <div class="pm-cell pm-cell-task-name pm-editable-task-name" data-editable="true" data-field="subject" data-task-id="${taskData.task_id}" data-field-type="task_name_editor" data-current-task-name="${taskData.task_subject || ''}">
+                <div class="pm-task-name-content">
+                    <span class="editable-field task-name-display">${taskData.task_subject || 'Untitled Task'}</span>
+                    <i class="fa fa-edit pm-edit-icon"></i>
+                </div>
+            </div>
+            <div class="pm-cell pm-cell-entity">
+                <span class="pm-entity-badge entity-company">Company</span>
+            </div>
+            <div class="pm-cell pm-cell-tf-tg" data-editable="true" data-field="custom_tftg" data-task-id="${taskData.task_id}" data-field-type="select" data-options="TF,TG" data-backend-options="Top Figures,Top Grants">
+                <span class="pm-tf-tg-badge editable-field">TF</span>
+            </div>
+            <div class="pm-cell pm-cell-software" data-editable="true" data-field="custom_softwares" data-task-id="${taskData.task_id}" data-field-type="software_selector">
+                <div class="pm-software-tags pm-empty-software">
+                    <span class="pm-software-badge pm-empty-badge">
+                        <i class="fa fa-plus"></i>
+                        Add software
+                    </span>
+                </div>
+            </div>
+            <div class="pm-cell pm-cell-status">
+                <span class="pm-status-badge status-${statusClass}">${statusValue}</span>
+            </div>
+            <div class="pm-cell pm-cell-target-month" data-editable="true" data-field="custom_target_month" data-task-id="${taskData.task_id}" data-field-type="select" data-options="January,February,March,April,May,June,July,August,September,October,November,December">
+                <span class="editable-field">-</span>
+            </div>
+            <div class="pm-cell pm-cell-budget" data-editable="true" data-field="custom_budget_planning" data-task-id="${taskData.task_id}" data-field-type="currency">
+                <span class="pm-no-amount editable-field">-</span>
+            </div>
+            <div class="pm-cell pm-cell-actual" data-editable="true" data-field="custom_actual_billing" data-task-id="${taskData.task_id}" data-field-type="currency">
+                <span class="pm-no-amount editable-field">-</span>
+            </div>
+            <div class="pm-cell pm-cell-review-note">
+                <div class="pm-review-note-indicator no-notes" data-task-id="${taskData.task_id}">
+                    <i class="fa fa-times-circle"></i>
+                    <span>none</span>
+                </div>
+            </div>
+            <div class="pm-cell pm-cell-action-person" data-editable="true" data-field="custom_action_person" data-task-id="${taskData.task_id}" data-field-type="person_selector">
+                <div class="pm-user-avatars pm-empty-person">
+                    <div class="pm-avatar pm-empty-avatar">
+                        <i class="fa fa-user"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="pm-cell pm-cell-preparer" data-editable="true" data-field="custom_preparer" data-task-id="${taskData.task_id}" data-field-type="person_selector">
+                <div class="pm-user-avatars pm-empty-person">
+                    <div class="pm-avatar pm-empty-avatar">
+                        <i class="fa fa-user"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="pm-cell pm-cell-reviewer" data-editable="true" data-field="custom_reviewer" data-task-id="${taskData.task_id}" data-field-type="person_selector">
+                <div class="pm-user-avatars pm-empty-person">
+                    <div class="pm-avatar pm-empty-avatar">
+                        <i class="fa fa-user"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="pm-cell pm-cell-partner" data-editable="true" data-field="custom_partner" data-task-id="${taskData.task_id}" data-field-type="person_selector">
+                <div class="pm-user-avatars pm-empty-person">
+                    <div class="pm-avatar pm-empty-avatar">
+                        <i class="fa fa-user"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="pm-cell pm-cell-lodgment-due" data-editable="true" data-field="custom_lodgement_due_date" data-task-id="${taskData.task_id}" data-field-type="date">
+                <span class="editable-field">-</span>
+            </div>
+            <div class="pm-cell pm-cell-engagement pm-engagement-indicator" data-task-id="${taskData.task_id}" data-current-engagement="">
+                <div class="pm-engagement-content">
+                    <span class="pm-engagement-display no-engagement">No engagement</span>
+                </div>
+            </div>
+            <div class="pm-cell pm-cell-group">
+                <div class="pm-group-content">
+                    <span class="pm-group-display">-</span>
+                </div>
+            </div>
+            <div class="pm-cell pm-cell-year-end" data-editable="true" data-field="custom_year_end" data-task-id="${taskData.task_id}" data-field-type="select" data-options="January,February,March,April,May,June,July,August,September,October,November,December">
+                <span class="editable-field">-</span>
+            </div>
+            <div class="pm-cell pm-cell-note" data-editable="true" data-field="custom_note" data-task-id="${taskData.task_id}" data-field-type="text">
+                <span class="editable-field">-</span>
+            </div>
+            <div class="pm-cell pm-cell-last-updated">
+                <span class="pm-last-updated">Just now</span>
+            </div>
+            <div class="pm-cell pm-cell-priority">
+                <span class="pm-priority-badge priority-medium">Medium</span>
+            </div>
+        </div>`;
+    }
+
+    applyCurrentColumnVisibility($row) {
+        // Apply current column visibility to a specific row
+        // This ensures new rows respect the current Manage Columns settings
+        const allColumns = [
+            'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 
+            'budget', 'actual', 'review-note', 'action-person', 'preparer', 
+            'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'note', 'last-updated', 'priority'
+        ];
+        
+        allColumns.forEach(column => {
+            const $headerCell = $(`.pm-header-cell[data-column="${column}"]`).first();
+            const $rowCell = $row.find(`.pm-cell-${column}`);
+            
+            if ($headerCell.length && $rowCell.length) {
+                // Copy visibility state from header to row cell
+                if ($headerCell.is(':visible') && $headerCell.css('display') !== 'none') {
+                    $rowCell.show().css('display', '').removeClass('column-hidden');
+                } else {
+                    $rowCell.hide().css('display', 'none !important').addClass('column-hidden');
+                }
+            }
+        });
     }
 
     async quickAddTask() {
@@ -255,17 +317,43 @@ class ProjectManager {
         const projectName = $projectGroup.data('project');
         const clientName = $projectGroup.data('client');
         
-        // Get current column widths and generate HTML
-        const currentWidths = window.TableManager ? window.TableManager.getCurrentColumnWidths() : {};
-        const totalWidth = Object.values(currentWidths).reduce((sum, width) => sum + width, 0);
-        const newTaskRowHTML = this.generateNewTaskRowHTML(taskData, clientName, currentWidths, totalWidth, 'new-task-highlight');
+        // Generate HTML with current column configuration
+        const newTaskRowHTML = this.generateNewTaskRowHTML(taskData, clientName, {}, 0, 'new-task-highlight');
         
         // Insert at the top of the project's task group
         const $taskGroup = $projectGroup.find('.pm-task-group');
         $taskGroup.prepend(newTaskRowHTML);
         
+        // Apply current column configuration to the new row
+        let $newRow = $taskGroup.find('.new-task-highlight');
+        
+        // Apply column widths
+        if (window.TableManager && window.TableManager.getCurrentColumnWidths) {
+            const currentWidths = window.TableManager.getCurrentColumnWidths();
+            
+            // Apply widths to each cell in the new row
+            Object.keys(currentWidths).forEach(column => {
+                const width = currentWidths[column];
+                const $cell = $newRow.find(`.pm-cell-${column}`);
+                if ($cell.length && width) {
+                    $cell.css({
+                        'width': `${width}px`,
+                        'min-width': `${width}px`,
+                        'flex': `0 0 ${width}px`
+                    });
+                }
+            });
+        }
+        
+        // Apply current column visibility configuration
+        if (window.TableManager && window.TableManager.applyColumnConfigurationToRow) {
+            window.TableManager.applyColumnConfigurationToRow($newRow);
+        } else {
+            // Fallback: manually apply current column visibility
+            this.applyCurrentColumnVisibility($newRow);
+        }
+        
         // Scroll to the new task
-        const $newRow = $taskGroup.find('.new-task-highlight');
         $newRow[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
         
         // Highlight animation

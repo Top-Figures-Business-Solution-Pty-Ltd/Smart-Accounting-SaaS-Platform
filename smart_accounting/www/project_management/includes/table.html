@@ -148,6 +148,10 @@
                                     <span>Year End</span>
                                     <div class="pm-column-resizer"></div>
                                 </div>
+                                <div class="pm-header-cell pm-cell-note" data-column="note">
+                                    <span>Note</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
                                 <div class="pm-header-cell pm-cell-last-updated" data-column="last-updated">
                                     <span>Last Updated</span>
                                     <div class="pm-column-resizer"></div>
@@ -407,6 +411,13 @@
                                              data-options="January,February,March,April,May,June,July,August,September,October,November,December">
                                             <span class="editable-field">{{ task.year_end or '-' }}</span>
                                         </div>
+                                        <div class="pm-cell pm-cell-note"
+                                             data-editable="true"
+                                             data-field="custom_note"
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="text">
+                                            <span class="editable-field">{{ task.note or '-' }}</span>
+                                        </div>
                                         <div class="pm-cell pm-cell-last-updated">
                                             {% if task.last_updated %}
                                                 <span class="pm-last-updated">{{ task.last_updated }}</span>
@@ -424,31 +435,12 @@
                                     </div>
                                 {% endfor %}
                                 
-                                <!-- Add Task Row - Integrated Table Row -->
-                                <div class="pm-task-row pm-add-task-row pm-responsive-table" data-project="{{ project_name }}" data-client="{{ client_name }}">
-                                    <div class="pm-cell pm-cell-select"></div>
-                                    <div class="pm-cell pm-cell-client">
-                                        <button class="pm-add-task-btn">
-                                            <i class="fa fa-plus"></i>
-                                            <span>Add new task</span>
-                                        </button>
-                                    </div>
-                                    <div class="pm-cell pm-cell-entity"></div>
-                                    <div class="pm-cell pm-cell-tf-tg"></div>
-                                    <div class="pm-cell pm-cell-software"></div>
-                                    <div class="pm-cell pm-cell-status"></div>
-                                    <div class="pm-cell pm-cell-target-month"></div>
-                                    <div class="pm-cell pm-cell-budget"></div>
-                                    <div class="pm-cell pm-cell-actual"></div>
-                                    <div class="pm-cell pm-cell-review-note"></div>
-                                    <div class="pm-cell pm-cell-action-person"></div>
-                                    <div class="pm-cell pm-cell-preparer"></div>
-                                    <div class="pm-cell pm-cell-reviewer"></div>
-                                    <div class="pm-cell pm-cell-partner"></div>
-                                    <div class="pm-cell pm-cell-lodgment-due"></div>
-                                    <div class="pm-cell pm-cell-year-end"></div>
-                                    <div class="pm-cell pm-cell-last-updated"></div>
-                                    <div class="pm-cell pm-cell-priority"></div>
+                                <!-- Add Task Row - Simplified Single Button -->
+                                <div class="pm-add-task-row" data-project="{{ project_name }}" data-client="{{ client_name }}">
+                                    <button class="pm-add-task-btn">
+                                        <i class="fa fa-plus"></i>
+                                        <span>Add new task</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
