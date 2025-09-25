@@ -117,10 +117,17 @@ def create_partition(partition_name, is_workspace=False, parent_partition=None, 
     Create a new partition (workspace or board)
     """
     try:
+        # Ensure is_workspace is properly converted to boolean
+        is_workspace = frappe.utils.cint(is_workspace) if is_workspace is not None else False
+        
         if not partition_name or not partition_name.strip():
             return {'success': False, 'error': 'Partition name is required'}
         
         partition_name = partition_name.strip()
+        
+        # Safely truncate description to prevent "Value too big" error
+        if description and len(description) > 140:
+            description = description[:140]
         
         # Check if partition already exists with same name under same parent
         existing_filters = {"partition_name": partition_name}

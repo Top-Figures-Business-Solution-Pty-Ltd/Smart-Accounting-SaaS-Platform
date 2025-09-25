@@ -275,7 +275,8 @@ class WorkspaceManager {
                         ` : ''}
                         <div class="pm-form-group">
                             <label>Description (Optional)</label>
-                            <textarea class="pm-workspace-description-input" placeholder="Brief description..." rows="2" maxlength="200"></textarea>
+                            <textarea class="pm-workspace-description-input" placeholder="Brief description..." rows="2" maxlength="140"></textarea>
+                            <small class="pm-field-hint">Maximum 140 characters</small>
                         </div>
                         ${parentPartition ? `<input type="hidden" class="pm-parent-partition" value="${parentPartition}">` : ''}
                     </div>
@@ -335,7 +336,8 @@ class WorkspaceManager {
                         ` : ''}
                         <div class="pm-form-group">
                             <label>Description (Optional)</label>
-                            <textarea class="pm-workspace-description-input" placeholder="Brief description..." rows="2" maxlength="200"></textarea>
+                            <textarea class="pm-workspace-description-input" placeholder="Brief description..." rows="2" maxlength="140"></textarea>
+                            <small class="pm-field-hint">Maximum 140 characters</small>
                         </div>
                         ${parentPartition ? `<input type="hidden" class="pm-parent-partition" value="${parentPartition}">` : ''}
                     </div>
@@ -418,6 +420,7 @@ class WorkspaceManager {
             const name = $('.pm-workspace-name-input').val().trim();
             const description = $('.pm-workspace-description-input').val().trim();
             const parent = $('.pm-parent-partition').val() || $('.pm-parent-workspace-select').val() || parentPartition;
+            
             
             if (!name) {
                 frappe.show_alert({
