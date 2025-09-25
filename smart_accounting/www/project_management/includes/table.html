@@ -290,7 +290,8 @@
                                              data-editable="true" 
                                              data-field="custom_action_person" 
                                              data-task-id="{{ task.task_id }}"
-                                             data-field-type="person_selector">
+                                             data-field-type="person_selector"
+                                             data-role-filter="Action Person">
                                             {% if task.action_person_info %}
                                                 <div class="pm-user-avatars">
                                                     {% if task.action_person_info|length == 1 %}
@@ -312,7 +313,8 @@
                                              data-editable="true" 
                                              data-field="custom_preparer" 
                                              data-task-id="{{ task.task_id }}"
-                                             data-field-type="person_selector">
+                                             data-field-type="person_selector"
+                                             data-role-filter="Preparer">
                                             {% if task.preparer_info %}
                                                 <div class="pm-user-avatars">
                                                     {% if task.preparer_info|length == 1 %}
@@ -334,7 +336,8 @@
                                              data-editable="true" 
                                              data-field="custom_reviewer" 
                                              data-task-id="{{ task.task_id }}"
-                                             data-field-type="person_selector">
+                                             data-field-type="person_selector"
+                                             data-role-filter="Reviewer">
                                             {% if task.reviewer_info %}
                                                 <div class="pm-user-avatars">
                                                     {% if task.reviewer_info|length == 1 %}
@@ -356,7 +359,8 @@
                                              data-editable="true" 
                                              data-field="custom_partner" 
                                              data-task-id="{{ task.task_id }}"
-                                             data-field-type="person_selector">
+                                             data-field-type="person_selector"
+                                             data-role-filter="Partner">
                                             {% if task.partner_info %}
                                                 <div class="pm-user-avatars">
                                                     {% if task.partner_info|length == 1 %}

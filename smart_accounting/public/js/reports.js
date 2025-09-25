@@ -56,7 +56,7 @@ class ReportsManager {
         const $personList = $('.pm-person-list');
         
         try {
-            // Get all people from tasks - simplified approach
+            // Get all people from tasks - use real data from avatars
             const people = new Map();
             
             // Find all avatars on the page, including hidden ones
@@ -64,11 +64,10 @@ class ReportsManager {
                 try {
                     const $avatar = $(avatar);
                     const fullName = $avatar.attr('title');
+                    const email = $avatar.attr('data-email'); // Use real email from data attribute
                     const initials = $avatar.text();
                     
-                    if (fullName && fullName !== '-' && fullName.trim() !== '') {
-                        const email = fullName.includes('@') ? fullName : `${fullName.toLowerCase().replace(/\s+/g, '.')}@company.com`;
-                        
+                    if (fullName && fullName !== '-' && fullName.trim() !== '' && email && email.trim() !== '') {
                         if (!people.has(email)) {
                             people.set(email, {
                                 email: email,
@@ -133,7 +132,7 @@ class ReportsManager {
         }
     }
 
-    applyPersonFilter(personEmail, personName) {
+    async applyPersonFilter(personEmail, personName) {
         // Record active filter
         this.activeFilters.person = { email: personEmail, name: personName };
         this.activeFilters.client = null;
@@ -141,7 +140,16 @@ class ReportsManager {
         
         let visibleTasks = 0;
         
-        $('.pm-task-row').each((index, row) => {
+        // Show loading indicator
+        frappe.show_alert({
+            message: `Filtering by ${personName}...`,
+            indicator: 'blue'
+        });
+        
+        const $taskRows = $('.pm-task-row');
+        const promises = [];
+        
+        $taskRows.each((index, row) => {
             const $row = $(row);
             
             // Skip add task rows
@@ -149,17 +157,23 @@ class ReportsManager {
                 return;
             }
             
-            // Check if person is involved in this task
-            const isInvolved = this.isPersonInvolvedInTask($row, personEmail, personName);
-            const taskId = $row.data('task-id');
+            // Create promise for each task check
+            const promise = this.isPersonInvolvedInTask($row, personEmail, personName).then(isInvolved => {
+                if (isInvolved) {
+                    $row.show().css('display', '').addClass('filter-visible');
+                    return 1; // Count this task
+                } else {
+                    $row.hide().css('display', 'none !important').removeClass('filter-visible');
+                    return 0;
+                }
+            });
             
-            if (isInvolved) {
-                $row.show().css('display', '').addClass('filter-visible');
-                visibleTasks++;
-            } else {
-                $row.hide().css('display', 'none !important').removeClass('filter-visible');
-            }
+            promises.push(promise);
         });
+        
+        // Wait for all checks to complete
+        const results = await Promise.all(promises);
+        visibleTasks = results.reduce((sum, count) => sum + count, 0);
         
         // Mark body as filtering active
         $('body').addClass('filtering-active');
@@ -173,9 +187,12 @@ class ReportsManager {
         });
     }
 
-    isPersonInvolvedInTask($row, personEmail, personName) {
+    async isPersonInvolvedInTask($row, personEmail, personName) {
         try {
-            // Check all people-related cells, including hidden ones
+            const taskId = $row.data('task-id');
+            if (!taskId) return false;
+            
+            // First check visible avatars (faster)
             const peopleCells = [
                 '.pm-cell-action-person',
                 '.pm-cell-preparer', 
@@ -193,10 +210,50 @@ class ReportsManager {
                     const title = $avatar.attr('title');
                     const email = $avatar.attr('data-email');
                     
-                    // Check by both name and email (more precise matching)
-                    if ((title && title.toLowerCase() === personName.toLowerCase()) ||
-                        (email && email.toLowerCase() === personEmail.toLowerCase())) {
-                        return true;
+                    // Check by both name and email (more flexible matching)
+                    if (email && email.toLowerCase() === personEmail.toLowerCase()) {
+                        return true; // Email match is most reliable
+                    }
+                    
+                    if (title && personName) {
+                        // Also check if the person name is contained in the title (for partial matches)
+                        if (title.toLowerCase() === personName.toLowerCase() ||
+                            title.toLowerCase().includes(personName.toLowerCase()) ||
+                            personName.toLowerCase().includes(title.toLowerCase())) {
+                            return true;
+                        }
+                    }
+                }
+                
+                // If there's a "+N" indicator, check backend data for hidden people
+                const $moreIndicator = $cell.find('.pm-avatar-more');
+                if ($moreIndicator.length > 0) {
+                    // Get role filter from cell
+                    const roleFilter = $cell.data('role-filter');
+                    
+                    try {
+                        const response = await frappe.call({
+                            method: 'smart_accounting.www.project_management.index.get_task_role_assignments',
+                            args: { 
+                                task_id: taskId,
+                                role_filter: roleFilter 
+                            }
+                        });
+                        
+                        if (response.message && response.message.success) {
+                            const assignments = response.message.role_assignments;
+                            
+                            // Check if person is in the assignments
+                            for (let assignment of assignments) {
+                                if ((assignment.email && assignment.email.toLowerCase() === personEmail.toLowerCase()) ||
+                                    (assignment.full_name && assignment.full_name.toLowerCase() === personName.toLowerCase()) ||
+                                    (assignment.user && assignment.user.toLowerCase() === personEmail.toLowerCase())) {
+                                    return true;
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.warn('Could not check backend assignments for task', taskId, error);
                     }
                 }
             }

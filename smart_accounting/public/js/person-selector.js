@@ -7,16 +7,32 @@ class PersonSelectorManager {
     }
 
     // Multi-Person Selector
-    showMultiPersonSelector($cell, taskId, fieldName) {
+    async showMultiPersonSelector($cell, taskId, fieldName) {
         // Check if there's a role filter specified
         const roleFilter = $cell.data('role-filter');
         
-        // Get current person emails
-        const currentEmails = [];
-        $cell.find('.pm-avatar[data-email]').each(function() {
-            const email = $(this).data('email');
-            if (email) currentEmails.push(email);
-        });
+        // Get current person emails from backend (not just from UI)
+        let currentEmails = [];
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_task_role_assignments',
+                args: { 
+                    task_id: taskId,
+                    role_filter: roleFilter 
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                currentEmails = response.message.role_assignments.map(assignment => assignment.user);
+            }
+        } catch (error) {
+            console.warn('Could not load current assignments from backend, falling back to UI:', error);
+            // Fallback to UI-based method
+            $cell.find('.pm-avatar[data-email]').each(function() {
+                const email = $(this).data('email');
+                if (email) currentEmails.push(email);
+            });
+        }
         
         // Create person selector dropdown outside the table
         const selectorHTML = `
@@ -30,25 +46,11 @@ class PersonSelectorManager {
                     </div>
                     <div class="pm-person-selector-body">
                         ${currentEmails.length > 0 ? `
-                            <div class="pm-current-people">
-                                <div class="pm-current-person-list">
-                                    ${currentEmails.map(email => {
-                                        const avatar = $cell.find(`[data-email="${email}"]`);
-                                        const name = avatar.attr('title') || email;
-                                        return `
-                                            <div class="pm-current-person" data-email="${email}">
-                                                <div class="pm-avatar" style="background: ${this.utils.getAvatarColor(name)}">
-                                                    ${this.utils.getInitials(name)}
-                                                </div>
-                                                <span class="pm-person-name">${name.split(' ')[0]}</span>
-                                                <button class="pm-remove-person" data-email="${email}">
-                                                    <i class="fa fa-times"></i>
-                                                </button>
-                                            </div>
-                                        `;
-                                    }).join('')}
-                                </div>
+                        <div class="pm-current-people">
+                            <div class="pm-current-person-list" id="current-person-list-${taskId}-${fieldName}">
+                                <!-- Will be populated by loadCurrentPeople method -->
                             </div>
+                        </div>
                         ` : ''}
                         <h4>Suggested people</h4>
                         <div class="pm-person-options">
@@ -139,6 +141,11 @@ class PersonSelectorManager {
             // Don't close selector - allow continued editing
             this.updateCurrentPeopleInSelector($selector, $cell);
         });
+        
+        // Load current people into the selector
+        if (currentEmails.length > 0) {
+            this.loadCurrentPeopleIntoSelector($selector, currentEmails, taskId, fieldName);
+        }
         
         // Close on outside click (without clearing data)
         setTimeout(() => {
@@ -435,7 +442,7 @@ class PersonSelectorManager {
                 return;
             }
             
-            // Generate avatars - max 2 displayed, rest as "+N"
+            // Generate avatars - show up to 2 avatars, then use "+N" for more
             let avatarsHTML = '';
             let moreHTML = '';
             
@@ -446,8 +453,18 @@ class PersonSelectorManager {
                 const isPrimary = roleUsers[0].is_primary ? ' pm-primary-user' : '';
                 
                 avatarsHTML = `<div class="pm-avatar${isPrimary}" title="${userInfo?.full_name || roleUsers[0].user}" data-email="${roleUsers[0].user}">${initials}</div>`;
-            } else if (roleUsers.length >= 2) {
-                // Multiple users - show first user + "+N" count
+            } else if (roleUsers.length === 2) {
+                // Two users - show both avatars
+                for (let i = 0; i < 2; i++) {
+                    const user = roleUsers[i];
+                    const userInfo = await this.utils.getRealUserInfo(user.user);
+                    const initials = this.utils.getInitials(userInfo?.full_name || user.user);
+                    const isPrimary = user.is_primary ? ' pm-primary-user' : '';
+                    
+                    avatarsHTML += `<div class="pm-avatar${isPrimary}" title="${userInfo?.full_name || user.user}" data-email="${user.user}">${initials}</div>`;
+                }
+            } else if (roleUsers.length >= 3) {
+                // Three or more users - show first user + "+N" count
                 const firstUser = roleUsers[0];
                 const userInfo = await this.utils.getRealUserInfo(firstUser.user);
                 const initials = this.utils.getInitials(userInfo?.full_name || firstUser.user);
@@ -528,49 +545,54 @@ class PersonSelectorManager {
         }
     }
 
-    updateCurrentPeopleInSelector($selector, $cell) {
-        // Get current people from cell
-        const currentEmails = [];
-        $cell.find('.pm-avatar[data-email]').each(function() {
-            const email = $(this).data('email');
-            if (email) currentEmails.push(email);
-        });
+    async loadCurrentPeopleIntoSelector($selector, currentEmails, taskId, fieldName) {
+        const $currentList = $selector.find(`#current-person-list-${taskId}-${fieldName}`);
         
-        // Update the current people section in selector
-        const $currentSection = $selector.find('.pm-current-people');
-        if (currentEmails.length > 0) {
-            const currentHTML = `
-                <div class="pm-current-person-list">
-                    ${currentEmails.map(email => {
-                        const avatar = $cell.find(`[data-email="${email}"]`);
-                        const name = avatar.attr('title') || email;
-                        return `
-                            <div class="pm-current-person" data-email="${email}">
-                                <div class="pm-avatar" style="background: ${this.utils.getAvatarColor(name)}">
-                                    ${this.utils.getInitials(name)}
-                                </div>
-                                <span class="pm-person-name">${name.split(' ')[0]}</span>
-                                <button class="pm-remove-person" data-email="${email}">
-                                    <i class="fa fa-times"></i>
-                                </button>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            `;
-            
-            if ($currentSection.length === 0) {
-                $selector.find('.pm-person-selector-body').prepend(`
-                    <div class="pm-current-people">
-                        ${currentHTML}
-                    </div>
-                `);
-            } else {
-                $currentSection.html(currentHTML);
-            }
-        } else {
-            $currentSection.remove();
+        if (currentEmails.length === 0) {
+            $currentList.parent().hide();
+            return;
         }
+        
+        // Get full user info for each email
+        const currentPeopleHTML = await Promise.all(currentEmails.map(async (email) => {
+            try {
+                const userInfo = await this.utils.getRealUserInfo(email);
+                const name = userInfo?.full_name || email;
+                return `
+                    <div class="pm-current-person" data-email="${email}">
+                        <div class="pm-avatar" style="background: ${this.utils.getAvatarColor(name)}">
+                            ${this.utils.getInitials(name)}
+                        </div>
+                        <span class="pm-person-name">${name}</span>
+                        <button class="pm-remove-person" data-email="${email}">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                `;
+            } catch (error) {
+                console.warn('Could not get user info for', email);
+                return `
+                    <div class="pm-current-person" data-email="${email}">
+                        <div class="pm-avatar" style="background: ${this.utils.getAvatarColor(email)}">
+                            ${this.utils.getInitials(email)}
+                        </div>
+                        <span class="pm-person-name">${email}</span>
+                        <button class="pm-remove-person" data-email="${email}">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                `;
+            }
+        }));
+        
+        $currentList.html(currentPeopleHTML.join(''));
+        $currentList.parent().show();
+    }
+
+    updateCurrentPeopleInSelector($selector, $cell) {
+        // This method is now simplified - just refresh the cell display
+        // The selector will be closed and reopened if needed
+        console.log('Current people updated in selector');
     }
 
     // Legacy single person assignment
