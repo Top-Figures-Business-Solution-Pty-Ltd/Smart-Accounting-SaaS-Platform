@@ -472,9 +472,10 @@ class EditorsManager {
                 $cell.data('current-client-id', customerId);
                 $cell.data('current-client-name', customerName);
                 const currentCommentHtml = $cell.find('.pm-client-comments').prop('outerHTML');
+                const currentTaskId = $cell.data('task-id'); // Re-get taskId to avoid scope issues
                 $cell.html(`
                     <div class="pm-client-content">
-                        <button class="pm-subtask-toggle" data-task-id="${taskId}" title="Show/hide subtasks">
+                        <button class="pm-subtask-toggle" data-task-id="${currentTaskId}" title="Show/hide subtasks">
                             <i class="fa fa-chevron-right"></i>
                         </button>
                         <span class="editable-field client-display">${customerName}</span>
@@ -485,7 +486,6 @@ class EditorsManager {
                 $cell[0].offsetHeight; // Force reflow
                 
                 // Remove dropdown from body
-                const taskId = $cell.data('task-id');
                 $(`#client-dropdown-${taskId}`).remove();
                 
                 // Remove event listener
@@ -559,12 +559,12 @@ class EditorsManager {
 
     cancelClientEditing($cell) {
         const originalName = $cell.data('current-client-name') || 'No Client';
-        const taskId = $cell.data('task-id');
+        const currentTaskId = $cell.data('task-id'); // Use different variable name to avoid conflicts
         
         // Preserve comment indicator when canceling
         const currentCommentHtml = $cell.find('.pm-client-comments').prop('outerHTML') || `
             <div class="pm-client-comments">
-                <div class="pm-comment-indicator" data-task-id="${taskId}">
+                <div class="pm-comment-indicator" data-task-id="${currentTaskId}">
                     <i class="fa fa-comment-o"></i>
                     <span class="pm-comment-count">0</span>
                 </div>
@@ -573,7 +573,7 @@ class EditorsManager {
         
         $cell.html(`
             <div class="pm-client-content">
-                <button class="pm-subtask-toggle" data-task-id="${taskId}" title="Show/hide subtasks">
+                <button class="pm-subtask-toggle" data-task-id="${currentTaskId}" title="Show/hide subtasks">
                     <i class="fa fa-chevron-right"></i>
                 </button>
                 <span class="editable-field client-display">${originalName}</span>
@@ -583,7 +583,7 @@ class EditorsManager {
         $cell.removeClass('editing');
         
         // Remove dropdown from body
-        $(`#client-dropdown-${taskId}`).remove();
+        $(`#client-dropdown-${currentTaskId}`).remove();
         
         // Remove event listener
         $(document).off('click.client-selector');
