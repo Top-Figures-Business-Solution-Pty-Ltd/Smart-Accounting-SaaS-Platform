@@ -474,6 +474,9 @@ class EditorsManager {
                 const currentCommentHtml = $cell.find('.pm-client-comments').prop('outerHTML');
                 $cell.html(`
                     <div class="pm-client-content">
+                        <button class="pm-subtask-toggle" data-task-id="${taskId}" title="Show/hide subtasks">
+                            <i class="fa fa-chevron-right"></i>
+                        </button>
                         <span class="editable-field client-display">${customerName}</span>
                     </div>
                     ${currentCommentHtml}
@@ -570,6 +573,9 @@ class EditorsManager {
         
         $cell.html(`
             <div class="pm-client-content">
+                <button class="pm-subtask-toggle" data-task-id="${taskId}" title="Show/hide subtasks">
+                    <i class="fa fa-chevron-right"></i>
+                </button>
                 <span class="editable-field client-display">${originalName}</span>
             </div>
             ${currentCommentHtml}

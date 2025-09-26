@@ -455,6 +455,31 @@ div.pm-table-header,
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    position: relative;
+    z-index: 1;
+}
+
+/* Ensure client editor doesn't overlap subtask button */
+.pm-client-content .client-selector-container {
+    position: absolute;
+    top: 0;
+    left: 26px; /* Leave space for subtask button (20px + 6px margin) */
+    right: 0;
+    z-index: 100;
+    background: white;
+    border: 2px solid var(--monday-blue);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 4px 8px;
+}
+
+.pm-client-content .client-selector-container .client-search-input {
+    width: 100%;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 13px;
+    color: #2c3e50;
 }
 
 .pm-client-comments {

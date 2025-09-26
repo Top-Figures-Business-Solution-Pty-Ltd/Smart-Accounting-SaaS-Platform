@@ -47,6 +47,7 @@ class ProjectManagement {
         this.applyPartitionColumnConfig();
         this.addColumnManagementButton();
         this.bindMainDashboardEvents();
+        this.initializeAutomateButton();
     }
 
     initializeMultiSelect() {
@@ -389,6 +390,77 @@ class ProjectManagement {
     initializeSubtasks() {
         this.subtaskManager.initializeSubtasks();
         this.subtaskManager.loadSubtaskCounts();
+    }
+
+    initializeAutomateButton() {
+        // Load automation count
+        this.loadAutomationCount();
+        
+        // Bind click event
+        $(document).on('click', '.pm-automate-btn', (e) => {
+            e.preventDefault();
+            this.showAutomateDialog();
+        });
+    }
+
+    loadAutomationCount() {
+        frappe.call({
+            method: 'smart_accounting.www.project_management.index.get_automation_count',
+            callback: (r) => {
+                if (r.message && r.message.success) {
+                    const count = r.message.count || 0;
+                    $('#pm-automate-count').text(count);
+                } else {
+                    $('#pm-automate-count').text('0');
+                }
+            }
+        });
+    }
+
+    showAutomateDialog() {
+        // Show "Under Development" dialog
+        const dialogHtml = `
+            <div class="pm-automate-dialog" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10000; display: flex; align-items: center; justify-content: center;">
+                <div class="pm-dialog-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(2px);"></div>
+                <div class="pm-dialog-content" style="position: relative; background: white; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); width: 400px; max-width: 90vw; z-index: 1;">
+                    <div class="pm-dialog-header" style="display: flex; align-items: center; justify-content: space-between; padding: 24px 24px 16px; border-bottom: 1px solid #e1e5e9;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <i class="fa fa-robot" style="font-size: 20px; color: #667eea;"></i>
+                            <h3 style="margin: 0; color: #2c3e50; font-size: 18px;">Automation</h3>
+                        </div>
+                        <button class="pm-dialog-close" type="button" style="background: none; border: none; font-size: 18px; color: #999; cursor: pointer; padding: 4px;">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="pm-dialog-body" style="padding: 24px; text-align: center;">
+                        <div style="font-size: 48px; color: #667eea; margin-bottom: 16px;">
+                            <i class="fa fa-cogs"></i>
+                        </div>
+                        <h4 style="margin: 0 0 12px 0; color: #2c3e50; font-size: 20px;">Under Development</h4>
+                        <p style="margin: 0; color: #666; line-height: 1.5;">
+                            Automation features are currently being developed. 
+                            Stay tuned for powerful workflow automation capabilities!
+                        </p>
+                    </div>
+                    <div class="pm-dialog-footer" style="padding: 16px 24px 24px; text-align: center;">
+                        <button class="pm-btn pm-btn-primary pm-dialog-close" style="padding: 10px 24px; border-radius: 6px; border: none; background: #667eea; color: white; cursor: pointer;">
+                            Got it
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing dialog
+        $('.pm-automate-dialog').remove();
+        
+        // Add dialog to body
+        $('body').append(dialogHtml);
+
+        // Bind close events
+        $(document).on('click', '.pm-automate-dialog .pm-dialog-close, .pm-automate-dialog .pm-dialog-overlay', () => {
+            $('.pm-automate-dialog').remove();
+        });
     }
 
     // Legacy method for comment editing (placeholder)

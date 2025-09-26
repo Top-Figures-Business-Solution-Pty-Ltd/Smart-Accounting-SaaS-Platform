@@ -100,6 +100,10 @@
                                     <span>Status</span>
                                     <div class="pm-column-resizer"></div>
                                 </div>
+                                <div class="pm-header-cell pm-cell-note" data-column="note">
+                                    <span>Note</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
                                 <div class="pm-header-cell pm-cell-target-month" data-column="target-month">
                                     <span>Target Month</span>
                                     <div class="pm-column-resizer"></div>
@@ -148,16 +152,20 @@
                                     <span>Year End</span>
                                     <div class="pm-column-resizer"></div>
                                 </div>
-                                <div class="pm-header-cell pm-cell-note" data-column="note">
-                                    <span>Note</span>
-                                    <div class="pm-column-resizer"></div>
-                                </div>
                                 <div class="pm-header-cell pm-cell-last-updated" data-column="last-updated">
                                     <span>Last Updated</span>
                                     <div class="pm-column-resizer"></div>
                                 </div>
                                 <div class="pm-header-cell pm-cell-priority" data-column="priority">
                                     <span>Priority</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-frequency" data-column="frequency">
+                                    <span>Frequency</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-reset-date" data-column="reset-date">
+                                    <span>Reset Date</span>
                                     <div class="pm-column-resizer"></div>
                                 </div>
                             </div>
@@ -242,6 +250,13 @@
                                             <span class="pm-status-badge status-{{ task.status.lower() if task.status else 'open' }}">
                                                 {{ task.status or 'Open' }}
                                             </span>
+                                        </div>
+                                        <div class="pm-cell pm-cell-note"
+                                             data-editable="true"
+                                             data-field="custom_note"
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="text">
+                                            <span class="editable-field">{{ task.custom_note or '-' }}</span>
                                         </div>
                                         <div class="pm-cell pm-cell-target-month"
                                              data-editable="true"
@@ -415,13 +430,6 @@
                                              data-options="January,February,March,April,May,June,July,August,September,October,November,December">
                                             <span class="editable-field">{{ task.year_end or '-' }}</span>
                                         </div>
-                                        <div class="pm-cell pm-cell-note"
-                                             data-editable="true"
-                                             data-field="custom_note"
-                                             data-task-id="{{ task.task_id }}"
-                                             data-field-type="text">
-                                            <span class="editable-field">{{ task.note or '-' }}</span>
-                                        </div>
                                         <div class="pm-cell pm-cell-last-updated">
                                             {% if task.last_updated %}
                                                 <span class="pm-last-updated">{{ task.last_updated }}</span>
@@ -435,6 +443,21 @@
                                             {% else %}
                                                 <span class="pm-priority-badge priority-medium">Medium</span>
                                             {% endif %}
+                                        </div>
+                                        <div class="pm-cell pm-cell-frequency"
+                                             data-editable="true"
+                                             data-field="custom_frequency"
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="select"
+                                             data-options-source="custom_frequency">
+                                            <span class="editable-field">{{ task.custom_frequency or '-' }}</span>
+                                        </div>
+                                        <div class="pm-cell pm-cell-reset-date"
+                                             data-editable="true"
+                                             data-field="custom_reset_date"
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="text">
+                                            <span class="editable-field">{{ task.custom_reset_date or '-' }}</span>
                                         </div>
                                     </div>
                                 {% endfor %}

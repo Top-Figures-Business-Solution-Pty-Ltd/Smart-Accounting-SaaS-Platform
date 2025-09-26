@@ -355,6 +355,7 @@ class FilterManager {
             'tf-tg': 'TF/TG',
             'software': 'Software',
             'status': 'Status',
+            'note': 'Note',
             'target-month': 'Target Month',
             'budget': 'Budget',
             'actual': 'Actual',
@@ -368,7 +369,9 @@ class FilterManager {
             'group': 'Group',
             'year-end': 'Year End',
             'last-updated': 'Last Updated',
-            'priority': 'Priority'
+            'priority': 'Priority',
+            'frequency': 'Frequency',
+            'reset-date': 'Reset Date'
         };
 
         const visibleColumns = config.visible_columns || Object.keys(allColumns);

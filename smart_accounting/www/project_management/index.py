@@ -335,7 +335,7 @@ def get_partition_column_config(partition_name):
             # Default configuration for main view - show all current columns
             return {
                 'success': True,
-                'visible_columns': ['client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority'],
+                'visible_columns': ['client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'note', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'],
                 'column_config': {}
             }
         
@@ -358,7 +358,7 @@ def get_partition_column_config(partition_name):
         
         # If no configuration, use default
         if not visible_columns:
-            visible_columns = ['client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'year-end', 'last-updated', 'priority']
+            visible_columns = ['client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority']
         
         return {
             'success': True,
@@ -702,12 +702,11 @@ def get_project_management_data(view='main'):
             task_filters["project"] = ["in", []]
         
         tasks = frappe.db.get_all("Task",
-            fields=["name", "subject", "custom_task_status", "priority", "exp_end_date", "project", "description", "modified", "company", "custom_note"],
+            fields=["name", "subject", "custom_task_status", "priority", "exp_end_date", "project", "description", "modified", "company", "custom_note", "custom_frequency", "custom_reset_date"],
             filters=task_filters,
             order_by="exp_end_date"
         )
         
-        print(f"DEBUG: Found {len(tasks)} tasks for {len(projects)} projects")
         
         # Enrich tasks with project and client information
         for task in tasks:
@@ -825,6 +824,10 @@ def get_project_management_data(view='main'):
                 task.budget_planning = getattr(task_doc, 'custom_budget_planning', None) or 0
                 task.actual_billing = getattr(task_doc, 'custom_actual_billing', None) or 0
                 
+                # Get Frequency and Reset Date (newly added fields)
+                task.custom_frequency = getattr(task_doc, 'custom_frequency', None) or ""
+                task.custom_reset_date = getattr(task_doc, 'custom_reset_date', None) or ""
+                
                 # Try to get Review Notes (child table)
                 try:
                     # Get review notes from the custom_review_notes child table
@@ -929,6 +932,8 @@ def get_project_management_data(view='main'):
                 task.entity_type = "Company"  # Default entity type
                 task.budget_planning = 0
                 task.actual_billing = 0
+                task.custom_frequency = ""
+                task.custom_reset_date = ""
                 task.review_notes = []
                 task.latest_review_note = ""
                 # Set empty user info for avatars (no sub-table data)
@@ -1036,7 +1041,8 @@ def update_task_field(task_id, field_name, new_value):
             'custom_tftg', 'custom_tf_tg', 'custom_target_month',
             'custom_budget_planning', 'custom_actual_billing', 'custom_year_end', 'custom_task_status',
             'custom_service_line', 'custom_client', 'custom_lodgement_due_date', 'subject',
-            'custom_engagement', 'custom_roles', 'custom_due_date', 'description', 'custom_note'
+            'custom_engagement', 'custom_roles', 'custom_due_date', 'description', 'custom_note',
+            'custom_frequency', 'custom_reset_date'
         ]
         
         if field_name not in allowed_fields:
@@ -3108,4 +3114,27 @@ def get_task_role_assignments(task_id, role_filter=None):
         return {
             'success': False,
             'error': str(e)
+        }
+
+@frappe.whitelist()
+def get_automation_count():
+    """
+    Get count of automations (placeholder for future automation system)
+    """
+    try:
+        # For now, return a placeholder count
+        # In the future, this would count actual automation records
+        # Example: automation_count = frappe.db.count('Automation', {'is_active': 1})
+        automation_count = 0  # Placeholder count
+        
+        return {
+            'success': True,
+            'count': automation_count
+        }
+    except Exception as e:
+        frappe.log_error(f"Error getting automation count: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'count': 0
         }

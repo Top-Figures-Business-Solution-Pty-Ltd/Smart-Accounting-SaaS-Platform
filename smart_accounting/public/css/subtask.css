@@ -10,34 +10,64 @@
 
 .pm-subtask-toggle,
 .pm-add-subtask {
-    background: none;
-    border: none;
-    color: #6b7280;
+    background: linear-gradient(135deg, #ffffff 0%, #f1f3f4 100%);
+    border: 1.5px solid #9ca3af;
+    color: #374151;
     cursor: pointer;
-    padding: 4px;
+    padding: 3px;
     border-radius: 4px;
     transition: all 0.2s ease;
-    font-size: 12px;
-    width: 24px;
-    height: 24px;
+    font-size: 10px;
+    width: 20px;
+    height: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
     opacity: 1;
-    min-width: 24px;
+    min-width: 20px;
     flex-shrink: 0;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    position: relative;
+    z-index: 10;
+    font-weight: 600;
 }
 
 .pm-subtask-toggle:hover,
 .pm-add-subtask:hover {
-    background: rgba(0, 115, 234, 0.1);
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border-color: var(--monday-blue);
     color: var(--monday-blue);
     opacity: 1;
+    box-shadow: 0 2px 6px rgba(0, 115, 234, 0.2);
+    transform: translateY(-1px);
 }
 
 .pm-subtask-toggle.has-subtasks {
-    color: var(--monday-blue);
+    background: linear-gradient(135deg, var(--monday-blue) 0%, #1976d2 100%);
+    color: white;
+    border-color: var(--monday-blue);
     opacity: 1;
+    box-shadow: 0 2px 6px rgba(0, 115, 234, 0.3);
+}
+
+.pm-subtask-toggle.has-subtasks:hover {
+    background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(0, 115, 234, 0.4);
+}
+
+/* Rotation animation for expanded state */
+.pm-subtask-toggle .fa-chevron-right {
+    transition: transform 0.2s ease;
+}
+
+.pm-subtask-toggle.expanded .fa-chevron-right {
+    transform: rotate(90deg);
+}
+
+/* Make button more prominent when it has subtasks */
+.pm-subtask-toggle.has-subtasks .fa-chevron-right {
+    font-weight: 900;
 }
 
 .pm-client-content {

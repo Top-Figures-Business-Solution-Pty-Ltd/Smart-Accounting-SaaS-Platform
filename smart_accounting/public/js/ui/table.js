@@ -178,6 +178,7 @@ class TableManager {
             'tf-tg': 'pm-cell-tf-tg',
             'software': 'pm-cell-software',
             'status': 'pm-cell-status',
+            'note': 'pm-cell-note',
             'target-month': 'pm-cell-target-month',
             'budget': 'pm-cell-budget',
             'actual': 'pm-cell-actual',
@@ -190,9 +191,10 @@ class TableManager {
             'engagement': 'pm-cell-engagement',
             'group': 'pm-cell-group',
             'year-end': 'pm-cell-year-end',
-            'note': 'pm-cell-note',
             'last-updated': 'pm-cell-last-updated',
-            'priority': 'pm-cell-priority'
+            'priority': 'pm-cell-priority',
+            'frequency': 'pm-cell-frequency',
+            'reset-date': 'pm-cell-reset-date'
         };
         
         const cellClass = `.${columnClassMap[column]}`;
@@ -278,6 +280,7 @@ class TableManager {
             'tf-tg': 80,
             'software': 120,
             'status': 120,
+            'note': 150,
             'target-month': 120,
             'budget': 100,
             'actual': 100,
@@ -290,9 +293,10 @@ class TableManager {
             'engagement': 120,
             'group': 100,
             'year-end': 100,
-            'note': 150,
             'last-updated': 130,
-            'priority': 100
+            'priority': 100,
+            'frequency': 120,
+            'reset-date': 120
         };
     }
     
@@ -499,9 +503,9 @@ class TableManager {
     hideUnwantedColumns(visibleColumns) {
         // All possible columns (excluding select which is always visible)
         const allColumns = [
-            'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 
+            'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'note', 'target-month', 
             'budget', 'actual', 'review-note', 'action-person', 'preparer', 
-            'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'note', 'last-updated', 'priority'
+            'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'
         ];
         
         // Always ensure select column is visible (it's not user-configurable)
