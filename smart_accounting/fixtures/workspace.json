@@ -1,7 +1,7 @@
 [
  {
   "charts": [],
-  "content": "[{\"id\":\"5-fxqUq5Hh\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Smart Accounting</span>\",\"col\":12}},{\"id\":\"5lHpcUkVaZ\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Top Figures / Top Grants Clients\",\"col\":5}},{\"id\":\"Vmr3JLbikd\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Data Structure\",\"col\":3}},{\"id\":\"9uETq8MrN8\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Task Management</b></span>\",\"col\":12}},{\"id\":\"GSElRdjbmx\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Project\",\"col\":4}},{\"id\":\"jUdUh0gAqv\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Task\",\"col\":4}},{\"id\":\"JLrQlWryFm\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Clients\",\"col\":4}}]",
+  "content": "[{\"id\":\"5-fxqUq5Hh\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Smart Accounting</span>\",\"col\":12}},{\"id\":\"5lHpcUkVaZ\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Task Management View\",\"col\":5}},{\"id\":\"Vmr3JLbikd\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Data Structure(For dev use only)\",\"col\":5}},{\"id\":\"vZKpJgg6mI\",\"type\":\"paragraph\",\"data\":{\"text\":\"----------------------------------------------------------------------------------------------------------------------------------------\",\"col\":12}},{\"id\":\"9uETq8MrN8\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">ERPNext Built-In Tables (Dev only)</span>\",\"col\":12}},{\"id\":\"GSElRdjbmx\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Project\",\"col\":4}},{\"id\":\"jUdUh0gAqv\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Task\",\"col\":4}},{\"id\":\"JLrQlWryFm\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Clients\",\"col\":4}}]",
   "custom_blocks": [],
   "docstatus": 0,
   "doctype": "Workspace",
@@ -12,7 +12,7 @@
   "is_hidden": 0,
   "label": "Smart Accounting",
   "links": [],
-  "modified": "2025-09-11 16:05:01.526661",
+  "modified": "2025-09-26 09:13:10.841131",
   "module": null,
   "name": "Smart Accounting",
   "number_cards": [],
@@ -54,24 +54,7 @@
     "format": null,
     "icon": null,
     "kanban_board": null,
-    "label": "Data Structure",
-    "link_to": null,
-    "parent": "Smart Accounting",
-    "parentfield": "shortcuts",
-    "parenttype": "Workspace",
-    "report_ref_doctype": null,
-    "restrict_to_domain": null,
-    "stats_filter": null,
-    "type": "URL",
-    "url": "/data-structure"
-   },
-   {
-    "color": "Grey",
-    "doc_view": "List",
-    "format": null,
-    "icon": null,
-    "kanban_board": null,
-    "label": "Top Figures / Top Grants Clients",
+    "label": "Task Management View",
     "link_to": null,
     "parent": "Smart Accounting",
     "parentfield": "shortcuts",
@@ -81,6 +64,23 @@
     "stats_filter": null,
     "type": "URL",
     "url": "/project_management"
+   },
+   {
+    "color": "Grey",
+    "doc_view": "List",
+    "format": null,
+    "icon": null,
+    "kanban_board": null,
+    "label": "Data Structure(For dev use only)",
+    "link_to": null,
+    "parent": "Smart Accounting",
+    "parentfield": "shortcuts",
+    "parenttype": "Workspace",
+    "report_ref_doctype": null,
+    "restrict_to_domain": null,
+    "stats_filter": null,
+    "type": "URL",
+    "url": "/data-structure"
    }
   ],
   "title": "Smart Accounting"
