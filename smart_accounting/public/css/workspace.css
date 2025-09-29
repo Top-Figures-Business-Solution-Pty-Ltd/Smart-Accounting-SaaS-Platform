@@ -1,6 +1,6 @@
 /* Workspace and Navigation Styles */
 
-/* Header Section */
+/* Header Section - Fixed Below ERPNext Navbar */
 .pm-header {
     background: white;
     padding: 20px 24px;
@@ -9,9 +9,11 @@
     justify-content: space-between;
     align-items: center;
     box-shadow: var(--monday-shadow);
-    position: sticky;
-    top: 0;
-    z-index: 100;
+    position: fixed;
+    top: 48px; /* ERPNext navbar height */
+    left: 0;
+    right: 0;
+    z-index: 99; /* Below ERPNext navbar but above content */
     flex-wrap: wrap;
     gap: 16px;
     margin: 0;
@@ -308,18 +310,16 @@
     transform: scale(1.1);
 }
 
-/* Main Dashboard Styles - Override all table styles */
+/* Main Dashboard Styles - Override all table styles - Full Width Layout */
 .pm-main-dashboard {
-    padding: 40px !important;
-    max-width: 1200px !important;
-    margin: 0 auto !important;
+    padding: 40px 24px !important; /* Reduced horizontal padding for full width */
+    width: 100% !important; /* Use full width instead of max-width constraint */
     height: auto !important;
     overflow: visible !important;
     background: #fafbfc !important;
-    border-radius: 8px !important;
+    border-radius: 0 !important; /* Remove border radius for full width */
     box-shadow: none !important;
     display: block !important;
-    width: auto !important;
     min-width: auto !important;
     flex: none !important;
 }
@@ -353,7 +353,8 @@ body.main-dashboard-view .pm-content {
     overflow: visible !important;
     height: auto !important;
     background: #f6f7fb !important;
-    min-height: calc(100vh - 200px) !important;
+    min-height: auto !important;
+    padding-top: 200px !important; /* Maximum spacing to ensure complete visibility */
 }
 
 /* Reset any table-specific styles for main dashboard */
@@ -368,13 +369,12 @@ body.main-dashboard-view * {
     box-sizing: border-box !important;
 }
 
-/* Main dashboard container styles */
+/* Main dashboard container styles - Full Width Layout */
 body.main-dashboard-view .pm-main-dashboard {
-    padding: 40px;
-    max-width: 1200px;
-    margin: 0 auto;
+    padding: 40px 24px; /* Reduced horizontal padding for full width */
+    width: 100%; /* Use full width instead of max-width constraint */
     background: #fafbfc;
-    border-radius: 8px;
+    border-radius: 0; /* Remove border radius for full width */
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 

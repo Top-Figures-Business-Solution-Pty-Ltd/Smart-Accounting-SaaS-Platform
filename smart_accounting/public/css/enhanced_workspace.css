@@ -773,21 +773,20 @@
     }
 }
 
-/* Fix table layout to prevent column overlap */
+/* Fix table layout to prevent column overlap - Full Native Browser Scrolling */
 .pm-table-container {
-    overflow-x: auto !important;
-    overflow-y: auto !important;
+    overflow: visible !important; /* Use browser's native scrolling for both directions */
     width: 100% !important;
     position: relative !important;
-    height: calc(100vh - 200px) !important;
+    /* Removed fixed height and internal scrolling - let content flow naturally for native browser scrolling */
 }
 
 .pm-task-row,
 .pm-project-table-header {
     display: flex !important;
     flex-wrap: nowrap !important;
-    width: max-content !important;
-    min-width: fit-content !important;
+    width: 100% !important; /* Use full available width */
+    min-width: fit-content !important; /* Expand only if content requires it */
 }
 
 .pm-cell,

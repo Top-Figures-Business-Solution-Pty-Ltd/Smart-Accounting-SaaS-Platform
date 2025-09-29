@@ -79,9 +79,12 @@ class PMUtils {
             '#9333ea', '#059669', '#dc2626', '#ea580c', '#7c3aed', '#0891b2'
         ];
         
-        const statusOptions = window.projectManagement?.statusOptions || ['Open', 'Working', 'Completed', 'Cancelled'];
-        const statusIndex = statusOptions.indexOf(status);
-        const color = colors[statusIndex % colors.length];
+        // Use dynamic status options from global project management instance
+        const statusOptions = window.projectManagement?.statusOptions || [];
+        const statusIndex = statusOptions.length > 0 ? statusOptions.indexOf(status) : -1;
+        // If status not found in dynamic list, use hash-based color assignment
+        const colorIndex = statusIndex >= 0 ? statusIndex : Math.abs(status.split('').reduce((a, b) => a + b.charCodeAt(0), 0));
+        const color = colors[colorIndex % colors.length];
         
         $badge.css('background-color', color);
     }

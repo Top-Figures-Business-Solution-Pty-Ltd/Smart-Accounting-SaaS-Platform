@@ -23,6 +23,7 @@ def get_context(context):
     context.title = get_workspace_title(view)
     context.show_sidebar = False
     context.show_header = True
+    context.full_width = True  # Enable full width layout for better laptop/desktop experience
     context.current_view = view
     context.available_views = get_available_views()
     
@@ -2969,27 +2970,8 @@ def batch_delete_tasks(task_ids):
         'total_processed': len(task_ids)
     }
 
-def get_excluded_task_statuses():
-    """
-    Get list of task statuses that should be excluded from main view
-    This function can be easily modified to change exclusion logic
-    """
-    # You can modify this list based on your business requirements
-    # These statuses will be hidden from the main table view
-    excluded_statuses = ["Hold", "Not Trading"]
-    
-    # Future enhancement: Make this configurable via Custom Settings
-    # This way users can modify excluded statuses without code changes
-    try:
-        # Example of how to make this configurable:
-        # custom_settings = frappe.get_single("Project Management Settings")
-        # if hasattr(custom_settings, 'excluded_task_statuses') and custom_settings.excluded_task_statuses:
-        #     excluded_statuses = [s.strip() for s in custom_settings.excluded_task_statuses.split('\n') if s.strip()]
-        pass
-    except:
-        pass
-    
-    return excluded_statuses
+# Removed get_excluded_task_statuses() function - now showing all customer tasks
+# This allows management of all tasks including "Hold" and "Not Trading" statuses
 
 @frappe.whitelist()
 def batch_archive_tasks(task_ids):
@@ -3040,27 +3022,6 @@ def batch_archive_tasks(task_ids):
         'total_processed': len(task_ids)
     }
 
-def get_excluded_task_statuses():
-    """
-    Get list of task statuses that should be excluded from main view
-    This function can be easily modified to change exclusion logic
-    """
-    # You can modify this list based on your business requirements
-    # These statuses will be hidden from the main table view
-    excluded_statuses = ["Hold", "Not Trading"]
-    
-    # Future enhancement: Make this configurable via Custom Settings
-    # This way users can modify excluded statuses without code changes
-    try:
-        # Example of how to make this configurable:
-        # custom_settings = frappe.get_single("Project Management Settings")
-        # if hasattr(custom_settings, 'excluded_task_statuses') and custom_settings.excluded_task_statuses:
-        #     excluded_statuses = [s.strip() for s in custom_settings.excluded_task_statuses.split('\n') if s.strip()]
-        pass
-    except:
-        pass
-    
-    return excluded_statuses
 @frappe.whitelist()
 def get_task_role_assignments(task_id, role_filter=None):
     """

@@ -10,6 +10,8 @@ class TableManager {
         this.startWidth = 0;
         this.columnWidths = this.getDefaultColumnWidths();
         this.saveTimeout = null;
+        this.updateTimeout = null; // Prevent multiple simultaneous updates
+        this.lastUpdateTime = 0; // Track last update to prevent rapid calls
     }
 
     // Column Resizing Functionality
@@ -73,10 +75,14 @@ class TableManager {
             }
         });
         
-        // Handle window resize
+        // Handle window resize with debouncing
+        let resizeTimeout;
         $(window).on('resize', () => {
             if (!this.isResizing) {
-                this.updateTableWidth();
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    this.updateTableWidth();
+                }, 250); // Debounce window resize events
             }
         });
         
@@ -117,14 +123,16 @@ class TableManager {
     endResize() {
         if (!this.isResizing) return;
         
-        // Save the new width
+        // Save the new width - user's manual resize should always be respected
         if (this.currentColumn) {
             const newWidth = $(`.pm-header-cell[data-column="${this.currentColumn}"]`).outerWidth();
             this.columnWidths[this.currentColumn] = newWidth;
-            this.saveColumnWidths();
             
-            // Immediately update table width to maintain consistency
+            // Update table width to match new column widths (table adapts to columns)
             this.updateTableWidth();
+            
+            // Save user's preference immediately
+            this.saveColumnWidths();
         }
         
         // Clean up
@@ -217,8 +225,8 @@ class TableManager {
             }
         }
         
-        // Update total table width
-        this.updateTableWidth();
+        // Don't automatically update table width from setColumnWidth to prevent recursion
+        // Table width will be updated by the calling function
     }
     
     applyColumnWidths() {
@@ -271,7 +279,7 @@ class TableManager {
     }
     
     getDefaultColumnWidths() {
-        // Simplified default column widths (temporarily restore sync version)
+        // Static default widths to avoid DOM queries during initialization
         return {
             'select': 40,
             'client': 150,
@@ -298,6 +306,12 @@ class TableManager {
             'frequency': 120,
             'reset-date': 120
         };
+    }
+    
+    // Get default width for a specific column (used for dynamic columns)
+    getColumnDefaultWidth(columnName) {
+        const defaults = this.getDefaultColumnWidths();
+        return defaults[columnName] || 120; // Default 120px for unknown columns
     }
     
     saveColumnWidths() {
@@ -331,23 +345,85 @@ class TableManager {
     }
     
     updateTableWidth() {
-        // Calculate total width based on all column widths
+        // Prevent rapid successive calls for better performance
+        const now = Date.now();
+        if (now - this.lastUpdateTime < 50) { // Throttle to max 20 calls per second
+            clearTimeout(this.updateTimeout);
+            this.updateTimeout = setTimeout(() => {
+                this._doUpdateTableWidth();
+            }, 50);
+            return;
+        }
+        
+        this.lastUpdateTime = now;
+        this._doUpdateTableWidth();
+    }
+    
+    _doUpdateTableWidth() {
+        // Dynamic width calculation - ensures perfect fit with no extra space
         if (!this.columnWidths || typeof this.columnWidths !== 'object') {
             return;
         }
         
-        const totalWidth = Object.values(this.columnWidths).reduce((sum, width) => sum + width, 0);
-        const calculatedWidth = Math.max(totalWidth + 50, 1200); // Add padding and set minimum
+        // Get container width (available space for table)
+        const $tableContainer = $('.pm-table-container');
+        if (!$tableContainer.length) return;
         
-        // Update all table elements to maintain consistency, preserving display property
+        // Prevent infinite recursion by checking if we're already in a CSS calculation
+        if ($tableContainer.data('updating-width')) {
+            return;
+        }
+        $tableContainer.data('updating-width', true);
+        
+        let containerWidth;
+        try {
+            containerWidth = $tableContainer.width() || window.innerWidth - 100;
+        } catch (e) {
+            console.warn('Error getting container width:', e);
+            containerWidth = window.innerWidth - 100; // Fallback
+        }
+        
+        const scrollbarWidth = 17; // Standard scrollbar width
+        const availableWidth = Math.max(600, containerWidth - scrollbarWidth); // Minimum 600px
+        
+        // Get all visible columns and their current widths
+        const visibleColumns = [];
+        const allColumns = this.getAllAvailableColumns();
+        
+        allColumns.forEach(column => {
+            const $headerCell = $(`.pm-header-cell[data-column="${column}"]`).first();
+            if ($headerCell.length && $headerCell.is(':visible') && $headerCell.css('display') !== 'none') {
+                visibleColumns.push({
+                    name: column,
+                    width: this.columnWidths[column] || this.getColumnDefaultWidth(column),
+                    isFixed: column === 'select' // Select column is always fixed width
+                });
+            }
+        });
+        
+        if (visibleColumns.length === 0) return;
+        
+        // Calculate total width based on user's saved column widths
+        // NEVER modify user's saved column widths - table should adapt to columns, not vice versa
+        let totalColumnsWidth = visibleColumns.reduce((sum, col) => sum + col.width, 0);
+        
+        // Table width should always match the sum of visible column widths
+        // No adjustment of column widths - respect user's preferences
+        const finalWidth = totalColumnsWidth;
+        
+        console.log(`📐 Table width calculation: ${finalWidth}px (sum of ${visibleColumns.length} visible columns)`);
+        
+        // Update all table elements with the calculated width
         $('.pm-project-table-header, .pm-task-row, .pm-project-group, .pm-add-task-row').each(function() {
             const $element = $(this);
             const currentDisplay = $element.css('display');
             const isHidden = $element.hasClass('column-hidden') || currentDisplay === 'none';
             
+            // Set exact width to match available space
             $element.css({
-                'width': calculatedWidth + 'px',
-                'min-width': calculatedWidth + 'px'
+                'width': finalWidth + 'px',
+                'min-width': finalWidth + 'px',
+                'max-width': finalWidth + 'px'
             });
             
             // Preserve the original display value
@@ -358,14 +434,17 @@ class TableManager {
         
         // Update table body container
         $('.pm-table-body').css({
-            'width': calculatedWidth + 'px',
-            'min-width': calculatedWidth + 'px'
+            'width': finalWidth + 'px',
+            'min-width': finalWidth + 'px',
+            'max-width': finalWidth + 'px'
         });
         
-        // Force table container to accommodate new width
-        $('.pm-table-container').css({
-            'overflow-x': 'auto'
-        });
+        console.log(`✅ Table width updated: ${finalWidth}px (respecting user's column widths, no forced adjustments)`);
+        
+        // Clear the updating flag to allow future updates
+        setTimeout(() => {
+            $('.pm-table-container').removeData('updating-width');
+        }, 10);
     }
     
     resetColumnWidths() {
@@ -499,14 +578,34 @@ class TableManager {
         return currentWidths;
     }
 
+    // Get all available columns dynamically from DOM
+    getAllAvailableColumns() {
+        const columns = [];
+        try {
+            $('.pm-header-cell[data-column]').each(function() {
+                const columnName = $(this).data('column');
+                if (columnName && !columns.includes(columnName)) {
+                    columns.push(columnName);
+                }
+            });
+        } catch (e) {
+            console.warn('Error getting available columns:', e);
+            // Fallback to basic columns if DOM query fails
+            return ['select', 'client', 'task-name', 'status'];
+        }
+        
+        // If no columns found, return basic set
+        if (columns.length === 0) {
+            return ['select', 'client', 'task-name', 'status'];
+        }
+        
+        return columns;
+    }
+
     // Column visibility management
     hideUnwantedColumns(visibleColumns) {
-        // All possible columns (excluding select which is always visible)
-        const allColumns = [
-            'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'note', 'target-month', 
-            'budget', 'actual', 'review-note', 'action-person', 'preparer', 
-            'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'
-        ];
+        // Get all possible columns dynamically (excluding select which is always visible)
+        const allColumns = this.getAllAvailableColumns().filter(col => col !== 'select');
         
         // Always ensure select column is visible (it's not user-configurable)
         $(`.pm-header-cell[data-column="select"]`).show().css('display', '').removeClass('column-hidden');
@@ -529,21 +628,29 @@ class TableManager {
             }
         });
         
-        // Recalculate table width after hiding columns
-        this.updateTableWidth();
+        // Recalculate table width after hiding/showing columns
+        // Add small delay to ensure DOM updates are complete
+        setTimeout(() => {
+            this.updateTableWidth();
+        }, 150); // Slightly longer delay for better stability
     }
 
     applyColumnConfiguration(config) {
         const visibleColumns = config.visible_columns || [];
         const columnConfig = config.column_config || {};
         
-        // Apply column visibility
+        // Apply column visibility (this will trigger updateTableWidth internally)
         this.hideUnwantedColumns(visibleColumns);
         
         // Apply column order if specified
         if (columnConfig.column_order && columnConfig.column_order.length > 0) {
             this.applyColumnOrder(columnConfig.column_order, visibleColumns);
         }
+        
+        // Ensure width is recalculated after all configuration changes
+        setTimeout(() => {
+            this.updateTableWidth();
+        }, 150);
     }
 
     applyColumnOrder(columnOrder, visibleColumns) {
@@ -557,6 +664,13 @@ class TableManager {
         // 1. Reordering header cells in all project groups
         // 2. Reordering data cells in all task rows
         // 3. Maintaining the responsive table structure
+    }
+
+    // Force immediate table width recalculation (public method)
+    forceUpdateTableWidth() {
+        this.lastUpdateTime = 0; // Reset throttling
+        clearTimeout(this.updateTimeout);
+        this._doUpdateTableWidth();
     }
 
     // Apply partition-specific column configuration

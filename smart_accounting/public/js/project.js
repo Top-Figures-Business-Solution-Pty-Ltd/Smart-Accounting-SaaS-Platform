@@ -4,7 +4,8 @@
 class ProjectManager {
     constructor() {
         this.utils = window.PMUtils;
-        this.statusOptions = ['Open', 'Working', 'Completed', 'Cancelled'];
+        // Status options are now loaded dynamically from backend
+        this.statusOptions = [];
     }
 
     // Project expand/collapse
@@ -396,7 +397,9 @@ class ProjectManager {
             '#0891b2'  // cyan-600
         ];
         
-        const statusOptions = (this.statusOptions || ['Open', 'Working', 'Completed', 'Cancelled']).map((status, index) => ({
+        // Use dynamic status options, with minimal fallback if needed
+        const availableStatuses = this.statusOptions.length > 0 ? this.statusOptions : ['Open', 'Completed'];
+        const statusOptions = availableStatuses.map((status, index) => ({
             value: status,
             label: status,
             color: colors[index % colors.length]
@@ -539,8 +542,8 @@ class ProjectManager {
             }
         } catch (error) {
             console.warn('Failed to load system options:', error);
-            // Use fallback options
-            this.statusOptions = ['Open', 'Working', 'Completed', 'Cancelled'];
+            // Status options will be loaded dynamically via API when needed
+            this.statusOptions = [];
         }
     }
 

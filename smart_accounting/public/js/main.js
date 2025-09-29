@@ -48,6 +48,23 @@ class ProjectManagement {
         this.addColumnManagementButton();
         this.bindMainDashboardEvents();
         this.initializeAutomateButton();
+        this.setupDynamicResizing();
+    }
+    
+    setupDynamicResizing() {
+        // Add window resize listener for dynamic table adjustment
+        $(window).on('resize', () => {
+            if (this.tableManager && this.tableManager.updateTableWidth) {
+                this.tableManager.updateTableWidth();
+            }
+        });
+        
+        // Initial table width adjustment
+        setTimeout(() => {
+            if (this.tableManager && this.tableManager.updateTableWidth) {
+                this.tableManager.updateTableWidth();
+            }
+        }, 500);
     }
 
     initializeMultiSelect() {

@@ -1,17 +1,18 @@
 /* Reports and Table Styles */
 
-/* Main Content */
+/* Main Content - Fixed Header Layout */
 .pm-content {
-    padding: 24px;
+    padding: 24px 12px;
+    padding-top: 240px; /* Maximum space for fixed headers to ensure complete visibility */
     width: 100%;
     overflow: visible;
+    min-width: fit-content;
 }
 
-/* Table Container */
+/* Table Container - Full Native Browser Scrolling */
 .pm-table-container {
     background: transparent;
-    overflow-x: auto;
-    overflow-y: visible;
+    overflow: visible; /* Use browser's native scrolling for both directions */
     width: 100%;
     position: relative;
     scroll-behavior: smooth;
@@ -19,36 +20,12 @@
     border: 1px solid rgba(208, 212, 228, 0.5);
     backdrop-filter: blur(10px);
     transition: all 0.3s ease;
-    /* Make scrollbar always visible */
-    scrollbar-width: thin;
-    scrollbar-color: var(--monday-border) transparent;
+    /* No internal scrollbars - use browser native only */
 }
 
-/* Webkit scrollbar styling */
-.pm-table-container::-webkit-scrollbar {
-    height: 12px;
-}
+/* Remove all custom scrollbar styling - use browser native scrollbars only */
 
-.pm-table-container::-webkit-scrollbar-track {
-    background: var(--monday-light-gray);
-    border-radius: 6px;
-}
-
-.pm-table-container::-webkit-scrollbar-thumb {
-    background: var(--monday-border);
-    border-radius: 6px;
-    border: 2px solid var(--monday-light-gray);
-}
-
-.pm-table-container::-webkit-scrollbar-thumb:hover {
-    background: var(--monday-gray);
-}
-
-/* Make table container sticky at bottom for scrollbar visibility */
-.pm-table-container {
-    position: sticky;
-    bottom: 0;
-}
+/* Remove sticky positioning for natural browser scrolling */
 
 .pm-table-container:hover {
     box-shadow: var(--monday-shadow-hover);
@@ -149,10 +126,10 @@
     color: var(--monday-gray);
     margin-top: 8px;
     margin-bottom: 4px;
-    width: max-content;
-    min-width: 100%;
-    position: sticky;
-    top: 54px;
+    width: 100%; /* Use full width */
+    min-width: fit-content; /* Expand if needed */
+    /* Remove sticky positioning to prevent overlap with fixed pm-header */
+    position: relative;
     z-index: 12;
 }
 
@@ -254,19 +231,20 @@ div.pm-table-header,
 .pm-cell-priority,
 .pm-header-cell.pm-cell-priority { width: 100px; min-width: 100px; flex: 0 0 100px; }
 
-/* Table Body */
+/* Table Body - Dynamic Natural Flow */
 .pm-table-body {
     overflow: visible;
-    width: max-content;
-    min-width: max-content;
+    width: 100%; /* Use container width, not max-content */
+    min-width: fit-content; /* Only expand if needed */
     position: relative;
+    /* Dynamic height based on content */
 }
 
-/* Project Groups */
+/* Project Groups - Dynamic Width */
 .pm-project-group {
     border-bottom: 1px solid var(--monday-border);
-    min-width: 2100px;
-    width: max-content;
+    width: 100%; /* Use full available width */
+    min-width: fit-content; /* Expand only if content requires it */
     background: white;
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -279,12 +257,14 @@ div.pm-table-header,
     padding: 12px 20px;
     cursor: pointer;
     transition: background-color 0.2s ease;
-    position: sticky;
-    top: 0;
+    position: relative;
     left: 0;
     z-index: 15;
     border-right: 2px solid var(--monday-border);
     border-bottom: 2px solid var(--monday-border);
+    /* Ensure project name is visible and prominent */
+    font-weight: 600;
+    font-size: 16px;
 }
 
 .pm-project-header:hover {
@@ -309,6 +289,13 @@ div.pm-table-header,
     gap: 12px;
     font-weight: 600;
     color: var(--monday-dark);
+}
+
+.pm-project-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--monday-dark);
+    flex-shrink: 0; /* Prevent project name from being compressed */
 }
 
 .pm-expand-icon {
@@ -503,13 +490,13 @@ div.pm-table-header,
 }
 
 .pm-table-header {
-    width: max-content !important;
-    min-width: 1200px !important;
+    width: 100% !important; /* Use full container width */
+    min-width: fit-content !important; /* Expand only if needed */
 }
 
 .pm-task-row {
-    width: max-content !important;
-    min-width: 1200px !important;
+    width: 100% !important; /* Use full container width */
+    min-width: fit-content !important; /* Expand only if needed */
 }
 
 /* Column Dividers - Add vertical lines between columns */
@@ -531,19 +518,19 @@ div.pm-table-header,
     border-right: none !important;
 }
 
-/* Real Table Styles - Perfect Alignment */
+/* Real Table Styles - Perfect Alignment - Native Browser Scrolling */
 .pm-project-table-wrapper {
     width: 100%;
-    overflow-x: auto;
+    overflow: visible; /* Use browser native scrolling */
     margin-bottom: 20px;
 }
 
 .pm-project-table {
-    width: 2200px !important;
-    min-width: 2200px !important;
+    width: 100% !important; /* Dynamic width based on content */
+    min-width: fit-content !important; /* Expand only if needed */
     border-collapse: collapse;
     background: white;
-    table-layout: fixed;
+    table-layout: auto; /* Auto layout for better responsiveness */
 }
 
 /* Column Widths - Flexible for resizing */
