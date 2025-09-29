@@ -29,10 +29,17 @@ class EditorsManager {
                 if (window.SoftwareSelectorManager) {
                     window.SoftwareSelectorManager.showSoftwareSelector($(e.currentTarget), taskId, fieldName);
                 }
+            } else if (fieldType === 'date') {
+                // Date fields directly show date picker, never text editor
+                console.log('📅 Opening date picker for:', fieldName);
+                this.showDatePicker($(e.currentTarget), taskId, fieldName);
+                return; // Prevent any other editing behavior
             } else {
                 this.makeEditable(e.currentTarget);
             }
         });
+
+        // Calendar icon removed - entire cell is now clickable for date fields
 
         // Prevent row click when editing
         $(document).on('click', '.pm-task-row.editing', (e) => {
@@ -50,9 +57,12 @@ class EditorsManager {
         const field = $cell.data('field');
         const fieldType = $cell.data('field-type');
         
-        // Don't allow text editing for special selector fields
-        if (fieldType === 'person_selector' || fieldType === 'software_selector') {
-            // These are handled in the main click handler
+        // Don't allow text editing for special selector fields and date fields
+        if (fieldType === 'person_selector' || fieldType === 'software_selector' || fieldType === 'date') {
+            // Date fields should use the date picker, not text editing
+            if (fieldType === 'date') {
+                this.showDatePicker($cell, taskId, field);
+            }
             return;
         }
         
@@ -70,9 +80,6 @@ class EditorsManager {
                 break;
             case 'currency':
                 editor = this.createCurrencyEditor($cell, currentValue);
-                break;
-            case 'date':
-                editor = this.createDateEditor($cell, currentValue);
                 break;
             case 'text':
                 editor = this.createTextEditor($cell, currentValue);
@@ -173,6 +180,278 @@ class EditorsManager {
         }
         
         return `<input type="date" value="${dateValue}" lang="en-US" data-locale="en-US" style="width: 100%; border: 2px solid var(--monday-blue); padding: 6px 8px; border-radius: 4px; font-size: 14px; z-index: 10000; position: relative; background: white; color-scheme: light;">`;
+    }
+    
+    showDatePicker($cell, taskId, fieldName) {
+        console.log('📅 Showing date picker for field:', fieldName);
+        
+        // Get current date value
+        const currentValue = $cell.find('.pm-date-display, .editable-field').text().trim();
+        let initialDate = '';
+        let displayValue = '';
+        
+        // Parse current date value and format for display
+        if (currentValue && currentValue !== '-') {
+            // Try to parse various date formats
+            const parsed = this.parseDateValue(currentValue);
+            if (parsed) {
+                initialDate = parsed;  // YYYY-MM-DD for HTML date input
+                displayValue = this.formatDateForDisplay(parsed);  // DD/MM/YYYY for text input
+            } else {
+                // If already in DD/MM/YYYY format, use as-is
+                displayValue = currentValue;
+            }
+        }
+        
+        // Create custom date picker HTML with English interface and DD/MM/YYYY format
+        const datePickerHTML = `
+            <div class="pm-date-picker-modal" id="pm-date-picker-${taskId}-${fieldName}" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;">
+                <div class="pm-date-picker-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></div>
+                <div class="pm-date-picker-content" style="background: white; border-radius: 8px; padding: 20px; min-width: 300px; max-width: 400px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+                    <div class="pm-date-picker-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="margin: 0; color: #333;">Select Date</h3>
+                        <button class="pm-date-picker-close" style="background: none; border: none; font-size: 18px; cursor: pointer; color: #666;">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="pm-date-picker-body" style="margin-bottom: 20px;">
+                        <div style="margin-bottom: 10px;">
+                            <input type="text" 
+                                   class="pm-date-text-input" 
+                                   placeholder="DD-MM-YYYY"
+                                   value="${displayValue}"
+                                   style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; text-align: center;">
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <input type="date" 
+                                   class="pm-date-input" 
+                                   value="${initialDate}"
+                                   lang="en-US"
+                                   data-locale="en-US"
+                                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; color-scheme: light;">
+                        </div>
+                        <div class="pm-date-format-info" style="font-size: 12px; color: #666; text-align: center;">
+                            Enter date as DD-MM-YYYY or DD-MM-YY, or use the date picker above
+                        </div>
+                    </div>
+                    <div class="pm-date-picker-footer" style="display: flex; justify-content: space-between; align-items: center;">
+                        <button class="pm-btn pm-btn-secondary pm-date-clear" style="background: #f8f9fa; border: 1px solid #ddd; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Clear</button>
+                        <div class="pm-date-actions" style="display: flex; gap: 8px;">
+                            <button class="pm-btn pm-btn-secondary pm-date-cancel" style="background: #f8f9fa; border: 1px solid #ddd; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Cancel</button>
+                            <button class="pm-btn pm-btn-primary pm-date-save" style="background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Save</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing date picker
+        $('.pm-date-picker-modal').remove();
+        
+        // Add to body
+        $('body').append(datePickerHTML);
+        
+        const $datePicker = $(`#pm-date-picker-${taskId}-${fieldName}`);
+        
+        // Show modal
+        $datePicker.fadeIn(200);
+        
+        // Focus the text input by default
+        setTimeout(() => {
+            const $textInput = $datePicker.find('.pm-date-text-input');
+            $textInput.focus().select();
+            
+            // Sync between text input and date input
+            const $dateInput = $datePicker.find('.pm-date-input');
+            
+            // When date picker changes, update text input
+            $dateInput.on('change', () => {
+                const dateValue = $dateInput.val();
+                if (dateValue) {
+                    const displayDate = this.formatDateForDisplay(dateValue);
+                    $textInput.val(displayDate);
+                }
+            });
+            
+            // When text input changes, try to update date picker
+            $textInput.on('input', () => {
+                const textValue = $textInput.val();
+                const isoDate = this.parseDateValue(textValue);
+                if (isoDate) {
+                    $dateInput.val(isoDate);
+                }
+            });
+        }, 100);
+        
+        // Bind events
+        this.bindDatePickerEvents($datePicker, $cell, taskId, fieldName);
+    }
+    
+    parseDateValue(value) {
+        // Parse various date formats and convert to YYYY-MM-DD for HTML date input
+        if (!value || value === '-') return '';
+        
+        // Already in ISO format (YYYY-MM-DD)
+        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            return value;
+        }
+        
+        // DD-MM-YYYY format (preferred)
+        const ddmmyyyy_dash = value.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+        if (ddmmyyyy_dash) {
+            const day = ddmmyyyy_dash[1].padStart(2, '0');
+            const month = ddmmyyyy_dash[2].padStart(2, '0');
+            const year = ddmmyyyy_dash[3];
+            return `${year}-${month}-${day}`;
+        }
+        
+        // DD-MM-YY format (assume YY is 20YY for 00-30, 19YY for 31-99)
+        const ddmmyy_dash = value.match(/^(\d{1,2})-(\d{1,2})-(\d{2})$/);
+        if (ddmmyy_dash) {
+            const day = ddmmyy_dash[1].padStart(2, '0');
+            const month = ddmmyy_dash[2].padStart(2, '0');
+            let year = parseInt(ddmmyy_dash[3]);
+            // Assume 00-30 is 20xx, 31-99 is 19xx
+            year = year <= 30 ? 2000 + year : 1900 + year;
+            return `${year}-${month.padStart(2, '0')}-${day}`;
+        }
+        
+        // DD/MM/YYYY format (legacy support)
+        const ddmmyyyy = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (ddmmyyyy) {
+            const day = ddmmyyyy[1].padStart(2, '0');
+            const month = ddmmyyyy[2].padStart(2, '0');
+            const year = ddmmyyyy[3];
+            return `${year}-${month}-${day}`;
+        }
+        
+        // DD/MM/YY format (legacy support)
+        const ddmmyy = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+        if (ddmmyy) {
+            const day = ddmmyy[1].padStart(2, '0');
+            const month = ddmmyy[2].padStart(2, '0');
+            let year = parseInt(ddmmyy[3]);
+            // Assume 00-30 is 20xx, 31-99 is 19xx
+            year = year <= 30 ? 2000 + year : 1900 + year;
+            return `${year}-${month.padStart(2, '0')}-${day}`;
+        }
+        
+        return '';
+    }
+    
+    bindDatePickerEvents($datePicker, $cell, taskId, fieldName) {
+        // Close button
+        $datePicker.on('click', '.pm-date-picker-close, .pm-date-cancel', () => {
+            $datePicker.fadeOut(200, () => $datePicker.remove());
+        });
+        
+        // Click overlay to close
+        $datePicker.on('click', '.pm-date-picker-overlay', () => {
+            $datePicker.fadeOut(200, () => $datePicker.remove());
+        });
+        
+        // Clear date
+        $datePicker.on('click', '.pm-date-clear', () => {
+            this.saveDateValue($cell, taskId, fieldName, '');
+            $datePicker.fadeOut(200, () => $datePicker.remove());
+        });
+        
+        // Save date
+        $datePicker.on('click', '.pm-date-save', () => {
+            // Get value from text input (preferred) or date input as fallback
+            const textValue = $datePicker.find('.pm-date-text-input').val().trim();
+            const dateValue = $datePicker.find('.pm-date-input').val();
+            
+            let finalValue = '';
+            if (textValue) {
+                // Validate the text input format
+                const isoDate = this.parseDateValue(textValue);
+                if (isoDate) {
+                    finalValue = textValue; // Keep the DD/MM/YYYY format for display
+                } else {
+                    frappe.show_alert({
+                        message: 'Invalid date format. Please use DD/MM/YYYY or DD/MM/YY',
+                        indicator: 'red'
+                    });
+                    return;
+                }
+            } else if (dateValue) {
+                // Convert ISO date to DD/MM/YYYY format
+                finalValue = this.formatDateForDisplay(dateValue);
+            }
+            
+            if (finalValue) {
+                this.saveDateValue($cell, taskId, fieldName, finalValue);
+            }
+            $datePicker.fadeOut(200, () => $datePicker.remove());
+        });
+        
+        // ESC key to close
+        $(document).on('keydown.date-picker', (e) => {
+            if (e.key === 'Escape') {
+                $datePicker.fadeOut(200, () => $datePicker.remove());
+                $(document).off('keydown.date-picker');
+            }
+        });
+    }
+    
+    formatDateForDisplay(isoDate) {
+        // Convert YYYY-MM-DD to DD-MM-YYYY for display
+        if (!isoDate) return '';
+        
+        const parts = isoDate.split('-');
+        if (parts.length === 3) {
+            return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        return isoDate;
+    }
+    
+    async saveDateValue($cell, taskId, fieldName, dateValue) {
+        try {
+            console.log('💾 Saving date value:', { taskId, fieldName, dateValue });
+            
+            // Validate and convert date format for backend
+            let backendValue = '';
+            if (dateValue && dateValue !== '-') {
+                // If it's in DD/MM/YYYY or DD/MM/YY format, convert to YYYY-MM-DD for backend
+                const isoDate = this.parseDateValue(dateValue);
+                if (isoDate) {
+                    backendValue = isoDate;
+                } else {
+                    throw new Error('Invalid date format. Please use DD/MM/YYYY or DD/MM/YY format.');
+                }
+            }
+            
+            // Update UI display immediately
+            $cell.find('.pm-date-display, .editable-field').text(dateValue || '-');
+            
+            // Save to backend with ISO format
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.update_task_field',
+                args: {
+                    task_id: taskId,
+                    field_name: fieldName,
+                    new_value: backendValue
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                frappe.show_alert({
+                    message: 'Date updated successfully',
+                    indicator: 'green'
+                });
+            } else {
+                throw new Error(response.message?.error || 'Unknown error');
+            }
+        } catch (error) {
+            console.error('Error saving date:', error);
+            frappe.show_alert({
+                message: 'Error saving date: ' + error.message,
+                indicator: 'red'
+            });
+            // Restore original value
+            $cell.find('.pm-date-display, .editable-field').text('-');
+        }
     }
 
     async saveEdit($cell, taskId, field, newValue, fieldType) {

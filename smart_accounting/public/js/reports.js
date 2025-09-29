@@ -140,11 +140,8 @@ class ReportsManager {
         
         let visibleTasks = 0;
         
-        // Show loading indicator
-        frappe.show_alert({
-            message: `Filtering by ${personName}...`,
-            indicator: 'blue'
-        });
+        // 移除loading通知 - 专业应用不需要为每个filter操作显示通知
+        // 用户可以通过filter按钮状态和表格变化看到结果
         
         const $taskRows = $('.pm-task-row');
         const promises = [];
@@ -181,10 +178,11 @@ class ReportsManager {
         // Update projects visibility
         this.updateProjectVisibility();
         
-        frappe.show_alert({
-            message: `Filtered by ${personName} - ${visibleTasks} tasks shown`,
-            indicator: 'blue'
-        });
+        // 使用静默方式更新filter状态，避免过度通知
+        console.log(`✅ Person filter applied: ${personName} - ${visibleTasks} tasks shown`);
+        
+        // 更新filter按钮状态显示当前过滤信息
+        $('.pm-person-filter-dropdown .pm-dropdown-text').text(`Person ${visibleTasks > 0 ? visibleTasks : ''}`).trim();
     }
 
     async isPersonInvolvedInTask($row, personEmail, personName) {
@@ -393,10 +391,9 @@ class ReportsManager {
         // Update projects visibility
         this.updateProjectVisibility();
         
-        frappe.show_alert({
-            message: `Filtered by ${clientName} - ${visibleTasks} tasks shown`,
-            indicator: 'blue'
-        });
+        // 静默更新client filter状态
+        console.log(`✅ Client filter applied: ${clientName} - ${visibleTasks} tasks shown`);
+        $('.pm-client-filter-dropdown .pm-dropdown-text').text(`${clientName}`).trim();
     }
 
     clearClientFilter() {
@@ -481,10 +478,9 @@ class ReportsManager {
         // Update projects visibility
         this.updateProjectVisibility();
         
-        frappe.show_alert({
-            message: `Filtered by ${status} - ${visibleTasks} tasks shown`,
-            indicator: 'blue'
-        });
+        // 静默更新status filter状态  
+        console.log(`✅ Status filter applied: ${status} - ${visibleTasks} tasks shown`);
+        $('.pm-status-filter-dropdown .pm-dropdown-text').text(`${status}`).trim();
     }
 
     clearStatusFilter() {

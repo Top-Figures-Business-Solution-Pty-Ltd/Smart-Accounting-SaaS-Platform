@@ -621,12 +621,12 @@ class ModalManager {
                 $indicator.removeClass('no-notes').addClass('has-notes');
                 $indicator.find('i').removeClass('fa-times-circle').addClass('fa-check-circle');
                 $indicator.find('span').text(`${count} note${count !== 1 ? 's' : ''}`);
-                $indicator.attr('title', '点击查看所有Review Notes');
+                $indicator.attr('title', 'Click to view all Review Notes');
             } else {
                 $indicator.removeClass('has-notes').addClass('no-notes');
                 $indicator.find('i').removeClass('fa-check-circle').addClass('fa-times-circle');
                 $indicator.find('span').text('none');
-                $indicator.attr('title', '点击添加Review Note');
+                $indicator.attr('title', 'Click to add Review Note');
             }
         });
     }

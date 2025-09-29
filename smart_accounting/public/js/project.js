@@ -140,7 +140,7 @@ class ProjectManager {
                     <span class="editable-field client-display">${clientName || 'No Client'}</span>
                 </div>
                 <div class="pm-client-comments">
-                    <div class="pm-comment-indicator" data-task-id="${taskData.task_id}" title="点击查看或添加评论">
+                    <div class="pm-comment-indicator" data-task-id="${taskData.task_id}" title="Click to view or add comments">
                         <i class="fa fa-comment-o"></i>
                         <span class="pm-comment-count">0</span>
                     </div>
@@ -237,17 +237,24 @@ class ProjectManager {
             <div class="pm-cell pm-cell-priority">
                 <span class="pm-priority-badge priority-medium">Medium</span>
             </div>
+            <div class="pm-cell pm-cell-frequency" data-editable="true" data-field="custom_frequency" data-task-id="${taskData.task_id}" data-field-type="select" data-options-source="custom_frequency">
+                <span class="editable-field">-</span>
+            </div>
+            <div class="pm-cell pm-cell-reset-date" data-editable="true" data-field="custom_reset_date" data-task-id="${taskData.task_id}" data-field-type="date">
+                <span class="editable-field">-</span>
+            </div>
         </div>`;
     }
 
     applyCurrentColumnVisibility($row) {
         // Apply current column visibility to a specific row
         // This ensures new rows respect the current Manage Columns settings
-        const allColumns = [
-            'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 
-            'budget', 'actual', 'review-note', 'action-person', 'preparer', 
-            'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'note', 'last-updated', 'priority'
-        ];
+        const allColumns = window.ColumnConfigManager ? 
+            window.ColumnConfigManager.getAllColumnKeys() : 
+            // 后备硬编码列表（如果ColumnConfigManager不可用）
+            ['client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 
+             'budget', 'actual', 'review-note', 'action-person', 'preparer', 
+             'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'note', 'last-updated', 'priority', 'frequency', 'reset-date'];
         
         allColumns.forEach(column => {
             const $headerCell = $(`.pm-header-cell[data-column="${column}"]`).first();

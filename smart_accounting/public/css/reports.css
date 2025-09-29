@@ -199,16 +199,16 @@ div.pm-table-header,
 .pm-header-cell.pm-cell-review-note { width: 150px; min-width: 150px; flex: 0 0 150px; }
 
 .pm-cell-action-person,
-.pm-header-cell.pm-cell-action-person { width: 120px; min-width: 120px; flex: 0 0 120px; }
+.pm-header-cell.pm-cell-action-person { width: 120px; min-width: 100px !important; flex: 0 0 120px; }
 
 .pm-cell-preparer,
-.pm-header-cell.pm-cell-preparer { width: 120px; min-width: 120px; flex: 0 0 120px; }
+.pm-header-cell.pm-cell-preparer { width: 120px; min-width: 100px !important; flex: 0 0 120px; }
 
 .pm-cell-reviewer,
-.pm-header-cell.pm-cell-reviewer { width: 120px; min-width: 120px; flex: 0 0 120px; }
+.pm-header-cell.pm-cell-reviewer { width: 120px; min-width: 100px !important; flex: 0 0 120px; }
 
 .pm-cell-partner,
-.pm-header-cell.pm-cell-partner { width: 120px; min-width: 120px; flex: 0 0 120px; }
+.pm-header-cell.pm-cell-partner { width: 120px; min-width: 100px !important; flex: 0 0 120px; }
 
 .pm-cell-lodgment-due,
 .pm-header-cell.pm-cell-lodgment-due { width: 120px; min-width: 120px; flex: 0 0 120px; }

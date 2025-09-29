@@ -309,6 +309,14 @@
     position: relative !important;
 }
 
+/* Date fields should never show editing state */
+.pm-cell[data-field-type="date"].editing {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    z-index: auto !important;
+}
+
 .pm-inline-input,
 .pm-inline-select {
     width: 100% !important;
@@ -901,23 +909,34 @@
     /* Color will be set dynamically via style attribute */
 }
 
-/* Empty Avatar Style */
+/* Empty Avatar Style - Visible placeholder */
 .pm-empty-avatar {
-    background: #e6e9ef !important;
-    color: #676879 !important;
-    border: 2px dashed #d0d4e4 !important;
-    box-shadow: none !important;
+    background: transparent;
+    border: 2px dashed #d0d7de;
+    color: #656d76;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
 }
 
 .pm-empty-avatar i {
     font-size: 14px;
-    font-weight: normal;
+    color: #656d76;
 }
 
 .pm-empty-person:hover .pm-empty-avatar {
-    background: #dde1eb !important;
-    border-color: var(--monday-blue) !important;
-    color: var(--monday-blue) !important;
+    background: #f0f6ff;
+    border-color: var(--monday-blue);
+    border-style: solid;
+    transform: scale(1.05);
+}
+
+.pm-empty-person:hover .pm-empty-avatar i {
+    color: var(--monday-blue);
 }
 
 /* Person Info Tooltip */
@@ -1949,9 +1968,96 @@
 
 .pm-column-placeholder {
     background: #e1e5e9 !important;
-    border: 2px dashed #c5c7d0 !important;
-    height: 48px !important;
+    border: 2px dashed #667eea !important;
+    height: 56px !important;
     margin: 4px 0 !important;
+    border-radius: 6px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    opacity: 0.7 !important;
+    position: relative !important;
+}
+
+.pm-column-placeholder::after {
+    content: "Drop here";
+    color: #667eea;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* 拖拽排序的视觉反馈样式 */
+.pm-column-item.pm-dragging {
+    opacity: 0.9 !important;
+    background: #f0f8ff !important;
+    border: 2px solid var(--monday-blue) !important;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25) !important;
+    transform: rotate(2deg) scale(1.05) !important;
+    z-index: 1000 !important;
+    pointer-events: none;
+    transition: none !important;
+}
+
+.pm-column-item.pm-reordered {
+    background: #e8f5e8 !important;
+    border-left: 4px solid #22c55e;
+    animation: reorderHighlight 1s ease-out;
+}
+
+@keyframes reorderHighlight {
+    0% {
+        background: #dcfce7;
+        transform: scale(1.02);
+    }
+    100% {
+        background: #f8f9fb;
+        transform: scale(1);
+    }
+}
+
+/* 拖拽句柄增强样式 */
+.pm-column-drag-handle {
+    cursor: move;
+    padding: 8px;
+    margin-right: 12px;
+    color: #9ca3af;
+    transition: all 0.2s ease;
+    border-radius: 4px;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    min-height: 24px;
+    background: rgba(156, 163, 175, 0.1);
+    border: 1px solid rgba(156, 163, 175, 0.2);
+}
+
+.pm-column-drag-handle:hover {
+    background: rgba(102, 126, 234, 0.1) !important;
+    color: var(--monday-blue) !important;
+    transform: scale(1.1);
+    border-color: var(--monday-blue);
+}
+
+.pm-column-drag-handle:active {
+    background: var(--monday-blue) !important;
+    color: white !important;
+    transform: scale(0.95);
+}
+
+/* 保存按钮变化提示 */
+.pm-dialog-save.pm-changes-pending {
+    background: #f59e0b !important;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.8;
+    }
 }
 
 .pm-dialog-footer {

@@ -117,10 +117,14 @@ class ProjectManagement {
         });
 
         // Editable field click - Handle different field types
+        // This handler is for text fields with .editable-field class
         $(document).on('click', '.editable-field', (e) => {
             e.stopPropagation();
             this.editorsManager.startFieldEditing(e.currentTarget);
         });
+        
+        // Note: Person selector and other special fields are handled by 
+        // editors.js initializeInlineEditing() method with [data-editable="true"] selector
         
         // Person avatar hover events with delay
         $(document).on('mouseenter', '.pm-avatar[data-email]', (e) => {

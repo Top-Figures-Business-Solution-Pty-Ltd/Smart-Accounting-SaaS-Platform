@@ -2,6 +2,28 @@ import frappe
 from frappe import _
 from collections import defaultdict
 import re
+from datetime import datetime
+
+def format_date_for_display(date_value):
+    """
+    Convert YYYY-MM-DD date format to DD-MM-YYYY for display
+    """
+    if not date_value:
+        return ""
+    
+    try:
+        # Handle both string and date objects
+        if isinstance(date_value, str):
+            if len(date_value) == 10 and date_value.count('-') == 2:
+                parts = date_value.split('-')
+                if len(parts[0]) == 4:  # YYYY-MM-DD format
+                    return f"{parts[2]}-{parts[1]}-{parts[0]}"
+            return date_value
+        else:
+            # Handle date objects
+            return date_value.strftime('%d-%m-%Y')
+    except:
+        return str(date_value) if date_value else ""
 
 def get_context(context):
     """
@@ -334,10 +356,19 @@ def get_partition_column_config(partition_name):
     try:
         if partition_name == 'main':
             # Default configuration for main view - show all current columns
+            # 使用动态的默认列配置而不是硬编码
+            default_visible_columns = [
+                'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'note', 
+                'target-month', 'budget', 'actual', 'review-note', 'action-person', 
+                'preparer', 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 
+                'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'
+            ]
             return {
                 'success': True,
-                'visible_columns': ['client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'note', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'],
-                'column_config': {}
+                'visible_columns': default_visible_columns,
+                'column_config': {
+                    'column_order': default_visible_columns  # 提供默认排序
+                }
             }
         
         # Get partition configuration
@@ -359,7 +390,15 @@ def get_partition_column_config(partition_name):
         
         # If no configuration, use default
         if not visible_columns:
-            visible_columns = ['client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority']
+            visible_columns = [
+                'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 
+                'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 
+                'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority'
+            ]
+            
+        # 确保column_config包含默认的列顺序
+        if not column_config.get('column_order'):
+            column_config['column_order'] = visible_columns.copy()
         
         return {
             'success': True,
@@ -385,11 +424,18 @@ def save_partition_column_config(partition_name, visible_columns, column_config=
         
         # Handle main view - don't save, always use default
         if partition_name == 'main':
+            default_columns = [
+                'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 
+                'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 
+                'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority'
+            ]
             return {
                 'success': True,
                 'message': 'Main view uses default configuration (not saved)',
-                'visible_columns': ['client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority'],
-                'column_config': {}
+                'visible_columns': default_columns,
+                'column_config': {
+                    'column_order': default_columns
+                }
             }
         
         # For non-main partitions, save to Partition record
@@ -816,7 +862,9 @@ def get_project_management_data(view='main'):
                 task.partner = get_primary_role_user(task_doc, 'partner') or ""
                 task.reviewer = get_primary_role_user(task_doc, 'reviewer') or ""
                 task.preparer = get_primary_role_user(task_doc, 'preparer') or ""
-                task.lodgment_due_date = getattr(task_doc, 'custom_lodgement_due_date', None) or ""
+                # Format lodgement due date for display (convert YYYY-MM-DD to DD-MM-YYYY)
+                lodgement_due_raw = getattr(task_doc, 'custom_lodgement_due_date', None)
+                task.lodgment_due_date = format_date_for_display(lodgement_due_raw) if lodgement_due_raw else ""
                 
                 # Get action person - only from sub-table
                 task.action_person = get_primary_role_user(task_doc, 'action_person') or ""
@@ -827,7 +875,9 @@ def get_project_management_data(view='main'):
                 
                 # Get Frequency and Reset Date (newly added fields)
                 task.custom_frequency = getattr(task_doc, 'custom_frequency', None) or ""
-                task.custom_reset_date = getattr(task_doc, 'custom_reset_date', None) or ""
+                # Format reset date for display (convert YYYY-MM-DD to DD-MM-YYYY)
+                reset_date_raw = getattr(task_doc, 'custom_reset_date', None)
+                task.custom_reset_date = format_date_for_display(reset_date_raw) if reset_date_raw else ""
                 
                 # Try to get Review Notes (child table)
                 try:
@@ -1062,19 +1112,33 @@ def update_task_field(task_id, field_name, new_value):
             if new_value and new_value not in valid_months:
                 return {'success': False, 'error': f'Year End must be a valid month. Invalid value: {new_value}'}
             print(f"DEBUG: Year End validation passed for value: {new_value}")
-        elif field_name in ['custom_lodgment_due_date', 'custom_lodgement_due_date', 'custom_due_date']:
-            # Simple date validation for date fields
+        elif field_name in ['custom_lodgment_due_date', 'custom_lodgement_due_date', 'custom_due_date', 'custom_reset_date']:
+            # Enhanced date validation for date fields - support multiple formats
             if new_value and new_value.strip():
                 try:
                     from datetime import datetime
-                    # Accept YYYY-MM-DD format
+                    original_value = new_value
+                    
+                    # Try to parse and convert various date formats to YYYY-MM-DD
                     if len(new_value) == 10 and new_value.count('-') == 2:
-                        datetime.strptime(new_value, '%Y-%m-%d')
-                        print(f"DEBUG: Date validation passed for {field_name}: {new_value}")
+                        parts = new_value.split('-')
+                        
+                        # Check if it's already YYYY-MM-DD format
+                        if len(parts[0]) == 4:
+                            datetime.strptime(new_value, '%Y-%m-%d')
+                            print(f"DEBUG: Date validation passed (YYYY-MM-DD) for {field_name}: {new_value}")
+                        # Check if it's DD-MM-YYYY format
+                        elif len(parts[2]) == 4:
+                            datetime.strptime(new_value, '%d-%m-%Y')
+                            # Convert DD-MM-YYYY to YYYY-MM-DD for storage
+                            new_value = f"{parts[2]}-{parts[1]}-{parts[0]}"
+                            print(f"DEBUG: Date converted from DD-MM-YYYY to YYYY-MM-DD for {field_name}: {original_value} -> {new_value}")
+                        else:
+                            return {'success': False, 'error': f'Date must be in DD-MM-YYYY or YYYY-MM-DD format.'}
                     else:
-                        return {'success': False, 'error': f'Date must be in YYYY-MM-DD format.'}
+                        return {'success': False, 'error': f'Date must be in DD-MM-YYYY or YYYY-MM-DD format.'}
                 except ValueError:
-                    return {'success': False, 'error': f'Invalid date format. Please use YYYY-MM-DD.'}
+                    return {'success': False, 'error': f'Invalid date format. Please use DD-MM-YYYY or YYYY-MM-DD.'}
         elif field_name in ['custom_tftg', 'custom_tf_tg']:
             # For TF/TG field, try to find the company
             print(f"DEBUG: Trying to save TF/TG value: {new_value}")

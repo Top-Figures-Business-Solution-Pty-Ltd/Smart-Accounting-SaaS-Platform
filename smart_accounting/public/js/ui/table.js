@@ -166,8 +166,17 @@ class TableManager {
     }
     
     setColumnWidth(column, width) {
-        // Ensure minimum width
-        const minWidth = Math.max(width, 50);
+        // Define specific minimum widths for different column types
+        const columnMinWidths = {
+            'action-person': 100,
+            'preparer': 100,
+            'reviewer': 100,
+            'partner': 100
+        };
+        
+        // Get the minimum width for this column type, fallback to 50px
+        const specificMinWidth = columnMinWidths[column] || 50;
+        const minWidth = Math.max(width, specificMinWidth);
         
         // Set width for header cells
         $(`.pm-header-cell[data-column="${column}"]`).css({
@@ -441,6 +450,9 @@ class TableManager {
         
         console.log(`✅ Table width updated: ${finalWidth}px (respecting user's column widths, no forced adjustments)`);
         
+        // 列宽度变化后，重新渲染所有用户头像以适应新宽度
+        this.refreshAllUserAvatars();
+        
         // Clear the updating flag to allow future updates
         setTimeout(() => {
             $('.pm-table-container').removeData('updating-width');
@@ -507,8 +519,8 @@ class TableManager {
             
             switch(action) {
                 case 'manage-columns':
-                    if (window.ColumnManager) {
-                        window.ColumnManager.showColumnManagementDialog();
+                    if (window.FilterManager) {
+                        window.FilterManager.showColumnManagementDialog();
                     }
                     break;
                 case 'reset-widths':
@@ -654,16 +666,152 @@ class TableManager {
     }
 
     applyColumnOrder(columnOrder, visibleColumns) {
-        // This is a more complex feature that would require reordering DOM elements
-        // For now, we'll focus on visibility. Column order can be implemented later
-        // when we have more time to handle the DOM manipulation complexity
-        console.log('Column order configuration:', columnOrder);
+        console.log('🔄 Applying column order:', columnOrder);
         
-        // TODO: Implement actual column reordering
-        // This would involve:
-        // 1. Reordering header cells in all project groups
-        // 2. Reordering data cells in all task rows
-        // 3. Maintaining the responsive table structure
+        if (!columnOrder || columnOrder.length === 0) {
+            console.warn('⚠️ No column order provided');
+            return;
+        }
+        
+        // 检查是否需要重排序（避免不必要的DOM操作）
+        if (!this.needsReordering(columnOrder)) {
+            console.log('ℹ️ Column order unchanged, skipping reorder');
+            return;
+        }
+        
+        // 使用CSS方式重排序，完全避免DOM操作，确保事件绑定不受影响
+        this.reorderColumnsWithCSS(columnOrder);
+        
+        console.log('✅ Column order applied via CSS, DOM structure and events preserved');
+    }
+    
+    needsReordering(newColumnOrder) {
+        // 获取当前列顺序
+        const currentOrder = [];
+        $('.pm-project-table-header').first().find('.pm-header-cell[data-column]').each(function() {
+            const columnName = $(this).data('column');
+            if (columnName) {
+                currentOrder.push(columnName);
+            }
+        });
+        
+        // 确保select列在最前面进行比较
+        const normalizedCurrentOrder = ['select', ...currentOrder.filter(col => col !== 'select')];
+        const normalizedNewOrder = ['select', ...newColumnOrder.filter(col => col !== 'select')];
+        
+        // 比较顺序是否相同
+        if (normalizedCurrentOrder.length !== normalizedNewOrder.length) {
+            return true;
+        }
+        
+        for (let i = 0; i < normalizedCurrentOrder.length; i++) {
+            if (normalizedCurrentOrder[i] !== normalizedNewOrder[i]) {
+                return true;
+            }
+        }
+        
+        console.log('📋 Current order matches new order, no reordering needed');
+        return false;
+    }
+    
+    reorderColumnsWithCSS(columnOrder) {
+        console.log('🎨 Applying column order via CSS flexbox order...');
+        
+        // 确保select列始终在最前面
+        const orderedColumns = ['select', ...columnOrder.filter(col => col !== 'select')];
+        
+        // 为每个列设置CSS order属性
+        orderedColumns.forEach((columnName, index) => {
+            const order = index + 1; // CSS order从1开始
+            
+            // 设置表头单元格的order
+            $(`.pm-header-cell[data-column="${columnName}"]`).css('order', order);
+            
+            // 设置对应数据单元格的order
+            const columnClassMap = {
+                'select': 'pm-cell-select',
+                'client': 'pm-cell-client',
+                'task-name': 'pm-cell-task-name',
+                'entity': 'pm-cell-entity',
+                'tf-tg': 'pm-cell-tf-tg',
+                'software': 'pm-cell-software',
+                'status': 'pm-cell-status',
+                'note': 'pm-cell-note',
+                'target-month': 'pm-cell-target-month',
+                'budget': 'pm-cell-budget',
+                'actual': 'pm-cell-actual',
+                'review-note': 'pm-cell-review-note',
+                'action-person': 'pm-cell-action-person',
+                'preparer': 'pm-cell-preparer',
+                'reviewer': 'pm-cell-reviewer',
+                'partner': 'pm-cell-partner',
+                'lodgment-due': 'pm-cell-lodgment-due',
+                'engagement': 'pm-cell-engagement',
+                'group': 'pm-cell-group',
+                'year-end': 'pm-cell-year-end',
+                'last-updated': 'pm-cell-last-updated',
+                'priority': 'pm-cell-priority',
+                'frequency': 'pm-cell-frequency',
+                'reset-date': 'pm-cell-reset-date'
+            };
+            
+            const cellClass = columnClassMap[columnName];
+            if (cellClass) {
+                $(`.${cellClass}`).css('order', order);
+            }
+        });
+        
+        console.log('✅ CSS-based column reordering applied, DOM structure preserved');
+    }
+    
+    // 旧的DOM操作方法已移除，现在完全使用CSS方式进行列重排序
+    // 这确保了事件绑定不会被破坏，功能之间完全隔离
+    
+    refreshAllUserAvatars() {
+        console.log('👥 Refreshing all user avatars to adapt to column widths...');
+        
+        // 查找所有用户相关的单元格
+        const userCellSelectors = [
+            '.pm-cell-action-person',
+            '.pm-cell-preparer', 
+            '.pm-cell-reviewer',
+            '.pm-cell-partner'
+        ];
+        
+        let refreshedCount = 0;
+        
+        userCellSelectors.forEach(selector => {
+            $(selector).each(async function() {
+                const $cell = $(this);
+                const taskId = $cell.data('task-id');
+                const fieldName = $cell.data('field');
+                
+                // 只刷新有数据的单元格
+                if (taskId && fieldName && !$cell.hasClass('pm-empty-person')) {
+                    try {
+                        // 获取当前角色类型
+                        const roleType = fieldName.replace('custom_', '');
+                        const roleMapping = {
+                            'action_person': 'Action Person',
+                            'preparer': 'Preparer',
+                            'reviewer': 'Reviewer',
+                            'partner': 'Partner'
+                        };
+                        const mappedRoleType = roleMapping[roleType] || roleType;
+                        
+                        // 重新渲染这个单元格的头像
+                        if (window.PersonSelectorManager) {
+                            await window.PersonSelectorManager.updatePersonCellDisplay($cell, taskId, mappedRoleType);
+                            refreshedCount++;
+                        }
+                    } catch (error) {
+                        console.warn('Error refreshing avatar for cell:', error);
+                    }
+                }
+            });
+        });
+        
+        console.log(`✅ Refreshed ${refreshedCount} user avatar cells`);
     }
 
     // Force immediate table width recalculation (public method)

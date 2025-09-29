@@ -8,6 +8,13 @@ class PersonSelectorManager {
 
     // Multi-Person Selector
     async showMultiPersonSelector($cell, taskId, fieldName) {
+        console.log('🎭 PersonSelectorManager.showMultiPersonSelector called with:', {
+            $cell: $cell.length,
+            taskId: taskId,
+            fieldName: fieldName,
+            cellHtml: $cell[0]?.outerHTML?.substring(0, 200) + '...'
+        });
+        
         // Check if there's a role filter specified
         const roleFilter = $cell.data('role-filter');
         
@@ -80,15 +87,28 @@ class PersonSelectorManager {
         
         // Remove existing selector
         $('.pm-person-selector-modal').remove();
+        console.log('🗑️ Removed existing selectors');
         
         // Add to body
         $('body').append(selectorHTML);
+        console.log('📎 Appended selector to body');
+        
         const $selector = $(`#pm-person-selector-${taskId}-${fieldName}`);
+        console.log('🔍 Found selector:', $selector.length, 'elements');
+        
+        if ($selector.length === 0) {
+            console.error('❌ Selector not found after append!');
+            return;
+        }
         
         // Position the modal properly relative to cell
         this.positionModalRelativeToCell($cell, $selector);
+        console.log('📍 Positioned modal relative to cell');
         
-        // Show with animation
+        // 智能定位弹窗
+        this.positionModalSmart($cell, $selector);
+        
+        // 显示弹窗
         $selector.fadeIn(200);
         
         // Focus search input
@@ -442,37 +462,8 @@ class PersonSelectorManager {
                 return;
             }
             
-            // Generate avatars - show up to 2 avatars, then use "+N" for more
-            let avatarsHTML = '';
-            let moreHTML = '';
-            
-            if (roleUsers.length === 1) {
-                // Single user - show full avatar
-                const userInfo = await this.utils.getRealUserInfo(roleUsers[0].user);
-                const initials = this.utils.getInitials(userInfo?.full_name || roleUsers[0].user);
-                const isPrimary = roleUsers[0].is_primary ? ' pm-primary-user' : '';
-                
-                avatarsHTML = `<div class="pm-avatar${isPrimary}" title="${userInfo?.full_name || roleUsers[0].user}" data-email="${roleUsers[0].user}">${initials}</div>`;
-            } else if (roleUsers.length === 2) {
-                // Two users - show both avatars
-                for (let i = 0; i < 2; i++) {
-                    const user = roleUsers[i];
-                    const userInfo = await this.utils.getRealUserInfo(user.user);
-                    const initials = this.utils.getInitials(userInfo?.full_name || user.user);
-                    const isPrimary = user.is_primary ? ' pm-primary-user' : '';
-                    
-                    avatarsHTML += `<div class="pm-avatar${isPrimary}" title="${userInfo?.full_name || user.user}" data-email="${user.user}">${initials}</div>`;
-                }
-            } else if (roleUsers.length >= 3) {
-                // Three or more users - show first user + "+N" count
-                const firstUser = roleUsers[0];
-                const userInfo = await this.utils.getRealUserInfo(firstUser.user);
-                const initials = this.utils.getInitials(userInfo?.full_name || firstUser.user);
-                const isPrimary = firstUser.is_primary ? ' pm-primary-user' : '';
-                
-                avatarsHTML = `<div class="pm-avatar${isPrimary}" title="${userInfo?.full_name || firstUser.user}" data-email="${firstUser.user}">${initials}</div>`;
-                moreHTML = `<div class="pm-avatar-more" title="Total ${roleUsers.length} people assigned">+${roleUsers.length - 1}</div>`;
-            }
+            // 动态生成头像 - 根据列宽度智能调整显示数量
+            const { avatarsHTML, moreHTML } = await this.generateDynamicAvatars($cell, roleUsers);
             
             $cell.html(`
                 <div class="pm-user-avatars">
@@ -530,6 +521,17 @@ class PersonSelectorManager {
             if (response.message && response.message.success) {
                 // Update cell display
                 await this.updatePersonCellDisplay($cell, taskId, roleType);
+                
+                // 刷新弹窗内容 - 重新加载当前人员列表
+                const $currentModal = $(`.pm-person-selector-modal`);
+                if ($currentModal.length > 0) {
+                    console.log('🔄 Refreshing modal content after person removal...');
+                    // 获取更新后的人员列表
+                    const updatedEmails = await this.getCurrentTaskRoleEmails(taskId, roleType);
+                    // 更新弹窗中的当前人员显示
+                    this.loadCurrentPeopleIntoSelector($currentModal, updatedEmails, taskId, fieldName);
+                    console.log('✅ Modal content refreshed');
+                }
                 
                 frappe.show_alert({
                     message: 'Person removed from role',
@@ -711,6 +713,171 @@ class PersonSelectorManager {
             // Show empty state on error
             this.updatePersonFieldDisplay($cell, '', '');
         }
+    }
+    positionModalSmart($cell, $modal) {
+        console.log('🎯 Smart positioning modal...');
+        
+        // 获取单元格位置信息
+        const cellRect = $cell[0].getBoundingClientRect();
+        const modalHeight = 400; // 弹窗预估高度
+        const modalWidth = 320;  // 弹窗宽度
+        const padding = 8;       // 边距
+        
+        // 获取视窗信息
+        const viewportHeight = window.innerHeight;
+        const viewportWidth = window.innerWidth;
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        
+        console.log('📐 Positioning data:', {
+            cellRect: {
+                top: cellRect.top,
+                bottom: cellRect.bottom,
+                left: cellRect.left,
+                right: cellRect.right,
+                width: cellRect.width,
+                height: cellRect.height
+            },
+            viewport: {
+                width: viewportWidth,
+                height: viewportHeight,
+                scrollTop: scrollTop
+            }
+        });
+        
+        // 计算最佳位置
+        let position = this.calculateOptimalPosition(cellRect, modalWidth, modalHeight, padding, viewportWidth, viewportHeight);
+        
+        // 应用位置样式
+        $modal.css({
+            position: 'fixed',
+            top: position.top + 'px',
+            left: position.left + 'px',
+            zIndex: 9999,
+            width: modalWidth + 'px',
+            maxHeight: modalHeight + 'px'
+        });
+        
+        console.log('✅ Modal positioned at:', position);
+    }
+    
+    calculateOptimalPosition(cellRect, modalWidth, modalHeight, padding, viewportWidth, viewportHeight) {
+        let top, left;
+        let placement = 'bottom-left'; // 默认位置
+        
+        // 水平位置计算
+        // 优先尝试在单元格左侧对齐
+        left = cellRect.left;
+        
+        // 检查右边界是否超出视窗
+        if (left + modalWidth > viewportWidth - padding) {
+            // 右对齐到单元格右边
+            left = cellRect.right - modalWidth;
+            placement = placement.replace('left', 'right');
+        }
+        
+        // 确保不超出左边界
+        if (left < padding) {
+            left = padding;
+        }
+        
+        // 垂直位置计算
+        // 优先尝试在单元格下方
+        top = cellRect.bottom + padding;
+        
+        // 检查下边界是否超出视窗
+        if (top + modalHeight > viewportHeight - padding) {
+            // 显示在单元格上方
+            top = cellRect.top - modalHeight - padding;
+            placement = placement.replace('bottom', 'top');
+            
+            // 如果上方也不够空间，则显示在视窗顶部
+            if (top < padding) {
+                top = padding;
+                placement = 'viewport-top';
+            }
+        }
+        
+        console.log('📍 Calculated position:', { top, left, placement });
+        
+        return { top, left, placement };
+    }
+    
+    async getCurrentTaskRoleEmails(taskId, roleType) {
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_task_role_assignments',
+                args: { 
+                    task_id: taskId,
+                    role_filter: roleType 
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                return response.message.role_assignments.map(assignment => assignment.user);
+            }
+        } catch (error) {
+            console.warn('Error getting current task role emails:', error);
+        }
+        return [];
+    }
+    
+    async generateDynamicAvatars($cell, roleUsers) {
+        console.log('🎨 Generating dynamic avatars for', roleUsers.length, 'users');
+        
+        // 计算列可用宽度和容量
+        const capacity = this.calculateAvatarCapacity($cell);
+        console.log('📏 Avatar capacity for this cell:', capacity);
+        
+        let avatarsHTML = '';
+        let moreHTML = '';
+        
+        if (roleUsers.length === 0) {
+            return { avatarsHTML: '', moreHTML: '' };
+        }
+        
+        // 优化显示策略：
+        // - 1-2个人：显示所有profile
+        // - 3个及以上：显示1个profile + +N指示器
+        let displayCount, hasMore;
+        
+        if (roleUsers.length <= 2) {
+            displayCount = roleUsers.length;
+            hasMore = false;
+        } else {
+            displayCount = 1; // 3个及以上只显示1个profile
+            hasMore = true;
+        }
+        
+        // 生成可见的头像
+        for (let i = 0; i < displayCount; i++) {
+            const user = roleUsers[i];
+            const userInfo = await this.utils.getRealUserInfo(user.user);
+            const initials = this.utils.getInitials(userInfo?.full_name || user.user);
+            const isPrimary = user.is_primary ? ' pm-primary-user' : '';
+            
+            avatarsHTML += `<div class="pm-avatar${isPrimary}" title="${userInfo?.full_name || user.user}" data-email="${user.user}">${initials}</div>`;
+        }
+        
+        // 生成+N按钮（如果需要）
+        if (hasMore) {
+            const remainingCount = roleUsers.length - displayCount;
+            const allNames = roleUsers.slice(displayCount).map(u => u.user).join(', ');
+            moreHTML = `<div class="pm-avatar-more" title="Total ${roleUsers.length} people: ${allNames}">+${remainingCount}</div>`;
+        }
+        
+        console.log(`✅ Generated ${displayCount} avatars + ${hasMore ? '1 more indicator' : 'no more indicator'}`);
+        
+        return { avatarsHTML, moreHTML };
+    }
+    
+    calculateAvatarCapacity($cell) {
+        // 优化显示策略：最多显示2个头像，3个及以上显示1个 + +N指示器
+        // 这样既保持良好的UX，又减少DOM复杂度和内存占用
+        const fixedCapacity = 2;
+        
+        console.log('📐 Optimized capacity strategy: Show max 2 avatars, then 1 avatar + more indicator');
+        
+        return fixedCapacity;
     }
 }
 

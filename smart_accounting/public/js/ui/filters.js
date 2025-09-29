@@ -347,34 +347,12 @@ class FilterManager {
     }
 
     createColumnManagementDialog(config, currentView) {
-        // Define all available columns with their display names
-        const allColumns = {
-            'client': 'Client Name',
-            'task-name': 'Task Name',
-            'entity': 'Entity',
-            'tf-tg': 'TF/TG',
-            'software': 'Software',
-            'status': 'Status',
-            'note': 'Note',
-            'target-month': 'Target Month',
-            'budget': 'Budget',
-            'actual': 'Actual',
-            'review-note': 'Review Note',
-            'action-person': 'Action Person',
-            'preparer': 'Preparer',
-            'reviewer': 'Reviewer',
-            'partner': 'Partner',
-            'lodgment-due': 'Lodgement Due',
-            'engagement': 'Engagement',
-            'group': 'Group',
-            'year-end': 'Year End',
-            'last-updated': 'Last Updated',
-            'priority': 'Priority',
-            'frequency': 'Frequency',
-            'reset-date': 'Reset Date'
-        };
-
-        const visibleColumns = config.visible_columns || Object.keys(allColumns);
+        // 使用统一的列配置管理器
+        const allColumns = window.ColumnConfigManager.getAllColumns();
+        const visibleColumns = config.visible_columns || window.ColumnConfigManager.getDefaultVisibleColumns();
+        
+        // 获取当前的列顺序，如果没有则使用默认顺序
+        const currentColumnOrder = config.column_config?.column_order || window.ColumnConfigManager.getDefaultColumnOrder();
 
         // Create dialog HTML
         const dialogHtml = `
@@ -392,17 +370,22 @@ class FilterManager {
                             Choose which columns to display and drag to reorder them.
                         </p>
                         <div class="pm-column-list" id="pm-sortable-columns">
-                            ${Object.entries(allColumns).map(([columnKey, displayName]) => {
-                const isVisible = visibleColumns.includes(columnKey);
+                            ${currentColumnOrder.map((columnKey, index) => {
+                                const displayName = window.ColumnConfigManager.getColumnDisplayName(columnKey);
+                                const isVisible = visibleColumns.includes(columnKey);
+                                const isRequired = window.ColumnConfigManager.isRequiredColumn(columnKey);
+                                
                                 return `
-                                    <div class="pm-column-item ${isVisible ? 'visible' : 'hidden'}" data-column="${columnKey}">
-                                        <div class="pm-column-drag-handle">
-                                            <i class="fa fa-bars"></i>
+                                    <div class="pm-column-item ${isVisible ? 'visible' : 'hidden'}" 
+                                         data-column="${columnKey}" 
+                                         data-original-index="${index}">
+                                        <div class="pm-column-drag-handle" title="Drag to reorder">
+                                            <span style="font-size: 14px; color: #9ca3af;">☰</span>
                                         </div>
                                         <label class="pm-column-checkbox">
-                                            <input type="checkbox" ${isVisible ? 'checked' : ''} data-column="${columnKey}" ${columnKey === 'client' ? 'disabled' : ''}>
+                                            <input type="checkbox" ${isVisible ? 'checked' : ''} data-column="${columnKey}" ${isRequired ? 'disabled' : ''}>
                                             <span class="checkmark"></span>
-                                            <span class="pm-column-name">${displayName}${columnKey === 'client' ? ' (Required)' : ''}</span>
+                                            <span class="pm-column-name">${displayName}${isRequired ? ' (Required)' : ''}</span>
                                         </label>
                                         <div class="pm-column-status">
                                             <i class="fa ${isVisible ? 'fa-eye' : 'fa-eye-slash'}"></i>
@@ -426,32 +409,41 @@ class FilterManager {
         // Add dialog to body
         $('body').append(dialogHtml);
 
-        // Make columns sortable
-        this.initializeSortableColumns();
+        // 使用setTimeout确保DOM完全渲染后再初始化拖拽功能
+        setTimeout(() => {
+            console.log('🔍 Attempting to initialize drag functionality...');
+            
+            // 检查DOM元素是否存在
+            const container = document.getElementById('pm-sortable-columns');
+            const items = container ? container.querySelectorAll('.pm-column-item') : [];
+            const handles = container ? container.querySelectorAll('.pm-column-drag-handle') : [];
+            
+            console.log('📊 DOM check:', {
+                container: !!container,
+                itemsCount: items.length,
+                handlesCount: handles.length,
+                DragManagerAvailable: !!window.DragManager
+            });
+            
+            // 使用专门的DragManager来处理拖拽功能
+            if (window.DragManager && container && items.length > 0) {
+                const success = window.DragManager.initializeDragSort('pm-sortable-columns', () => {
+                    this.updateColumnOrder();
+                });
+                console.log('🎯 Drag initialization result:', success);
+            } else {
+                console.error('❌ Drag initialization failed:', {
+                    DragManager: !!window.DragManager,
+                    container: !!container,
+                    itemsCount: items.length
+                });
+            }
+        }, 200); // 增加延迟时间
 
         // Bind dialog events
         this.bindColumnDialogEvents(currentView);
     }
 
-    initializeSortableColumns() {
-        // Check if jQuery UI sortable is available
-        if (typeof $.fn.sortable === 'undefined') {
-            console.warn('jQuery UI sortable not available. Column reordering disabled.');
-            return;
-        }
-        
-        // Initialize sortable functionality for column reordering
-        $('#pm-sortable-columns').sortable({
-            handle: '.pm-column-drag-handle',
-            placeholder: 'pm-column-placeholder',
-            axis: 'y',
-            tolerance: 'pointer',
-            update: (event, ui) => {
-                // Update visual order
-                this.updateColumnOrder();
-            }
-        });
-    }
 
     bindColumnDialogEvents(currentView) {
         const dialog = $('.pm-column-management-dialog');
@@ -498,8 +490,23 @@ class FilterManager {
     }
 
     updateColumnOrder() {
-        // This method can be used to provide visual feedback during sorting
-        // The actual order is determined when saving
+        // 提供拖拽排序的视觉反馈
+        console.log('🔄 Column order updated');
+        
+        // 获取当前顺序
+        const currentOrder = window.DragManager ? window.DragManager.getCurrentOrder() : [];
+        console.log('📋 Current order:', currentOrder);
+        
+        // 显示保存提示
+        const $saveBtn = $('.pm-dialog-save');
+        if (!$saveBtn.hasClass('pm-changes-pending')) {
+            $saveBtn.addClass('pm-changes-pending')
+                .text('Save Changes *')
+                .attr('title', 'Column order has been changed');
+        }
+        
+        // 更新拖拽句柄的提示文本
+        $('.pm-column-drag-handle').attr('title', 'Drag to reorder (changes will be saved when you click Save Changes)');
     }
 
     saveColumnConfiguration(currentView) {
@@ -512,14 +519,26 @@ class FilterManager {
             const isVisible = $(this).find('input[type="checkbox"]').is(':checked');
             
             columnOrder.push(columnKey);
-            if (isVisible || columnKey === 'client') {
+            if (isVisible || window.ColumnConfigManager.isRequiredColumn(columnKey)) {
                 visibleColumns.push(columnKey);
             }
         });
         
-        // Ensure client column is always visible
-        if (!visibleColumns.includes('client')) {
-            visibleColumns.unshift('client');
+        console.log('💾 Saving column configuration:', {
+            columnOrder: columnOrder,
+            visibleColumns: visibleColumns,
+            currentView: currentView
+        });
+        
+        // 使用配置管理器规范化可见列（确保必需列包含在内）
+        const normalizedVisibleColumns = window.ColumnConfigManager.normalizeVisibleColumns(visibleColumns);
+        
+        // 验证配置
+        const validation = window.ColumnConfigManager.validateColumnConfig(normalizedVisibleColumns, columnOrder);
+        if (!validation.isValid) {
+            console.error('Column configuration validation failed:', validation.errors);
+            frappe.msgprint('Invalid column configuration: ' + validation.errors.join(', '));
+            return;
         }
 
         // Save to backend
@@ -527,7 +546,7 @@ class FilterManager {
             method: 'smart_accounting.www.project_management.index.save_partition_column_config',
             args: {
                 partition_name: currentView,
-                visible_columns: JSON.stringify(visibleColumns),
+                visible_columns: JSON.stringify(normalizedVisibleColumns),
                 column_config: JSON.stringify({
                     column_order: columnOrder
                 })
@@ -541,10 +560,17 @@ class FilterManager {
                     
                     // Apply the new configuration
                     if (window.TableManager) {
+                        console.log('🔄 Applying column configuration to table:', {
+                            visible_columns: visibleColumns,
+                            column_order: columnOrder
+                        });
+                        
                         window.TableManager.applyColumnConfiguration({
                             visible_columns: visibleColumns,
                             column_config: { column_order: columnOrder }
                         });
+                    } else {
+                        console.error('❌ TableManager not available');
                     }
                     
                     this.closeColumnDialog();
@@ -560,6 +586,11 @@ class FilterManager {
     }
 
     closeColumnDialog() {
+        // 只清理当前拖拽状态，不销毁整个DragManager
+        if (window.DragManager) {
+            window.DragManager.cleanup();
+        }
+        
         $('.pm-column-management-dialog').remove();
         $(document).off('keydown.column-dialog');
     }
