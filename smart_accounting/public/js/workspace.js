@@ -14,6 +14,22 @@ class WorkspaceManager {
             $('.pm-workspace-menu').toggle();
         });
         
+        // 点击遮罩关闭菜单
+        $(document).on('click', '.pm-workspace-menu', (e) => {
+            // 只有点击遮罩背景时才关闭，点击菜单内容不关闭
+            if (e.target === e.currentTarget) {
+                $('.pm-workspace-menu').hide();
+                $('.pm-workspace-submenu').remove();
+            }
+        });
+        
+        // 点击关闭按钮关闭菜单
+        $(document).on('click', '.pm-workspace-menu-close', (e) => {
+            e.stopPropagation();
+            $('.pm-workspace-menu').hide();
+            $('.pm-workspace-submenu').remove();
+        });
+        
         // Handle create workspace button (top-level or in submenu)
         $(document).on('click', '.pm-create-workspace', (e) => {
             e.stopPropagation();
@@ -58,11 +74,24 @@ class WorkspaceManager {
             }
         });
         
-        // Close menu when clicking outside
-        $(document).on('click', (e) => {
-            if (!$(e.target).closest('.pm-workspace-switcher').length) {
-                $('.pm-workspace-menu').hide();
+        // 点击子菜单遮罩关闭子菜单
+        $(document).on('click', '.pm-workspace-submenu', (e) => {
+            // 只有点击遮罩背景时才关闭
+            if (e.target === e.currentTarget) {
                 $('.pm-workspace-submenu').remove();
+                $('.pm-workspace-menu').show(); // 回到主菜单
+            }
+        });
+        
+        // ESC键关闭菜单
+        $(document).on('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if ($('.pm-workspace-submenu').length) {
+                    $('.pm-workspace-submenu').remove();
+                    $('.pm-workspace-menu').show();
+                } else if ($('.pm-workspace-menu').is(':visible')) {
+                    $('.pm-workspace-menu').hide();
+                }
             }
         });
 
@@ -118,41 +147,43 @@ class WorkspaceManager {
         
         const submenuHtml = `
             <div class="pm-workspace-submenu" data-parent="${parentPartition}" data-back-target="${backTarget}">
-                <div class="pm-submenu-header">
-                    <button class="pm-back-btn" title="返回上级菜单" data-back-target="${backTarget}">
-                        <i class="fa fa-arrow-left"></i>
-                        <span>Back</span>
-                    </button>
-                    <span class="pm-submenu-title">Currently in: ${parentName}</span>
-                </div>
-                ${isEmpty ? `
-                    <div class="pm-empty-workspace">
-                        <i class="fa fa-folder-open"></i>
-                        <h4>Empty Workspace</h4>
-                        <p>No boards created yet. Create your first board below.</p>
-                        <div class="pm-empty-workspace-actions">
-                            <button class="pm-btn-secondary pm-back-to-main" onclick="this.closest('.pm-workspace-submenu').querySelector('.pm-back-btn').click()">
-                                <i class="fa fa-arrow-left"></i>
-                                ${backTarget === 'main' ? 'Back to Main Menu' : 'Back to Parent'}
-                            </button>
+                <div class="pm-workspace-submenu-content">
+                    <div class="pm-submenu-header">
+                        <button class="pm-back-btn" title="返回上级菜单" data-back-target="${backTarget}">
+                            <i class="fa fa-arrow-left"></i>
+                            <span>Back</span>
+                        </button>
+                        <span class="pm-submenu-title">Currently in: ${parentName}</span>
+                    </div>
+                    ${isEmpty ? `
+                        <div class="pm-empty-workspace">
+                            <i class="fa fa-folder-open"></i>
+                            <h4>Empty Workspace</h4>
+                            <p>No boards created yet. Create your first board below.</p>
+                            <div class="pm-empty-workspace-actions">
+                                <button class="pm-btn-secondary pm-back-to-main" onclick="this.closest('.pm-workspace-submenu').querySelector('.pm-back-btn').click()">
+                                    <i class="fa fa-arrow-left"></i>
+                                    ${backTarget === 'main' ? 'Back to Main Menu' : 'Back to Parent'}
+                                </button>
+                            </div>
                         </div>
+                    ` : childPartitions.map(child => `
+                        <div class="pm-workspace-item" data-view="${child.name}" data-has-children="${child.has_children || false}">
+                            <i class="fa fa-${child.is_workspace ? 'sitemap' : 'folder'}"></i>
+                            <span class="pm-item-name">${child.partition_name}</span>
+                            <span class="pm-item-type">(${child.is_workspace ? 'workspace' : 'board'})</span>
+                            ${child.has_children ? '<i class="fa fa-chevron-right pm-workspace-arrow"></i>' : ''}
+                        </div>
+                    `).join('')}
+                    <div class="pm-workspace-divider"></div>
+                    <div class="pm-workspace-item pm-create-workspace" data-parent="${parentPartition}">
+                        <i class="fa fa-plus-circle"></i>
+                        <span>Create new workspace</span>
                     </div>
-                ` : childPartitions.map(child => `
-                    <div class="pm-workspace-item" data-view="${child.name}" data-has-children="${child.has_children || false}">
-                        <i class="fa fa-${child.is_workspace ? 'sitemap' : 'folder'}"></i>
-                        <span class="pm-item-name">${child.partition_name}</span>
-                        <span class="pm-item-type">(${child.is_workspace ? 'workspace' : 'board'})</span>
-                        ${child.has_children ? '<i class="fa fa-chevron-right pm-workspace-arrow"></i>' : ''}
+                    <div class="pm-workspace-item pm-create-board" data-parent="${parentPartition}">
+                        <i class="fa fa-folder-plus"></i>
+                        <span>Create new board</span>
                     </div>
-                `).join('')}
-                <div class="pm-workspace-divider"></div>
-                <div class="pm-workspace-item pm-create-workspace" data-parent="${parentPartition}">
-                    <i class="fa fa-plus-circle"></i>
-                    <span>Create new workspace</span>
-                </div>
-                <div class="pm-workspace-item pm-create-board" data-parent="${parentPartition}">
-                    <i class="fa fa-folder-plus"></i>
-                    <span>Create new board</span>
                 </div>
             </div>
         `;

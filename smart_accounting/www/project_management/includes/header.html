@@ -34,15 +34,57 @@
                     (View: {{ current_view }} | Projects: {{ project_data.total_projects }} | Tasks: {{ project_data.total_tasks }})
                 </small>
             </div>
-            <!-- Workspace Switcher -->
+            
+            <!-- Workspace Switcher - positioned next to breadcrumb -->
             <div class="pm-workspace-switcher">
                 <button class="pm-workspace-btn" title="切换工作区">
                     <i class="fa fa-th-large"></i>
                     <span>Workspaces/Boards</span>
                     <i class="fa fa-chevron-down"></i>
                 </button>
+                <div class="pm-workspace-menu" style="display: none;">
+                    <div class="pm-workspace-menu-content">
+                        <!-- Menu Header with Close Button -->
+                        <div class="pm-workspace-menu-header">
+                            <h3>Workspaces & Boards</h3>
+                            <button class="pm-workspace-menu-close" title="关闭菜单">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- Always show main dashboard -->
+                        <div class="pm-workspace-item {% if current_view == 'main' %}active{% endif %}" 
+                             data-view="main" data-type="main">
+                            <i class="fa fa-home"></i>
+                            <span>Main Dashboard</span>
+                        </div>
+                        
+                        <!-- Show all available partitions -->
+                        {% for view in available_views %}
+                        <div class="pm-workspace-item {% if current_view == view.key %}active{% endif %}" 
+                             data-view="{{ view.key }}" data-type="{{ view.type }}" 
+                             {% if view.has_children %}data-has-children="true"{% endif %}>
+                            <i class="fa {{ view.icon }}"></i>
+                            <span class="pm-item-name">{{ view.label }}</span>
+                            <span class="pm-item-type">({{ view.type }})</span>
+                            {% if view.has_children %}
+                                <i class="fa fa-chevron-right pm-workspace-arrow"></i>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                        
+                        <div class="pm-workspace-divider"></div>
+                        <div class="pm-workspace-item pm-create-workspace" data-action="create">
+                            <i class="fa fa-plus"></i>
+                            <span>Create new workspace</span>
+                        </div>
+                        <div class="pm-workspace-item pm-create-board" data-action="create">
+                            <i class="fa fa-folder-plus"></i>
+                            <span>Create new board</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-            
             <!-- Automate Button -->
             <div class="pm-automate-container">
                 <button class="pm-automate-btn" title="Automation Settings">
@@ -50,38 +92,6 @@
                     <span>Automate</span>
                     <span class="pm-automate-count" id="pm-automate-count">0</span>
                 </button>
-                <div class="pm-workspace-menu" style="display: none;">
-                    <!-- Always show main dashboard -->
-                    <div class="pm-workspace-item {% if current_view == 'main' %}active{% endif %}" 
-                         data-view="main" data-type="main">
-                        <i class="fa fa-home"></i>
-                        <span>Main Dashboard</span>
-                    </div>
-                    
-                    <!-- Show all available partitions -->
-                    {% for view in available_views %}
-                    <div class="pm-workspace-item {% if current_view == view.key %}active{% endif %}" 
-                         data-view="{{ view.key }}" data-type="{{ view.type }}" 
-                         {% if view.has_children %}data-has-children="true"{% endif %}>
-                        <i class="fa {{ view.icon }}"></i>
-                        <span class="pm-item-name">{{ view.label }}</span>
-                        <span class="pm-item-type">({{ view.type }})</span>
-                        {% if view.has_children %}
-                            <i class="fa fa-chevron-right pm-workspace-arrow"></i>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                    
-                    <div class="pm-workspace-divider"></div>
-                    <div class="pm-workspace-item pm-create-workspace" data-action="create">
-                        <i class="fa fa-plus"></i>
-                        <span>Create new workspace</span>
-                    </div>
-                    <div class="pm-workspace-item pm-create-board" data-action="create">
-                        <i class="fa fa-folder-plus"></i>
-                        <span>Create new board</span>
-                    </div>
-                </div>
             </div>
         </h1>
         {% if not project_data.is_main_dashboard %}
