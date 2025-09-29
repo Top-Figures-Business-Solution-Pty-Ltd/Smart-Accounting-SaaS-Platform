@@ -917,9 +917,9 @@ def get_project_management_data(view='main'):
                 # Get software info for display (from sub-table)
                 task.software_info = get_software_info(task_doc)
                 
-                # Format last updated date
+                # Format last updated date (DD-MM-YYYY format to match other date fields)
                 if hasattr(task, 'modified') and task.modified:
-                    task.last_updated = task.modified.strftime("%Y-%m-%d") if hasattr(task.modified, 'strftime') else str(task.modified)
+                    task.last_updated = task.modified.strftime("%d-%m-%Y") if hasattr(task.modified, 'strftime') else str(task.modified)
                 else:
                     task.last_updated = ""
                 

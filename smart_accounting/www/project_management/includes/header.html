@@ -213,66 +213,7 @@
             <i class="fa fa-search"></i>
             <input type="text" placeholder="Search clients..." id="pm-search-input">
         </div>
-        <div class="pm-filters">
-            <div class="pm-client-filter-dropdown">
-                <button class="pm-filter-btn pm-client-filter-btn">
-                    <i class="fa fa-building"></i>
-                    All Clients
-                    <span class="pm-filter-count" style="display: none;">0</span>
-                    <i class="fa fa-chevron-down pm-filter-dropdown-icon"></i>
-                </button>
-                <div class="pm-client-filter-menu" style="display: none;">
-                    <div class="pm-filter-search">
-                        <input type="text" class="pm-client-search-input" placeholder="Search clients...">
-                        <i class="fa fa-search"></i>
-                    </div>
-                    <div class="pm-filter-options">
-                        <div class="pm-filter-option pm-clear-client-filter">
-                            <div class="pm-filter-icon">
-                                <i class="fa fa-times"></i>
-                            </div>
-                            <span>All Clients</span>
-                        </div>
-                    </div>
-                    <div class="pm-client-list">
-                        <!-- Clients will be loaded dynamically -->
-                    </div>
-                </div>
-            </div>
-            
-            <div class="pm-status-filter-dropdown">
-                <button class="pm-filter-btn pm-status-filter-btn">
-                    <i class="fa fa-circle"></i>
-                    All Status
-                    <span class="pm-filter-count" style="display: none;">0</span>
-                    <i class="fa fa-chevron-down pm-filter-dropdown-icon"></i>
-                </button>
-                <div class="pm-status-filter-menu" style="display: none;">
-                    <div class="pm-filter-options">
-                        <div class="pm-filter-option pm-clear-status-filter">
-                            <div class="pm-filter-icon">
-                                <i class="fa fa-times"></i>
-                            </div>
-                            <span>All Status</span>
-                        </div>
-                    </div>
-                    <div class="pm-status-list">
-                        <div class="pm-filter-option" data-status="Open">
-                            <div class="pm-status-dot status-open"></div>
-                            <span>Open</span>
-                        </div>
-                        <div class="pm-filter-option" data-status="Working">
-                            <div class="pm-status-dot status-working"></div>
-                            <span>Working</span>
-                        </div>
-                        <div class="pm-filter-option" data-status="Completed">
-                            <div class="pm-status-dot status-completed"></div>
-                            <span>Completed</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- All Clients and All Status buttons removed - functionality moved to Filter button -->
     </div>
     {% endif %}
 </div>

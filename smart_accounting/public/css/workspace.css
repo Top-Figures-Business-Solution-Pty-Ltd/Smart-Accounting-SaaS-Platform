@@ -6,25 +6,23 @@
     padding: 20px 24px;
     border-bottom: 1px solid var(--monday-border);
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column; /* 垂直布局 */
     box-shadow: var(--monday-shadow);
     position: fixed;
     top: 48px; /* ERPNext navbar height */
     left: 0;
     right: 0;
     z-index: 99; /* Below ERPNext navbar but above content */
-    flex-wrap: wrap;
-    gap: 16px;
     margin: 0;
+    gap: 16px; /* 垂直间距 */
 }
 
 .pm-header-left {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    flex-shrink: 0;
-    min-width: 0;
+    width: 100%; /* 占用全宽 */
+    overflow: hidden; /* 防止内容溢出 */
 }
 
 .pm-title {
@@ -35,8 +33,8 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    white-space: nowrap;
-    flex-shrink: 0;
+    width: 100%;
+    justify-content: space-between; /* 分散对齐 */
 }
 
 .pm-title i {
@@ -48,6 +46,8 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+    flex: 1; /* 占用可用空间 */
+    min-width: 0; /* 允许收缩 */
 }
 
 .pm-breadcrumb-nav {
@@ -95,8 +95,10 @@
 /* Workspace Switcher */
 .pm-workspace-switcher {
     position: relative;
-    display: inline-block;
-    margin-left: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0; /* 防止被挤压 */
 }
 
 .pm-workspace-btn {
@@ -283,6 +285,8 @@
     border-radius: 8px;
     padding: 8px 12px;
     border: 1px solid var(--monday-border);
+    width: 100%; /* 占用全宽 */
+    justify-content: space-between; /* 分散对齐 */
 }
 
 .pm-actions {
@@ -550,16 +554,28 @@ body.main-dashboard-view .pm-card-stats i {
 /* Responsive Design for Header */
 @media (max-width: 768px) {
     .pm-header {
+        padding: 16px 20px;
+        gap: 12px;
+    }
+    
+    .pm-title {
+        font-size: 24px;
         flex-direction: column;
-        gap: 16px;
-        align-items: stretch;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .pm-workspace-switcher {
+        align-self: flex-end;
     }
     
     .pm-header-right {
-        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
     }
     
     .pm-actions {
         flex-wrap: wrap;
+        gap: 8px;
     }
 }
