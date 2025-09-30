@@ -26,6 +26,18 @@ class ClientManagementSystem {
         }
     }
 
+    // Generate Year End options HTML
+    generateYearEndOptions(selectedValue = 'June') {
+        const months = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        
+        return months.map(month => 
+            `<option value="${month}" ${month === selectedValue ? 'selected' : ''}>${month}</option>`
+        ).join('');
+    }
+
     // Main entry point - show client management dialog
     showClientManagementDialog() {
         const dialogHTML = this.generateDialogHTML();
@@ -656,10 +668,7 @@ class ClientManagementSystem {
                             <div class="pm-edit-item">
                                 <label>Year End</label>
                                 <select name="custom_year_end">
-                                    <option value="June" ${(client.custom_year_end || client.year_end) === 'June' ? 'selected' : ''}>June</option>
-                                    <option value="December" ${(client.custom_year_end || client.year_end) === 'December' ? 'selected' : ''}>December</option>
-                                    <option value="March" ${(client.custom_year_end || client.year_end) === 'March' ? 'selected' : ''}>March</option>
-                                    <option value="September" ${(client.custom_year_end || client.year_end) === 'September' ? 'selected' : ''}>September</option>
+                                    ${this.generateYearEndOptions(client.custom_year_end || client.year_end || 'June')}
                                 </select>
                             </div>
                             <div class="pm-edit-item">
@@ -921,10 +930,7 @@ class ClientManagementSystem {
                                 <div class="pm-form-group">
                                     <label>Year End</label>
                                     <select name="custom_year_end">
-                                        <option value="June" ${(client?.custom_year_end || client?.year_end) === 'June' ? 'selected' : ''}>June</option>
-                                        <option value="December" ${(client?.custom_year_end || client?.year_end) === 'December' ? 'selected' : ''}>December</option>
-                                        <option value="March" ${(client?.custom_year_end || client?.year_end) === 'March' ? 'selected' : ''}>March</option>
-                                        <option value="September" ${(client?.custom_year_end || client?.year_end) === 'September' ? 'selected' : ''}>September</option>
+                                        ${this.generateYearEndOptions(client?.custom_year_end || client?.year_end || 'June')}
                                     </select>
                                 </div>
                             </div>
