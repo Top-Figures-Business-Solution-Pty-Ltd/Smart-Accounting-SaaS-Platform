@@ -132,12 +132,18 @@ class ProjectManager {
             <div class="pm-cell pm-cell-select">
                 <input type="checkbox" class="pm-task-checkbox" data-task-id="${taskData.task_id}" title="Select this task">
             </div>
-            <div class="pm-cell pm-cell-client pm-client-with-comments" data-editable="true" data-field="custom_client" data-task-id="${taskData.task_id}" data-field-type="client_selector" data-current-client-id="" data-current-client-name="${clientName || 'No Client'}">
+            <div class="pm-cell pm-cell-client pm-client-with-comments" data-field="custom_client" data-task-id="${taskData.task_id}" data-current-client-id="" data-current-client-name="${clientName || 'No Client'}">
                 <div class="pm-client-content">
                     <button class="pm-subtask-toggle" data-task-id="${taskData.task_id}" title="Show/hide subtasks">
                         <i class="fa fa-chevron-right"></i>
                     </button>
-                    <span class="editable-field client-display">${clientName || 'No Client'}</span>
+                    <span class="pm-client-selector-trigger client-display" 
+                          data-task-id="${taskData.task_id}"
+                          data-field="custom_client"
+                          data-field-type="client_selector"
+                          data-current-client-id=""
+                          data-current-client-name="${clientName || 'No Client'}"
+                          title="Click to select client">${clientName || 'No Client'}</span>
                 </div>
                 <div class="pm-client-comments">
                     <div class="pm-comment-indicator" data-task-id="${taskData.task_id}" title="Click to view or add comments">

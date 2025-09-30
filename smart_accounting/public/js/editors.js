@@ -8,7 +8,25 @@ class EditorsManager {
 
     // Inline editing initialization
     initializeInlineEditing() {
-        // Bind click events for editable fields
+        // Bind click events for client selector trigger
+        $(document).on('click', '.pm-client-selector-trigger', (e) => {
+            e.stopPropagation();
+            
+            const $trigger = $(e.currentTarget);
+            const $cell = $trigger.closest('.pm-cell-client');
+            
+            if (window.ClientSelectorModal) {
+                window.ClientSelectorModal.showClientSelector($cell);
+            } else {
+                console.error('ClientSelectorModal not loaded');
+                frappe.show_alert({
+                    message: 'Client selector not available',
+                    indicator: 'red'
+                });
+            }
+        });
+        
+        // Bind click events for other editable fields
         $(document).on('click', '[data-editable="true"]', (e) => {
             e.stopPropagation();
             
@@ -570,22 +588,33 @@ class EditorsManager {
         // Clear all previous editing states and close dropdowns
         this.clearAllEditingStates();
         
-        $cell.addClass('editing');
-        
         switch(fieldType) {
             case 'client_selector':
-                this.showClientSelector($cell);
+                // Use new modal-based client selector - no need to add editing class
+                if (window.ClientSelectorModal) {
+                    window.ClientSelectorModal.showClientSelector($cell);
+                } else {
+                    console.error('ClientSelectorModal not loaded');
+                    frappe.show_alert({
+                        message: 'Client selector not available',
+                        indicator: 'red'
+                    });
+                }
                 break;
             case 'task_name_editor':
+                $cell.addClass('editing');
                 this.showTaskNameEditor($cell);
                 break;
             case 'select':
+                $cell.addClass('editing');
                 this.showSelectEditor($cell);
                 break;
             case 'currency':
+                $cell.addClass('editing');
                 this.showCurrencyEditor($cell);
                 break;
             default:
+                $cell.addClass('editing');
                 this.showTextEditor($cell);
         }
     }

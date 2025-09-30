@@ -1562,16 +1562,29 @@ def search_customers(query):
         if not query or len(query.strip()) < 2:
             return {'success': True, 'customers': []}
         
-        # Search customers by customer_name
-        customers = frappe.get_all("Customer",
-            filters={
-                "customer_name": ["like", f"%{query}%"],
-                "disabled": 0
-            },
-            fields=["name", "customer_name", "customer_type"],
-            limit=10,
-            order_by="customer_name"
-        )
+        # Search customers by customer_name - include custom fields if they exist
+        try:
+            # Try to get custom_year_end field if it exists
+            customers = frappe.get_all("Customer",
+                filters={
+                    "customer_name": ["like", f"%{query}%"],
+                    "disabled": 0
+                },
+                fields=["name", "customer_name", "customer_type", "custom_year_end"],
+                limit=10,
+                order_by="customer_name"
+            )
+        except Exception:
+            # Fallback if custom_year_end field doesn't exist
+            customers = frappe.get_all("Customer",
+                filters={
+                    "customer_name": ["like", f"%{query}%"],
+                    "disabled": 0
+                },
+                fields=["name", "customer_name", "customer_type"],
+                limit=10,
+                order_by="customer_name"
+            )
         
         return {
             'success': True, 
@@ -3162,4 +3175,86 @@ def get_automation_count():
             'success': False,
             'error': str(e),
             'count': 0
+        }
+
+@frappe.whitelist()
+def create_customer_and_link(task_id, customer_name, year_end="June", customer_type="Company"):
+    """
+    Create a new customer with detailed information and link to task
+    """
+    try:
+        # Validate inputs
+        if not task_id or not customer_name:
+            return {
+                'success': False,
+                'error': 'Task ID and customer name are required'
+            }
+        
+        customer_name = customer_name.strip()
+        if len(customer_name) < 2:
+            return {
+                'success': False,
+                'error': 'Customer name must be at least 2 characters'
+            }
+        
+        # Check if customer already exists
+        existing = frappe.db.get_value("Customer", {"customer_name": customer_name})
+        if existing:
+            # Link existing customer to task
+            link_response = update_task_client(task_id, existing)
+            if link_response.get('success'):
+                return {
+                    'success': True,
+                    'customer_id': existing,
+                    'customer_name': customer_name,
+                    'message': 'Existing customer linked to task',
+                    'was_existing': True
+                }
+            else:
+                return link_response
+        
+        # Create new customer with enhanced fields
+        new_customer = frappe.new_doc("Customer")
+        new_customer.customer_name = customer_name
+        new_customer.customer_type = customer_type
+        
+        # Set year end if custom field exists
+        if hasattr(new_customer, 'custom_year_end'):
+            new_customer.custom_year_end = year_end
+        
+        # Set default required fields
+        new_customer.customer_group = frappe.db.get_single_value("Selling Settings", "customer_group") or "All Customer Groups"
+        new_customer.territory = frappe.db.get_single_value("Selling Settings", "territory") or "All Territories"
+        
+        # Save customer
+        new_customer.save()
+        
+        # Link customer to task
+        link_response = update_task_client(task_id, new_customer.name)
+        if not link_response.get('success'):
+            # If linking fails, still return success for customer creation
+            frappe.log_error(f"Customer created but linking failed: {link_response.get('error')}")
+            return {
+                'success': True,
+                'customer_id': new_customer.name,
+                'customer_name': new_customer.customer_name,
+                'message': 'Customer created but linking to task failed',
+                'link_error': link_response.get('error')
+            }
+        
+        return {
+            'success': True,
+            'customer_id': new_customer.name,
+            'customer_name': new_customer.customer_name,
+            'customer_type': new_customer.customer_type,
+            'year_end': year_end,
+            'message': 'Customer created and linked successfully'
+        }
+        
+    except Exception as e:
+        error_msg = f"Create customer and link error: {str(e)}"
+        frappe.log_error(error_msg)
+        return {
+            'success': False,
+            'error': str(e)
         }
