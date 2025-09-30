@@ -277,8 +277,8 @@ class ProjectManagement {
 
         // Unified dropdown management - close all when clicking outside
         $(document).on('click', (e) => {
-            // Check if click is outside any dropdown
-            const isOutsideDropdown = !$(e.target).closest('.pm-dropdown-container, .pm-new-task-dropdown, .pm-person-filter-dropdown, .pm-client-filter-dropdown, .pm-status-filter-dropdown, .pm-advanced-filter-dropdown').length;
+            // Check if click is outside any dropdown (exclude workspace menus)
+            const isOutsideDropdown = !$(e.target).closest('.pm-dropdown-container, .pm-new-task-dropdown, .pm-person-filter-dropdown, .pm-client-filter-dropdown, .pm-status-filter-dropdown, .pm-advanced-filter-dropdown, .pm-workspace-menu, .pm-workspace-submenu').length;
             
             if (isOutsideDropdown) {
                 this.filterManager.closeAllDropdowns();

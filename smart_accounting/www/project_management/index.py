@@ -48,6 +48,7 @@ def get_context(context):
     context.full_width = True  # Enable full width layout for better laptop/desktop experience
     context.current_view = view
     context.available_views = get_available_views()
+    context.hide_footer_signup = True  # Hide email subscription footer
     
     # Generate breadcrumb path for navigation
     context.breadcrumb_path = get_breadcrumb_path(view)
@@ -142,6 +143,7 @@ def create_partition(partition_name, is_workspace=False, parent_partition=None, 
     try:
         # Ensure is_workspace is properly converted to boolean
         is_workspace = frappe.utils.cint(is_workspace) if is_workspace is not None else False
+        print(f"DEBUG: Creating partition - name: {partition_name}, is_workspace: {is_workspace} (original: {frappe.form_dict.get('is_workspace')})")
         
         if not partition_name or not partition_name.strip():
             return {'success': False, 'error': 'Partition name is required'}
@@ -715,7 +717,8 @@ def get_project_management_data(view='main'):
                         'organized_data': {},
                         'total_projects': 0,
                         'total_tasks': 0,
-                        'debug_info': {'message': f'Partition {view} not found'}
+                        'debug_info': {'message': f'Partition {view} not found'},
+                        'is_workspace_view': False  # This is a board view, not a workspace view
                     }
             except Exception as e:
                 print(f"DEBUG: Partition filtering error: {str(e)}")
@@ -1043,7 +1046,8 @@ def get_project_management_data(view='main'):
             'organized_data': dict(organized_data),
             'total_projects': len(projects),
             'total_tasks': len(tasks),
-            'debug_info': debug_info
+            'debug_info': debug_info,
+            'is_workspace_view': False  # This is a board view, not a workspace view
         }
     
     except Exception as e:
@@ -1053,7 +1057,8 @@ def get_project_management_data(view='main'):
             'total_projects': 0,
             'total_tasks': 0,
             'error': str(e),
-            'debug_info': {'error_details': str(e)}
+            'debug_info': {'error_details': str(e)},
+            'is_workspace_view': False  # This is a board view, not a workspace view
         }
 
 @frappe.whitelist()
@@ -3675,4 +3680,122 @@ def get_client_groups():
             'success': False,
             'error': str(e),
             'client_groups': []
+        }
+
+@frappe.whitelist()
+def get_project_form_data():
+    """
+    Get data needed for project creation form
+    """
+    try:
+        # Get available partitions
+        partitions = frappe.get_all("Partition", 
+            fields=["name", "partition_name"],
+            filters={"is_archived": ["!=", 1]},
+            order_by="partition_name"
+        )
+        
+        # Get service lines (if Service Line DocType exists)
+        service_lines = []
+        try:
+            if frappe.db.exists("DocType", "Service Line"):
+                # First try to get all service lines to debug
+                all_service_lines = frappe.get_all("Service Line", 
+                    fields=["*"],
+                    limit=10
+                )
+                print(f"DEBUG: Found {len(all_service_lines)} service lines")
+                for sl in all_service_lines:
+                    print(f"DEBUG: Service Line: {sl}")
+                
+                # Get service lines with correct field names
+                service_lines = frappe.get_all("Service Line",
+                    fields=["name", "service_name"],
+                    order_by="service_name"
+                )
+                print(f"DEBUG: Final service_lines: {service_lines}")
+        except Exception as e:
+            print(f"DEBUG: Error getting service lines: {str(e)}")
+            # If Service Line DocType doesn't exist, return empty list
+            pass
+        
+        return {
+            'success': True,
+            'partitions': partitions,
+            'service_lines': service_lines
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting project form data: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'partitions': [],
+            'service_lines': []
+        }
+
+@frappe.whitelist()
+def create_project(project_name, service_line=None, partition=None, is_archived=0):
+    """
+    Create a new project with the provided data
+    """
+    try:
+        if not project_name or not project_name.strip():
+            return {'success': False, 'error': 'Project name is required'}
+        
+        if not partition:
+            return {'success': False, 'error': 'Partition is required'}
+        
+        # Validate partition exists
+        if not frappe.db.exists("Partition", partition):
+            return {'success': False, 'error': f'Partition "{partition}" not found'}
+        
+        # Create new project
+        project_doc = frappe.new_doc("Project")
+        project_doc.project_name = project_name.strip()
+        
+        # Set default naming series
+        if hasattr(project_doc, 'naming_series'):
+            # Get default series from Project DocType
+            try:
+                series_list = frappe.get_meta("Project").get_field("naming_series")
+                if series_list and series_list.options:
+                    default_series = series_list.options.split('\n')[0].strip()
+                    project_doc.naming_series = default_series
+                else:
+                    project_doc.naming_series = "PROJ-.####"
+            except:
+                project_doc.naming_series = "PROJ-.####"
+        
+        # Set service line if provided and field exists
+        if service_line and hasattr(project_doc, 'service_line'):
+            project_doc.service_line = service_line
+        
+        # Set partition (custom field)
+        if hasattr(project_doc, 'custom_partition'):
+            project_doc.custom_partition = partition
+        
+        # Set archived status
+        if hasattr(project_doc, 'is_archived'):
+            project_doc.is_archived = 1 if frappe.utils.cint(is_archived) else 0
+        
+        # Set default values
+        project_doc.status = "Open"
+        
+        # Save the project
+        project_doc.save()
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'message': f'Project "{project_name}" created successfully',
+            'project_name': project_doc.name,
+            'project_title': project_doc.project_name
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error creating project: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
         }

@@ -378,15 +378,346 @@ class ProjectManager {
     }
 
     createNewProject() {
-        // Navigate to ERPNext project creation
-        frappe.show_alert({
-            message: 'Redirecting to project creation...',
-            indicator: 'blue'
+        // Show custom project creation modal
+        this.showCreateProjectModal();
+    }
+
+    async showCreateProjectModal() {
+        try {
+            // Get form data from backend
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_project_form_data'
+            });
+
+            if (!response.message || !response.message.success) {
+                frappe.show_alert({
+                    message: 'Error loading form data: ' + (response.message?.error || 'Unknown error'),
+                    indicator: 'red'
+                });
+                return;
+            }
+
+            const formData = response.message;
+            console.log('DEBUG: Form data received:', formData);
+            console.log('DEBUG: Service lines:', formData.service_lines);
+            this.renderCreateProjectModal(formData);
+
+        } catch (error) {
+            frappe.show_alert({
+                message: 'Error loading form data: ' + error.message,
+                indicator: 'red'
+            });
+        }
+    }
+
+    renderCreateProjectModal(formData) {
+        // Get current partition from URL if available
+        const currentView = new URLSearchParams(window.location.search).get('view');
+        const currentPartition = currentView && currentView !== 'main' ? currentView : '';
+
+        const modalHTML = `
+            <div class="pm-project-modal-overlay">
+                <div class="pm-project-modal">
+                    <div class="pm-project-modal-header">
+                        <h3><i class="fa fa-folder-plus"></i> New Project</h3>
+                        <button class="pm-project-modal-close">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="pm-project-modal-body">
+                        <form class="pm-project-form">
+                            <div class="pm-form-row">
+                                <div class="pm-form-group">
+                                    <label for="project-name">Project Name <span class="required">*</span></label>
+                                    <input type="text" id="project-name" class="pm-form-control" 
+                                           placeholder="Enter project name..." maxlength="140" required>
+                                </div>
+                            </div>
+                            
+                            <div class="pm-form-row">
+                                <div class="pm-form-group">
+                                    <label for="service-line">Service Line</label>
+                                    <div class="pm-service-line-selector">
+                                        <input type="text" id="service-line" class="pm-form-control pm-service-line-input" 
+                                               placeholder="Search or enter service line..." autocomplete="off">
+                                        <div class="pm-service-line-dropdown" style="display: none;">
+                                            ${formData.service_lines.map(sl => 
+                                                `<div class="pm-service-line-option" data-value="${sl.name}">
+                                                    <span class="pm-option-title">${sl.service_name || sl.name}</span>
+                                                    ${sl.service_name && sl.service_name !== sl.name ? 
+                                                        `<small class="pm-option-subtitle">${sl.name}</small>` : ''
+                                                    }
+                                                </div>`
+                                            ).join('')}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="pm-form-row">
+                                <div class="pm-form-group">
+                                    <label for="project-partition">Partition <span class="required">*</span></label>
+                                    <select id="project-partition" class="pm-form-control" required>
+                                        <option value="">Select partition...</option>
+                                        ${formData.partitions.map(partition => 
+                                            `<option value="${partition.name}" ${partition.name === currentPartition ? 'selected' : ''}>
+                                                ${partition.partition_name}
+                                            </option>`
+                                        ).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="pm-form-row">
+                                <div class="pm-form-group pm-checkbox-group">
+                                    <label class="pm-checkbox-label">
+                                        <input type="checkbox" id="is-archived" class="pm-checkbox">
+                                        <span class="pm-checkbox-text">Is Archived</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="pm-project-modal-footer">
+                        <button type="button" class="pm-btn pm-btn-secondary pm-project-cancel">Cancel</button>
+                        <button type="button" class="pm-btn pm-btn-primary pm-project-save">
+                            <i class="fa fa-save"></i> Create Project
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing modal
+        $('.pm-project-modal-overlay').remove();
+        
+        // Add modal to body
+        $('body').append(modalHTML);
+        
+        // Show modal with animation
+        $('.pm-project-modal-overlay').fadeIn(200);
+        
+        // Focus on project name field
+        setTimeout(() => {
+            $('#project-name').focus();
+        }, 250);
+        
+        // Bind events
+        this.bindCreateProjectModalEvents();
+        
+        // Initialize service line selector
+        this.initializeServiceLineSelector(formData.service_lines);
+    }
+
+    initializeServiceLineSelector(serviceLines) {
+        const $input = $('.pm-service-line-input');
+        const $dropdown = $('.pm-service-line-dropdown');
+        let selectedValue = '';
+
+        // Show dropdown on focus
+        $input.on('focus', () => {
+            if (serviceLines.length > 0) {
+                $dropdown.show();
+                this.filterServiceLineOptions('');
+            }
+        });
+
+        // Filter options on input
+        $input.on('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            this.filterServiceLineOptions(searchTerm);
+            selectedValue = ''; // Clear selection when typing
+        });
+
+        // Handle option selection
+        $(document).on('click', '.pm-service-line-option', (e) => {
+            const $option = $(e.currentTarget);
+            const value = $option.data('value');
+            const displayText = $option.find('.pm-option-title').text();
+            
+            $input.val(displayText);
+            selectedValue = value;
+            $dropdown.hide();
+        });
+
+        // Hide dropdown when clicking outside
+        $(document).on('click', (e) => {
+            if (!$(e.target).closest('.pm-service-line-selector').length) {
+                $dropdown.hide();
+            }
+        });
+
+        // Handle keyboard navigation
+        $input.on('keydown', (e) => {
+            const $options = $('.pm-service-line-option:visible');
+            const $current = $('.pm-service-line-option.highlighted');
+            let $next;
+
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    if ($dropdown.is(':hidden')) {
+                        $dropdown.show();
+                        this.filterServiceLineOptions('');
+                    } else {
+                        $next = $current.length ? $current.next('.pm-service-line-option:visible') : $options.first();
+                        if ($next.length) {
+                            $('.pm-service-line-option').removeClass('highlighted');
+                            $next.addClass('highlighted');
+                        }
+                    }
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    $next = $current.length ? $current.prev('.pm-service-line-option:visible') : $options.last();
+                    if ($next.length) {
+                        $('.pm-service-line-option').removeClass('highlighted');
+                        $next.addClass('highlighted');
+                    }
+                    break;
+                case 'Enter':
+                    e.preventDefault();
+                    if ($current.length) {
+                        $current.click();
+                    }
+                    break;
+                case 'Escape':
+                    $dropdown.hide();
+                    break;
+            }
+        });
+
+        // Store selected value for form submission
+        $input.data('selected-value', () => selectedValue || $input.val());
+    }
+
+    filterServiceLineOptions(searchTerm) {
+        $('.pm-service-line-option').each(function() {
+            const $option = $(this);
+            const title = $option.find('.pm-option-title').text().toLowerCase();
+            const subtitle = $option.find('.pm-option-subtitle').text().toLowerCase();
+            
+            if (title.includes(searchTerm) || subtitle.includes(searchTerm)) {
+                $option.show();
+            } else {
+                $option.hide();
+            }
+        });
+
+        // Remove highlight when filtering
+        $('.pm-service-line-option').removeClass('highlighted');
+    }
+
+    bindCreateProjectModalEvents() {
+        // Close modal events
+        $('.pm-project-modal-close, .pm-project-cancel').on('click', () => {
+            this.closeCreateProjectModal();
         });
         
-        setTimeout(() => {
-            window.open('/app/project/new-project', '_blank');
-        }, 500);
+        // Close on overlay click
+        $('.pm-project-modal-overlay').on('click', (e) => {
+            if (e.target === e.currentTarget) {
+                this.closeCreateProjectModal();
+            }
+        });
+        
+        // Handle enter key in form
+        $('.pm-project-form input, .pm-project-form select').on('keypress', (e) => {
+            if (e.which === 13) {
+                e.preventDefault();
+                $('.pm-project-save').click();
+            }
+        });
+        
+        // Handle form submission
+        $('.pm-project-save').on('click', () => {
+            this.submitCreateProject();
+        });
+        
+        // ESC key to close
+        $(document).on('keydown.project-modal', (e) => {
+            if (e.key === 'Escape') {
+                this.closeCreateProjectModal();
+            }
+        });
+    }
+
+    closeCreateProjectModal() {
+        $('.pm-project-modal-overlay').fadeOut(200, function() {
+            $(this).remove();
+        });
+        $(document).off('keydown.project-modal');
+    }
+
+    async submitCreateProject() {
+        try {
+            // Get form values
+            const projectName = $('#project-name').val().trim();
+            const $serviceLineInput = $('.pm-service-line-input');
+            const serviceLine = $serviceLineInput.data('selected-value') ? $serviceLineInput.data('selected-value')() : $serviceLineInput.val().trim();
+            const partition = $('#project-partition').val();
+            const isArchived = $('#is-archived').is(':checked') ? 1 : 0;
+
+            // Validate required fields
+            if (!projectName) {
+                frappe.show_alert({
+                    message: 'Project name is required',
+                    indicator: 'red'
+                });
+                $('#project-name').focus();
+                return;
+            }
+
+            if (!partition) {
+                frappe.show_alert({
+                    message: 'Partition is required',
+                    indicator: 'red'
+                });
+                $('#project-partition').focus();
+                return;
+            }
+
+            // Disable save button during submission
+            $('.pm-project-save').prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Creating...');
+
+            // Submit to backend
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.create_project',
+                args: {
+                    project_name: projectName,
+                    service_line: serviceLine,
+                    partition: partition,
+                    is_archived: isArchived
+                }
+            });
+
+            if (response.message && response.message.success) {
+                frappe.show_alert({
+                    message: response.message.message,
+                    indicator: 'green'
+                });
+                
+                // Close modal
+                this.closeCreateProjectModal();
+                
+                // Refresh the page to show new project
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+                
+            } else {
+                throw new Error(response.message?.error || 'Project creation failed');
+            }
+
+        } catch (error) {
+            frappe.show_alert({
+                message: 'Error creating project: ' + error.message,
+                indicator: 'red'
+            });
+            
+            // Re-enable save button
+            $('.pm-project-save').prop('disabled', false).html('<i class="fa fa-save"></i> Create Project');
+        }
     }
 
     // Status management

@@ -818,4 +818,291 @@
     background: #f8f9fb !important;
 }
 
+/* Project Creation Modal Styles */
+.pm-project-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+}
+
+.pm-project-modal {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    width: 500px;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: hidden;
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.pm-project-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e1e5e9;
+    background: #f8f9fa;
+}
+
+.pm-project-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #2c3e50;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pm-project-modal-header h3 i {
+    color: #0073ea;
+}
+
+.pm-project-modal-close {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: #666;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.pm-project-modal-close:hover {
+    background: #e9ecef;
+    color: #333;
+}
+
+.pm-project-modal-body {
+    padding: 24px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.pm-project-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.pm-form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.pm-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.pm-form-group label {
+    font-weight: 500;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+.pm-form-group label .required {
+    color: #e74c3c;
+    margin-left: 2px;
+}
+
+.pm-form-control {
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    background: white;
+}
+
+.pm-form-control:focus {
+    outline: none;
+    border-color: #0073ea;
+    box-shadow: 0 0 0 3px rgba(0, 115, 234, 0.1);
+}
+
+.pm-form-control:invalid {
+    border-color: #e74c3c;
+}
+
+.pm-checkbox-group {
+    flex-direction: row !important;
+    align-items: center;
+    gap: 8px !important;
+}
+
+.pm-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: normal !important;
+}
+
+.pm-checkbox {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.pm-checkbox-text {
+    font-size: 14px;
+    color: #2c3e50;
+}
+
+.pm-project-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px;
+    border-top: 1px solid #e1e5e9;
+    background: #f8f9fa;
+}
+
+.pm-project-modal-footer .pm-btn {
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pm-project-modal-footer .pm-btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.pm-project-modal-footer .pm-btn-secondary:hover {
+    background: #5a6268;
+}
+
+.pm-project-modal-footer .pm-btn-primary {
+    background: #0073ea;
+    color: white;
+}
+
+.pm-project-modal-footer .pm-btn-primary:hover {
+    background: #0056b3;
+}
+
+.pm-project-modal-footer .pm-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.pm-project-modal-footer .pm-btn:disabled:hover {
+    background: #0073ea;
+}
+
+/* Service Line Selector Styles */
+.pm-service-line-selector {
+    position: relative;
+}
+
+.pm-service-line-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+}
+
+.pm-service-line-option {
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.pm-service-line-option:last-child {
+    border-bottom: none;
+}
+
+.pm-service-line-option:hover,
+.pm-service-line-option.highlighted {
+    background-color: #f8f9fa;
+}
+
+.pm-service-line-option .pm-option-title {
+    display: block;
+    font-weight: 500;
+    color: #2c3e50;
+    margin-bottom: 2px;
+}
+
+.pm-service-line-option .pm-option-subtitle {
+    display: block;
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.pm-service-line-input:focus + .pm-service-line-dropdown {
+    border-color: #0073ea;
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 768px) {
+    .pm-project-modal {
+        width: 95vw;
+        margin: 20px;
+    }
+    
+    .pm-project-modal-body {
+        padding: 16px;
+    }
+    
+    .pm-project-modal-header {
+        padding: 16px;
+    }
+    
+    .pm-project-modal-footer {
+        padding: 12px 16px;
+        flex-direction: column;
+    }
+    
+    .pm-project-modal-footer .pm-btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .pm-service-line-dropdown {
+        max-height: 150px;
+    }
+}
+
 

@@ -480,8 +480,16 @@
             {% else %}
                 <div class="pm-empty-state">
                     <i class="fa fa-folder-open"></i>
-                    <h3>{% if current_view != 'main' %}Empty Workspace{% else %}No projects found{% endif %}</h3>
-                    <p>{% if current_view != 'main' %}No boards or projects created yet. Create your first board to get started.{% else %}Create your first project to get started{% endif %}</p>
+                    {% if project_data.is_workspace_view %}
+                        <h3>Empty Workspace</h3>
+                        <p>No boards created yet. Create your first board to get started.</p>
+                    {% elif current_view != 'main' %}
+                        <h3>Empty Board</h3>
+                        <p>No projects created yet. Create your first project to get started.</p>
+                    {% else %}
+                        <h3>No projects found</h3>
+                        <p>Create your first project to get started</p>
+                    {% endif %}
                     {% if current_view != 'main' and breadcrumb_path and breadcrumb_path|length > 1 %}
                     <div class="pm-empty-actions">
                         <button class="pm-btn pm-btn-secondary pm-back-to-parent" data-view="{{ breadcrumb_path[-2].key }}">

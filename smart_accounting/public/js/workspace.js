@@ -76,7 +76,7 @@ class WorkspaceManager {
         
         // 点击子菜单遮罩关闭子菜单
         $(document).on('click', '.pm-workspace-submenu', (e) => {
-            // 只有点击遮罩背景时才关闭
+            // 只有点击遮罩背景时才关闭，确保不干扰按钮点击
             if (e.target === e.currentTarget) {
                 $('.pm-workspace-submenu').remove();
                 $('.pm-workspace-menu').show(); // 回到主菜单
@@ -469,7 +469,7 @@ class WorkspaceManager {
                     method: 'smart_accounting.www.project_management.index.create_partition',
                     args: {
                         partition_name: name,
-                        is_workspace: isWorkspace,
+                        is_workspace: isWorkspace ? 1 : 0,  // Ensure proper boolean conversion
                         parent_partition: parent,
                         description: description
                     }
