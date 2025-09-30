@@ -141,6 +141,7 @@ def create_partition(partition_name, is_workspace=False, parent_partition=None, 
     Create a new partition (workspace or board)
     """
     try:
+        import json
         # Ensure is_workspace is properly converted to boolean
         is_workspace = frappe.utils.cint(is_workspace) if is_workspace is not None else False
         print(f"DEBUG: Creating partition - name: {partition_name}, is_workspace: {is_workspace} (original: {frappe.form_dict.get('is_workspace')})")
@@ -186,15 +187,20 @@ def create_partition(partition_name, is_workspace=False, parent_partition=None, 
                     new_partition.visible_columns = parent_doc.visible_columns
                     new_partition.column_config = parent_doc.column_config or "{}"
                 else:
-                    new_partition.visible_columns = '["client", "task-name", "entity", "tf-tg", "software", "status", "target-month", "budget", "actual"]'
-                    new_partition.column_config = "{}"
+                    # Use comprehensive default columns
+                    default_columns = ["client", "task-name", "entity", "tf-tg", "software", "status", "note", "target-month", "budget", "actual", "review-note", "action-person", "preparer", "reviewer", "partner", "lodgment-due", "engagement", "group", "year-end", "last-updated", "priority", "frequency", "reset-date"]
+                    new_partition.visible_columns = json.dumps(default_columns)
+                    new_partition.column_config = json.dumps({"column_order": default_columns})
             except:
-                new_partition.visible_columns = '["client", "task-name", "entity", "tf-tg", "software", "status", "target-month", "budget", "actual"]'
-                new_partition.column_config = "{}"
+                # Use comprehensive default columns
+                default_columns = ["client", "task-name", "entity", "tf-tg", "software", "status", "note", "target-month", "budget", "actual", "review-note", "action-person", "preparer", "reviewer", "partner", "lodgment-due", "engagement", "group", "year-end", "last-updated", "priority", "frequency", "reset-date"]
+                new_partition.visible_columns = json.dumps(default_columns)
+                new_partition.column_config = json.dumps({"column_order": default_columns})
         else:
-            # Default columns for new top-level partition
-            new_partition.visible_columns = '["client", "task-name", "entity", "tf-tg", "software", "status", "target-month", "budget", "actual"]'
-            new_partition.column_config = "{}"
+            # Default columns for new top-level partition - use comprehensive list
+            default_columns = ["client", "task-name", "entity", "tf-tg", "software", "status", "note", "target-month", "budget", "actual", "review-note", "action-person", "preparer", "reviewer", "partner", "lodgment-due", "engagement", "group", "year-end", "last-updated", "priority", "frequency", "reset-date"]
+            new_partition.visible_columns = json.dumps(default_columns)
+            new_partition.column_config = json.dumps({"column_order": default_columns})
         
         new_partition.save()
         frappe.db.commit()
@@ -393,9 +399,10 @@ def get_partition_column_config(partition_name):
         # If no configuration, use default
         if not visible_columns:
             visible_columns = [
-                'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 
-                'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 
-                'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority'
+                'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'note', 
+                'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 
+                'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 
+                'last-updated', 'priority', 'frequency', 'reset-date'
             ]
             
         # 确保column_config包含默认的列顺序
@@ -413,7 +420,7 @@ def get_partition_column_config(partition_name):
         return {
             'success': False,
             'error': str(e),
-            'visible_columns': ['client', 'task-name', 'status'],
+            'visible_columns': ['client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'note', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'],
             'column_config': {}
         }
 
@@ -427,9 +434,10 @@ def save_partition_column_config(partition_name, visible_columns, column_config=
         # Handle main view - don't save, always use default
         if partition_name == 'main':
             default_columns = [
-                'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 
-                'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 
-                'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority'
+                'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'note', 
+                'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 
+                'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 
+                'last-updated', 'priority', 'frequency', 'reset-date'
             ]
             return {
                 'success': True,
