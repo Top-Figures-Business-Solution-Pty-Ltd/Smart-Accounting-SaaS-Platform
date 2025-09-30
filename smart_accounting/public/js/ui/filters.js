@@ -651,52 +651,18 @@ class FilterManager {
     }
 
     showClientsManagementDialog() {
-        // Simple placeholder dialog showing "Under Development"
-        const dialogHtml = `
-            <div class="pm-clients-management-dialog" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10000; display: flex; align-items: center; justify-content: center;">
-                <div class="pm-dialog-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(2px);"></div>
-                <div class="pm-dialog-content" style="position: relative; background: white; border-radius: 8px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); width: 500px; max-width: 90vw; max-height: 80vh; display: flex; flex-direction: column; z-index: 1;">
-                    <div class="pm-dialog-header" style="display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid #e1e5e9;">
-                        <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #323338; display: flex; align-items: center; gap: 8px;">
-                            <i class="fa fa-users"></i> Manage Clients
-                        </h3>
-                        <button class="pm-dialog-close" type="button" style="background: none; border: none; color: #676879; cursor: pointer; padding: 4px; border-radius: 4px; transition: all 0.2s ease;">
-                            <i class="fa fa-times"></i>
-                        </button>
-                    </div>
-                    <div class="pm-dialog-body" style="flex: 1; padding: 40px 24px; overflow-y: auto; text-align: center;">
-                        <div class="pm-coming-soon">
-                            <i class="fa fa-cogs" style="font-size: 48px; margin-bottom: 16px; color: var(--monday-blue);"></i>
-                            <h3 style="margin: 0 0 8px 0; color: var(--monday-dark);">Under Development</h3>
-                            <p style="color: var(--monday-gray); margin: 0;">Client management feature is coming soon!</p>
-                        </div>
-                    </div>
-                    <div class="pm-dialog-footer" style="display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 16px 24px 20px; border-top: 1px solid #e1e5e9;">
-                        <button class="pm-btn pm-btn-secondary pm-close-dialog" style="min-width: 80px; padding: 10px 20px; border-radius: 4px; border: none; cursor: pointer; font-weight: 500; font-size: 14px; background: #f8f9fa; color: #323338;">
-                            Close
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
+        // Initialize and show the comprehensive client management system
+        if (!window.ClientManagementSystem) {
+            console.error('ClientManagementSystem not loaded');
+            frappe.show_alert({
+                message: 'Client management system not available',
+                indicator: 'red'
+            });
+            return;
+        }
 
-        $('body').append(dialogHtml);
-
-        // Bind close events
-        const dialog = $('.pm-clients-management-dialog');
-        
-        dialog.on('click', '.pm-dialog-close, .pm-close-dialog', () => {
-            dialog.remove();
-        });
-
-        dialog.on('click', '.pm-dialog-overlay', () => {
-            dialog.remove();
-        });
-
-        // Prevent dialog content clicks from closing
-        dialog.on('click', '.pm-dialog-content', (e) => {
-            e.stopPropagation();
-        });
+        const clientManager = new window.ClientManagementSystem();
+        clientManager.showClientManagementDialog();
     }
 }
 

@@ -3269,3 +3269,410 @@ def create_customer_and_link(task_id, customer_name, year_end="June", customer_t
             'success': False,
             'error': str(e)
         }
+
+# Client Management System API Methods
+# Comprehensive CRUD operations for client management
+
+@frappe.whitelist()
+def get_all_clients():
+    """
+    Get all clients with statistics for client management system
+    """
+    try:
+        # Get all customers with enhanced information
+        customers = frappe.get_all("Customer",
+            fields=[
+                "name", "customer_name", "customer_type", "territory", 
+                "customer_group", "disabled", "website", "creation", 
+                "modified", "customer_primary_contact", "customer_primary_address"
+            ],
+            order_by="customer_name"
+        )
+        
+        # Enhance each customer with statistics
+        enhanced_customers = []
+        for customer in customers:
+            # Get project count
+            project_count = frappe.db.count("Project", {
+                "customer": customer.name,
+                "status": ["!=", "Cancelled"]
+            })
+            
+            # Get task count and active task count
+            task_count = frappe.db.count("Task", {
+                "custom_client": customer.name
+            })
+            
+            active_task_count = frappe.db.count("Task", {
+                "custom_client": customer.name,
+                "status": ["not in", ["Completed", "Cancelled"]]
+            })
+            
+            # Get client group (from custom field if exists)
+            client_group = None
+            try:
+                if hasattr(frappe.get_doc("Customer", customer.name), 'client_group'):
+                    client_group = frappe.db.get_value("Customer", customer.name, "client_group")
+            except:
+                pass
+            
+            enhanced_customer = customer.copy()
+            enhanced_customer.update({
+                'project_count': project_count,
+                'task_count': task_count,
+                'active_tasks': active_task_count,
+                'client_group': client_group
+            })
+            
+            enhanced_customers.append(enhanced_customer)
+        
+        return {
+            'success': True,
+            'clients': enhanced_customers,
+            'total_count': len(enhanced_customers)
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Get all clients error: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def get_client_details(client_id):
+    """
+    Get detailed information for a specific client
+    """
+    try:
+        if not client_id:
+            return {
+                'success': False,
+                'error': 'Client ID is required'
+            }
+        
+        # Get customer document
+        customer = frappe.get_doc("Customer", client_id)
+        
+        # Get enhanced statistics
+        project_count = frappe.db.count("Project", {
+            "customer": client_id,
+            "status": ["!=", "Cancelled"]
+        })
+        
+        task_count = frappe.db.count("Task", {
+            "custom_client": client_id
+        })
+        
+        active_task_count = frappe.db.count("Task", {
+            "custom_client": client_id,
+            "status": ["not in", ["Completed", "Cancelled"]]
+        })
+        
+        # Get recent projects
+        recent_projects = frappe.get_all("Project",
+            filters={
+                "customer": client_id,
+                "status": ["!=", "Cancelled"]
+            },
+            fields=["name", "project_name", "status", "creation"],
+            order_by="creation desc",
+            limit=5
+        )
+        
+        # Get recent tasks
+        recent_tasks = frappe.get_all("Task",
+            filters={
+                "custom_client": client_id
+            },
+            fields=["name", "subject", "status", "creation", "project"],
+            order_by="creation desc",
+            limit=10
+        )
+        
+        # Prepare client details
+        client_details = {
+            'name': customer.name,
+            'customer_name': customer.customer_name,
+            'customer_type': customer.customer_type,
+            'territory': customer.territory,
+            'customer_group': customer.customer_group,
+            'disabled': customer.disabled,
+            'website': customer.website,
+            'creation': customer.creation,
+            'modified': customer.modified,
+            'customer_primary_contact': customer.customer_primary_contact,
+            'customer_primary_address': customer.customer_primary_address,
+            'project_count': project_count,
+            'task_count': task_count,
+            'active_tasks': active_task_count,
+            'recent_projects': recent_projects,
+            'recent_tasks': recent_tasks
+        }
+        
+        # Add custom fields if they exist
+        try:
+            if hasattr(customer, 'client_group'):
+                client_details['client_group'] = customer.client_group
+            if hasattr(customer, 'custom_year_end'):
+                client_details['custom_year_end'] = customer.custom_year_end
+            if hasattr(customer, 'custom_company'):
+                client_details['custom_company'] = customer.custom_company
+            if hasattr(customer, 'custom_entity_type'):
+                client_details['custom_entity_type'] = customer.custom_entity_type
+        except:
+            pass
+        
+        return {
+            'success': True,
+            'client': client_details
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Get client details error: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def create_client(customer_name, customer_type="Company", territory=None, customer_group=None, 
+                 client_group=None, website=None, disabled=0, custom_year_end="June"):
+    """
+    Create a new client with comprehensive fields
+    """
+    try:
+        if not customer_name or not customer_name.strip():
+            return {
+                'success': False,
+                'error': 'Customer name is required'
+            }
+        
+        customer_name = customer_name.strip()
+        
+        # Check if customer already exists
+        existing = frappe.db.get_value("Customer", {"customer_name": customer_name})
+        if existing:
+            return {
+                'success': False,
+                'error': f'Customer with name "{customer_name}" already exists'
+            }
+        
+        # Create new customer
+        new_customer = frappe.new_doc("Customer")
+        new_customer.customer_name = customer_name
+        new_customer.customer_type = customer_type or "Company"
+        new_customer.disabled = int(disabled) if disabled else 0
+        
+        # Set territory
+        if territory:
+            new_customer.territory = territory
+        else:
+            new_customer.territory = frappe.db.get_single_value("Selling Settings", "territory") or "All Territories"
+        
+        # Set customer group
+        if customer_group:
+            new_customer.customer_group = customer_group
+        else:
+            new_customer.customer_group = frappe.db.get_single_value("Selling Settings", "customer_group") or "All Customer Groups"
+        
+        # Set website if provided
+        if website:
+            new_customer.website = website
+        
+        # Set custom fields if they exist
+        try:
+            if client_group and hasattr(new_customer, 'client_group'):
+                new_customer.client_group = client_group
+            if custom_year_end and hasattr(new_customer, 'custom_year_end'):
+                new_customer.custom_year_end = custom_year_end
+        except:
+            pass
+        
+        # Save customer
+        new_customer.save()
+        
+        return {
+            'success': True,
+            'customer_id': new_customer.name,
+            'customer_name': new_customer.customer_name,
+            'message': 'Client created successfully'
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Create client error: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def update_client(client_id, customer_name=None, customer_type=None, territory=None, 
+                 customer_group=None, client_group=None, website=None, disabled=None, custom_year_end=None):
+    """
+    Update an existing client
+    """
+    try:
+        if not client_id:
+            return {
+                'success': False,
+                'error': 'Client ID is required'
+            }
+        
+        # Get existing customer
+        customer = frappe.get_doc("Customer", client_id)
+        
+        # Update fields if provided
+        if customer_name and customer_name.strip():
+            # Check if new name conflicts with existing customers (excluding current)
+            existing = frappe.db.get_value("Customer", {
+                "customer_name": customer_name.strip(),
+                "name": ["!=", client_id]
+            })
+            if existing:
+                return {
+                    'success': False,
+                    'error': f'Another customer with name "{customer_name}" already exists'
+                }
+            customer.customer_name = customer_name.strip()
+        
+        if customer_type:
+            customer.customer_type = customer_type
+        
+        if territory:
+            customer.territory = territory
+            
+        if customer_group:
+            customer.customer_group = customer_group
+        
+        if website is not None:  # Allow empty string to clear website
+            customer.website = website
+        
+        if disabled is not None:
+            customer.disabled = int(disabled)
+        
+        # Update custom fields if they exist
+        try:
+            if client_group is not None and hasattr(customer, 'client_group'):
+                customer.client_group = client_group
+            if custom_year_end is not None and hasattr(customer, 'custom_year_end'):
+                customer.custom_year_end = custom_year_end
+        except:
+            pass
+        
+        # Save customer
+        customer.save()
+        
+        return {
+            'success': True,
+            'customer_id': customer.name,
+            'customer_name': customer.customer_name,
+            'message': 'Client updated successfully'
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Update client error: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def delete_client(client_id):
+    """
+    Delete a client (with safety checks)
+    """
+    try:
+        if not client_id:
+            return {
+                'success': False,
+                'error': 'Client ID is required'
+            }
+        
+        # Check if client has associated projects
+        project_count = frappe.db.count("Project", {
+            "customer": client_id,
+            "status": ["!=", "Cancelled"]
+        })
+        
+        if project_count > 0:
+            return {
+                'success': False,
+                'error': f'Cannot delete client. {project_count} active projects are associated with this client.'
+            }
+        
+        # Check if client has associated tasks
+        task_count = frappe.db.count("Task", {
+            "custom_client": client_id,
+            "status": ["not in", ["Completed", "Cancelled"]]
+        })
+        
+        if task_count > 0:
+            return {
+                'success': False,
+                'error': f'Cannot delete client. {task_count} active tasks are associated with this client.'
+            }
+        
+        # Get customer name for confirmation message
+        customer_name = frappe.db.get_value("Customer", client_id, "customer_name")
+        
+        # Delete customer
+        frappe.delete_doc("Customer", client_id)
+        
+        return {
+            'success': True,
+            'message': f'Client "{customer_name}" deleted successfully'
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Delete client error: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def get_client_groups():
+    """
+    Get all available client groups for dropdown
+    """
+    try:
+        # Try to get from Client Group doctype if it exists
+        client_groups = []
+        
+        try:
+            # First try to get from Client Group doctype
+            client_groups = frappe.get_all("Client Group",
+                fields=["name", "group_name"],
+                order_by="group_name"
+            )
+        except:
+            # Fallback: get unique client groups from existing customers
+            try:
+                unique_groups = frappe.db.sql("""
+                    SELECT DISTINCT client_group as name, client_group as group_name
+                    FROM `tabCustomer` 
+                    WHERE client_group IS NOT NULL AND client_group != ''
+                    ORDER BY client_group
+                """, as_dict=True)
+                client_groups = unique_groups
+            except:
+                # Final fallback: create some default groups if none exist
+                client_groups = [
+                    {"name": "individual_clients", "group_name": "Individual Clients"},
+                    {"name": "corporate_clients", "group_name": "Corporate Clients"},
+                    {"name": "small_business", "group_name": "Small Business"}
+                ]
+        
+        return {
+            'success': True,
+            'client_groups': client_groups
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Get client groups error: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'client_groups': []
+        }
