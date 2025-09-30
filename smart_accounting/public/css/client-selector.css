@@ -116,6 +116,31 @@
     font-size: 13px;
 }
 
+/* Dynamic styling for different confirmation types */
+.pm-client-confirmation[data-type="remove"] {
+    background: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+.pm-client-confirmation[data-type="remove"] .pm-confirmation-content i {
+    color: #721c24;
+}
+
+.pm-client-confirmation[data-type="remove"] .pm-confirmation-message {
+    color: #721c24;
+}
+
+.pm-client-confirmation[data-type="remove"] .pm-confirm-change {
+    background: #dc3545;
+    border-color: #dc3545;
+    color: white;
+}
+
+.pm-client-confirmation[data-type="remove"] .pm-confirm-change:hover {
+    background: #c82333;
+    border-color: #bd2130;
+}
+
 .pm-current-client label {
     font-weight: 600;
     color: #495057;

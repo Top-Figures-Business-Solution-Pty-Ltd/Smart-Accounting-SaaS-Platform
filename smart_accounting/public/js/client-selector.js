@@ -153,7 +153,7 @@ class ClientSelectorModal {
             clearTimeout(searchTimeout);
             const query = e.target.value.trim();
 
-            if (query.length < 2) {
+            if (query.length < 1) {
                 $('.pm-search-results').hide();
                 return;
             }
@@ -171,7 +171,7 @@ class ClientSelectorModal {
 
         // Remove client button
         $('.pm-remove-client').on('click', () => {
-            this.removeClientFromTask();
+            this.showRemoveConfirmation();
         });
 
         // Confirmation area events
@@ -239,6 +239,7 @@ class ClientSelectorModal {
         // Store the pending selection
         this.pendingCustomerId = customerId;
         this.pendingCustomerName = customerName;
+        this.confirmationType = 'change';
         
         // Get current client name for comparison
         const currentClientName = this.currentCell.data('current-client-name') || 'No Client';
@@ -246,11 +247,40 @@ class ClientSelectorModal {
         // Show confirmation message
         const message = `Change client from "${currentClientName}" to "${customerName}"?`;
         $('.pm-confirmation-message').text(message);
+        $('.pm-confirm-change').text('Confirm Change');
+        $('.pm-client-confirmation').attr('data-type', 'change');
         
         // Hide search results and show confirmation
         $('.pm-search-results').hide();
         $('.pm-client-search-input').val('');
         $('.pm-client-confirmation').slideDown(200);
+        
+        // Scroll modal body to top to ensure confirmation is visible
+        $('.pm-client-selector-body').animate({ scrollTop: 0 }, 300);
+        
+        // Hide other sections temporarily
+        $('.pm-client-search-section h4, .pm-search-container input').css('opacity', '0.5');
+        $('.pm-client-create-section').css('opacity', '0.5');
+    }
+
+    showRemoveConfirmation() {
+        // Store the confirmation type
+        this.confirmationType = 'remove';
+        
+        // Get current client name
+        const currentClientName = this.currentCell.data('current-client-name') || 'No Client';
+        
+        // Show confirmation message
+        const message = `Remove "${currentClientName}" from this task?`;
+        $('.pm-confirmation-message').text(message);
+        $('.pm-confirm-change').text('Remove Client');
+        $('.pm-client-confirmation').attr('data-type', 'remove');
+        
+        // Show confirmation and scroll to top
+        $('.pm-client-confirmation').slideDown(200);
+        
+        // Scroll modal body to top to ensure confirmation is visible
+        $('.pm-client-selector-body').animate({ scrollTop: 0 }, 300);
         
         // Hide other sections temporarily
         $('.pm-client-search-section h4, .pm-search-container input').css('opacity', '0.5');
@@ -258,21 +288,25 @@ class ClientSelectorModal {
     }
 
     hideClientConfirmation() {
-        // Clear pending selection
+        // Clear pending selection and confirmation type
         this.pendingCustomerId = null;
         this.pendingCustomerName = null;
+        this.confirmationType = null;
         
         // Hide confirmation and restore other sections
-        $('.pm-client-confirmation').slideUp(200);
+        $('.pm-client-confirmation').slideUp(200).removeAttr('data-type');
         $('.pm-client-search-section h4, .pm-search-container input').css('opacity', '1');
         $('.pm-client-create-section').css('opacity', '1');
     }
 
     async confirmClientChange() {
-        if (!this.pendingCustomerId || !this.pendingCustomerName) return;
-        
         try {
-            await this.selectExistingClient(this.pendingCustomerId, this.pendingCustomerName);
+            if (this.confirmationType === 'change') {
+                if (!this.pendingCustomerId || !this.pendingCustomerName) return;
+                await this.selectExistingClient(this.pendingCustomerId, this.pendingCustomerName);
+            } else if (this.confirmationType === 'remove') {
+                await this.removeClientFromTask();
+            }
         } finally {
             this.hideClientConfirmation();
         }
@@ -368,13 +402,7 @@ class ClientSelectorModal {
 
     async removeClientFromTask() {
         try {
-            const confirmed = await this.utils.showConfirmDialog(
-                'Remove Client',
-                'Remove the client from this task?'
-            );
-
-            if (!confirmed) return;
-
+            // No need for external confirmation dialog anymore
             const response = await frappe.call({
                 method: 'smart_accounting.www.project_management.index.update_task_client',
                 args: {

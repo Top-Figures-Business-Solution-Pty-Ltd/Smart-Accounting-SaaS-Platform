@@ -1559,7 +1559,7 @@ def search_customers(query):
     Search existing customers by name
     """
     try:
-        if not query or len(query.strip()) < 2:
+        if not query or len(query.strip()) < 1:
             return {'success': True, 'customers': []}
         
         # Search customers by customer_name - include custom fields if they exist
@@ -1646,7 +1646,18 @@ def update_task_client(task_id, customer_id):
         task = frappe.get_doc("Task", task_id)
         task.flags.ignore_version = True
         
-        # Get customer info
+        # Handle removing client (customer_id is None or empty)
+        if not customer_id:
+            task.custom_client = None
+            task.save()
+            return {
+                'success': True,
+                'message': 'Client removed from task successfully',
+                'customer_name': None,
+                'customer_type': None
+            }
+        
+        # Get customer info for linking
         customer = frappe.get_doc("Customer", customer_id)
         
         # Update task
@@ -3191,10 +3202,10 @@ def create_customer_and_link(task_id, customer_name, year_end="June", customer_t
             }
         
         customer_name = customer_name.strip()
-        if len(customer_name) < 2:
+        if len(customer_name) < 1:
             return {
                 'success': False,
-                'error': 'Customer name must be at least 2 characters'
+                'error': 'Customer name cannot be empty'
             }
         
         # Check if customer already exists
