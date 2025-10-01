@@ -25,6 +25,7 @@ class ProjectManagement {
         this.workspaceManager = window.WorkspaceManager;
         this.subtaskManager = window.SubtaskManager;
         this.multiSelectManager = window.MultiSelectManager;
+        this.combinationViewManager = window.CombinationViewManager;
         
         this.init();
     }
@@ -41,6 +42,7 @@ class ProjectManagement {
         this.refreshReviewNoteCounts();
         this.initializeSubtasks();
         this.initializeMultiSelect();
+        this.initializeCombinationView();
         
         // Apply partition column configuration after DOM is ready
         // Remove the setTimeout to prevent interference with filters
@@ -71,6 +73,24 @@ class ProjectManagement {
         // Initialize multi-select functionality
         if (this.multiSelectManager && typeof this.multiSelectManager === 'function') {
             this.multiSelectInstance = new this.multiSelectManager();
+        }
+    }
+
+    initializeCombinationView() {
+        if (this.combinationViewManager) {
+            this.combinationViewManager.init();
+            
+            // Check if we're in combination view mode
+            const urlParams = new URLSearchParams(window.location.search);
+            const view = urlParams.get('view');
+            const boards = urlParams.get('boards');
+            
+            if (view === 'combination' && boards) {
+                // URL decode the board names
+                const boardIds = boards.split(',').map(id => decodeURIComponent(id.trim()));
+                console.log('Decoded board IDs:', boardIds);
+                this.combinationViewManager.initCombinationViewPage(boardIds);
+            }
         }
     }
 

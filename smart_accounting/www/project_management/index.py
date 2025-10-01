@@ -2,6 +2,7 @@ import frappe
 from frappe import _
 from collections import defaultdict
 import re
+import json
 from datetime import datetime
 
 def format_date_for_display(date_value):
@@ -40,25 +41,50 @@ def get_context(context):
     
     # Get view parameter for different workspaces
     view = frappe.form_dict.get('view', 'main')
+    boards = frappe.form_dict.get('boards', '')
     
-    # Set page context based on view
-    context.title = get_workspace_title(view)
-    context.show_sidebar = False
-    context.show_header = True
-    context.full_width = True  # Enable full width layout for better laptop/desktop experience
-    context.current_view = view
-    context.available_views = get_available_views()
-    context.hide_footer_signup = True  # Hide email subscription footer
-    
-    # Generate breadcrumb path for navigation
-    context.breadcrumb_path = get_breadcrumb_path(view)
-    
-    # Disable page caching for real-time updates
-    context.no_cache = True
-    context.cache_key = f"pm_view_{view}_{frappe.utils.now()}"
-    
-    # Get data based on view
-    context.project_data = get_project_management_data(view)
+    # Handle combination view
+    if view == 'combination' and boards:
+        context.title = 'Combination View'
+        context.show_sidebar = False
+        context.show_header = True
+        context.full_width = True
+        context.current_view = view
+        context.available_views = get_available_views()
+        context.hide_footer_signup = True
+        context.breadcrumb_path = [
+            {'label': 'Main Dashboard', 'icon': 'fa-th-large', 'key': 'main'},
+            {'label': 'Combination View', 'icon': 'fa-layer-group', 'key': 'combination'}
+        ]
+        context.no_cache = True
+        context.cache_key = f"pm_combination_{boards}_{frappe.utils.now()}"
+        
+        # Set combination view flag
+        context.project_data = {
+            'is_combination_view': True,
+            'board_ids': boards.split(','),
+            'total_projects': 0,
+            'total_tasks': 0
+        }
+    else:
+        # Set page context based on view
+        context.title = get_workspace_title(view)
+        context.show_sidebar = False
+        context.show_header = True
+        context.full_width = True  # Enable full width layout for better laptop/desktop experience
+        context.current_view = view
+        context.available_views = get_available_views()
+        context.hide_footer_signup = True  # Hide email subscription footer
+        
+        # Generate breadcrumb path for navigation
+        context.breadcrumb_path = get_breadcrumb_path(view)
+        
+        # Disable page caching for real-time updates
+        context.no_cache = True
+        context.cache_key = f"pm_view_{view}_{frappe.utils.now()}"
+        
+        # Get data based on view
+        context.project_data = get_project_management_data(view)
     
     return context
 
@@ -422,6 +448,34 @@ def get_partition_column_config(partition_name):
             'error': str(e),
             'visible_columns': ['client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'note', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'],
             'column_config': {}
+        }
+
+@frappe.whitelist()
+def save_partition_column_width(partition_id, column_name, width):
+    """
+    Save column width for a specific partition
+    """
+    try:
+        # Get existing column config
+        config = get_partition_column_config(partition_id)
+        
+        # Update column width
+        if 'column_widths' not in config:
+            config['column_widths'] = {}
+        
+        config['column_widths'][column_name] = int(width)
+        
+        # Save back to database
+        save_partition_column_config(partition_id, config.get('visible_columns', []), config)
+        
+        return {
+            'success': True,
+            'message': 'Column width saved successfully'
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e)
         }
 
 @frappe.whitelist()
@@ -3806,4 +3860,320 @@ def create_project(project_name, service_line=None, partition=None, is_archived=
         return {
             'success': False,
             'error': str(e)
+        }
+
+@frappe.whitelist()
+def get_available_boards_for_combination():
+    """
+    Get all available boards for combination view
+    """
+    try:
+        # Get only boards (not workspaces) that are not archived
+        boards = frappe.db.get_all("Partition",
+            fields=["name", "partition_name", "description", "parent_partition"],
+            filters={
+                "is_workspace": 0,  # Only boards, not workspaces
+                "is_archived": ["!=", 1]
+            },
+            order_by="partition_name"
+        )
+        
+        # Get project and task counts for each board
+        boards_with_stats = []
+        for board in boards:
+            # Get project count
+            project_count = frappe.db.count("Project", {
+                "custom_partition": board.name,
+                "status": ["!=", "Cancelled"]
+            })
+            
+            # Get task count through projects
+            # First get projects for this board
+            board_projects = frappe.db.get_all("Project", {
+                "custom_partition": board.name,
+                "status": ["!=", "Cancelled"]
+            }, pluck="name")
+            
+            # Then count tasks in those projects
+            task_count = 0
+            if board_projects:
+                task_count = frappe.db.count("Task", {
+                    "project": ["in", board_projects],
+                    "custom_is_archived": ["!=", 1],
+                    "parent_task": ["is", "not set"]  # Only top-level tasks
+                })
+            
+            boards_with_stats.append({
+                "name": board.name,
+                "partition_name": board.partition_name,
+                "description": board.description,
+                "project_count": project_count,
+                "task_count": task_count
+            })
+        
+        return {
+            'success': True,
+            'boards': boards_with_stats
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Get available boards error: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'boards': []
+        }
+
+@frappe.whitelist()
+def test_combination_search(board_name):
+    """
+    Test function to debug combination view search
+    """
+    try:
+        frappe.log_error(f"TEST: Searching for board: '{board_name}'", "Test Combination")
+        
+        # Test all search methods
+        results = {}
+        
+        # Method 1: partition_name exact match
+        result1 = frappe.db.get_value("Partition", 
+            {"partition_name": board_name, "is_workspace": 0, "is_archived": ["!=", 1]}, 
+            ["name", "partition_name", "description"], as_dict=True)
+        results["method1_partition_name"] = result1
+        
+        # Method 2: name exact match  
+        result2 = frappe.db.get_value("Partition", 
+            {"name": board_name, "is_workspace": 0, "is_archived": ["!=", 1]}, 
+            ["name", "partition_name", "description"], as_dict=True)
+        results["method2_name"] = result2
+        
+        # Method 3: Get all partitions for manual comparison
+        all_partitions = frappe.db.get_all("Partition",
+            fields=["name", "partition_name", "is_workspace", "is_archived"],
+            filters={"is_workspace": 0, "is_archived": ["!=", 1]},
+            order_by="partition_name"
+        )
+        results["all_partitions"] = all_partitions
+        
+        # Method 4: Case insensitive search
+        matching_partitions = []
+        for p in all_partitions:
+            if (p.partition_name.lower() == board_name.lower() or 
+                p.name.lower() == board_name.lower()):
+                matching_partitions.append(p)
+        results["case_insensitive_matches"] = matching_partitions
+        
+        return {
+            'success': True,
+            'search_term': board_name,
+            'results': results
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"TEST ERROR: {str(e)}", "Test Combination")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def debug_partitions():
+    """
+    Debug function to see all partitions in database
+    """
+    try:
+        all_partitions = frappe.db.get_all("Partition",
+            fields=["name", "partition_name", "is_workspace", "is_archived"],
+            order_by="partition_name"
+        )
+        
+        boards_only = frappe.db.get_all("Partition",
+            fields=["name", "partition_name", "description"],
+            filters={
+                "is_workspace": 0,
+                "is_archived": ["!=", 1]
+            },
+            order_by="partition_name"
+        )
+        
+        return {
+            'success': True,
+            'all_partitions': all_partitions,
+            'boards_only': boards_only
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def test_partition_query(board_name="Debt Collection"):
+    """Test partition query to debug the issue"""
+    try:
+        # Test 1: Simple query
+        result1 = frappe.db.get_value("Partition", 
+            {"partition_name": board_name}, 
+            ["name", "partition_name", "is_workspace", "is_archived"], 
+            as_dict=True)
+        
+        # Test 2: Query with is_workspace filter
+        result2 = frappe.db.get_value("Partition", 
+            {"partition_name": board_name, "is_workspace": 0}, 
+            ["name", "partition_name", "is_workspace", "is_archived"], 
+            as_dict=True)
+        
+        # Test 3: Query with both filters
+        result3 = frappe.db.get_value("Partition", 
+            {"partition_name": board_name, "is_workspace": 0, "is_archived": ["!=", 1]}, 
+            ["name", "partition_name", "is_workspace", "is_archived"], 
+            as_dict=True)
+        
+        # Test 4: Get all partitions with this name
+        result4 = frappe.db.get_all("Partition",
+            filters={"partition_name": board_name},
+            fields=["name", "partition_name", "is_workspace", "is_archived"]
+        )
+        
+        return {
+            'success': True,
+            'test_board': board_name,
+            'simple_query': result1,
+            'with_workspace_filter': result2,
+            'with_both_filters': result3,
+            'get_all_result': result4
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def debug_partition_data():
+    """Debug function to check partition data"""
+    try:
+        all_partitions = frappe.db.get_all("Partition",
+            fields=["name", "partition_name", "description", "is_workspace", "is_archived"],
+            order_by="partition_name"
+        )
+        
+        boards_only = frappe.db.get_all("Partition",
+            fields=["name", "partition_name", "description"],
+            filters={"is_workspace": 0, "is_archived": ["!=", 1]},
+            order_by="partition_name"
+        )
+        
+        return {
+            'success': True,
+            'all_partitions': all_partitions,
+            'boards_only': boards_only,
+            'total_partitions': len(all_partitions),
+            'total_boards': len(boards_only)
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def get_combination_view_data(board_ids):
+    """
+    Get data for combination view with multiple boards
+    """
+    try:
+        # Handle board_ids parameter - fix JSON serialization issue
+        if isinstance(board_ids, str):
+            try:
+                # Try to parse as JSON array first (Frappe serializes JS arrays to JSON)
+                parsed_board_ids = json.loads(board_ids)
+                if isinstance(parsed_board_ids, list):
+                    board_ids = [str(bid).strip() for bid in parsed_board_ids if str(bid).strip()]
+                else:
+                    # Fallback to comma-separated
+                    board_ids = [bid.strip() for bid in board_ids.split(',') if bid.strip()]
+            except (json.JSONDecodeError, TypeError):
+                # If not valid JSON, treat as comma-separated
+                board_ids = [bid.strip() for bid in board_ids.split(',') if bid.strip()]
+        elif isinstance(board_ids, list):
+            board_ids = [str(bid).strip() for bid in board_ids if str(bid).strip()]
+        else:
+            board_ids = []
+        
+        boards_data = []
+        
+        # Direct approach - for each requested board, try to find it
+        for board_id in board_ids:
+            # Try to find partition by partition_name first (non-workspace, non-archived)
+            partition = frappe.db.get_value("Partition", 
+                {
+                    "partition_name": board_id, 
+                    "is_workspace": 0,
+                    "is_archived": ["!=", 1]
+                }, 
+                ["name", "partition_name", "description"], 
+                as_dict=True)
+            
+            # If not found by partition_name, try by name
+            if not partition:
+                partition = frappe.db.get_value("Partition", 
+                    {
+                        "name": board_id, 
+                        "is_workspace": 0,
+                        "is_archived": ["!=", 1]
+                    }, 
+                    ["name", "partition_name", "description"], 
+                    as_dict=True)
+            
+            # Skip if not found
+            if not partition:
+                continue
+            
+            # Get board's column configuration
+            try:
+                column_config = get_partition_column_config(partition.name)
+            except:
+                column_config = {
+                    'visible_columns': ['client', 'task-name', 'status', 'target-month'],
+                    'column_widths': {}
+                }
+            
+            # Get board's tasks with full data
+            try:
+                board_data = get_project_management_data(partition.name)
+                organized_data = board_data.get('organized_data', {})
+                total_tasks = board_data.get('total_tasks', 0)
+                total_projects = board_data.get('total_projects', 0)
+            except:
+                organized_data = {}
+                total_tasks = 0
+                total_projects = 0
+            
+            boards_data.append({
+                "board_id": partition.name,
+                "board_name": partition.partition_name,
+                "description": partition.description or "",
+                "column_config": column_config,
+                "tasks": organized_data,
+                "total_tasks": total_tasks,
+                "total_projects": total_projects
+            })
+        
+        return {
+            'success': True,
+            'boards_data': boards_data,
+            'debug_info': {
+                'requested_boards': board_ids,
+                'found_boards': len(boards_data),
+                'board_names': [b['board_name'] for b in boards_data]
+            }
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'boards_data': []
         }

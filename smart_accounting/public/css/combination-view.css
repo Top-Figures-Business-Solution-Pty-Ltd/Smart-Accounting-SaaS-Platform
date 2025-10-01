@@ -1,0 +1,724 @@
+/* Combination View Styles */
+
+/* Dashboard Header Layout */
+.pm-dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+    gap: 2rem;
+}
+
+.pm-dashboard-title-section {
+    flex: 1;
+}
+
+.pm-dashboard-actions {
+    flex-shrink: 0;
+}
+
+.pm-combination-view-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.pm-combination-view-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 115, 234, 0.3);
+}
+
+/* Combination Modal Styles */
+.pm-combination-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    backdrop-filter: blur(4px);
+}
+
+.pm-combination-modal {
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+}
+
+.pm-combination-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--monday-border-color);
+    background: var(--monday-background-color);
+}
+
+.pm-combination-modal-header h3 {
+    margin: 0;
+    color: var(--monday-text-color);
+    font-size: 1.25rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pm-combination-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    color: var(--monday-gray);
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.pm-combination-modal-close:hover {
+    background: var(--monday-hover-color);
+    color: var(--monday-text-color);
+}
+
+.pm-combination-modal-content {
+    flex: 1;
+    padding: 2rem;
+    overflow-y: auto;
+}
+
+.pm-combination-description {
+    margin-bottom: 2rem;
+}
+
+.pm-combination-description p {
+    color: var(--monday-gray);
+    margin: 0;
+    line-height: 1.5;
+}
+
+.pm-combination-board-list,
+.pm-combination-selected {
+    margin-bottom: 2rem;
+}
+
+.pm-combination-board-list h4,
+.pm-combination-selected h4 {
+    margin: 0 0 1rem 0;
+    color: var(--monday-text-color);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.pm-combination-boards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 0.5rem;
+    border: 1px solid var(--monday-border-color);
+    border-radius: 8px;
+    background: var(--monday-background-color);
+}
+
+.pm-combination-board-item {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    border: 2px solid var(--monday-border-color);
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.pm-combination-board-item:hover {
+    border-color: var(--monday-blue);
+    box-shadow: 0 2px 8px rgba(0, 115, 234, 0.1);
+}
+
+.pm-combination-board-item.selected {
+    border-color: var(--monday-blue);
+    background: rgba(0, 115, 234, 0.05);
+}
+
+.pm-combination-board-checkbox {
+    margin-right: 1rem;
+    transform: scale(1.2);
+}
+
+.pm-combination-board-info {
+    flex: 1;
+}
+
+.pm-combination-board-name {
+    font-weight: 600;
+    color: var(--monday-text-color);
+    margin-bottom: 0.25rem;
+}
+
+.pm-combination-board-stats {
+    font-size: 0.85rem;
+    color: var(--monday-gray);
+    display: flex;
+    gap: 1rem;
+}
+
+.pm-combination-selected-list {
+    min-height: 60px;
+    padding: 1rem;
+    border: 2px dashed var(--monday-border-color);
+    border-radius: 8px;
+    background: var(--monday-background-color);
+}
+
+.pm-combination-selected-empty {
+    text-align: center;
+    color: var(--monday-gray);
+    font-style: italic;
+    padding: 2rem;
+}
+
+.pm-combination-selected-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+    background: white;
+    border: 1px solid var(--monday-border-color);
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.pm-combination-selected-item:last-child {
+    margin-bottom: 0;
+}
+
+.pm-combination-selected-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.pm-combination-selected-order {
+    background: var(--monday-blue);
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.pm-combination-selected-name {
+    font-weight: 500;
+    color: var(--monday-text-color);
+}
+
+.pm-combination-remove-btn {
+    background: none;
+    border: none;
+    color: var(--monday-gray);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.pm-combination-remove-btn:hover {
+    background: var(--monday-red);
+    color: white;
+}
+
+.pm-combination-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding: 1.5rem 2rem;
+    border-top: 1px solid var(--monday-border-color);
+    background: var(--monday-background-color);
+}
+
+.pm-combination-create:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Combination View Page Styles */
+.pm-combination-view-container {
+    padding: 1rem 0;
+}
+
+.pm-loading-placeholder {
+    text-align: center;
+    padding: 3rem;
+    color: var(--monday-gray);
+}
+
+.pm-loading-placeholder i {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+}
+
+.pm-empty-board {
+    text-align: center;
+    padding: 2rem;
+    color: var(--monday-gray);
+    background: var(--monday-background-color);
+    border-radius: 8px;
+    margin: 1rem;
+}
+
+.pm-empty-board i {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.pm-combination-view-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding: 0 1rem;
+}
+
+.pm-combination-view-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.pm-combination-view-title h2 {
+    margin: 0;
+    color: var(--monday-text-color);
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.pm-combination-view-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.pm-combination-board-section {
+    margin-bottom: 2rem;
+    border: 1px solid var(--monday-border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    background: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.pm-combination-board-section:last-child {
+    margin-bottom: 1rem;
+}
+
+.pm-combination-board-header {
+    background: var(--monday-background-color);
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--monday-border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pm-combination-board-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.pm-combination-board-title h3 {
+    margin: 0;
+    color: var(--monday-text-color);
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.pm-combination-board-badge {
+    background: var(--monday-blue);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.pm-combination-board-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.pm-combination-goto-board {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: none;
+    border: 1px solid var(--monday-border-color);
+    border-radius: 6px;
+    color: var(--monday-text-color);
+    text-decoration: none;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+}
+
+.pm-combination-goto-board:hover {
+    border-color: var(--monday-blue);
+    color: var(--monday-blue);
+    text-decoration: none;
+}
+
+.pm-combination-column-mgmt-disabled {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--monday-background-color);
+    border: 1px solid var(--monday-border-color);
+    border-radius: 6px;
+    color: var(--monday-gray);
+    font-size: 0.85rem;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.pm-combination-board-table {
+    /* Inherit table styles from main project management CSS */
+    padding: 0;
+}
+
+/* Combination view specific table styles */
+.pm-combination-project {
+    margin-bottom: 1rem;
+}
+
+.pm-combination-table-header {
+    background: var(--monday-background-color);
+    border-bottom: 1px solid var(--monday-border-color);
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 0.5rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--monday-text-color);
+}
+
+.pm-combination-table-header .pm-header-cell {
+    position: relative;
+    padding: 0.5rem;
+    border-right: 1px solid var(--monday-border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+}
+
+.pm-combination-table-header .pm-header-cell:last-child {
+    border-right: none;
+}
+
+.pm-combination-tasks {
+    background: white;
+}
+
+.pm-combination-task-row {
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    border-bottom: 1px solid var(--monday-border-color);
+    transition: background-color 0.2s ease;
+}
+
+.pm-combination-task-row:hover {
+    background: var(--monday-hover-color);
+}
+
+.pm-combination-task-row .pm-cell {
+    padding: 0.75rem 0.5rem;
+    border-right: 1px solid var(--monday-border-color);
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.pm-combination-task-row .pm-cell:last-child {
+    border-right: none;
+}
+
+.pm-combination-task-row .pm-cell-select {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    justify-content: center;
+    padding: 0.5rem;
+}
+
+/* Board-specific column width preservation */
+.pm-combination-board-section[data-board-id] .pm-header-cell,
+.pm-combination-board-section[data-board-id] .pm-cell {
+    flex-shrink: 0;
+}
+
+/* Column resizer styles for combination view */
+.pm-combination-table-header .pm-column-resizer {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    cursor: col-resize;
+    background: transparent;
+    z-index: 10;
+}
+
+.pm-combination-table-header .pm-column-resizer:hover {
+    background: var(--monday-blue);
+}
+
+/* Status badges in combination view */
+.pm-combination-task-row .pm-status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Editable cells in combination view */
+.pm-combination-task-row [data-editable="true"] {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.pm-combination-task-row [data-editable="true"]:hover {
+    background: rgba(0, 115, 234, 0.05);
+    border-radius: 4px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .pm-dashboard-header {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .pm-combination-modal {
+        width: 95%;
+        margin: 1rem;
+    }
+    
+    .pm-combination-modal-content {
+        padding: 1rem;
+    }
+    
+    .pm-combination-boards {
+        grid-template-columns: 1fr;
+    }
+    
+    .pm-combination-view-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+}
+
+/* Disable column resizing in combination view */
+.pm-combination-board-section .pm-column-resizer {
+    display: none !important;
+    cursor: default !important;
+}
+
+.pm-combination-board-section .pm-header-cell {
+    cursor: default !important;
+}
+
+/* Enhanced column width synchronization - perfect alignment */
+.pm-combination-table-header {
+    display: flex !important;
+    width: 100% !important;
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    color: #495057;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.pm-combination-table-header .pm-header-cell {
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    padding: 12px 8px !important;
+    border-right: 1px solid #dee2e6 !important;
+    display: flex !important;
+    align-items: center !important;
+    height: 40px !important;
+    margin: 0 !important;
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+}
+
+.pm-combination-tasks {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.pm-combination-task-row {
+    display: flex !important;
+    width: 100% !important;
+    border-bottom: 1px solid #e9ecef;
+    background-color: #fff;
+    transition: background-color 0.15s ease-in-out;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.pm-combination-task-row:hover {
+    background-color: #f8f9fa;
+}
+
+.pm-combination-task-row .pm-cell {
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    padding: 8px !important;
+    border-right: 1px solid #e9ecef !important;
+    display: flex !important;
+    align-items: center !important;
+    min-height: 44px !important;
+    font-size: 14px;
+    color: #495057;
+    margin: 0 !important;
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+}
+
+/* Special styling for specific cell types */
+.pm-combination-task-row .pm-cell-select {
+    justify-content: center !important;
+    padding: 4px !important;
+}
+
+.pm-combination-task-row .pm-cell .editable-field {
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Status badges and labels styling */
+.pm-combination-task-row .pm-status-badge,
+.pm-combination-task-row .badge,
+.pm-combination-task-row .label {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+/* Ensure consistent column alignment */
+.pm-combination-board-section[data-board-id] .pm-header-cell:last-child,
+.pm-combination-board-section[data-board-id] .pm-cell:last-child {
+    border-right: none !important;
+}
+
+/* Hide back buttons in combination view */
+.pm-combination-board-section .pm-back-to-parent,
+.pm-combination-board-section .pm-back-btn,
+.pm-combination-board-section .fa-arrow-left:not(.pm-back-to-dashboard .fa-arrow-left) {
+    display: none !important;
+}
+
+
+/* Board header with title and actions in same line (left aligned) */
+.pm-combination-board-header {
+    padding: 15px 20px;
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+    margin-bottom: 0;
+}
+
+.pm-combination-board-title-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.pm-combination-board-title-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.pm-combination-board-title-left h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.pm-combination-board-title-left .pm-combination-goto-board,
+.pm-combination-board-title-left .pm-combination-column-mgmt-disabled {
+    font-size: 14px;
+    padding: 6px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background-color: white;
+    color: #495057;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.pm-combination-board-title-left .pm-combination-goto-board:hover {
+    background-color: #f8f9fa;
+}
+
+.pm-combination-column-mgmt-disabled {
+    opacity: 0.6 !important;
+    cursor: not-allowed !important;
+}
+
+.pm-combination-column-mgmt-disabled:hover {
+    background-color: white !important;
+}
+
+/* Style for disabled column management button */
+.pm-combination-column-mgmt-disabled {
+    background-color: #f8f9fa !important;
+    color: #6c757d !important;
+    cursor: not-allowed !important;
+    border: 1px solid #dee2e6 !important;
+}
+
+.pm-combination-column-mgmt-disabled:hover {
+    background-color: #f8f9fa !important;
+    color: #6c757d !important;
+    border: 1px solid #dee2e6 !important;
+}

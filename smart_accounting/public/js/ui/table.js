@@ -246,6 +246,39 @@ class TableManager {
         
         // Update total table width after applying all column widths
         this.updateTableWidth();
+        
+        // Force synchronization after applying widths
+        this.forceColumnWidthSync();
+    }
+    
+    // Force synchronization between header and content columns
+    forceColumnWidthSync() {
+        setTimeout(() => {
+            $('.pm-header-cell').each((index, headerCell) => {
+                const $headerCell = $(headerCell);
+                const column = $headerCell.data('column');
+                
+                if (!column) return;
+                
+                const headerWidth = $headerCell.outerWidth();
+                if (headerWidth && headerWidth > 0) {
+                    // Apply the actual header width to content cells
+                    $(`.pm-cell-${column}`).css({
+                        'width': headerWidth + 'px',
+                        'min-width': headerWidth + 'px',
+                        'max-width': headerWidth + 'px',
+                        'flex': 'none'
+                    });
+                }
+            });
+            
+            // Force layout recalculation
+            $('.pm-responsive-table, .pm-project-tasks').each(function() {
+                this.style.display = 'none';
+                this.offsetHeight; // Trigger reflow
+                this.style.display = '';
+            });
+        }, 50);
     }
     
     loadColumnWidthsAsync() {
