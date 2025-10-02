@@ -25,6 +25,18 @@
     font-size: 0.9rem;
     font-weight: 500;
     white-space: nowrap;
+    position: relative;
+}
+
+.pm-combination-view-btn i.fa-cogs {
+    color: #ffc107;
+    animation: rotate 2s linear infinite;
+    margin-right: -0.25rem;
+}
+
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
 .pm-combination-view-btn:hover {
@@ -398,7 +410,35 @@
 /* Combination view specific table styles */
 .pm-combination-project {
     margin-bottom: 1rem;
+    display: block !important;
+    clear: both !important;
+    width: 100% !important;
 }
+
+
+/* Force each task row to be a separate block with maximum specificity */
+.pm-combination-board-section .pm-task-group .pm-combination-task-row,
+.pm-combination-board-section .pm-combination-task-row {
+    display: flex !important;
+    width: 100% !important;
+    clear: both !important;
+    margin-bottom: 0 !important;
+    flex-wrap: nowrap !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    min-height: 48px !important;
+    border-bottom: 1px solid var(--monday-border-color) !important;
+    position: relative !important;
+    z-index: 1 !important;
+}
+
+/* Ensure task group container displays tasks vertically */
+.pm-combination-board-section .pm-task-group {
+    width: 100% !important;
+    display: block !important;
+    flex-direction: column !important;
+}
+
 
 .pm-combination-table-header {
     background: var(--monday-background-color);
@@ -473,20 +513,27 @@
 /* Board-specific column width classes - each board gets its own width namespace */
 /* This allows each board to have independent column widths */
 
-/* Board-specific table width independence */
+/* Board-specific table width independence - preserve project structure */
 .pm-combination-board-section {
     overflow-x: auto; /* Allow horizontal scroll for each board independently */
     margin-bottom: 2rem;
 }
 
-.pm-combination-board-section .pm-combination-table-header,
-.pm-combination-board-section .pm-combination-tasks {
-    width: fit-content; /* Let each board determine its own width */
-    min-width: 100%; /* Ensure minimum width */
+/* Don't force width on project elements - let them be natural */
+.pm-combination-board-section .pm-project-group {
+    width: 100% !important;
+    display: block !important;
+    margin-bottom: 1rem !important;
 }
 
-.pm-combination-board-section .pm-combination-task-row {
-    width: fit-content; /* Let each row determine its own width */
+.pm-combination-board-section .pm-project-table-header {
+    width: 100% !important;
+    display: flex !important;
+}
+
+.pm-combination-board-section .pm-task-group {
+    width: 100% !important;
+    display: block !important;
 }
 
 /* Column resizer styles for combination view */
@@ -563,68 +610,16 @@
     cursor: default !important;
 }
 
-/* Enhanced column width synchronization - board-independent */
-.pm-combination-table-header {
-    display: flex !important;
-    background-color: #f8f9fa;
-    border-bottom: 2px solid #dee2e6;
-    font-weight: 600;
-    font-size: 12px;
-    text-transform: uppercase;
-    color: #495057;
-    margin: 0 !important;
-    padding: 0 !important;
-    /* Remove width: 100% to allow natural table width */
-}
-
-.pm-combination-table-header .pm-header-cell {
-    box-sizing: border-box !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
-    padding: 12px 8px !important;
-    border-right: 1px solid #dee2e6 !important;
-    display: flex !important;
-    align-items: center !important;
-    height: 40px !important;
-    margin: 0 !important;
-    flex-shrink: 0 !important;
-    flex-grow: 0 !important;
-}
-
-.pm-combination-tasks {
-    margin: 0 !important;
-    padding: 0 !important;
-    /* Remove width: 100% to allow natural table width */
-}
-
+/* Minimal CSS for combination view - let normal project CSS handle structure */
 .pm-combination-task-row {
-    display: flex !important;
+    /* Only essential overrides, inherit everything else from normal project CSS */
     border-bottom: 1px solid #e9ecef;
     background-color: #fff;
     transition: background-color 0.15s ease-in-out;
-    margin: 0 !important;
-    padding: 0 !important;
-    /* Remove width: 100% to allow natural table width */
 }
 
 .pm-combination-task-row:hover {
     background-color: #f8f9fa;
-}
-
-.pm-combination-task-row .pm-cell {
-    box-sizing: border-box !important;
-    overflow: hidden !important;
-    padding: 8px !important;
-    border-right: 1px solid #e9ecef !important;
-    display: flex !important;
-    align-items: center !important;
-    min-height: 44px !important;
-    font-size: 14px;
-    color: #495057;
-    margin: 0 !important;
-    flex-shrink: 0 !important;
-    flex-grow: 0 !important;
 }
 
 /* Special styling for specific cell types */

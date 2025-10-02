@@ -19,7 +19,17 @@ class CombinationViewManager {
         // Combination view button click
         $(document).on('click', '.pm-combination-view-btn', (e) => {
             e.preventDefault();
-            this.showBoardSelector();
+            
+            // Show development notice
+            frappe.show_alert({
+                message: '🚧 Combination View is in Beta. Some display issues may occur. Thank you for your patience!',
+                indicator: 'orange'
+            });
+            
+            // Still allow access to the feature
+            setTimeout(() => {
+                this.showBoardSelector();
+            }, 1500);
         });
 
         // Modal close events
@@ -519,6 +529,12 @@ class CombinationViewManager {
 
         // Initialize table functionality for each board
         this.initializeBoardTables(boardsData);
+        
+        // Force immediate column width application after rendering
+        setTimeout(() => {
+            this.forceColumnWidthApplication(boardsData);
+            this.debugRenderedStructure(boardsData);
+        }, 200);
     }
 
     // Render individual board section
@@ -569,10 +585,12 @@ class CombinationViewManager {
 
     // Render board table with full project management structure
     renderBoardTable(boardData) {
-        console.log('DEBUG: renderBoardTable called for board:', boardData.board_id);
-        console.log('DEBUG: boardData.tasks:', boardData.tasks);
+        console.log('🔍 DEBUG: renderBoardTable called for board:', boardData.board_id);
+        console.log('🔍 DEBUG: boardData.tasks structure:', boardData.tasks);
+        console.log('🔍 DEBUG: boardData.tasks keys:', Object.keys(boardData.tasks || {}));
         
         if (!boardData.tasks || Object.keys(boardData.tasks).length === 0) {
+            console.log('❌ No tasks data found for board:', boardData.board_id);
             return `
                 <div class="pm-empty-board">
                     <i class="fa fa-inbox"></i>
@@ -582,19 +600,40 @@ class CombinationViewManager {
         }
         
         let tableHtml = '';
+        let projectCount = 0;
         
         // Render each client's projects and tasks
         Object.entries(boardData.tasks).forEach(([clientName, projects]) => {
+            console.log(`🔍 Processing client: ${clientName}`, projects);
+            
             if (projects && typeof projects === 'object') {
                 Object.entries(projects).forEach(([projectName, tasks]) => {
+                    console.log(`🔍 Processing project: ${projectName}`, tasks);
+                    
                     if (tasks && Array.isArray(tasks) && tasks.length > 0) {
+                        console.log(`✅ Rendering project: ${projectName} with ${tasks.length} tasks`);
+                        console.log(`🔍 Tasks data for ${projectName}:`, tasks.map(t => ({
+                            name: t.name || t.subject,
+                            client: t.client_name,
+                            status: t.status
+                        })));
                         tableHtml += this.renderProjectSection(clientName, projectName, tasks, boardData);
+                        projectCount++;
+                    } else {
+                        console.log(`⚠️ Skipping project ${projectName}: no valid tasks`);
+                        console.log(`🔍 Invalid tasks data:`, tasks);
                     }
                 });
+            } else {
+                console.log(`⚠️ Skipping client ${clientName}: invalid projects structure`);
             }
         });
         
+        console.log(`🔍 Total projects rendered: ${projectCount}`);
+        console.log(`🔍 Generated HTML length: ${tableHtml.length}`);
+        
         if (!tableHtml) {
+            console.log('❌ No valid projects found to render');
             return `
                 <div class="pm-empty-board">
                     <i class="fa fa-info-circle"></i>
@@ -608,6 +647,11 @@ class CombinationViewManager {
     
     // Render project section for a board
     renderProjectSection(clientName, projectName, tasks, boardData) {
+        console.log(`🏗️ Rendering project section: ${projectName} (${tasks.length} tasks) for board ${boardData.board_id}`);
+        
+        const taskRowsHtml = this.renderTaskRows(tasks, boardData);
+        console.log(`🔍 Task rows HTML length: ${taskRowsHtml.length}`);
+        
         const projectHtml = `
             <div class="pm-project-group pm-combination-project" data-client="${clientName}" data-project="${projectName}" data-board-id="${boardData.board_id}">
                 <div class="pm-project-header">
@@ -625,12 +669,14 @@ class CombinationViewManager {
                 </div>
                 
                 <!-- Project Tasks -->
-                <div class="pm-project-tasks pm-combination-tasks" data-board-id="${boardData.board_id}">
-                    ${this.renderTaskRows(tasks, boardData)}
+                <div class="pm-task-group" style="display: block !important; width: 100% !important;">
+                    ${taskRowsHtml}
                 </div>
             </div>
         `;
         
+        console.log(`✅ Project section rendered for: ${projectName}`);
+        console.log(`🔍 First 500 chars of project HTML:`, projectHtml.substring(0, 500));
         return projectHtml;
     }
     
@@ -669,12 +715,28 @@ class CombinationViewManager {
     
     // Render task rows
     renderTaskRows(tasks, boardData) {
+        console.log(`🔍 renderTaskRows called with ${tasks.length} tasks for board ${boardData.board_id}`);
+        
         const columnConfig = boardData.column_config || {};
         const visibleColumns = columnConfig.visible_columns || this.getDefaultVisibleColumns();
         
-        return tasks.map(task => {
+        console.log(`🔍 Visible columns for board ${boardData.board_id}:`, visibleColumns);
+        
+        // Ensure tasks is always an array
+        if (!Array.isArray(tasks)) {
+            console.warn(`⚠️ Tasks is not an array for board ${boardData.board_id}:`, tasks);
+            return '';
+        }
+        
+        const taskRowsHtml = tasks.map((task, index) => {
+            console.log(`🔍 Rendering task ${index + 1}/${tasks.length}: ${task.name || task.subject}`);
+            
+            // Ensure each task row is properly structured with explicit styling
             let rowHtml = `
-                <div class="pm-task-row pm-combination-task-row" data-task-id="${task.name}" data-board-id="${boardData.board_id}">
+                <div class="pm-task-row pm-combination-task-row" 
+                     data-task-id="${task.name}" 
+                     data-board-id="${boardData.board_id}"
+                     style="display: flex !important; width: 100% !important; clear: both !important;">
                     <div class="pm-cell pm-cell-select" data-column="select">
                         <input type="checkbox" class="pm-task-checkbox" value="${task.name}">
                     </div>
@@ -686,7 +748,11 @@ class CombinationViewManager {
             
             rowHtml += '</div>';
             return rowHtml;
-        }).join('');
+        }).join('\n'); // Use newlines to separate task rows for better debugging
+        
+        console.log(`✅ Generated ${tasks.length} task rows, HTML length: ${taskRowsHtml.length}`);
+        console.log(`🔍 First 200 chars of HTML:`, taskRowsHtml.substring(0, 200));
+        return taskRowsHtml;
     }
     
     // Render individual task cell - EXACT copy from table.html logic
@@ -694,7 +760,14 @@ class CombinationViewManager {
         const taskId = task.name;
         
         // Use the unified cell renderer to ensure 100% consistency with normal board view
-        return this.renderUnifiedTaskCell(task, column, taskId);
+        let cellHtml = this.renderUnifiedTaskCell(task, column, taskId);
+        
+        // Ensure data-column attribute is present for CSS column width targeting
+        if (!cellHtml.includes('data-column=')) {
+            cellHtml = cellHtml.replace('<div class="pm-cell', `<div class="pm-cell" data-column="${column}"`);
+        }
+        
+        return cellHtml;
     }
     
     // Unified cell renderer that matches table.html exactly
@@ -702,7 +775,7 @@ class CombinationViewManager {
         switch (column) {
             case 'select':
                 return `
-                    <div class="pm-cell pm-cell-select">
+                    <div class="pm-cell pm-cell-select" data-column="select">
                         <input type="checkbox" class="pm-task-checkbox" data-task-id="${taskId}" title="Select this task">
                     </div>
                 `;
@@ -1582,13 +1655,10 @@ class CombinationViewManager {
             });
         }
         
-        // Set board-specific table width
-        this.setBoardTableWidth(boardId, totalBoardWidth);
-        
-        // Force synchronization after a short delay to ensure DOM is ready
+        // Apply gentle column width settings that preserve project structure
         setTimeout(() => {
-            this.ensureColumnWidthSync(boardId);
-        }, 100);
+            this.applyGentleColumnWidths(boardId, visibleColumns, totalBoardWidth);
+        }, 200);
     }
     
     // Get optimized column width based on total columns count
@@ -1606,38 +1676,91 @@ class CombinationViewManager {
         }
     }
     
-    // Set board-specific table width with perfect header-body alignment
+    // Apply gentle column widths that don't break project structure
+    applyGentleColumnWidths(boardId, visibleColumns, totalBoardWidth) {
+        const $boardSection = $(`.pm-combination-board-section[data-board-id="${boardId}"]`);
+        
+        console.log(`🕊️ Applying gentle column widths for board: ${boardId}`);
+        
+        // Only apply column widths to cells, not to containers
+        visibleColumns.forEach(column => {
+            const width = this.getOptimizedColumnWidth(column, visibleColumns.length);
+            this.applyGentleColumnWidth(boardId, column, width);
+        });
+        
+        console.log(`✅ Gentle column widths applied to board: ${boardId}`);
+    }
+    
+    // Apply column width gently without breaking structure
+    applyGentleColumnWidth(boardId, column, width) {
+        const widthPx = width + 'px';
+        
+        // Use specific selectors that don't interfere with project structure
+        const headerCells = $(`.pm-combination-board-section[data-board-id="${boardId}"] .pm-project-table-header .pm-header-cell[data-column="${column}"]`);
+        const bodyCells = $(`.pm-combination-board-section[data-board-id="${boardId}"] .pm-task-group .pm-cell[data-column="${column}"]`);
+        
+        // Apply width only to cells, not containers
+        headerCells.css({
+            'width': widthPx,
+            'min-width': widthPx,
+            'flex': `0 0 ${widthPx}`
+        });
+        
+        bodyCells.css({
+            'width': widthPx,
+            'min-width': widthPx,
+            'flex': `0 0 ${widthPx}`
+        });
+        
+        console.log(`🎯 Gentle width applied: ${column} = ${widthPx} (${headerCells.length} headers, ${bodyCells.length} cells)`);
+    }
+    
+    // Set board-specific table width while preserving project structure
     setBoardTableWidth(boardId, totalWidth) {
         const $boardSection = $(`.pm-combination-board-section[data-board-id="${boardId}"]`);
-        const $tableHeader = $boardSection.find('.pm-combination-table-header');
-        const $tasks = $boardSection.find('.pm-combination-tasks');
         
         const tableWidthPx = totalWidth + 'px';
-        console.log(`📐 Setting synchronized table width for board ${boardId}: ${tableWidthPx}`);
+        console.log(`📐 Setting table width for board ${boardId}: ${tableWidthPx} (preserving project structure)`);
         
         // Create board-specific table width CSS class
         const boardTableClass = `pm-board-${boardId.replace(/[^a-zA-Z0-9]/g, '_')}-table`;
         
-        // Add class to table elements
-        $tableHeader.addClass(boardTableClass);
-        $tasks.addClass(boardTableClass);
-        $boardSection.find('.pm-combination-task-row').addClass(boardTableClass);
+        // Apply to each project's table elements individually to preserve structure
+        $boardSection.find('.pm-project-group').each((index, projectGroup) => {
+            const $projectGroup = $(projectGroup);
+            const $projectTableHeader = $projectGroup.find('.pm-project-table-header');
+            const $projectTasks = $projectGroup.find('.pm-task-group');
+            const $projectTaskRows = $projectGroup.find('.pm-combination-task-row');
+            
+            // Add class to project-specific table elements
+            $projectTableHeader.addClass(boardTableClass);
+            $projectTasks.addClass(boardTableClass);
+            $projectTaskRows.addClass(boardTableClass);
+            
+            // Apply inline styles to each project's table elements
+            const tableCSS = {
+                'width': tableWidthPx + ' !important',
+                'min-width': tableWidthPx + ' !important',
+                'max-width': tableWidthPx + ' !important'
+            };
+            
+            $projectTableHeader.css(tableCSS);
+            $projectTasks.css(tableCSS);
+            $projectTaskRows.css(tableCSS);
+            
+            // Ensure project group structure is preserved
+            $projectGroup.css({
+                'margin-bottom': '1rem',
+                'display': 'block',
+                'clear': 'both',
+                'width': '100%'
+            });
+        });
         
         // Create CSS rule for perfect synchronization
         this.createBoardTableWidthCSS(boardTableClass, tableWidthPx);
         
-        // Also apply inline styles for immediate effect
-        const tableCSS = {
-            'width': tableWidthPx + ' !important',
-            'min-width': tableWidthPx + ' !important',
-            'max-width': tableWidthPx + ' !important'
-        };
-        
-        $tableHeader.css(tableCSS);
-        $tasks.css(tableCSS);
-        $boardSection.find('.pm-combination-task-row').css(tableCSS);
-        
-        console.log(`✅ Synchronized table width for board ${boardId}: header and body aligned`);
+        console.log(`✅ Table width applied to ${$boardSection.find('.pm-project-group').length} projects in board ${boardId}`);
     }
     
     // Create board-specific table width CSS rules
@@ -1682,7 +1805,7 @@ class CombinationViewManager {
         
         // Use highly specific selectors to ensure board independence
         const headerSelector = `.pm-combination-board-section[data-board-id="${boardId}"] .pm-combination-table-header .pm-header-cell[data-column="${column}"]`;
-        const cellSelector = `.pm-combination-board-section[data-board-id="${boardId}"] .pm-combination-tasks .pm-cell[data-column="${column}"]`;
+        const cellSelector = `.pm-combination-board-section[data-board-id="${boardId}"] .pm-task-group .pm-cell[data-column="${column}"]`;
         
         // Add board-specific class to elements
         $(headerSelector).addClass(boardSpecificClass);
@@ -1780,7 +1903,7 @@ class CombinationViewManager {
                 
                 if (column) {
                     // Check corresponding body cell width
-                    const $bodyCell = $boardSection.find(`.pm-combination-tasks .pm-cell[data-column="${column}"]`).first();
+                    const $bodyCell = $boardSection.find(`.pm-task-group .pm-cell[data-column="${column}"]`).first();
                     const bodyWidth = $bodyCell.length ? $bodyCell.outerWidth() : 0;
                     const isAligned = Math.abs(headerWidth - bodyWidth) <= 1;
                     
@@ -1838,10 +1961,10 @@ class CombinationViewManager {
         // Force final layout recalculation with staggered timing
         setTimeout(() => {
             // First, hide and show to trigger reflow
-            $boardSection.find('.pm-combination-table-header, .pm-combination-tasks').each(function() {
+            $boardSection.find('.pm-combination-table-header, .pm-task-group').each(function() {
                 this.style.display = 'none';
                 this.offsetHeight; // Trigger reflow
-                this.style.display = 'flex';
+                this.style.display = this.classList.contains('pm-task-group') ? 'block' : 'flex';
             });
             
             // Then ensure all cells are perfectly aligned
@@ -1868,7 +1991,7 @@ class CombinationViewManager {
             const headerWidth = $headerCell.outerWidth();
             
             // Find corresponding body cells and ensure they match exactly
-            const $bodyCells = $boardSection.find(`.pm-combination-tasks .pm-cell[data-column="${column}"]`);
+            const $bodyCells = $boardSection.find(`.pm-task-group .pm-cell[data-column="${column}"]`);
             
             $bodyCells.each((cellIndex, bodyCell) => {
                 const $bodyCell = $(bodyCell);
@@ -1888,18 +2011,107 @@ class CombinationViewManager {
         console.log(`✅ Perfect alignment achieved for board: ${boardId}`);
     }
     
+    // Force column width application for all boards using their own saved widths
+    forceColumnWidthApplication(boardsData) {
+        console.log('🔧 Force applying board-specific column widths for all boards');
+        
+        boardsData.forEach(boardData => {
+            const boardId = boardData.board_id;
+            const columnConfig = boardData.column_config || {};
+            const visibleColumns = columnConfig.visible_columns || this.getDefaultVisibleColumns();
+            const savedColumnWidths = columnConfig.column_widths || {};
+            
+            console.log(`🔧 Applying board-specific column widths for board: ${boardId}`);
+            console.log(`🔧 Saved column widths:`, savedColumnWidths);
+            
+            visibleColumns.forEach(column => {
+                // Use board's saved width or fall back to default
+                const width = savedColumnWidths[column] || this.getDefaultColumnWidth(column);
+                
+                // Apply width to both header and body cells with maximum specificity
+                const headerSelector = `.pm-combination-board-section[data-board-id="${boardId}"] .pm-combination-table-header .pm-header-cell[data-column="${column}"]`;
+                const cellSelector = `.pm-combination-board-section[data-board-id="${boardId}"] .pm-task-group .pm-cell[data-column="${column}"]`;
+                
+                const cssProps = {
+                    'width': width + 'px !important',
+                    'min-width': width + 'px !important',
+                    'max-width': width + 'px !important',
+                    'flex': `0 0 ${width}px !important`,
+                    'box-sizing': 'border-box !important'
+                };
+                
+                $(headerSelector).css(cssProps);
+                $(cellSelector).css(cssProps);
+                
+                console.log(`✅ Applied board-specific ${width}px to column ${column} in board ${boardId}`);
+            });
+        });
+        
+        console.log('✅ Board-specific column width application completed');
+    }
+    
+    // Debug rendered HTML structure to identify display issues
+    debugRenderedStructure(boardsData) {
+        console.log('🔍 DEBUG: Analyzing rendered HTML structure');
+        
+        boardsData.forEach(boardData => {
+            const boardId = boardData.board_id;
+            const $boardSection = $(`.pm-combination-board-section[data-board-id="${boardId}"]`);
+            
+            console.log(`\n📋 Board: ${boardData.board_name} (${boardId})`);
+            
+            // Check project groups
+            const $projectGroups = $boardSection.find('.pm-project-group');
+            console.log(`📁 Project groups found: ${$projectGroups.length}`);
+            
+            $projectGroups.each((index, projectGroup) => {
+                const $projectGroup = $(projectGroup);
+                const projectName = $projectGroup.find('.pm-project-name').text();
+                const taskCount = $projectGroup.find('.pm-task-count').text();
+                
+                console.log(`  📁 Project ${index + 1}: ${projectName} (${taskCount})`);
+                
+                // Check task rows
+                const $taskRows = $projectGroup.find('.pm-combination-task-row');
+                console.log(`    📝 Task rows found: ${$taskRows.length}`);
+                
+                $taskRows.each((taskIndex, taskRow) => {
+                    const $taskRow = $(taskRow);
+                    const taskId = $taskRow.data('task-id');
+                    const cellCount = $taskRow.find('.pm-cell').length;
+                    const rowDisplay = $taskRow.css('display');
+                    const rowWidth = $taskRow.outerWidth();
+                    
+                    console.log(`      📝 Task ${taskIndex + 1}: ID=${taskId}, Cells=${cellCount}, Display=${rowDisplay}, Width=${rowWidth}px`);
+                    
+                    // Check if cells are properly sized
+                    $taskRow.find('.pm-cell').each((cellIndex, cell) => {
+                        const $cell = $(cell);
+                        const column = $cell.data('column');
+                        const cellWidth = $cell.outerWidth();
+                        const cellDisplay = $cell.css('display');
+                        
+                        if (cellIndex < 5) { // Only log first 5 cells to avoid spam
+                            console.log(`        📊 Cell ${cellIndex + 1}: ${column}=${cellWidth}px (${cellDisplay})`);
+                        }
+                    });
+                });
+            });
+        });
+    }
+    
     // Get default column width based on column type
     getDefaultColumnWidth(column) {
         const defaultWidths = {
             'select': 50,
-            'client': 150,
-            'task-name': 200,
-            'entity': 120,
-            'tf-tg': 80,
-            'software': 100,
-            'status': 100,
+            'client': 180,
+            'task-name': 250,
+            'entity': 100,
+            'tf-tg': 70,
+            'software': 120,
+            'status': 120,
             'note': 150,
-            'target-month': 120,
+            'target-month': 100,
             'budget': 100,
             'actual': 100,
             'review-note': 120,
@@ -1940,7 +2152,7 @@ class CombinationViewManager {
                 $(`.pm-combination-table-header[data-board-id="${boardId}"] .pm-header-cell[data-column="${column}"]`).css('width', newWidth + 'px');
                 
                 // Update task cell widths for this board only
-                $(`.pm-combination-tasks[data-board-id="${boardId}"] .pm-cell-${column}`).css('width', newWidth + 'px');
+                $(`.pm-combination-board-section[data-board-id="${boardId}"] .pm-task-group .pm-cell-${column}`).css('width', newWidth + 'px');
             };
             
             const handleMouseUp = () => {
