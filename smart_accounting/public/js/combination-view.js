@@ -63,21 +63,12 @@ class CombinationViewManager {
             this.createCombinationView();
         });
 
-        // Column management restriction in combination view
-        $(document).on('click', '.pm-combination-column-mgmt-disabled', (e) => {
-            e.preventDefault();
-            frappe.show_alert({
-                message: '列管理在组合视图中不可用。请前往具体的board进行列管理设置。',
-                indicator: 'orange'
-            });
-        });
-        
         // Disable manage columns button in combination view
         $(document).on('click', '.pm-manage-columns-btn', (e) => {
             if (window.location.search.includes('view=combination')) {
                 e.preventDefault();
                 frappe.show_alert({
-                    message: 'Due to this being a combination view, if you want to use this feature, please return to the respective board.',
+                    message: 'Column management is not available in combination view. Please go to the specific board to manage columns.',
                     indicator: 'orange'
                 });
             }
@@ -88,19 +79,55 @@ class CombinationViewManager {
             // Let the default link behavior handle navigation
         });
         
+        // Save combination view button
+        $(document).on('click', '.pm-save-combination-btn', (e) => {
+            e.preventDefault();
+            this.showSaveCombinationModal();
+        });
+        
+        // Save combination modal events
+        $(document).on('click', '.pm-save-combination-modal-close, .pm-save-combination-cancel', (e) => {
+            e.preventDefault();
+            this.closeSaveCombinationModal();
+        });
+        
+        $(document).on('click', '.pm-save-combination-confirm', (e) => {
+            e.preventDefault();
+            this.saveCombinationView();
+        });
+        
+        // Load saved combination
+        $(document).on('click', '.pm-load-combination', (e) => {
+            e.preventDefault();
+            const combinationId = $(e.target).closest('.pm-load-combination').data('combination-id');
+            this.loadSavedCombination(combinationId);
+        });
+        
+        // Delete saved combination
+        $(document).on('click', '.pm-delete-combination', (e) => {
+            e.preventDefault();
+            const combinationId = $(e.target).closest('.pm-delete-combination').data('combination-id');
+            const combinationName = $(e.target).closest('.pm-saved-combination-item').find('.pm-saved-combination-name').text();
+            this.deleteSavedCombination(combinationId, combinationName);
+        });
+        
     }
 
     // Show board selector modal
     async showBoardSelector() {
         try {
-            // Load available boards
-            await this.loadAvailableBoards();
+            // Load available boards and saved combinations
+            await Promise.all([
+                this.loadAvailableBoards(),
+                this.loadSavedCombinations()
+            ]);
             
             // Reset selection
             this.selectedBoards = [];
             
-            // Render boards
+            // Render boards and saved combinations
             this.renderAvailableBoards();
+            this.renderSavedCombinations();
             this.updateSelectedBoardsList();
             
             // Show modal
@@ -139,6 +166,24 @@ class CombinationViewManager {
             throw error;
         }
     }
+    
+    // Load saved combinations from backend
+    async loadSavedCombinations() {
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_saved_combinations'
+            });
+
+            if (response.message && response.message.success) {
+                this.savedCombinations = response.message.combinations || [];
+            } else {
+                this.savedCombinations = [];
+            }
+        } catch (error) {
+            console.error('Error loading saved combinations:', error);
+            this.savedCombinations = [];
+        }
+    }
 
     // Render available boards in the selector
     renderAvailableBoards() {
@@ -171,6 +216,63 @@ class CombinationViewManager {
         `).join('');
 
         $container.html(boardsHtml);
+    }
+    
+    // Render saved combinations in the selector
+    renderSavedCombinations() {
+        // Check if saved combinations section exists, if not create it
+        if (!$('#pm-saved-combinations-section').length) {
+            // Insert saved combinations section before the available boards
+            $('#pm-combination-boards').before(`
+                <div id="pm-saved-combinations-section" class="pm-saved-combinations-section">
+                    <h4><i class="fa fa-bookmark"></i> Saved Combinations</h4>
+                    <div id="pm-saved-combinations-list" class="pm-saved-combinations-list"></div>
+                </div>
+            `);
+        }
+        
+        const $container = $('#pm-saved-combinations-list');
+        
+        if (!this.savedCombinations || this.savedCombinations.length === 0) {
+            $container.html(`
+                <div class="pm-no-saved-combinations">
+                    <i class="fa fa-info-circle"></i>
+                    <p>No saved combinations yet. Create one by selecting boards below.</p>
+                </div>
+            `);
+            return;
+        }
+        
+        const combinationsHtml = this.savedCombinations.map(combination => {
+            const lastUsed = combination.last_used ? 
+                new Date(combination.last_used).toLocaleDateString() : 
+                new Date(combination.creation).toLocaleDateString();
+            
+            return `
+                <div class="pm-saved-combination-item" data-combination-id="${combination.name}">
+                    <div class="pm-saved-combination-info">
+                        <div class="pm-saved-combination-name">${combination.view_name}</div>
+                        <div class="pm-saved-combination-details">
+                            <span><i class="fa fa-table"></i> ${combination.board_count} Boards</span>
+                            <span><i class="fa fa-eye"></i> Used ${combination.usage_count || 0} times</span>
+                            <span><i class="fa fa-clock-o"></i> ${lastUsed}</span>
+                        </div>
+                        ${combination.description ? `<div class="pm-saved-combination-description">${combination.description}</div>` : ''}
+                    </div>
+                    <div class="pm-saved-combination-actions">
+                        <button class="pm-load-combination pm-btn pm-btn-primary" data-combination-id="${combination.name}" title="Load this combination">
+                            <i class="fa fa-play"></i>
+                            Load
+                        </button>
+                        <button class="pm-delete-combination pm-btn pm-btn-danger" data-combination-id="${combination.name}" title="Delete this combination">
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        $container.html(combinationsHtml);
     }
 
     // Add board to selection
@@ -353,8 +455,21 @@ class CombinationViewManager {
         console.log('DEBUG: renderCombinationView called with:', boardsData);
         console.log('DEBUG: boardsData length:', boardsData ? boardsData.length : 'undefined');
         
+        // Clean up any existing board-specific CSS
+        $('#pm-board-specific-styles').remove();
+        
         // Update the badge count
         $('.pm-combination-board-badge').text(`${boardsData.length} Boards`);
+        
+        // Add save combination button if not exists
+        if (!$('.pm-save-combination-btn').length) {
+            $('.pm-combination-view-title').append(`
+                <button class="pm-save-combination-btn pm-btn pm-btn-primary" style="margin-left: 15px;">
+                    <i class="fa fa-bookmark"></i>
+                    Save This View
+                </button>
+            `);
+        }
         
         // Calculate total projects and tasks
         let totalProjects = 0;
@@ -414,18 +529,14 @@ class CombinationViewManager {
                 <div class="pm-combination-board-header">
                     <div class="pm-combination-board-title-row">
                         <div class="pm-combination-board-title-left">
-                            <i class="fa fa-table"></i>
-                            <h3>${boardData.board_name}</h3>
-                            <span class="pm-combination-board-badge">${taskCount} Tasks</span>
-                            <a href="/project_management?view=${boardData.board_id}" 
-                               class="pm-combination-goto-board" 
-                               target="_blank">
-                                Open Board
-                            </a>
-                            <button class="pm-combination-column-mgmt-disabled" 
-                                    title="Due to this being a combination view, if you want to use this feature, please return to the respective board">
-                                Columns (Disabled)
-                            </button>
+                        <i class="fa fa-table"></i>
+                        <h3>${boardData.board_name}</h3>
+                        <span class="pm-combination-board-badge">${taskCount} Tasks</span>
+                        <a href="/project_management?view=${boardData.board_id}" 
+                           class="pm-combination-goto-board" 
+                           target="_blank">
+                            Open Board
+                        </a>
                         </div>
                     </div>
                 </div>
@@ -525,7 +636,8 @@ class CombinationViewManager {
     // Render table header based on board's column configuration
     renderTableHeader(boardData) {
         const columnConfig = boardData.column_config || {};
-        const visibleColumns = columnConfig.visible_columns || ['client', 'task-name', 'status'];
+        // Use board's visible columns or fallback to default set
+        const visibleColumns = columnConfig.visible_columns || this.getDefaultVisibleColumns();
         
         let headerHtml = `
             <div class="pm-header-cell pm-cell-select" data-column="select">
@@ -546,10 +658,18 @@ class CombinationViewManager {
         return headerHtml;
     }
     
+    // Get default visible columns if none configured
+    getDefaultVisibleColumns() {
+        return [
+            'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 
+            'note', 'target-month', 'priority'
+        ];
+    }
+    
     // Render task rows
     renderTaskRows(tasks, boardData) {
         const columnConfig = boardData.column_config || {};
-        const visibleColumns = columnConfig.visible_columns || ['client', 'task-name', 'status'];
+        const visibleColumns = columnConfig.visible_columns || this.getDefaultVisibleColumns();
         
         return tasks.map(task => {
             let rowHtml = `
@@ -571,17 +691,21 @@ class CombinationViewManager {
     // Render individual task cell - EXACT copy from table.html logic
     renderTaskCell(task, column, boardData) {
         const taskId = task.name;
-        const isEditable = this.isCellEditable(column);
-        const editableAttr = isEditable ? 'data-editable="true"' : '';
         
+        // Use the unified cell renderer to ensure 100% consistency with normal board view
+        return this.renderUnifiedTaskCell(task, column, taskId);
+    }
+    
+    // Unified cell renderer that matches table.html exactly
+    renderUnifiedTaskCell(task, column, taskId) {
         switch (column) {
             case 'select':
                 return `
-                    <div class="pm-cell pm-cell-select" data-column="select">
+                    <div class="pm-cell pm-cell-select">
                         <input type="checkbox" class="pm-task-checkbox" data-task-id="${taskId}" title="Select this task">
                     </div>
                 `;
-            
+    
             case 'client':
                 return `
                     <div class="pm-cell pm-cell-client pm-client-with-comments"
@@ -590,6 +714,9 @@ class CombinationViewManager {
                          data-current-client-id="${task.custom_client || ''}"
                          data-current-client-name="${task.client_name || 'No Client'}">
                         <div class="pm-client-content">
+                            <button class="pm-subtask-toggle" data-task-id="${taskId}" title="Show/hide subtasks">
+                                <i class="fa fa-chevron-right"></i>
+                            </button>
                             <span class="pm-client-selector-trigger client-display" 
                                   data-task-id="${taskId}"
                                   data-field="custom_client"
@@ -641,11 +768,12 @@ class CombinationViewManager {
                          data-field-type="select"
                          data-options="TF,TG"
                          data-backend-options="Top Figures,Top Grants">
-                        <span class="pm-tf-tg-badge editable-field">${task.tf_tg || 'TF'}</span>
+                        <span class="pm-tf-tg-badge editable-field">${task.custom_tftg || task.tf_tg || 'TF'}</span>
                     </div>
                 `;
             
             case 'software':
+                // Exact match with table.html logic
                 if (task.software_info && task.software_info.length > 0) {
                     if (task.software_info.length === 1) {
                         return `
@@ -692,10 +820,12 @@ class CombinationViewManager {
                 }
             
             case 'status':
+                // Exact match with table.html - no editable attributes, just display
                 const status = task.status || 'Open';
+                const statusClass = status ? status.toLowerCase().replace(/\s+/g, '-') : 'open';
                 return `
                     <div class="pm-cell pm-cell-status">
-                        <span class="pm-status-badge status-${status.toLowerCase()}">${status}</span>
+                        <span class="pm-status-badge status-${statusClass}">${status}</span>
                     </div>
                 `;
             
@@ -711,6 +841,7 @@ class CombinationViewManager {
                 `;
             
             case 'review-note':
+                // Exact match with table.html
                 if (task.review_notes && task.review_notes.length > 0) {
                     return `
                         <div class="pm-cell pm-cell-review-note">
@@ -731,22 +862,567 @@ class CombinationViewManager {
                     `;
                 }
             
+            case 'action-person':
+                // Exact match with table.html structure
+                if (task.action_person_info && task.action_person_info.length > 0) {
+                    if (task.action_person_info.length === 1) {
+                        const person = task.action_person_info[0];
+                        return `
+                            <div class="pm-cell pm-cell-action-person" 
+                                 data-editable="true" 
+                                 data-field="custom_action_person" 
+                                 data-task-id="${taskId}"
+                                 data-field-type="person_selector"
+                                 data-role-filter="Action Person">
+                                <div class="pm-user-avatars">
+                                    <div class="pm-avatar pm-primary-user" title="${person.full_name}" data-email="${person.email}">${person.initials}</div>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        const primaryPerson = task.action_person_info[0];
+                        return `
+                            <div class="pm-cell pm-cell-action-person" 
+                                 data-editable="true" 
+                                 data-field="custom_action_person" 
+                                 data-task-id="${taskId}"
+                                 data-field-type="person_selector"
+                                 data-role-filter="Action Person">
+                                <div class="pm-user-avatars">
+                                    <div class="pm-avatar pm-primary-user" title="${primaryPerson.full_name}" data-email="${primaryPerson.email}">${primaryPerson.initials}</div>
+                                    <div class="pm-avatar-more" title="Total ${task.action_person_info.length} people assigned">+${task.action_person_info.length - 1}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                } else {
+                    return `
+                        <div class="pm-cell pm-cell-action-person" 
+                             data-editable="true" 
+                             data-field="custom_action_person" 
+                             data-task-id="${taskId}"
+                             data-field-type="person_selector"
+                             data-role-filter="Action Person">
+                            <div class="pm-user-avatars pm-empty-person">
+                                <div class="pm-avatar pm-empty-avatar">
+                                    <i class="fa fa-user"></i>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            
+            case 'preparer':
+                // Exact match with table.html structure
+                if (task.preparer_info && task.preparer_info.length > 0) {
+                    if (task.preparer_info.length === 1) {
+                        const person = task.preparer_info[0];
+                        return `
+                            <div class="pm-cell pm-cell-preparer" 
+                                 data-editable="true" 
+                                 data-field="custom_preparer" 
+                                 data-task-id="${taskId}"
+                                 data-field-type="person_selector"
+                                 data-role-filter="Preparer">
+                                <div class="pm-user-avatars">
+                                    <div class="pm-avatar pm-primary-user" title="${person.full_name}" data-email="${person.email}">${person.initials}</div>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        const primaryPerson = task.preparer_info[0];
+                        return `
+                            <div class="pm-cell pm-cell-preparer" 
+                                 data-editable="true" 
+                                 data-field="custom_preparer" 
+                                 data-task-id="${taskId}"
+                                 data-field-type="person_selector"
+                                 data-role-filter="Preparer">
+                                <div class="pm-user-avatars">
+                                    <div class="pm-avatar pm-primary-user" title="${primaryPerson.full_name}" data-email="${primaryPerson.email}">${primaryPerson.initials}</div>
+                                    <div class="pm-avatar-more" title="Total ${task.preparer_info.length} people assigned">+${task.preparer_info.length - 1}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                } else {
+                    return `
+                        <div class="pm-cell pm-cell-preparer" 
+                             data-editable="true" 
+                             data-field="custom_preparer" 
+                             data-task-id="${taskId}"
+                             data-field-type="person_selector"
+                             data-role-filter="Preparer">
+                            <div class="pm-user-avatars pm-empty-person">
+                                <div class="pm-avatar pm-empty-avatar">
+                                    <i class="fa fa-user"></i>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            
+            case 'reviewer':
+                // Exact match with table.html structure
+                if (task.reviewer_info && task.reviewer_info.length > 0) {
+                    if (task.reviewer_info.length === 1) {
+                        const person = task.reviewer_info[0];
+                        return `
+                            <div class="pm-cell pm-cell-reviewer" 
+                                 data-editable="true" 
+                                 data-field="custom_reviewer" 
+                                 data-task-id="${taskId}"
+                                 data-field-type="person_selector"
+                                 data-role-filter="Reviewer">
+                                <div class="pm-user-avatars">
+                                    <div class="pm-avatar pm-primary-user" title="${person.full_name}" data-email="${person.email}">${person.initials}</div>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        const primaryPerson = task.reviewer_info[0];
+                        return `
+                            <div class="pm-cell pm-cell-reviewer" 
+                                 data-editable="true" 
+                                 data-field="custom_reviewer" 
+                                 data-task-id="${taskId}"
+                                 data-field-type="person_selector"
+                                 data-role-filter="Reviewer">
+                                <div class="pm-user-avatars">
+                                    <div class="pm-avatar pm-primary-user" title="${primaryPerson.full_name}" data-email="${primaryPerson.email}">${primaryPerson.initials}</div>
+                                    <div class="pm-avatar-more" title="Total ${task.reviewer_info.length} people assigned">+${task.reviewer_info.length - 1}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                } else {
+                    return `
+                        <div class="pm-cell pm-cell-reviewer" 
+                             data-editable="true" 
+                             data-field="custom_reviewer" 
+                             data-task-id="${taskId}"
+                             data-field-type="person_selector"
+                             data-role-filter="Reviewer">
+                            <div class="pm-user-avatars pm-empty-person">
+                                <div class="pm-avatar pm-empty-avatar">
+                                    <i class="fa fa-user"></i>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            
+            case 'partner':
+                // Exact match with table.html structure
+                if (task.partner_info && task.partner_info.length > 0) {
+                    if (task.partner_info.length === 1) {
+                        const person = task.partner_info[0];
+                        return `
+                            <div class="pm-cell pm-cell-partner" 
+                                 data-editable="true" 
+                                 data-field="custom_partner" 
+                                 data-task-id="${taskId}"
+                                 data-field-type="person_selector"
+                                 data-role-filter="Partner">
+                                <div class="pm-user-avatars">
+                                    <div class="pm-avatar pm-primary-user" title="${person.full_name}" data-email="${person.email}">${person.initials}</div>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        const primaryPerson = task.partner_info[0];
+                        return `
+                            <div class="pm-cell pm-cell-partner" 
+                                 data-editable="true" 
+                                 data-field="custom_partner" 
+                                 data-task-id="${taskId}"
+                                 data-field-type="person_selector"
+                                 data-role-filter="Partner">
+                                <div class="pm-user-avatars">
+                                    <div class="pm-avatar pm-primary-user" title="${primaryPerson.full_name}" data-email="${primaryPerson.email}">${primaryPerson.initials}</div>
+                                    <div class="pm-avatar-more" title="Total ${task.partner_info.length} people assigned">+${task.partner_info.length - 1}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                } else {
+                    return `
+                        <div class="pm-cell pm-cell-partner" 
+                             data-editable="true" 
+                             data-field="custom_partner" 
+                             data-task-id="${taskId}"
+                             data-field-type="person_selector"
+                             data-role-filter="Partner">
+                            <div class="pm-user-avatars pm-empty-person">
+                                <div class="pm-avatar pm-empty-avatar">
+                                    <i class="fa fa-user"></i>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            
+            case 'target-month':
+                // Exact match with table.html
+                return `
+                    <div class="pm-cell pm-cell-target-month"
+                         data-editable="true"
+                         data-field="custom_target_month"
+                         data-task-id="${taskId}"
+                         data-field-type="select"
+                         data-options="January,February,March,April,May,June,July,August,September,October,November,December">
+                        <span class="editable-field">${task.target_month || '-'}</span>
+                    </div>
+                `;
+            
+            case 'budget':
+                // Exact match with table.html
+                if (task.budget_planning && task.budget_planning > 0) {
+                    return `
+                        <div class="pm-cell pm-cell-budget"
+                             data-editable="true"
+                             data-field="custom_budget_planning"
+                             data-task-id="${taskId}"
+                             data-field-type="currency">
+                            <span class="pm-currency editable-field">$${parseFloat(task.budget_planning).toFixed(2)}</span>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="pm-cell pm-cell-budget"
+                             data-editable="true"
+                             data-field="custom_budget_planning"
+                             data-task-id="${taskId}"
+                             data-field-type="currency">
+                            <span class="pm-no-amount editable-field">-</span>
+                        </div>
+                    `;
+                }
+            
+            case 'actual':
+                // Exact match with table.html
+                if (task.actual_billing && task.actual_billing > 0) {
+                    return `
+                        <div class="pm-cell pm-cell-actual"
+                             data-editable="true"
+                             data-field="custom_actual_billing"
+                             data-task-id="${taskId}"
+                             data-field-type="currency">
+                            <span class="pm-currency editable-field">$${parseFloat(task.actual_billing).toFixed(2)}</span>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="pm-cell pm-cell-actual"
+                             data-editable="true"
+                             data-field="custom_actual_billing"
+                             data-task-id="${taskId}"
+                             data-field-type="currency">
+                            <span class="pm-no-amount editable-field">-</span>
+                        </div>
+                    `;
+                }
+            
+            case 'engagement':
+                // Exact match with table.html - engagement indicator with click functionality
+                return `
+                    <div class="pm-cell pm-cell-engagement pm-engagement-indicator"
+                         data-task-id="${taskId}"
+                         data-current-engagement="${task.custom_engagement || ''}">
+                        <div class="pm-engagement-content">
+                            ${task.custom_engagement ? 
+                                `<span class="pm-engagement-display">${task.engagement_el_count || 0} EL${(task.engagement_el_count || 0) !== 1 ? 's' : ''}</span>` :
+                                `<span class="pm-engagement-display no-engagement">No engagement</span>`
+                            }
+                        </div>
+                    </div>
+                `;
+            
+            case 'lodgment-due':
+                // Exact match with table.html - uses custom_lodgement_due_date
+                return `
+                    <div class="pm-cell pm-cell-lodgment-due"
+                         data-editable="true"
+                         data-field="custom_lodgement_due_date"
+                         data-task-id="${taskId}"
+                         data-field-type="date">
+                        <span class="editable-field">${task.lodgment_due_date || '-'}</span>
+                    </div>
+                `;
+            
+            case 'group':
+                // Exact match with table.html - group display (not editable)
+                return `
+                    <div class="pm-cell pm-cell-group">
+                        <div class="pm-group-content">
+                            <span class="pm-group-display">${task.client_group || '-'}</span>
+                        </div>
+                    </div>
+                `;
+            
+            case 'year-end':
+                // Exact match with table.html
+                return `
+                    <div class="pm-cell pm-cell-year-end"
+                         data-editable="true"
+                         data-field="custom_year_end"
+                         data-task-id="${taskId}"
+                         data-field-type="select"
+                         data-options="January,February,March,April,May,June,July,August,September,October,November,December">
+                        <span class="editable-field">${task.year_end || '-'}</span>
+                    </div>
+                `;
+            
+            case 'last-updated':
+                // Exact match with table.html
+                return `
+                    <div class="pm-cell pm-cell-last-updated">
+                        ${task.last_updated ? 
+                            `<span class="pm-last-updated">${task.last_updated}</span>` :
+                            `<span class="pm-no-date">-</span>`
+                        }
+                    </div>
+                `;
+            
+            case 'priority':
+                // Exact match with table.html - priority is NOT editable, just display
+                const priority = task.priority || 'Medium';
+                return `
+                    <div class="pm-cell pm-cell-priority">
+                        <span class="pm-priority-badge priority-${priority.toLowerCase()}">${priority}</span>
+                    </div>
+                `;
+            
+            case 'frequency':
+                // Exact match with table.html - uses data-options-source
+                return `
+                    <div class="pm-cell pm-cell-frequency"
+                         data-editable="true"
+                         data-field="custom_frequency"
+                         data-task-id="${taskId}"
+                         data-field-type="select"
+                         data-options-source="custom_frequency">
+                        <span class="editable-field">${task.custom_frequency || '-'}</span>
+                    </div>
+                `;
+            
+            case 'reset-date':
+                // Exact match with table.html
+                return `
+                    <div class="pm-cell pm-cell-reset-date"
+                         data-editable="true"
+                         data-field="custom_reset_date"
+                         data-task-id="${taskId}"
+                         data-field-type="date">
+                        <span class="editable-field">${task.reset_date || '-'}</span>
+                    </div>
+                `;
+            
             default:
                 // For other columns, use simple editable field
-                const fieldName = this.getFieldName(column);
-                const fieldValue = task[fieldName] || task[`custom_${fieldName}`] || '-';
+                const defaultFieldName = this.getFieldName(column);
+                const defaultFieldValue = task[defaultFieldName] || '-';
+                const isDefaultEditable = this.isCellEditable(column);
                 return `
                     <div class="pm-cell pm-cell-${column}" 
-                         ${editableAttr}
-                         data-field="${fieldName}"
+                         ${isDefaultEditable ? 'data-editable="true"' : ''}
+                         data-field="${defaultFieldName}"
                          data-task-id="${taskId}"
                          data-field-type="text">
-                        <span class="editable-field">${fieldValue}</span>
+                        <span class="editable-field">${defaultFieldValue}</span>
                     </div>
                 `;
         }
     }
     
+    
+    // Show save combination modal
+    showSaveCombinationModal() {
+        // Create modal if not exists
+        if (!$('#pm-save-combination-modal').length) {
+            const modalHtml = `
+                <div class="pm-save-combination-modal-overlay" id="pm-save-combination-modal">
+                    <div class="pm-save-combination-modal">
+                        <div class="pm-save-combination-modal-header">
+                            <h3>Save Combination View</h3>
+                            <button class="pm-save-combination-modal-close">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="pm-save-combination-modal-body">
+                            <div class="pm-form-group">
+                                <label for="pm-combination-name">View Name *</label>
+                                <input type="text" id="pm-combination-name" class="form-control" placeholder="Enter view name" required>
+                            </div>
+                            <div class="pm-form-group">
+                                <label for="pm-combination-description">Description</label>
+                                <textarea id="pm-combination-description" class="form-control" rows="3" placeholder="Optional description"></textarea>
+                            </div>
+                            <div class="pm-form-group">
+                                <label class="pm-checkbox-label">
+                                    <input type="checkbox" id="pm-combination-public"> Make this view public (visible to all users)
+                                </label>
+                            </div>
+                            <div class="pm-current-boards">
+                                <h4>Current Boards:</h4>
+                                <div id="pm-current-boards-list"></div>
+                            </div>
+                        </div>
+                        <div class="pm-save-combination-modal-footer">
+                            <button class="pm-btn pm-btn-secondary pm-save-combination-cancel">Cancel</button>
+                            <button class="pm-btn pm-btn-primary pm-save-combination-confirm">
+                                <i class="fa fa-bookmark"></i>
+                                Save View
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            $('body').append(modalHtml);
+        }
+        
+        // Populate current boards
+        const currentBoards = this.currentCombinationView || [];
+        const boardsList = currentBoards.map(boardId => {
+            // Try to get display name from rendered boards
+            const $boardSection = $(`.pm-combination-board-section[data-board-id="${boardId}"]`);
+            const boardName = $boardSection.find('h3').text() || boardId;
+            return `<div class="pm-board-item"><i class="fa fa-table"></i> ${boardName}</div>`;
+        }).join('');
+        
+        $('#pm-current-boards-list').html(boardsList || '<div class="pm-no-boards">No boards selected</div>');
+        
+        // Clear form
+        $('#pm-combination-name').val('');
+        $('#pm-combination-description').val('');
+        $('#pm-combination-public').prop('checked', false);
+        
+        // Show modal
+        $('#pm-save-combination-modal').fadeIn(300);
+        $('#pm-combination-name').focus();
+    }
+    
+    // Close save combination modal
+    closeSaveCombinationModal() {
+        $('#pm-save-combination-modal').fadeOut(300);
+    }
+    
+    // Save combination view
+    async saveCombinationView() {
+        const viewName = $('#pm-combination-name').val().trim();
+        const description = $('#pm-combination-description').val().trim();
+        const isPublic = $('#pm-combination-public').is(':checked') ? 1 : 0;
+        
+        if (!viewName) {
+            frappe.show_alert({
+                message: 'Please enter a view name',
+                indicator: 'red'
+            });
+            $('#pm-combination-name').focus();
+            return;
+        }
+        
+        if (!this.currentCombinationView || this.currentCombinationView.length === 0) {
+            frappe.show_alert({
+                message: 'No boards to save',
+                indicator: 'red'
+            });
+            return;
+        }
+        
+        try {
+            // First test DocType configuration
+            console.log('🧪 Testing DocType configuration...');
+            const testResponse = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.test_combination_doctype'
+            });
+            
+            console.log('🧪 DocType test result:', testResponse.message);
+            
+            if (!testResponse.message || !testResponse.message.success) {
+                throw new Error(testResponse.message?.error || 'DocType configuration test failed');
+            }
+            
+            // Show loading
+            $('.pm-save-combination-confirm').prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Saving...');
+            
+            console.log('💾 Saving combination with data:', {
+                view_name: viewName,
+                description: description,
+                board_ids: this.currentCombinationView,
+                is_public: isPublic
+            });
+            
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.save_combination_view',
+                args: {
+                    view_name: viewName,
+                    description: description,
+                    board_ids: JSON.stringify(this.currentCombinationView),
+                    is_public: isPublic
+                }
+            });
+            
+            console.log('💾 Save response:', response.message);
+            
+            if (response.message && response.message.success) {
+                frappe.show_alert({
+                    message: response.message.message,
+                    indicator: 'green'
+                });
+                this.closeSaveCombinationModal();
+            } else {
+                throw new Error(response.message?.error || 'Failed to save combination view');
+            }
+            
+        } catch (error) {
+            console.error('❌ Error saving combination view:', error);
+            frappe.show_alert({
+                message: 'Error saving combination view: ' + error.message,
+                indicator: 'red'
+            });
+        } finally {
+            $('.pm-save-combination-confirm').prop('disabled', false).html('<i class="fa fa-bookmark"></i> Save View');
+        }
+    }
+    
+    // Load saved combination
+    async loadSavedCombination(combinationId) {
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.load_combination_view',
+                args: {
+                    combination_id: combinationId
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                const boardIds = response.message.board_ids;
+                const combinationName = response.message.combination_name;
+                
+                // Navigate to combination view with these boards
+                const encodedBoardIds = boardIds.map(id => encodeURIComponent(id));
+                const combinationUrl = `/project_management?view=combination&boards=${encodedBoardIds.join(',')}`;
+                
+                frappe.show_alert({
+                    message: `Loading "${combinationName}"...`,
+                    indicator: 'blue'
+                });
+                
+                window.location.href = combinationUrl;
+                
+            } else {
+                throw new Error(response.message?.error || 'Failed to load combination view');
+            }
+            
+        } catch (error) {
+            console.error('Error loading combination view:', error);
+            frappe.show_alert({
+                message: 'Error loading combination view: ' + error.message,
+                indicator: 'red'
+            });
+        }
+    }
     
     // Helper methods
     getColumnDisplayName(column) {
@@ -758,38 +1434,68 @@ class CombinationViewManager {
             'software': 'Software',
             'status': 'Status',
             'note': 'Note',
+            'review-note': 'Review Note',
             'target-month': 'Target Month',
             'budget': 'Budget',
-            'actual': 'Actual'
+            'actual': 'Actual',
+            'action-person': 'Action Person',
+            'preparer': 'Preparer',
+            'reviewer': 'Reviewer',
+            'partner': 'Partner',
+            'lodgment-due': 'Lodgment Due',
+            'engagement': 'Engagement',
+            'group': 'Group',
+            'year-end': 'Year End',
+            'last-updated': 'Last Updated',
+            'priority': 'Priority',
+            'frequency': 'Frequency',
+            'reset-date': 'Reset Date'
         };
-        return columnNames[column] || column;
+        return columnNames[column] || column.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
     
     getFieldName(column) {
         const fieldNames = {
             'client': 'custom_client',
             'task-name': 'subject',
-            'entity': 'entity',
-            'tf-tg': 'tf_tg',
-            'software': 'software',
+            'entity': 'entity_type',
+            'tf-tg': 'custom_tftg',
+            'software': 'custom_softwares',
             'status': 'status',
-            'note': 'description',
-            'target-month': 'target_month',
-            'budget': 'budget',
-            'actual': 'actual'
+            'note': 'custom_note',
+            'review-note': 'custom_review_note',
+            'target-month': 'custom_target_month',
+            'budget': 'custom_budget',
+            'actual': 'custom_actual',
+            'action-person': 'custom_action_person',
+            'preparer': 'custom_preparer',
+            'reviewer': 'custom_reviewer',
+            'partner': 'custom_partner',
+            'lodgment-due': 'custom_lodgment_due',
+            'engagement': 'custom_engagement',
+            'group': 'custom_group',
+            'year-end': 'custom_year_end',
+            'priority': 'priority',
+            'frequency': 'custom_frequency',
+            'reset-date': 'custom_reset_date'
         };
-        return fieldNames[column] || column;
+        return fieldNames[column] || `custom_${column.replace(/-/g, '_')}`;
     }
     
     isCellEditable(column) {
-        const editableColumns = ['task-name', 'status', 'entity', 'tf-tg', 'software', 'note', 'target-month', 'budget', 'actual'];
+        const editableColumns = [
+            'client', 'task-name', 'status', 'entity', 'tf-tg', 'software', 'note', 
+            'target-month', 'budget', 'actual', 'action-person', 'preparer', 
+            'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 
+            'year-end', 'priority', 'frequency', 'reset-date'
+        ];
         return editableColumns.includes(column);
     }
     
     getStatusClass(status) {
         if (!status) return 'open';
         return status.toLowerCase().replace(/\s+/g, '-');
-yi  }
+    }
     
     hashCode(str) {
         let hash = 0;
@@ -829,6 +1535,14 @@ yi  }
                 this.ensureColumnWidthSync(boardData.board_id);
             });
             
+            // Debug output after initialization
+            console.log('🎯 Combination view initialized with independent column widths');
+            console.log('💡 Tip: Use debugCombinationColumnWidths() in console to see current column widths');
+            this.debugColumnWidths();
+            
+            // Make debug function available globally
+            window.debugCombinationColumnWidths = () => this.debugColumnWidths();
+            
             // Also call the global table manager sync if available
             if (window.TableManager && window.TableManager.forceColumnWidthSync) {
                 window.TableManager.forceColumnWidthSync();
@@ -841,7 +1555,7 @@ yi  }
         console.log(`🔧 Applying column widths for board: ${boardId}`, columnConfig);
         
         // First, ensure we have the visible columns
-        const visibleColumns = columnConfig?.visible_columns || ['client', 'task-name', 'status', 'target-month'];
+        const visibleColumns = columnConfig?.visible_columns || this.getDefaultVisibleColumns();
         
         // Apply column widths if available
         if (columnConfig && columnConfig.column_widths) {
@@ -873,35 +1587,120 @@ yi  }
         const widthPx = width + 'px';
         console.log(`🎯 Setting width for board ${boardId}, column ${column}: ${widthPx}`);
         
+        // Create board-specific CSS class name to ensure complete independence
+        const boardSpecificClass = `pm-board-${boardId.replace(/[^a-zA-Z0-9]/g, '_')}-col-${column}`;
+        
         // Use highly specific selectors to ensure board independence
         const headerSelector = `.pm-combination-board-section[data-board-id="${boardId}"] .pm-combination-table-header .pm-header-cell[data-column="${column}"]`;
         const cellSelector = `.pm-combination-board-section[data-board-id="${boardId}"] .pm-combination-tasks .pm-cell[data-column="${column}"]`;
         
-        // Apply to header cells with exact styling
-        $(headerSelector).css({
+        // Add board-specific class to elements
+        $(headerSelector).addClass(boardSpecificClass);
+        $(cellSelector).addClass(boardSpecificClass);
+        
+        // Create or update board-specific CSS rule
+        this.createBoardSpecificCSS(boardSpecificClass, widthPx);
+        
+        // Also apply inline styles as fallback
+        const cssProps = {
             'width': widthPx,
             'min-width': widthPx,
             'max-width': widthPx,
             'flex': `0 0 ${widthPx}`,
             'box-sizing': 'border-box'
-        });
+        };
         
-        // Apply to content cells with matching styling  
-        $(cellSelector).css({
-            'width': widthPx,
-            'min-width': widthPx,
-            'max-width': widthPx,
-            'flex': `0 0 ${widthPx}`,
-            'box-sizing': 'border-box'
-        });
+        $(headerSelector).css(cssProps);
+        $(cellSelector).css(cssProps);
         
-        console.log(`✅ Applied width to ${$(headerSelector).length} headers and ${$(cellSelector).length} cells`);
+        console.log(`✅ Applied width to ${$(headerSelector).length} headers and ${$(cellSelector).length} cells with class ${boardSpecificClass}`);
     }
     
-    // Ensure column width synchronization between header and content
+    // Create board-specific CSS rules dynamically
+    createBoardSpecificCSS(className, widthPx) {
+        // Check if style element exists, create if not
+        let $styleElement = $('#pm-board-specific-styles');
+        if ($styleElement.length === 0) {
+            $styleElement = $('<style id="pm-board-specific-styles"></style>');
+            $('head').append($styleElement);
+        }
+        
+        // Get current CSS content
+        let cssContent = $styleElement.html();
+        
+        // Remove existing rule for this class if it exists
+        const classRegex = new RegExp(`\\.${className}\\s*\\{[^}]*\\}`, 'g');
+        cssContent = cssContent.replace(classRegex, '');
+        
+        // Add new rule
+        const newRule = `
+            .${className} {
+                width: ${widthPx} !important;
+                min-width: ${widthPx} !important;
+                max-width: ${widthPx} !important;
+                flex: 0 0 ${widthPx} !important;
+                box-sizing: border-box !important;
+            }
+        `;
+        
+        cssContent += newRule;
+        $styleElement.html(cssContent);
+        
+        console.log(`📝 Created CSS rule for ${className}: ${widthPx}`);
+    }
+    
+    // Clean up board-specific CSS when boards are removed
+    cleanupBoardSpecificCSS(boardId) {
+        const $styleElement = $('#pm-board-specific-styles');
+        if ($styleElement.length === 0) return;
+        
+        const boardPrefix = `pm-board-${boardId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        let cssContent = $styleElement.html();
+        
+        // Remove all CSS rules for this board
+        const boardRegex = new RegExp(`\\.${boardPrefix}-[^\\s{]*\\s*\\{[^}]*\\}`, 'g');
+        cssContent = cssContent.replace(boardRegex, '');
+        
+        $styleElement.html(cssContent);
+        console.log(`🧹 Cleaned up CSS rules for board: ${boardId}`);
+    }
+    
+    // Debug method to show current column widths for all boards
+    debugColumnWidths() {
+        console.log('🔍 DEBUG: Current column widths for all boards:');
+        
+        $('.pm-combination-board-section').each((index, boardSection) => {
+            const $boardSection = $(boardSection);
+            const boardId = $boardSection.data('board-id');
+            const boardName = $boardSection.find('h3').text();
+            
+            console.log(`\n📋 Board: ${boardName} (ID: ${boardId})`);
+            
+            $boardSection.find('.pm-combination-table-header .pm-header-cell').each((cellIndex, headerCell) => {
+                const $headerCell = $(headerCell);
+                const column = $headerCell.data('column');
+                const width = $headerCell.outerWidth();
+                
+                if (column) {
+                    console.log(`  📏 ${column}: ${width}px`);
+                }
+            });
+        });
+        
+        // Also show the CSS rules
+        const $styleElement = $('#pm-board-specific-styles');
+        if ($styleElement.length > 0) {
+            console.log('\n📝 Board-specific CSS rules:');
+            console.log($styleElement.html());
+        }
+    }
+    
+    // Ensure column width synchronization between header and content for specific board
     ensureColumnWidthSync(boardId) {
         const $boardSection = $(`.pm-combination-board-section[data-board-id="${boardId}"]`);
         const $headerCells = $boardSection.find('.pm-combination-table-header .pm-header-cell');
+        
+        console.log(`🔄 Syncing column widths for board: ${boardId}`);
         
         $headerCells.each((index, headerCell) => {
             const $headerCell = $(headerCell);
@@ -917,11 +1716,13 @@ yi  }
                 actualWidth = this.getDefaultColumnWidth(column);
             }
             
-            // Apply this width to ensure sync
+            console.log(`📐 Board ${boardId}, Column ${column}: ${actualWidth}px`);
+            
+            // Apply this width to ensure sync (this will create board-specific CSS)
             this.setColumnWidth(boardId, column, actualWidth);
         });
         
-        // Force layout recalculation
+        // Force layout recalculation for this board only
         setTimeout(() => {
             $boardSection.find('.pm-combination-table-header, .pm-combination-tasks').each(function() {
                 this.style.display = 'none';
@@ -1024,17 +1825,108 @@ yi  }
     
     // Initialize cell editing for combination view
     initializeCombinationCellEditing() {
-        // Enable inline editing for editable cells
+        // Priority order: Special selectors first, then general editable cells
+        
+        // 1. Client selector (highest priority - specific trigger)
+        $(document).off('click.combination-client').on('click.combination-client', '.pm-combination-task-row .pm-client-selector-trigger', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const $trigger = $(e.currentTarget);
+            const $cell = $trigger.closest('.pm-cell-client');
+            
+            if (window.ClientSelectorModal) {
+                window.ClientSelectorModal.showClientSelector($cell);
+            }
+        });
+        
+        // 2. Comment indicator clicks
+        $(document).off('click.combination-comments').on('click.combination-comments', '.pm-combination-task-row .pm-comment-indicator', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const taskId = $(e.currentTarget).data('task-id');
+            
+            if (window.CommentsModal) {
+                window.CommentsModal.showCommentsModal(taskId);
+            }
+        });
+        
+        // 3. Review note indicator clicks
+        $(document).off('click.combination-review').on('click.combination-review', '.pm-combination-task-row .pm-review-note-indicator', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const taskId = $(e.currentTarget).data('task-id');
+            
+            if (window.ReviewNotesModal) {
+                window.ReviewNotesModal.showReviewNotesModal(taskId);
+            }
+        });
+        
+        // 3.5. Engagement indicator clicks
+        $(document).off('click.combination-engagement').on('click.combination-engagement', '.pm-combination-task-row .pm-engagement-indicator', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const taskId = $(e.currentTarget).data('task-id');
+            
+            if (window.EngagementManager) {
+                window.EngagementManager.openEngagementModal(taskId);
+            }
+        });
+        
+        // 4. Subtask toggle
+        $(document).off('click.combination-subtask').on('click.combination-subtask', '.pm-combination-task-row .pm-subtask-toggle', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const taskId = $(e.currentTarget).data('task-id');
+            
+            if (window.SubtaskManager) {
+                window.SubtaskManager.toggleSubtasks(taskId);
+            }
+        });
+        
+        // 5. General editable cells (exactly like normal board view)
         $(document).off('click.combination-edit').on('click.combination-edit', '.pm-combination-task-row [data-editable="true"]', (e) => {
+            e.stopPropagation();
+            
+            // Don't trigger editing if clicking on subtask toggle
+            if ($(e.target).closest('.pm-subtask-toggle').length > 0) {
+                return;
+            }
+            
             const $cell = $(e.currentTarget);
+            const fieldType = $cell.data('field-type');
             const taskId = $cell.data('task-id');
-            const boardId = $cell.data('board-id');
-            const column = $cell.data('column');
             const fieldName = $cell.data('field');
             
-            // Use existing editors manager for inline editing
-            if (window.EditorsManager) {
-                window.EditorsManager.startInlineEdit($cell);
+            // Handle different field types exactly like normal board view
+            if (fieldType === 'person_selector') {
+                if (window.PersonSelectorManager) {
+                    window.PersonSelectorManager.showMultiPersonSelector($cell, taskId, fieldName);
+                }
+            } else if (fieldType === 'software_selector') {
+                if (window.SoftwareSelectorManager) {
+                    window.SoftwareSelectorManager.showSoftwareSelector($cell, taskId, fieldName);
+                }
+            } else if (fieldType === 'date') {
+                // Date fields directly show date picker, never text editor
+                console.log('📅 Opening date picker for:', fieldName);
+                if (window.EditorsManager) {
+                    window.EditorsManager.showDatePicker($cell, taskId, fieldName);
+                }
+                return; // Prevent any other editing behavior
+            } else if (fieldType === 'task_name_editor') {
+                if (window.EditorsManager) {
+                    window.EditorsManager.showTaskNameEditor($cell);
+                }
+            } else {
+                // For text, select, currency fields
+                if (window.EditorsManager) {
+                    window.EditorsManager.makeEditable($cell[0]);
+                }
             }
         });
     }
@@ -1052,6 +1944,48 @@ yi  }
             });
         } catch (error) {
             console.warn('Failed to save column width for board:', boardId, error);
+        }
+    }
+    // Delete saved combination
+    async deleteSavedCombination(combinationId, combinationName) {
+        const confirmed = await new Promise((resolve) => {
+            frappe.confirm(
+                `Are you sure you want to delete "${combinationName}"?`,
+                () => resolve(true),
+                () => resolve(false)
+            );
+        });
+        
+        if (!confirmed) return;
+        
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.delete_combination_view',
+                args: {
+                    combination_id: combinationId
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                frappe.show_alert({
+                    message: response.message.message,
+                    indicator: 'green'
+                });
+                
+                // Refresh saved combinations list
+                await this.loadSavedCombinations();
+                this.renderSavedCombinations();
+                
+            } else {
+                throw new Error(response.message?.error || 'Failed to delete combination view');
+            }
+            
+        } catch (error) {
+            console.error('Error deleting combination view:', error);
+            frappe.show_alert({
+                message: 'Error deleting combination view: ' + error.message,
+                indicator: 'red'
+            });
         }
     }
 }

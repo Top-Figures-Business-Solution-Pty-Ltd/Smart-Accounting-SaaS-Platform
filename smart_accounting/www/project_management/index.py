@@ -4079,6 +4079,186 @@ def debug_partition_data():
         }
 
 @frappe.whitelist()
+def test_combination_doctype():
+    """
+    Test function to verify Combination View DocType configuration
+    """
+    try:
+        # Check if DocTypes exist
+        if not frappe.db.exists("DocType", "Combination View"):
+            return {
+                'success': False,
+                'error': 'Combination View DocType does not exist. Please create it first.'
+            }
+        
+        if not frappe.db.exists("DocType", "Combination View Board"):
+            return {
+                'success': False,
+                'error': 'Combination View Board DocType does not exist. Please create it first.'
+            }
+        
+        # Get DocType meta
+        combination_meta = frappe.get_meta("Combination View")
+        board_meta = frappe.get_meta("Combination View Board")
+        
+        # Check required fields
+        main_fields = [field.fieldname for field in combination_meta.fields]
+        child_fields = [field.fieldname for field in board_meta.fields]
+        
+        return {
+            'success': True,
+            'main_doctype_fields': main_fields,
+            'child_doctype_fields': child_fields,
+            'message': 'DocTypes are properly configured'
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': f'DocType test error: {str(e)}'
+        }
+
+@frappe.whitelist()
+def save_combination_view(view_name, description, board_ids, is_public=0):
+    """
+    Save a combination view for quick access later
+    """
+    try:
+        # Handle board_ids parameter
+        if isinstance(board_ids, str):
+            try:
+                board_ids = json.loads(board_ids)
+            except:
+                board_ids = [bid.strip() for bid in board_ids.split(',') if bid.strip()]
+        
+        # Create new Combination View document
+        combination_view = frappe.new_doc("Combination View")
+        combination_view.view_name = view_name
+        combination_view.description = description or ""
+        combination_view.is_public = int(is_public)
+        combination_view.usage_count = 0
+        
+        # Add boards to child table
+        for i, board_id in enumerate(board_ids):
+            # Get board display name
+            board_name = frappe.db.get_value("Partition", 
+                {"name": board_id}, "partition_name") or board_id
+            if not board_name:
+                board_name = frappe.db.get_value("Partition", 
+                    {"partition_name": board_id}, "partition_name") or board_id
+            
+            combination_view.append("boards", {
+                "board_id": str(board_id),
+                "board_name": str(board_name),
+                "display_order": i + 1
+            })
+        
+        combination_view.insert()
+        
+        return {
+            'success': True,
+            'message': f'Combination view "{view_name}" saved successfully',
+            'combination_id': combination_view.name
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Save combination view error: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def get_saved_combinations():
+    """
+    Get all saved combination views for current user
+    """
+    try:
+        combinations = frappe.get_all("Combination View",
+            filters={
+                "owner": frappe.session.user
+            },
+            fields=["name", "view_name", "description", "usage_count", "last_used", "creation"],
+            order_by="last_used desc, creation desc"
+        )
+        
+        # Get boards for each combination
+        for combination in combinations:
+            boards = frappe.get_all("Combination View Board",
+                filters={"parent": combination.name},
+                fields=["board_id", "board_name", "display_order"],
+                order_by="display_order"
+            )
+            combination.boards = boards
+            combination.board_count = len(boards)
+        
+        return {
+            'success': True,
+            'combinations': combinations
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Get saved combinations error: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'combinations': []
+        }
+
+@frappe.whitelist()
+def load_combination_view(combination_id):
+    """
+    Load a saved combination view and update usage stats
+    """
+    try:
+        combination = frappe.get_doc("Combination View", combination_id)
+        
+        # Update usage statistics
+        combination.usage_count = (combination.usage_count or 0) + 1
+        combination.last_used = frappe.utils.now()
+        combination.save(ignore_permissions=True)
+        
+        # Get board IDs in correct order
+        boards = frappe.get_all("Combination View Board",
+            filters={"parent": combination_id},
+            fields=["board_id", "board_name"],
+            order_by="display_order"
+        )
+        
+        board_ids = [board.board_id for board in boards]
+        
+        return {
+            'success': True,
+            'combination_name': combination.view_name,
+            'board_ids': board_ids,
+            'boards': boards
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Load combination view error: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def delete_combination_view(combination_id):
+    """
+    Delete a saved combination view
+    """
+    try:
+        frappe.delete_doc("Combination View", combination_id)
+        return {
+            'success': True,
+            'message': 'Combination view deleted successfully'
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
 def get_combination_view_data(board_ids):
     """
     Get data for combination view with multiple boards
