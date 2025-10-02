@@ -457,6 +457,7 @@ class CombinationViewManager {
         
         // Clean up any existing board-specific CSS
         $('#pm-board-specific-styles').remove();
+        $('#pm-board-table-styles').remove();
         
         // Update the badge count
         $('.pm-combination-board-badge').text(`${boardsData.length} Boards`);
@@ -1536,8 +1537,8 @@ class CombinationViewManager {
             });
             
             // Debug output after initialization
-            console.log('🎯 Combination view initialized with independent column widths');
-            console.log('💡 Tip: Use debugCombinationColumnWidths() in console to see current column widths');
+            console.log('🎯 Combination view initialized with perfect header-body alignment');
+            console.log('💡 Tip: Use debugCombinationColumnWidths() in console to see alignment details');
             this.debugColumnWidths();
             
             // Make debug function available globally
@@ -1550,12 +1551,15 @@ class CombinationViewManager {
         }, 100);
     }
     
-    // Apply column widths specific to each board with enhanced synchronization
+    // Apply column widths specific to each board with complete independence
     applyBoardColumnWidths(boardId, columnConfig) {
-        console.log(`🔧 Applying column widths for board: ${boardId}`, columnConfig);
+        console.log(`🔧 Applying independent column widths for board: ${boardId}`, columnConfig);
         
-        // First, ensure we have the visible columns
+        // Get visible columns for this specific board
         const visibleColumns = columnConfig?.visible_columns || this.getDefaultVisibleColumns();
+        
+        // Calculate total table width for this board
+        let totalBoardWidth = 0;
         
         // Apply column widths if available
         if (columnConfig && columnConfig.column_widths) {
@@ -1566,15 +1570,20 @@ class CombinationViewManager {
             visibleColumns.forEach(column => {
                 const width = columnWidths[column] || this.getDefaultColumnWidth(column);
                 this.setColumnWidth(boardId, column, width);
+                totalBoardWidth += width;
             });
         } else {
-            console.log(`📏 No saved widths for ${boardId}, using defaults`);
-            // Apply default widths to all visible columns
+            console.log(`📏 No saved widths for ${boardId}, using optimized defaults`);
+            // Apply optimized default widths based on visible columns count
             visibleColumns.forEach(column => {
-                const width = this.getDefaultColumnWidth(column);
+                const width = this.getOptimizedColumnWidth(column, visibleColumns.length);
                 this.setColumnWidth(boardId, column, width);
+                totalBoardWidth += width;
             });
         }
+        
+        // Set board-specific table width
+        this.setBoardTableWidth(boardId, totalBoardWidth);
         
         // Force synchronization after a short delay to ensure DOM is ready
         setTimeout(() => {
@@ -1582,13 +1591,94 @@ class CombinationViewManager {
         }, 100);
     }
     
-    // Set column width for both header and content cells with board-specific precision
+    // Get optimized column width based on total columns count
+    getOptimizedColumnWidth(column, totalColumns) {
+        const baseWidths = this.getDefaultColumnWidth(column);
+        
+        // If board has fewer columns, allow wider columns
+        if (totalColumns <= 6) {
+            return Math.max(baseWidths, baseWidths * 1.2);
+        } else if (totalColumns <= 10) {
+            return baseWidths;
+        } else {
+            // Many columns, use slightly smaller widths
+            return Math.max(80, baseWidths * 0.9);
+        }
+    }
+    
+    // Set board-specific table width with perfect header-body alignment
+    setBoardTableWidth(boardId, totalWidth) {
+        const $boardSection = $(`.pm-combination-board-section[data-board-id="${boardId}"]`);
+        const $tableHeader = $boardSection.find('.pm-combination-table-header');
+        const $tasks = $boardSection.find('.pm-combination-tasks');
+        
+        const tableWidthPx = totalWidth + 'px';
+        console.log(`📐 Setting synchronized table width for board ${boardId}: ${tableWidthPx}`);
+        
+        // Create board-specific table width CSS class
+        const boardTableClass = `pm-board-${boardId.replace(/[^a-zA-Z0-9]/g, '_')}-table`;
+        
+        // Add class to table elements
+        $tableHeader.addClass(boardTableClass);
+        $tasks.addClass(boardTableClass);
+        $boardSection.find('.pm-combination-task-row').addClass(boardTableClass);
+        
+        // Create CSS rule for perfect synchronization
+        this.createBoardTableWidthCSS(boardTableClass, tableWidthPx);
+        
+        // Also apply inline styles for immediate effect
+        const tableCSS = {
+            'width': tableWidthPx + ' !important',
+            'min-width': tableWidthPx + ' !important',
+            'max-width': tableWidthPx + ' !important'
+        };
+        
+        $tableHeader.css(tableCSS);
+        $tasks.css(tableCSS);
+        $boardSection.find('.pm-combination-task-row').css(tableCSS);
+        
+        console.log(`✅ Synchronized table width for board ${boardId}: header and body aligned`);
+    }
+    
+    // Create board-specific table width CSS rules
+    createBoardTableWidthCSS(className, widthPx) {
+        // Check if style element exists, create if not
+        let $styleElement = $('#pm-board-table-styles');
+        if ($styleElement.length === 0) {
+            $styleElement = $('<style id="pm-board-table-styles"></style>');
+            $('head').append($styleElement);
+        }
+        
+        // Get current CSS content
+        let cssContent = $styleElement.html();
+        
+        // Remove existing rule for this class if it exists
+        const classRegex = new RegExp(`\\.${className}\\s*\\{[^}]*\\}`, 'g');
+        cssContent = cssContent.replace(classRegex, '');
+        
+        // Add new rule with maximum specificity for perfect alignment
+        const newRule = `
+            .pm-combination-board-section .${className} {
+                width: ${widthPx} !important;
+                min-width: ${widthPx} !important;
+                max-width: ${widthPx} !important;
+                display: flex !important;
+            }
+        `;
+        
+        cssContent += newRule;
+        $styleElement.html(cssContent);
+        
+        console.log(`📝 Created table width CSS rule for ${className}: ${widthPx}`);
+    }
+    
+    // Set column width for both header and content cells with complete board independence
     setColumnWidth(boardId, column, width) {
         const widthPx = width + 'px';
-        console.log(`🎯 Setting width for board ${boardId}, column ${column}: ${widthPx}`);
+        console.log(`🎯 Setting independent width for board ${boardId}, column ${column}: ${widthPx}`);
         
         // Create board-specific CSS class name to ensure complete independence
-        const boardSpecificClass = `pm-board-${boardId.replace(/[^a-zA-Z0-9]/g, '_')}-col-${column}`;
+        const boardSpecificClass = `pm-board-${boardId.replace(/[^a-zA-Z0-9]/g, '_')}-col-${column.replace(/[^a-zA-Z0-9]/g, '_')}`;
         
         // Use highly specific selectors to ensure board independence
         const headerSelector = `.pm-combination-board-section[data-board-id="${boardId}"] .pm-combination-table-header .pm-header-cell[data-column="${column}"]`;
@@ -1598,22 +1688,22 @@ class CombinationViewManager {
         $(headerSelector).addClass(boardSpecificClass);
         $(cellSelector).addClass(boardSpecificClass);
         
-        // Create or update board-specific CSS rule
+        // Create or update board-specific CSS rule with highest specificity
         this.createBoardSpecificCSS(boardSpecificClass, widthPx);
         
-        // Also apply inline styles as fallback
+        // Apply inline styles with !important to ensure independence
         const cssProps = {
-            'width': widthPx,
-            'min-width': widthPx,
-            'max-width': widthPx,
-            'flex': `0 0 ${widthPx}`,
-            'box-sizing': 'border-box'
+            'width': widthPx + ' !important',
+            'min-width': widthPx + ' !important',
+            'max-width': widthPx + ' !important',
+            'flex': `0 0 ${widthPx} !important`,
+            'box-sizing': 'border-box !important'
         };
         
         $(headerSelector).css(cssProps);
         $(cellSelector).css(cssProps);
         
-        console.log(`✅ Applied width to ${$(headerSelector).length} headers and ${$(cellSelector).length} cells with class ${boardSpecificClass}`);
+        console.log(`✅ Applied independent width to ${$(headerSelector).length} headers and ${$(cellSelector).length} cells with class ${boardSpecificClass}`);
     }
     
     // Create board-specific CSS rules dynamically
@@ -1632,9 +1722,9 @@ class CombinationViewManager {
         const classRegex = new RegExp(`\\.${className}\\s*\\{[^}]*\\}`, 'g');
         cssContent = cssContent.replace(classRegex, '');
         
-        // Add new rule
+        // Add new rule with maximum specificity
         const newRule = `
-            .${className} {
+            .pm-combination-board-section .${className} {
                 width: ${widthPx} !important;
                 min-width: ${widthPx} !important;
                 max-width: ${widthPx} !important;
@@ -1665,26 +1755,41 @@ class CombinationViewManager {
         console.log(`🧹 Cleaned up CSS rules for board: ${boardId}`);
     }
     
-    // Debug method to show current column widths for all boards
+    // Debug method to show current column widths and table widths for all boards
     debugColumnWidths() {
-        console.log('🔍 DEBUG: Current column widths for all boards:');
+        console.log('🔍 DEBUG: Independent column and table widths for all boards:');
         
         $('.pm-combination-board-section').each((index, boardSection) => {
             const $boardSection = $(boardSection);
             const boardId = $boardSection.data('board-id');
             const boardName = $boardSection.find('h3').text();
             
-            console.log(`\n📋 Board: ${boardName} (ID: ${boardId})`);
+            // Get table dimensions
+            const $tableHeader = $boardSection.find('.pm-combination-table-header');
+            const tableWidth = $tableHeader.outerWidth();
+            const visibleColumns = $boardSection.find('.pm-combination-table-header .pm-header-cell').length;
             
+            console.log(`\n📋 Board: ${boardName} (ID: ${boardId})`);
+            console.log(`📐 Table Width: ${tableWidth}px | Visible Columns: ${visibleColumns}`);
+            
+            let totalCalculatedWidth = 0;
             $boardSection.find('.pm-combination-table-header .pm-header-cell').each((cellIndex, headerCell) => {
                 const $headerCell = $(headerCell);
                 const column = $headerCell.data('column');
-                const width = $headerCell.outerWidth();
+                const headerWidth = $headerCell.outerWidth();
                 
                 if (column) {
-                    console.log(`  📏 ${column}: ${width}px`);
+                    // Check corresponding body cell width
+                    const $bodyCell = $boardSection.find(`.pm-combination-tasks .pm-cell[data-column="${column}"]`).first();
+                    const bodyWidth = $bodyCell.length ? $bodyCell.outerWidth() : 0;
+                    const isAligned = Math.abs(headerWidth - bodyWidth) <= 1;
+                    
+                    console.log(`  📏 ${column}: Header ${headerWidth}px | Body ${bodyWidth}px ${isAligned ? '✅' : '❌'}`);
+                    totalCalculatedWidth += headerWidth;
                 }
             });
+            
+            console.log(`📊 Total Width: ${totalCalculatedWidth}px | Table Width: ${tableWidth}px`);
         });
         
         // Also show the CSS rules
@@ -1695,13 +1800,17 @@ class CombinationViewManager {
         }
     }
     
-    // Ensure column width synchronization between header and content for specific board
+    // Ensure perfect column width synchronization between header and content for specific board
     ensureColumnWidthSync(boardId) {
         const $boardSection = $(`.pm-combination-board-section[data-board-id="${boardId}"]`);
         const $headerCells = $boardSection.find('.pm-combination-table-header .pm-header-cell');
         
-        console.log(`🔄 Syncing column widths for board: ${boardId}`);
+        console.log(`🔄 Ensuring perfect header-body sync for board: ${boardId}`);
         
+        // Force immediate layout calculation
+        $boardSection[0].offsetHeight; // Trigger reflow
+        
+        let totalSyncedWidth = 0;
         $headerCells.each((index, headerCell) => {
             const $headerCell = $(headerCell);
             const column = $headerCell.data('column');
@@ -1718,18 +1827,65 @@ class CombinationViewManager {
             
             console.log(`📐 Board ${boardId}, Column ${column}: ${actualWidth}px`);
             
-            // Apply this width to ensure sync (this will create board-specific CSS)
+            // Apply this width with perfect synchronization
             this.setColumnWidth(boardId, column, actualWidth);
+            totalSyncedWidth += actualWidth;
         });
         
-        // Force layout recalculation for this board only
+        // Re-sync table width after column sync
+        this.setBoardTableWidth(boardId, totalSyncedWidth);
+        
+        // Force final layout recalculation with staggered timing
         setTimeout(() => {
+            // First, hide and show to trigger reflow
             $boardSection.find('.pm-combination-table-header, .pm-combination-tasks').each(function() {
                 this.style.display = 'none';
                 this.offsetHeight; // Trigger reflow
-                this.style.display = '';
+                this.style.display = 'flex';
             });
+            
+            // Then ensure all cells are perfectly aligned
+            setTimeout(() => {
+                this.forceHeaderBodyAlignment(boardId);
+            }, 50);
         }, 10);
+    }
+    
+    // Force perfect header-body alignment for a specific board
+    forceHeaderBodyAlignment(boardId) {
+        const $boardSection = $(`.pm-combination-board-section[data-board-id="${boardId}"]`);
+        const $headerCells = $boardSection.find('.pm-combination-table-header .pm-header-cell');
+        
+        console.log(`🎯 Forcing perfect alignment for board: ${boardId}`);
+        
+        $headerCells.each((index, headerCell) => {
+            const $headerCell = $(headerCell);
+            const column = $headerCell.data('column');
+            
+            if (!column) return;
+            
+            // Get header width
+            const headerWidth = $headerCell.outerWidth();
+            
+            // Find corresponding body cells and ensure they match exactly
+            const $bodyCells = $boardSection.find(`.pm-combination-tasks .pm-cell[data-column="${column}"]`);
+            
+            $bodyCells.each((cellIndex, bodyCell) => {
+                const $bodyCell = $(bodyCell);
+                const bodyWidth = $bodyCell.outerWidth();
+                
+                if (Math.abs(headerWidth - bodyWidth) > 1) {
+                    console.log(`🔧 Adjusting body cell ${column}: ${bodyWidth}px → ${headerWidth}px`);
+                    $bodyCell.css({
+                        'width': headerWidth + 'px !important',
+                        'min-width': headerWidth + 'px !important',
+                        'max-width': headerWidth + 'px !important'
+                    });
+                }
+            });
+        });
+        
+        console.log(`✅ Perfect alignment achieved for board: ${boardId}`);
     }
     
     // Get default column width based on column type

@@ -473,6 +473,22 @@
 /* Board-specific column width classes - each board gets its own width namespace */
 /* This allows each board to have independent column widths */
 
+/* Board-specific table width independence */
+.pm-combination-board-section {
+    overflow-x: auto; /* Allow horizontal scroll for each board independently */
+    margin-bottom: 2rem;
+}
+
+.pm-combination-board-section .pm-combination-table-header,
+.pm-combination-board-section .pm-combination-tasks {
+    width: fit-content; /* Let each board determine its own width */
+    min-width: 100%; /* Ensure minimum width */
+}
+
+.pm-combination-board-section .pm-combination-task-row {
+    width: fit-content; /* Let each row determine its own width */
+}
+
 /* Column resizer styles for combination view */
 .pm-combination-table-header .pm-column-resizer {
     position: absolute;
@@ -547,10 +563,9 @@
     cursor: default !important;
 }
 
-/* Enhanced column width synchronization - perfect alignment */
+/* Enhanced column width synchronization - board-independent */
 .pm-combination-table-header {
     display: flex !important;
-    width: 100% !important;
     background-color: #f8f9fa;
     border-bottom: 2px solid #dee2e6;
     font-weight: 600;
@@ -559,6 +574,7 @@
     color: #495057;
     margin: 0 !important;
     padding: 0 !important;
+    /* Remove width: 100% to allow natural table width */
 }
 
 .pm-combination-table-header .pm-header-cell {
@@ -577,19 +593,19 @@
 }
 
 .pm-combination-tasks {
-    width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
+    /* Remove width: 100% to allow natural table width */
 }
 
 .pm-combination-task-row {
     display: flex !important;
-    width: 100% !important;
     border-bottom: 1px solid #e9ecef;
     background-color: #fff;
     transition: background-color 0.15s ease-in-out;
     margin: 0 !important;
     padding: 0 !important;
+    /* Remove width: 100% to allow natural table width */
 }
 
 .pm-combination-task-row:hover {
@@ -850,6 +866,12 @@
 .pm-combination-board-section .pm-back-to-parent,
 .pm-combination-board-section .pm-back-btn,
 .pm-combination-board-section .fa-arrow-left:not(.pm-back-to-dashboard .fa-arrow-left) {
+    display: none !important;
+}
+
+/* Hide "Back to Dashboard" button in combination view */
+body[data-view="combination"] .pm-combination-view-actions,
+.pm-combination-view-container .pm-combination-view-actions {
     display: none !important;
 }
 
