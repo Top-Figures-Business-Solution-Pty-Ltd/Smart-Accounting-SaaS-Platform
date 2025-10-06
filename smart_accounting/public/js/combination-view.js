@@ -7,6 +7,10 @@ class CombinationViewManager {
         this.selectedBoards = [];
         this.availableBoards = [];
         this.currentCombinationView = null;
+        
+        // 大数据量支持 - 自然集成
+        this.enableLargeDataMode = false;
+        this.renderingStrategy = 'standard'; // standard | chunked | virtual
     }
 
     // Initialize combination view functionality
@@ -469,8 +473,20 @@ class CombinationViewManager {
         $('#pm-board-specific-styles').remove();
         $('#pm-board-table-styles').remove();
         
-        // Update the badge count
-        $('.pm-combination-board-badge').text(`${boardsData.length} Boards`);
+        // Update the badge count with CLS protection
+        const $badge = $('.pm-combination-board-badge');
+        const newText = `${boardsData.length} Boards`;
+        
+        // 使用内容容器更新，保持尺寸稳定
+        const $content = $badge.find('.pm-badge-content');
+        if ($content.length) {
+            $content.text(newText);
+        } else {
+            $badge.text(newText);
+        }
+        
+        // 移除骨架屏类
+        $badge.removeClass('pm-badge-skeleton');
         
         // Add save combination button if not exists
         if (!$('.pm-save-combination-btn').length) {
@@ -494,27 +510,29 @@ class CombinationViewManager {
         $('.pm-view-stats').text(`(View: combination | Projects: ${totalProjects} | Tasks: ${totalTasks})`);
         
         
-        // Update or create bottom statistics using the correct footer structure
-        if (!$('.pm-summary').length) {
-            $('.project-management-container').append(`
-                <div class="pm-summary">
-                    <div class="pm-stat">
-                        <span class="pm-stat-number">${totalProjects}</span>
-                        <span class="pm-stat-label">Projects</span>
-                    </div>
-                    <div class="pm-stat">
-                        <span class="pm-stat-number">${totalTasks}</span>
-                        <span class="pm-stat-label">Tasks</span>
-                    </div>
-                </div>
-            `);
-        } else {
-            $('.pm-summary .pm-stat:first-child .pm-stat-number').text(totalProjects);
-            $('.pm-summary .pm-stat:last-child .pm-stat-number').text(totalTasks);
+        // Update existing summary stats (不再动态创建，避免CLS)
+        const $summary = $('.pm-summary');
+        if ($summary.length) {
+            // 平滑更新数字，避免布局跳跃
+            const $projectsNum = $summary.find('.pm-stat:first-child .pm-stat-number');
+            const $tasksNum = $summary.find('.pm-stat:last-child .pm-stat-number');
+            
+            if ($projectsNum.text() !== totalProjects.toString()) {
+                $projectsNum.text(totalProjects);
+            }
+            if ($tasksNum.text() !== totalTasks.toString()) {
+                $tasksNum.text(totalTasks);
+            }
         }
         
         const $container = $('#pm-combination-boards-container');
         console.log('DEBUG: Container found:', $container.length > 0);
+        
+        // 隐藏骨架屏，准备显示真实内容
+        const $skeleton = $container.find('.pm-combination-skeleton');
+        if ($skeleton.length) {
+            $skeleton.addClass('pm-hidden');
+        }
         
         let boardsHtml = '';
         
@@ -525,16 +543,84 @@ class CombinationViewManager {
         });
         
         console.log('DEBUG: Generated HTML length:', boardsHtml.length);
-        $container.html(boardsHtml);
+        
+        // CLS优化：零布局偏移的内容替换
+        if ($skeleton.length) {
+            // 测量骨架屏的精确尺寸
+            const skeletonRect = $skeleton[0].getBoundingClientRect();
+            const containerRect = $container[0].getBoundingClientRect();
+            
+            // 创建真实内容容器，确保尺寸完全一致
+            const $realContent = $('<div class="pm-combination-real-content pm-cls-protected"></div>');
+            
+            // 设置与骨架屏完全相同的尺寸和位置
+            $realContent.css({
+                'position': 'absolute',
+                'top': '0',
+                'left': '0',
+                'width': skeletonRect.width + 'px',
+                'height': skeletonRect.height + 'px',
+                'opacity': '0',
+                'z-index': '1'
+            });
+            
+            $realContent.html(boardsHtml);
+            
+            // 将容器设为相对定位
+            $container.css('position', 'relative');
+            
+            // 先添加真实内容（完全隐藏）
+            $container.append($realContent);
+            
+            // 等待真实内容完全渲染
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    // 同时进行透明度切换，确保无缝
+                    $skeleton.css({
+                        'opacity': '0',
+                        'transition': 'opacity 0.2s ease-out'
+                    });
+                    $realContent.css({
+                        'opacity': '1',
+                        'transition': 'opacity 0.2s ease-in'
+                    });
+                    
+                    // 切换完成后清理
+                    setTimeout(() => {
+                        $skeleton.remove();
+                        $realContent.css({
+                            'position': 'static',
+                            'width': 'auto',
+                            'height': 'auto',
+                            'z-index': 'auto'
+                        });
+                        $realContent.addClass('pm-transition-complete');
+                        $container.css('position', 'static');
+                        
+                        console.log('✅ Content transition completed without CLS');
+                    }, 200);
+                });
+            });
+        } else {
+            // 如果没有骨架屏，直接设置内容
+            $container.html(boardsHtml);
+        }
 
+        // 保存板块数量信息供下次预加载使用
+        try {
+            localStorage.setItem('board_count_combination', boardsData.length.toString());
+        } catch (e) {
+            console.warn('Could not save board count:', e);
+        }
+        
         // Initialize table functionality for each board
         this.initializeBoardTables(boardsData);
         
-        // Force immediate column width application after rendering
-        setTimeout(() => {
+        // 立即应用列宽，避免延迟闪烁
+        requestAnimationFrame(() => {
             this.forceColumnWidthApplication(boardsData);
             this.debugRenderedStructure(boardsData);
-        }, 200);
+        });
     }
 
     // Render individual board section
@@ -548,7 +634,7 @@ class CombinationViewManager {
                         <div class="pm-combination-board-title-left">
                         <i class="fa fa-table"></i>
                         <h3>${boardData.board_name}</h3>
-                        <span class="pm-combination-board-badge">${taskCount} Tasks</span>
+                        <span class="pm-combination-board-badge pm-badge-stable" style="min-width: 80px; height: 24px;">${taskCount} Tasks</span>
                         <a href="/project_management?view=${boardData.board_id}" 
                            class="pm-combination-goto-board" 
                            target="_blank">
@@ -1603,8 +1689,8 @@ class CombinationViewManager {
         // Hide column resizers in combination view
         $('.pm-combination-board-section .pm-column-resizer').hide();
         
-        // Force column width synchronization for all boards
-        setTimeout(() => {
+        // 立即同步列宽，避免延迟
+        requestAnimationFrame(() => {
             boardsData.forEach(boardData => {
                 this.ensureColumnWidthSync(boardData.board_id);
             });
@@ -1621,7 +1707,7 @@ class CombinationViewManager {
             if (window.TableManager && window.TableManager.forceColumnWidthSync) {
                 window.TableManager.forceColumnWidthSync();
             }
-        }, 100);
+        });
     }
     
     // Apply column widths specific to each board with complete independence
@@ -1655,10 +1741,10 @@ class CombinationViewManager {
             });
         }
         
-        // Apply gentle column width settings that preserve project structure
-        setTimeout(() => {
+        // 立即应用列宽设置，保持项目结构
+        requestAnimationFrame(() => {
             this.applyGentleColumnWidths(boardId, visibleColumns, totalBoardWidth);
-        }, 200);
+        });
     }
     
     // Get optimized column width based on total columns count

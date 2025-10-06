@@ -6,10 +6,20 @@ class OptimizedTableRenderer {
         this.container = options.container;
         this.config = window.AppConfig || {};
         
-        // 渲染配置
+        // 渲染配置 - 企业级优化
         this.rowHeight = options.rowHeight || this.config.get('performance.virtualScrolling.rowHeight', 48);
-        this.bufferSize = options.bufferSize || this.config.get('performance.virtualScrolling.bufferSize', 10);
-        this.threshold = options.threshold || this.config.get('performance.virtualScrolling.threshold', 100);
+        this.bufferSize = options.bufferSize || this.config.get('performance.virtualScrolling.bufferSize', 20);
+        this.threshold = options.threshold || this.config.get('performance.virtualScrolling.threshold', 200);
+        
+        // 自适应性能配置 - 根据数据量自动调整
+        this.adaptiveConfig = {
+            smallDataset: { threshold: 100, chunkSize: 50, bufferSize: 10 },
+            mediumDataset: { threshold: 1000, chunkSize: 100, bufferSize: 20 },
+            largeDataset: { threshold: 10000, chunkSize: 200, bufferSize: 50 }
+        };
+        
+        // 当前使用的配置
+        this.currentConfig = this.adaptiveConfig.smallDataset;
         
         // 状态管理
         this.data = [];
@@ -42,7 +52,59 @@ class OptimizedTableRenderer {
     init() {
         this.createViewport();
         this.bindEvents();
+        this.setupAdaptiveRendering();
         console.log('✅ 优化表格渲染器初始化完成');
+    }
+    
+    // 设置自适应渲染
+    setupAdaptiveRendering() {
+        // 监听数据量变化，自动调整配置
+        this.dataObserver = new MutationObserver((mutations) => {
+            const rowCount = document.querySelectorAll('.pm-task-row').length;
+            this.adaptToDataVolume(rowCount);
+        });
+        
+        // 观察表格容器的变化
+        const tableContainer = document.querySelector('.pm-table-container');
+        if (tableContainer) {
+            this.dataObserver.observe(tableContainer, {
+                childList: true,
+                subtree: true
+            });
+        }
+    }
+    
+    // 根据数据量自适应调整
+    adaptToDataVolume(dataCount) {
+        let newConfig = this.adaptiveConfig.smallDataset;
+        
+        if (dataCount > 10000) {
+            newConfig = this.adaptiveConfig.largeDataset;
+        } else if (dataCount > 1000) {
+            newConfig = this.adaptiveConfig.mediumDataset;
+        }
+        
+        // 只有配置真正改变时才更新
+        if (JSON.stringify(newConfig) !== JSON.stringify(this.currentConfig)) {
+            this.currentConfig = newConfig;
+            this.applyNewConfig();
+            
+            console.log(`🔄 Adapted to ${dataCount} items with config:`, newConfig);
+        }
+    }
+    
+    // 应用新配置
+    applyNewConfig() {
+        this.bufferSize = this.currentConfig.bufferSize;
+        this.threshold = this.currentConfig.threshold;
+        
+        // 如果数据量超过阈值，启用虚拟滚动
+        if (this.data.length > this.threshold && !this.virtualScrollingEnabled) {
+            this.enableVirtualScrolling();
+        }
+        
+        // 重新渲染以应用新配置
+        this.scheduleRender();
     }
 
     // 创建视口

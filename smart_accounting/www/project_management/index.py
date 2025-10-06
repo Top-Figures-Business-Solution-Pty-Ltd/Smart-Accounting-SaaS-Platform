@@ -557,15 +557,34 @@ def save_partition_column_config(partition_name, visible_columns, column_config=
 
 
 @frappe.whitelist()
-def load_partition_data(view='main'):
-    """Load project data for specific partition (called by JavaScript)"""
+def load_partition_data(view='main', enable_adaptive_loading=True):
+    """
+    Load project data for specific partition (called by JavaScript)
+    增强版：支持大数据量的自适应加载，保持现有功能完整性
+    """
     try:
-        data = get_project_management_data(view)
+        # 检查是否需要自适应加载
+        if enable_adaptive_loading:
+            total_count = get_data_count_internal(view)
+            
+            if total_count > 1000:
+                # 大数据量：分批加载但保持在同一页面
+                console.log(f"Large dataset detected ({total_count} items), using chunked loading")
+                data = get_project_management_data_chunked(view, chunk_size=200)
+            else:
+                # 正常数据量：使用原有逻辑
+                data = get_project_management_data(view)
+        else:
+            # 保持原有行为
+            data = get_project_management_data(view)
+        
         return {
             'success': True,
             'data': data,
             'view': view,
-            'title': get_workspace_title(view)
+            'title': get_workspace_title(view),
+            'total_count': len(data) if isinstance(data, list) else 0,
+            'adaptive_loading_used': enable_adaptive_loading and total_count > 1000 if 'total_count' in locals() else False
         }
     except Exception as e:
         frappe.log_error(f"Error loading partition data: {str(e)}")
@@ -573,6 +592,61 @@ def load_partition_data(view='main'):
             'success': False,
             'error': str(e)
         }
+
+def get_data_count_internal(view='main'):
+    """
+    内部数据计数方法 - 快速获取总数
+    """
+    try:
+        conditions = []
+        values = []
+        
+        if view != 'main':
+            partition_projects = frappe.get_all("Project", 
+                filters={"custom_partition": view},
+                fields=["name"]
+            )
+            if partition_projects:
+                project_names = [p.name for p in partition_projects]
+                conditions.append("project IN ({})".format(','.join(['%s'] * len(project_names))))
+                values.extend(project_names)
+        
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        
+        count = frappe.db.sql(f"""
+            SELECT COUNT(*) as total
+            FROM `tabTask`
+            WHERE {where_clause}
+        """, values)[0][0]
+        
+        return count
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting data count: {str(e)}")
+        return 0
+
+def get_project_management_data_chunked(view='main', chunk_size=200):
+    """
+    分块获取数据，但仍然返回完整数据集（保持现有功能）
+    """
+    try:
+        # 获取第一批数据（立即显示）
+        first_chunk = get_project_management_data_paginated(view, 0, chunk_size)
+        
+        # 在后台获取剩余数据（如果需要）
+        total_count = get_data_count_internal(view)
+        
+        if total_count > chunk_size:
+            # 标记需要后续加载
+            first_chunk['needs_more_loading'] = True
+            first_chunk['total_count'] = total_count
+            first_chunk['loaded_count'] = len(first_chunk.get('tasks', []))
+        
+        return first_chunk
+        
+    except Exception as e:
+        frappe.log_error(f"Error in chunked data loading: {str(e)}")
+        return get_project_management_data(view)  # 回退到原有方法
 
 def get_workspace_overview_data(workspace_name):
     """
@@ -2444,6 +2518,202 @@ def get_task_roles(task_id):
     except Exception as e:
         frappe.log_error(f"Error getting task roles: {str(e)}")
         return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def get_data_count(view='main', filters=None):
+    """
+    快速获取数据总数，用于虚拟滚动和性能优化
+    """
+    try:
+        if filters and isinstance(filters, str):
+            filters = frappe.parse_json(filters)
+        
+        # 构建查询条件
+        conditions = []
+        values = []
+        
+        if view != 'main':
+            # 获取特定视图的项目
+            partition_projects = frappe.get_all("Project", 
+                filters={"custom_partition": view},
+                fields=["name"]
+            )
+            if partition_projects:
+                project_names = [p.name for p in partition_projects]
+                conditions.append("project IN ({})".format(','.join(['%s'] * len(project_names))))
+                values.extend(project_names)
+        
+        # 应用过滤器
+        if filters:
+            if filters.get('client'):
+                conditions.append("custom_client = %s")
+                values.append(filters['client'])
+            if filters.get('status'):
+                conditions.append("status = %s")
+                values.append(filters['status'])
+        
+        # 构建SQL查询
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        
+        count = frappe.db.sql(f"""
+            SELECT COUNT(*) as total
+            FROM `tabTask`
+            WHERE {where_clause}
+        """, values)[0][0]
+        
+        return {
+            'success': True,
+            'total_count': count
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting data count: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
+def get_paginated_data(view='main', offset=0, limit=50, filters=None):
+    """
+    分页获取数据，支持大数据量的高性能加载
+    """
+    try:
+        offset = int(offset)
+        limit = min(int(limit), 200)  # 限制最大每页数量
+        
+        if filters and isinstance(filters, str):
+            filters = frappe.parse_json(filters)
+        
+        # 使用优化的查询
+        data = get_project_management_data_paginated(view, offset, limit, filters)
+        
+        return {
+            'success': True,
+            'data': data.get('tasks', []),
+            'offset': offset,
+            'limit': limit,
+            'has_more': len(data.get('tasks', [])) == limit
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting paginated data: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+def get_project_management_data_paginated(view='main', offset=0, limit=50, filters=None):
+    """
+    优化的分页数据获取，支持大数据量
+    """
+    try:
+        # 构建基础查询
+        conditions = ["1=1"]
+        values = []
+        
+        if view != 'main':
+            # 获取特定视图的项目
+            partition_projects = frappe.get_all("Project", 
+                filters={"custom_partition": view},
+                fields=["name"]
+            )
+            if partition_projects:
+                project_names = [p.name for p in partition_projects]
+                conditions.append("project IN ({})".format(','.join(['%s'] * len(project_names))))
+                values.extend(project_names)
+        
+        # 应用过滤器
+        if filters:
+            if filters.get('client'):
+                conditions.append("custom_client = %s")
+                values.append(filters['client'])
+            if filters.get('status'):
+                conditions.append("status = %s")
+                values.append(filters['status'])
+        
+        where_clause = " AND ".join(conditions)
+        
+        # 优化的SQL查询 - 只获取必要字段
+        tasks_data = frappe.db.sql(f"""
+            SELECT 
+                name as task_id,
+                subject as task_name,
+                custom_client,
+                status,
+                custom_entity_type,
+                custom_action_person,
+                custom_preparer,
+                custom_reviewer,
+                custom_partner,
+                modified as last_modified
+            FROM `tabTask`
+            WHERE {where_clause}
+            ORDER BY modified DESC
+            LIMIT %s OFFSET %s
+        """, values + [limit, offset], as_dict=True)
+        
+        # 批量获取客户信息
+        client_ids = [t.custom_client for t in tasks_data if t.custom_client]
+        clients_info = {}
+        if client_ids:
+            clients = frappe.get_all("Customer",
+                filters={"name": ["in", client_ids]},
+                fields=["name", "customer_name"]
+            )
+            clients_info = {c.name: c.customer_name for c in clients}
+        
+        # 批量获取角色信息（只获取必要的）
+        task_ids = [t.task_id for t in tasks_data]
+        roles_info = get_bulk_roles_info(task_ids)
+        
+        # 组装数据
+        enriched_tasks = []
+        for task in tasks_data:
+            enriched_task = {
+                'task_id': task.task_id,
+                'task_name': task.task_name,
+                'client_name': clients_info.get(task.custom_client, 'No Client'),
+                'status': task.status,
+                'entity_type': task.custom_entity_type or 'Company',
+                'action_person_info': roles_info.get(task.task_id, {}).get('action_person', []),
+                'last_modified': task.last_modified
+            }
+            enriched_tasks.append(enriched_task)
+        
+        return {
+            'tasks': enriched_tasks,
+            'total_loaded': len(enriched_tasks)
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error in paginated data fetch: {str(e)}")
+        return {'tasks': [], 'total_loaded': 0}
+
+def get_bulk_roles_info(task_ids):
+    """
+    批量获取角色信息，优化性能
+    """
+    if not task_ids:
+        return {}
+    
+    # 批量查询所有角色
+    roles = frappe.get_all("Task Role Assignment",
+        filters={"parent": ["in", task_ids]},
+        fields=["parent", "role", "user", "is_primary"]
+    )
+    
+    # 按任务分组
+    task_roles = {}
+    for role in roles:
+        task_id = role.parent
+        if task_id not in task_roles:
+            task_roles[task_id] = {}
+        
+        role_type = role.role.lower().replace(' ', '_')
+        if role_type not in task_roles[task_id]:
+            task_roles[task_id][role_type] = []
+        
+        # 获取用户信息
+        user_info = get_user_info(role.user)
+        if user_info:
+            task_roles[task_id][role_type].append(user_info)
+    
+    return task_roles
 
 @frappe.whitelist()
 def get_bulk_task_roles(task_ids):

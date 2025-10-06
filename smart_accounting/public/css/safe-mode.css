@@ -1,0 +1,294 @@
+/* Safe Mode CSS - 容错设计的安全模式样式 */
+
+/* 安全模式通知 */
+.pm-safe-mode-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 9999;
+    max-width: 400px;
+    animation: slide-in-right 0.3s ease-out;
+}
+
+.pm-notification-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.pm-notification-content i {
+    color: #856404;
+    font-size: 18px;
+}
+
+.pm-notification-content span {
+    flex: 1;
+    color: #856404;
+    font-weight: 500;
+}
+
+.pm-notification-close {
+    background: none;
+    border: none;
+    color: #856404;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.pm-notification-close:hover {
+    background-color: rgba(133, 100, 4, 0.1);
+}
+
+@keyframes slide-in-right {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* 安全模式基础布局 */
+.pm-safe-mode {
+    /* 禁用复杂动画 */
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* 安全模式表格样式 */
+.pm-safe-mode .pm-table-container {
+    display: block !important;
+    overflow: auto !important;
+    min-height: auto !important;
+    contain: none !important;
+}
+
+.pm-safe-mode .pm-project-table-header {
+    display: block !important;
+    background: #f8f9fa;
+    padding: 10px;
+    border-bottom: 2px solid #dee2e6;
+    font-weight: bold;
+}
+
+.pm-safe-mode .pm-project-table-header::before {
+    content: "Table View (Safe Mode)";
+    display: block;
+    margin-bottom: 10px;
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.pm-safe-mode .pm-header-cell {
+    display: inline-block !important;
+    margin-right: 15px !important;
+    margin-bottom: 5px !important;
+    padding: 5px 10px !important;
+    background: #e9ecef;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.pm-safe-mode .pm-task-row {
+    display: block !important;
+    border: 1px solid #dee2e6 !important;
+    border-radius: 8px !important;
+    padding: 15px !important;
+    margin-bottom: 10px !important;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.pm-safe-mode .pm-task-row:hover {
+    background: #f8f9fa;
+}
+
+.pm-safe-mode .pm-cell {
+    display: block !important;
+    margin-bottom: 8px !important;
+    padding: 0 !important;
+    border: none !important;
+    word-wrap: break-word;
+}
+
+.pm-safe-mode .pm-cell::before {
+    content: attr(data-label) ": ";
+    font-weight: bold;
+    color: #495057;
+    margin-right: 8px;
+}
+
+/* 为不同类型的单元格添加标签 */
+.pm-safe-mode .pm-cell-select::before { content: "Select: "; }
+.pm-safe-mode .pm-cell-client::before { content: "Client: "; }
+.pm-safe-mode .pm-cell-task-name::before { content: "Task: "; }
+.pm-safe-mode .pm-cell-entity::before { content: "Entity: "; }
+.pm-safe-mode .pm-cell-tf-tg::before { content: "TF/TG: "; }
+.pm-safe-mode .pm-cell-software::before { content: "Software: "; }
+.pm-safe-mode .pm-cell-status::before { content: "Status: "; }
+.pm-safe-mode .pm-cell-note::before { content: "Note: "; }
+.pm-safe-mode .pm-cell-target-month::before { content: "Target: "; }
+.pm-safe-mode .pm-cell-budget::before { content: "Budget: "; }
+.pm-safe-mode .pm-cell-actual::before { content: "Actual: "; }
+.pm-safe-mode .pm-cell-action-person::before { content: "Action Person: "; }
+.pm-safe-mode .pm-cell-preparer::before { content: "Preparer: "; }
+.pm-safe-mode .pm-cell-reviewer::before { content: "Reviewer: "; }
+.pm-safe-mode .pm-cell-partner::before { content: "Partner: "; }
+
+/* 安全模式用户头像 */
+.pm-safe-mode .pm-user-avatars {
+    display: inline-block !important;
+}
+
+.pm-safe-mode .pm-avatar {
+    display: inline-block !important;
+    margin-right: 5px !important;
+    width: 24px !important;
+    height: 24px !important;
+    line-height: 24px !important;
+    font-size: 10px !important;
+}
+
+/* 安全模式状态徽章 */
+.pm-safe-mode .pm-status-badge,
+.pm-safe-mode .pm-entity-badge,
+.pm-safe-mode .pm-tf-tg-badge {
+    display: inline-block !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+    font-size: 11px !important;
+    font-weight: normal !important;
+}
+
+/* 安全模式按钮 */
+.pm-safe-mode button,
+.pm-safe-mode .pm-btn {
+    padding: 8px 12px !important;
+    border-radius: 4px !important;
+    border: 1px solid #dee2e6 !important;
+    background: #fff !important;
+    color: #495057 !important;
+    cursor: pointer;
+    transition: none !important;
+}
+
+.pm-safe-mode button:hover,
+.pm-safe-mode .pm-btn:hover {
+    background: #f8f9fa !important;
+}
+
+/* 隐藏复杂元素 */
+.pm-safe-mode .pm-skeleton-loader,
+.pm-safe-mode [class*="pm-skeleton-"],
+.pm-safe-mode .pm-loading-placeholder {
+    display: none !important;
+}
+
+/* 安全模式搜索和过滤器 */
+.pm-safe-mode .pm-search-container,
+.pm-safe-mode .pm-filter-container {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.pm-safe-mode input,
+.pm-safe-mode select {
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+    width: 100%;
+    max-width: 300px;
+}
+
+/* 安全模式响应式 */
+@media (max-width: 768px) {
+    .pm-safe-mode .pm-task-row {
+        padding: 10px !important;
+        margin-bottom: 8px !important;
+    }
+    
+    .pm-safe-mode .pm-cell {
+        margin-bottom: 6px !important;
+        font-size: 14px;
+    }
+    
+    .pm-safe-mode-notification {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+        max-width: none;
+    }
+}
+
+/* 安全模式加载指示器 */
+.pm-safe-mode .pm-loading-simple {
+    text-align: center;
+    padding: 40px;
+    color: #6c757d;
+}
+
+.pm-safe-mode .pm-loading-simple::before {
+    content: "Loading...";
+    display: block;
+    font-size: 18px;
+    margin-bottom: 10px;
+}
+
+/* 安全模式错误处理 */
+.pm-safe-mode .pm-error-message {
+    background: #f8d7da;
+    color: #721c24;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 20px 0;
+    border: 1px solid #f5c6cb;
+}
+
+.pm-safe-mode .pm-error-message::before {
+    content: "⚠️ ";
+    font-weight: bold;
+}
+
+/* 确保基本功能可用 */
+.pm-safe-mode .pm-essential {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* 安全模式性能优化 */
+.pm-safe-mode * {
+    will-change: auto !important;
+    transform: none !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+}
+
+/* 打印样式 */
+@media print {
+    .pm-safe-mode-notification {
+        display: none !important;
+    }
+    
+    .pm-safe-mode .pm-task-row {
+        break-inside: avoid;
+        border: 1px solid #000 !important;
+        margin-bottom: 10px !important;
+    }
+}

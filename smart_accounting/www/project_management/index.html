@@ -1,6 +1,86 @@
 {% extends "templates/web.html" %}
 
 {% block page_content %}
+<!-- 预加载关键CSS变量和列宽，防止CLS和布局闪烁 -->
+<style>
+:root {
+    --pm-estimated-height: {% if project_data.is_combination_view %}1600px{% else %}800px{% endif %};
+    --pm-summary-height: 78px;
+    --pm-summary-width: 201px;
+    
+    /* 预设列宽，避免刷新后的布局调整 */
+    --pm-col-select: 50px;
+    --pm-col-client: 200px;
+    --pm-col-task-name: 250px;
+    --pm-col-entity: 100px;
+    --pm-col-tf-tg: 80px;
+    --pm-col-software: 120px;
+    --pm-col-status: 100px;
+    --pm-col-note: 120px;
+    --pm-col-target-month: 120px;
+    --pm-col-budget: 120px;
+    --pm-col-actual: 120px;
+    --pm-col-review-note: 120px;
+    --pm-col-action-person: 130px;
+    --pm-col-preparer: 120px;
+    --pm-col-reviewer: 120px;
+    --pm-col-partner: 120px;
+}
+
+/* 减少过渡动画，避免刷新时的闪烁 */
+.pm-header-cell, .pm-cell {
+    transition: width 0.1s ease !important; /* 极短的过渡，避免突兀变化 */
+}
+</style>
+
+<!-- 快速加载用户的自定义列宽，避免刷新时的布局调整 -->
+<script>
+(function() {
+    try {
+        // 使用与现有系统相同的存储键名
+        const userKey = `pm-column-widths-${frappe?.session?.user || 'guest'}`;
+        const savedWidths = localStorage.getItem(userKey);
+        
+        if (savedWidths) {
+            const widths = JSON.parse(savedWidths);
+            const root = document.documentElement;
+            
+            // 预加载用户的自定义列宽到CSS变量
+            Object.entries(widths).forEach(([column, width]) => {
+                if (width && width > 0) {
+                    root.style.setProperty(`--pm-col-${column}`, `${width}px`);
+                }
+            });
+            
+            // 标记已预加载用户偏好
+            document.documentElement.setAttribute('data-user-widths-preloaded', 'true');
+            console.log('✅ Pre-loaded user custom column widths');
+        } else {
+            console.log('ℹ️ No saved user column preferences found');
+        }
+    } catch (e) {
+        console.warn('Could not pre-load user column widths:', e);
+    }
+})();
+</script>
+
+<!-- 早期滚动位置管理 - 防止页面跳跃 -->
+<script>
+(function() {
+    // 立即禁用浏览器的滚动恢复
+    if ('scrollRestoration' in history) {
+        history.scrollRestoration = 'manual';
+    }
+    
+    // 立即滚动到顶部，防止布局变化时的跳跃
+    if (window.pageYOffset > 0 || document.documentElement.scrollTop > 0) {
+        window.scrollTo(0, 0);
+    }
+    
+    // 标记页面正在加载
+    document.documentElement.classList.add('pm-page-loading');
+})();
+</script>
 {% if project_data.is_main_dashboard or project_data.is_workspace_view %}
 <script>document.body.classList.add('main-dashboard-view');</script>
 {% endif %}
@@ -16,6 +96,12 @@
 {% endblock %}
 
 {% block script %}
+<!-- 优先加载性能关键模块 -->
+<script src="/assets/smart_accounting/js/config/app-config.js"></script>
+<script src="/assets/smart_accounting/js/performance/progressive-enhancement.js"></script>
+<script src="/assets/smart_accounting/js/performance/performance-monitor.js"></script>
+<script src="/assets/smart_accounting/js/performance/layout-preloader.js"></script>
+
 <!-- Load modules in dependency order -->
 <script src="/assets/smart_accounting/js/column-config.js"></script>
 <script src="/assets/smart_accounting/js/utils.js"></script>
@@ -39,6 +125,9 @@
 {% endblock %}
 
 {% block style %}
+    <!-- 关键CSS优先加载 - 防止CLS -->
+    <link rel="stylesheet" href="/assets/smart_accounting/css/skeleton-loader.css" media="all">
+    <link rel="stylesheet" href="/assets/smart_accounting/css/safe-mode.css" media="all">
     <link rel="stylesheet" href="/assets/smart_accounting/css/common.css">
     <link rel="stylesheet" href="/assets/smart_accounting/css/workspace.css">
     <link rel="stylesheet" href="/assets/smart_accounting/css/reports.css">

@@ -12,10 +12,18 @@ class TableManager {
         this.saveTimeout = null;
         this.updateTimeout = null; // Prevent multiple simultaneous updates
         this.lastUpdateTime = 0; // Track last update to prevent rapid calls
+        
+        // 大数据量支持 - 整合到现有架构
+        this.dataCount = 0;
+        this.isLargeDataset = false;
+        this.chunkLoadingEnabled = false;
     }
 
     // Column Resizing Functionality
     initializeColumnResizing() {
+        // 立即应用预加载的列宽，然后异步加载用户设置
+        this.applyPreloadedColumnWidths();
+        
         // Load column widths and initialize after loading
         this.loadColumnWidthsAsync().then(() => {
             // Bind resize events after column widths are loaded
@@ -360,11 +368,17 @@ class TableManager {
         // Save user-specific column widths with dual storage (server + localStorage)
         clearTimeout(this.saveTimeout);
         this.saveTimeout = setTimeout(() => {
+            // 立即更新CSS变量，确保下次刷新时能立即应用用户的自定义列宽
+            const root = document.documentElement;
+            Object.entries(this.columnWidths).forEach(([column, width]) => {
+                root.style.setProperty(`--pm-col-${column}`, `${width}px`);
+            });
+            
             // Save to localStorage immediately for instant fallback
             const userKey = `pm-column-widths-${frappe.session.user}`;
             try {
                 localStorage.setItem(userKey, JSON.stringify(this.columnWidths));
-                console.log('✅ Column widths saved to localStorage for user:', frappe.session.user);
+                console.log('✅ User custom column widths saved to localStorage and CSS variables');
             } catch (e) {
                 console.warn('Failed to save to localStorage:', e);
             }
@@ -803,8 +817,7 @@ class TableManager {
     refreshAllUserAvatars() {
         console.log('👥 Refreshing all user avatars to adapt to column widths...');
         
-        // 优化：只刷新可见的用户头像，避免大量API调用
-        // 使用CSS类更新来适应列宽变化，而不是重新获取数据
+        // 大数据量优化：只处理可见区域
         const userCellSelectors = [
             '.pm-cell-action-person',
             '.pm-cell-preparer', 
@@ -817,6 +830,11 @@ class TableManager {
         userCellSelectors.forEach(selector => {
             $(selector).each(function() {
                 const $cell = $(this);
+                
+                // 大数据量时只处理可见元素
+                if (this.isLargeDataset && !this.isElementVisible($cell[0])) {
+                    return;
+                }
                 
                 // 只更新有数据的单元格的显示样式，不重新获取数据
                 if (!$cell.hasClass('pm-empty-person')) {
@@ -832,6 +850,62 @@ class TableManager {
         });
         
         console.log(`✅ Refreshed ${refreshedCount} user avatar cells (display only, no API calls)`);
+    }
+    
+    // 检查元素是否可见（大数据量优化）
+    isElementVisible(element) {
+        if (!element) return false;
+        
+        const rect = element.getBoundingClientRect();
+        const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+        
+        return rect.top < windowHeight && rect.bottom > 0;
+    }
+    
+    // 启用虚拟滚动（整合到现有架构）
+    enableVirtualScrolling() {
+        if (this.virtualScrollEnabled) return;
+        
+        console.log('🚀 Enabling virtual scrolling for large dataset');
+        
+        const tableContainer = document.querySelector('.pm-table-container');
+        if (tableContainer) {
+            tableContainer.classList.add('pm-virtual-enabled');
+            
+            // 使用现有的OptimizedTableRenderer
+            if (window.OptimizedTableRenderer) {
+                this.virtualRenderer = new OptimizedTableRenderer({
+                    container: tableContainer,
+                    rowHeight: 48,
+                    bufferSize: 20,
+                    threshold: 200
+                });
+            }
+            
+            this.virtualScrollEnabled = true;
+        }
+    }
+    
+    // 应用预加载的列宽（尊重用户自定义设置）
+    applyPreloadedColumnWidths() {
+        // 检查是否已经预加载了用户偏好
+        if (document.documentElement.hasAttribute('data-user-widths-preloaded')) {
+            console.log('✅ User column preferences already pre-loaded');
+            return;
+        }
+        
+        // 如果没有用户偏好，使用默认宽度但不强制覆盖
+        const root = document.documentElement;
+        const defaultWidths = this.getDefaultColumnWidths();
+        
+        Object.entries(defaultWidths).forEach(([column, width]) => {
+            const currentValue = getComputedStyle(root).getPropertyValue(`--pm-col-${column}`);
+            if (!currentValue || currentValue.trim() === '') {
+                root.style.setProperty(`--pm-col-${column}`, `${width}px`);
+            }
+        });
+        
+        console.log('✅ Applied default column widths where needed');
     }
 
     // Force immediate table width recalculation (public method)

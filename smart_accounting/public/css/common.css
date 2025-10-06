@@ -396,13 +396,20 @@ header.navbar {
     color: var(--monday-dark);
 }
 
-/* Summary Stats */
+/* Summary Stats - 防CLS优化 */
 .pm-summary {
     position: fixed;
     bottom: 20px;
     right: 20px;
     background: white;
     padding: 16px;
+    /* 预定义尺寸防止CLS */
+    min-height: var(--pm-summary-height, 78px);
+    width: var(--pm-summary-width, 201px);
+    contain: layout; /* 防止影响其他元素布局 */
+    /* 确保立即可见，避免闪烁 */
+    opacity: 1;
+    visibility: visible;
     border-radius: 8px;
     box-shadow: var(--monday-shadow);
     display: flex;
@@ -567,4 +574,381 @@ header.navbar {
 @keyframes width-adjust {
     0% { opacity: 0.8; }
     100% { opacity: 1; }
+}
+
+/* ===== 防CLS的布局优化 ===== */
+
+/* 预定义表格布局尺寸 - 防止布局闪烁 */
+.pm-table-container {
+    /* 使用CSS Grid确保稳定的布局 */
+    display: grid;
+    grid-template-rows: auto 1fr;
+    min-height: var(--pm-estimated-height, 600px);
+    width: 100%;
+    contain: layout style; /* 性能优化 */
+}
+g
+/* Combination View 布局稳定化 */
+.pm-combination-boards-container.pm-cls-stable {
+    min-height: var(--pm-estimated-height, 800px);
+    width: 100%;
+    position: relative;
+    contain: layout;
+    /* 确保在内容加载前就占据空间 */
+    visibility: visible;
+}
+
+.pm-combination-board-badge.pm-badge-skeleton {
+    display: inline-block;
+    min-width: 80px;
+    height: 24px;
+    line-height: 24px;
+    text-align: center;
+    background: var(--monday-blue, #0073ea);
+    color: white;
+    padding: 0 12px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+/* 骨架屏样式 */
+.pm-combination-skeleton {
+    width: 100%;
+    padding: 20px;
+    opacity: 1;
+    transition: opacity 0.3s ease-out;
+}
+
+.pm-combination-skeleton.pm-hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* 真实内容样式 - 防CLS保护 */
+.pm-combination-real-content {
+    width: 100%;
+    transition: opacity 0.3s ease-in;
+}
+
+/* CLS保护的真实内容 */
+.pm-combination-real-content.pm-cls-protected {
+    /* 在绝对定位期间确保不影响布局 */
+    contain: layout size;
+    will-change: opacity;
+}
+
+/* 内容切换完成后的状态 */
+.pm-combination-real-content.pm-cls-protected.pm-transition-complete {
+    contain: none;
+    will-change: auto;
+}
+
+.pm-combination-board-skeleton {
+    background: #fff;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    padding: 20px;
+    min-height: 300px;
+}
+
+.pm-skeleton-board-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+    height: 40px;
+}
+
+.pm-skeleton-board-title {
+    height: 24px;
+    width: 200px;
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200px 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: 4px;
+}
+
+.pm-skeleton-board-badge {
+    height: 20px;
+    width: 60px;
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200px 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: 10px;
+}
+
+.pm-skeleton-board-table {
+    width: 100%;
+}
+
+.pm-skeleton-table-header {
+    height: 48px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+}
+
+.pm-skeleton-table-header::before {
+    content: '';
+    height: 16px;
+    width: 100%;
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200px 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: 4px;
+}
+
+.pm-skeleton-table-row {
+    height: 48px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+}
+
+.pm-skeleton-table-row::before {
+    content: '';
+    height: 16px;
+    width: 80%;
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200px 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: 4px;
+}
+
+/* 表格头部固定尺寸 */
+.pm-project-table-header,
+.pm-skeleton-table-header {
+    display: grid;
+    grid-template-columns: 
+        var(--pm-col-select, 50px)
+        var(--pm-col-client, 200px)
+        var(--pm-col-task-name, 250px)
+        var(--pm-col-entity, 100px)
+        var(--pm-col-tf-tg, 80px)
+        var(--pm-col-software, 120px)
+        var(--pm-col-status, 100px)
+        var(--pm-col-note, 120px)
+        var(--pm-col-target-month, 120px)
+        var(--pm-col-budget, 120px)
+        var(--pm-col-actual, 120px)
+        var(--pm-col-review-note, 120px)
+        var(--pm-col-action-person, 130px)
+        var(--pm-col-preparer, 120px)
+        var(--pm-col-reviewer, 120px)
+        var(--pm-col-partner, 120px);
+    height: var(--pm-header-height, 56px);
+    background: #f8f9fa;
+    border-bottom: 2px solid #e5e5e5;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+/* 表格行固定尺寸 */
+.pm-task-row,
+.pm-skeleton-row {
+    display: grid;
+    grid-template-columns: 
+        var(--pm-col-select, 50px)
+        var(--pm-col-client, 200px)
+        var(--pm-col-task-name, 250px)
+        var(--pm-col-entity, 100px)
+        var(--pm-col-tf-tg, 80px)
+        var(--pm-col-software, 120px)
+        var(--pm-col-status, 100px)
+        var(--pm-col-note, 120px)
+        var(--pm-col-target-month, 120px)
+        var(--pm-col-budget, 120px)
+        var(--pm-col-actual, 120px)
+        var(--pm-col-review-note, 120px)
+        var(--pm-col-action-person, 130px)
+        var(--pm-col-preparer, 120px)
+        var(--pm-col-reviewer, 120px)
+        var(--pm-col-partner, 120px);
+    height: var(--pm-row-height, 48px);
+    border-bottom: 1px solid #f0f0f0;
+    align-items: center;
+}
+
+/* 单元格基础样式 */
+.pm-header-cell,
+.pm-cell,
+.pm-skeleton-header-cell,
+.pm-skeleton-cell {
+    padding: 0 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-right: 1px solid #e5e5e5;
+    display: flex;
+    align-items: center;
+    min-height: 100%;
+}
+
+/* 响应式列宽调整 */
+@media (max-width: 1400px) {
+    :root {
+        --pm-col-note: 100px;
+        --pm-col-target-month: 100px;
+        --pm-col-budget: 100px;
+        --pm-col-actual: 100px;
+    }
+}
+
+@media (max-width: 1200px) {
+    :root {
+        --pm-col-client: 180px;
+        --pm-col-task-name: 200px;
+        --pm-col-action-person: 110px;
+        --pm-col-preparer: 100px;
+        --pm-col-reviewer: 100px;
+        --pm-col-partner: 100px;
+    }
+}
+
+@media (max-width: 768px) {
+    :root {
+        --pm-row-height: 44px;
+        --pm-header-height: 48px;
+    }
+    
+    .pm-header-cell,
+    .pm-cell {
+        padding: 0 8px;
+        font-size: 14px;
+    }
+}
+
+/* 加载状态管理 */
+.pm-table-container.pm-loading .pm-table-body {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.pm-table-container.pm-loaded .pm-skeleton-loader {
+    display: none;
+}
+
+.pm-table-container.pm-loaded .pm-table-body {
+    opacity: 1;
+    animation: fade-in-up 0.4s ease-out;
+}
+
+@keyframes fade-in-up {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 性能优化 */
+.pm-table-container,
+.pm-table-body,
+.pm-task-row {
+    will-change: auto; /* 避免不必要的合成层 */
+}
+
+/* 只在需要时启用硬件加速 */
+.pm-table-container.pm-loading,
+.pm-table-container.pm-loaded {
+    transform: translateZ(0); /* 创建合成层 */
+}
+
+/* 滚动优化 */
+.pm-table-container {
+    overflow-x: auto;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch; /* iOS滚动优化 */
+}
+
+/* 防止内容跳跃 */
+.pm-table-container::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+.pm-table-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.pm-table-container::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 6px;
+}
+
+.pm-table-container::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* 额外的CLS防护 - 确保关键元素立即占据空间 */
+.pm-actions, .pm-search {
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    contain: layout;
+    visibility: visible;
+    opacity: 1;
+}
+
+/* 确保所有动态内容都有预设空间 */
+.pm-combination-view-title h2 {
+    min-height: 32px;
+    line-height: 1.2;
+    margin: 0;
+}
+
+/* 防止badge尺寸变化导致CLS */
+.pm-combination-board-badge {
+    min-width: 80px; /* 增加最小宽度以容纳更多文本 */
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    box-sizing: border-box;
+    /* 确保文本变化时不影响布局 */
+    text-align: center;
+    overflow: hidden;
+}
+
+/* 稳定版本的badge - 完全固定尺寸 */
+.pm-combination-board-badge.pm-badge-stable {
+    width: 80px; /* 固定宽度而非最小宽度 */
+    height: 24px;
+    flex-shrink: 0;
+    flex-grow: 0;
+}
+
+/* 确保表格容器立即可见 */
+.pm-table-container, .pm-combination-boards-container {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* 页面加载状态管理 - 防止滚动跳跃 */
+.pm-page-loading {
+    overflow-x: hidden; /* 防止水平滚动条闪烁 */
+}
+
+.pm-page-loading body {
+    position: relative;
+    overflow-anchor: none; /* 禁用滚动锚定 */
+}
+
+/* 加载完成后的状态 */
+.pm-loaded {
+    overflow-anchor: auto; /* 重新启用滚动锚定 */
 }

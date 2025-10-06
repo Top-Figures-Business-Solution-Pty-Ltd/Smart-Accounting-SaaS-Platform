@@ -1,6 +1,10 @@
 <!-- Main Content Area - Monday.com Table Style -->
 <div class="pm-content">
-    <div class="pm-table-container pm-full-width-table">
+    <div class="pm-table-container pm-full-width-table pm-loading" id="pm-table-container">
+        
+        <!-- 骨架屏加载器 - 防止CLS -->
+        {% include "smart_accounting/www/project_management/includes/skeleton-loader.html" %}
+        
         <!-- Table Body -->
         <div class="pm-table-body" id="pm-table-body">
             {% if project_data and project_data.is_combination_view %}
@@ -10,7 +14,9 @@
                         <div class="pm-combination-view-title">
                             <i class="fa fa-layer-group"></i>
                             <h2>Combination View</h2>
-                            <span class="pm-combination-board-badge">Loading...</span>
+                            <span class="pm-combination-board-badge pm-badge-skeleton" data-skeleton-text="Loading...">
+                                <span class="pm-badge-content">Loading...</span>
+                            </span>
                         </div>
                         <div class="pm-combination-view-actions">
                             <a href="/project_management" class="pm-btn pm-btn-secondary">
@@ -19,8 +25,37 @@
                             </a>
                         </div>
                     </div>
-                    <div class="pm-combination-boards-container" id="pm-combination-boards-container">
-                        <div class="pm-loading-placeholder">
+                    <div class="pm-combination-boards-container pm-cls-stable" id="pm-combination-boards-container">
+                        <!-- 预定义容器尺寸防止CLS -->
+                        <div class="pm-combination-skeleton">
+                            <!-- 骨架屏板块 -->
+                            <div class="pm-combination-board-skeleton">
+                                <div class="pm-skeleton-board-header">
+                                    <div class="pm-skeleton-board-title"></div>
+                                    <div class="pm-skeleton-board-badge"></div>
+                                </div>
+                                <div class="pm-skeleton-board-table">
+                                    <div class="pm-skeleton-table-header"></div>
+                                    <div class="pm-skeleton-table-row"></div>
+                                    <div class="pm-skeleton-table-row"></div>
+                                    <div class="pm-skeleton-table-row"></div>
+                                </div>
+                            </div>
+                            <div class="pm-combination-board-skeleton">
+                                <div class="pm-skeleton-board-header">
+                                    <div class="pm-skeleton-board-title"></div>
+                                    <div class="pm-skeleton-board-badge"></div>
+                                </div>
+                                <div class="pm-skeleton-board-table">
+                                    <div class="pm-skeleton-table-header"></div>
+                                    <div class="pm-skeleton-table-row"></div>
+                                    <div class="pm-skeleton-table-row"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 原有的loading placeholder作为fallback -->
+                        <div class="pm-loading-placeholder pm-fallback-loader" style="display: none;">
                             <i class="fa fa-spinner fa-spin"></i>
                             <p>Loading combination view...</p>
                         </div>

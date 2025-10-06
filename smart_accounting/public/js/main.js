@@ -31,23 +31,138 @@ class ProjectManagement {
     }
 
     init() {
-        this.bindEvents();
-        this.initializeFilters();
-        this.setupSearch();
-        this.initializeInlineEditing();
-        this.initializeColumnResizing();
-        this.initializeAdvancedFilter();
-        this.loadSystemOptions();
-        this.initializeWorkspaceSwitcher();
-        this.refreshReviewNoteCounts();
-        this.initializeSubtasks();
-        this.initializeMultiSelect();
-        this.initializeCombinationView();
+        // 等待布局预加载完成
+        this.waitForLayoutPreload().then(() => {
+            this.bindEvents();
+            this.initializeFilters();
+            this.setupSearch();
+            this.initializeInlineEditing();
+            this.initializeColumnResizing();
+            this.initializeAdvancedFilter();
+            this.loadSystemOptions();
+            this.initializeWorkspaceSwitcher();
+            this.refreshReviewNoteCounts();
+            this.initializeSubtasks();
+            this.initializeMultiSelect();
+            this.initializeCombinationView();
+            
+            // Apply partition column configuration after DOM is ready
+            this.applyPartitionColumnConfig();
+            this.addColumnManagementButton();
+            
+            // 完成加载，切换到真实内容
+            this.finishLoading();
+        });
+    }
+    
+    // 等待布局预加载
+    async waitForLayoutPreload() {
+        return new Promise(async (resolve) => {
+            if (window.LayoutPreloader && window.LayoutPreloader.isLoading()) {
+                // 智能等待：根据数据量调整等待时间
+                let waitTime = 500; // 默认500ms
+                
+                try {
+                    const currentView = new URLSearchParams(window.location.search).get('view') || 'main';
+                    const dataCount = await this.getDataCount(currentView);
+                    
+                    // 根据数据量调整骨架屏显示时间
+                    if (dataCount > 1000) {
+                        waitTime = 800; // 大数据集显示更久的骨架屏
+                        this.enableLargeDataOptimizations();
+                    } else if (dataCount < 50) {
+                        waitTime = 200; // 小数据集快速切换
+                    }
+                } catch (error) {
+                    console.warn('Could not determine data count, using default timing');
+                }
+                
+                setTimeout(resolve, waitTime);
+            } else {
+                resolve();
+            }
+        });
+    }
+    
+    // 智能数据加载（增强现有功能）
+    async loadDataIntelligently(view) {
+        try {
+            // 使用增强的现有API
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.load_partition_data',
+                args: { 
+                    view: view, 
+                    enable_adaptive_loading: true 
+                }
+            });
+            
+            if (response.message && response.message.success) {
+                const data = response.message.data;
+                const totalCount = response.message.total_count || 0;
+                
+                // 根据数据量自动启用优化
+                if (totalCount > 1000) {
+                    this.enableLargeDataOptimizations(totalCount);
+                }
+                
+                return { data, totalCount, adaptiveUsed: response.message.adaptive_loading_used };
+            }
+        } catch (error) {
+            console.warn('Intelligent loading failed, using standard method:', error);
+        }
         
-        // Apply partition column configuration after DOM is ready
-        // Remove the setTimeout to prevent interference with filters
-        this.applyPartitionColumnConfig();
-        this.addColumnManagementButton();
+        return null;
+    }
+    
+    // 启用大数据优化（增强现有功能，不破坏原有逻辑）
+    enableLargeDataOptimizations(dataCount) {
+        console.log(`📊 Large dataset detected (${dataCount} items), enhancing existing components`);
+        
+        // 增强现有的表格管理器
+        if (this.tableManager) {
+            this.tableManager.isLargeDataset = true;
+            this.tableManager.dataCount = dataCount;
+        }
+        
+        // 增强现有的缓存策略
+        if (window.PersonSelectorManager) {
+            window.PersonSelectorManager.cacheTimeout = 120000; // 2分钟缓存
+        }
+        
+        // 启用现有的优化渲染器
+        if (window.OptimizedTableRenderer) {
+            const renderer = new OptimizedTableRenderer({
+                container: '.pm-table-container',
+                threshold: 500,
+                bufferSize: 30,
+                enableLazyLoading: true
+            });
+        }
+        
+        // 优化现有的组合视图
+        if (this.combinationViewManager) {
+            this.combinationViewManager.enableLargeDataMode = true;
+        }
+    }
+    
+    // 完成加载
+    finishLoading() {
+        // 通知布局预加载器完成
+        if (window.LayoutPreloader) {
+            window.LayoutPreloader.finishLoading();
+        }
+        
+        // 移除加载状态
+        document.documentElement.classList.remove('pm-page-loading');
+        document.body.classList.add('pm-loaded');
+        
+        // 触发自定义事件
+        const event = new CustomEvent('pm:loaded', {
+            detail: { timestamp: Date.now() }
+        });
+        document.dispatchEvent(event);
+        
+        // 继续初始化其他功能
         this.bindMainDashboardEvents();
         this.initializeAutomateButton();
         this.setupDynamicResizing();

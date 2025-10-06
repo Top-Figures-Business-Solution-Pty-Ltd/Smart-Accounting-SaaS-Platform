@@ -245,12 +245,24 @@ class AppConfigManager {
 
             // 性能配置
             performance: {
-                // 虚拟滚动配置
+                // 虚拟滚动配置 - 企业级优化
                 virtualScrolling: {
                     enabled: true,
                     rowHeight: 48,
-                    bufferSize: 10,
-                    threshold: 100 // 超过100行启用虚拟滚动
+                    bufferSize: 20, // 增加缓冲区
+                    threshold: 200, // 提高阈值
+                    maxRenderedRows: 100 // 最多同时渲染100行
+                },
+                
+                // 数据加载策略
+                dataLoading: {
+                    immediateThreshold: 100,    // < 100条立即加载
+                    chunkedThreshold: 1000,     // < 1000条分块加载
+                    virtualThreshold: 10000,    // < 10000条虚拟滚动
+                    streamingThreshold: 10000,  // > 10000条流式加载
+                    chunkSize: 100,             // 分块大小
+                    preloadChunks: 2,           // 预加载块数
+                    maxCacheChunks: 10          // 最大缓存块数
                 },
                 
                 // 懒加载配置
