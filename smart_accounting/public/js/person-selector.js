@@ -4,6 +4,70 @@
 class PersonSelectorManager {
     constructor() {
         this.utils = window.PMUtils;
+        // 添加缓存来避免重复的API调用
+        this.roleCache = new Map();
+        this.cacheTimeout = 30000; // 30秒缓存过期时间
+    }
+    
+    // 清除特定任务的缓存
+    clearTaskRoleCache(taskId) {
+        const cacheKey = `task_roles_${taskId}`;
+        this.roleCache.delete(cacheKey);
+    }
+    
+    // 清除所有缓存
+    clearAllRoleCache() {
+        this.roleCache.clear();
+    }
+    
+    // 批量获取多个任务的角色信息，减少API调用
+    async getBulkTaskRoles(taskIds) {
+        try {
+            // 检查哪些任务需要从服务器获取
+            const uncachedTaskIds = [];
+            const cachedResults = {};
+            
+            taskIds.forEach(taskId => {
+                const cacheKey = `task_roles_${taskId}`;
+                const cached = this.roleCache.get(cacheKey);
+                
+                if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
+                    cachedResults[taskId] = cached.data;
+                } else {
+                    uncachedTaskIds.push(taskId);
+                }
+            });
+            
+            // 如果所有数据都在缓存中，直接返回
+            if (uncachedTaskIds.length === 0) {
+                return cachedResults;
+            }
+            
+            // 批量获取未缓存的数据
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_bulk_task_roles',
+                args: { task_ids: JSON.stringify(uncachedTaskIds) }
+            });
+            
+            if (response.message && response.message.success) {
+                const bulkData = response.message.task_roles || {};
+                
+                // 缓存新获取的数据
+                Object.entries(bulkData).forEach(([taskId, roles]) => {
+                    const cacheKey = `task_roles_${taskId}`;
+                    this.roleCache.set(cacheKey, {
+                        data: roles,
+                        timestamp: Date.now()
+                    });
+                    cachedResults[taskId] = roles;
+                });
+            }
+            
+            return cachedResults;
+        } catch (error) {
+            console.error('Error getting bulk task roles:', error);
+            return {};
+        }
     }
 
     // Multi-Person Selector
@@ -313,16 +377,10 @@ class PersonSelectorManager {
             if (roleFilter) {
                 roleType = roleFilter;
             } else {
-                roleType = fieldName.replace('custom_', '');
-                // Map frontend field names to sub-table role values
-                const roleMapping = {
-                    'action_person': 'Action Person',
-                    'preparer': 'Preparer',
-                    'reviewer': 'Reviewer',
-                    'partner': 'Partner',
-                    'roles': 'Owner'  // Handle generic roles field for Owner
-                };
-                roleType = roleMapping[roleType] || roleType;
+                // 使用配置管理器映射角色，避免硬编码
+                roleType = window.AppConfig ? 
+                    window.AppConfig.mapFieldToRole(fieldName) : 
+                    fieldName.replace('custom_', '');
             }
             
             // Check if person already assigned to this role
@@ -352,6 +410,9 @@ class PersonSelectorManager {
             });
             
             if (response.message && response.message.success) {
+                // 清除缓存以确保数据一致性
+                this.clearTaskRoleCache(taskId);
+                
                 // Update cell display
                 await this.updatePersonCellDisplay($cell, taskId, roleType);
                 
@@ -380,16 +441,10 @@ class PersonSelectorManager {
             if (roleFilter) {
                 roleType = roleFilter;
             } else {
-                roleType = fieldName.replace('custom_', '');
-                // Map frontend field names to sub-table role values
-                const roleMapping = {
-                    'action_person': 'Action Person',
-                    'preparer': 'Preparer',
-                    'reviewer': 'Reviewer',
-                    'partner': 'Partner',
-                    'roles': 'Owner'  // Handle generic roles field for Owner
-                };
-                roleType = roleMapping[roleType] || roleType;
+                // 使用配置管理器映射角色，避免硬编码
+                roleType = window.AppConfig ? 
+                    window.AppConfig.mapFieldToRole(fieldName) : 
+                    fieldName.replace('custom_', '');
             }
             
             // Remove all assignments for this role
@@ -430,13 +485,27 @@ class PersonSelectorManager {
 
     async getCurrentTaskRoles(taskId) {
         try {
+            // 检查缓存
+            const cacheKey = `task_roles_${taskId}`;
+            const cached = this.roleCache.get(cacheKey);
+            
+            if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
+                return cached.data;
+            }
+            
             const response = await frappe.call({
                 method: 'smart_accounting.www.project_management.index.get_task_roles',
                 args: { task_id: taskId }
             });
             
             if (response.message && response.message.success) {
-                return response.message.roles || [];
+                const roles = response.message.roles || [];
+                // 缓存结果
+                this.roleCache.set(cacheKey, {
+                    data: roles,
+                    timestamp: Date.now()
+                });
+                return roles;
             }
             return [];
         } catch (error) {
@@ -488,16 +557,10 @@ class PersonSelectorManager {
             if (roleFilter) {
                 roleType = roleFilter;
             } else {
-                roleType = fieldName.replace('custom_', '');
-                // Map frontend field names to sub-table role values
-                const roleMapping = {
-                    'action_person': 'Action Person',
-                    'preparer': 'Preparer',
-                    'reviewer': 'Reviewer',
-                    'partner': 'Partner',
-                    'roles': 'Owner'  // Handle generic roles field for Owner
-                };
-                roleType = roleMapping[roleType] || roleType;
+                // 使用配置管理器映射角色，避免硬编码
+                roleType = window.AppConfig ? 
+                    window.AppConfig.mapFieldToRole(fieldName) : 
+                    fieldName.replace('custom_', '');
             }
             
             // Remove this specific person from this role
@@ -519,6 +582,9 @@ class PersonSelectorManager {
             });
             
             if (response.message && response.message.success) {
+                // 清除缓存以确保数据一致性
+                this.clearTaskRoleCache(taskId);
+                
                 // Update cell display
                 await this.updatePersonCellDisplay($cell, taskId, roleType);
                 

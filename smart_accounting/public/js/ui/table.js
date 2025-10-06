@@ -803,7 +803,8 @@ class TableManager {
     refreshAllUserAvatars() {
         console.log('👥 Refreshing all user avatars to adapt to column widths...');
         
-        // 查找所有用户相关的单元格
+        // 优化：只刷新可见的用户头像，避免大量API调用
+        // 使用CSS类更新来适应列宽变化，而不是重新获取数据
         const userCellSelectors = [
             '.pm-cell-action-person',
             '.pm-cell-preparer', 
@@ -814,37 +815,23 @@ class TableManager {
         let refreshedCount = 0;
         
         userCellSelectors.forEach(selector => {
-            $(selector).each(async function() {
+            $(selector).each(function() {
                 const $cell = $(this);
-                const taskId = $cell.data('task-id');
-                const fieldName = $cell.data('field');
                 
-                // 只刷新有数据的单元格
-                if (taskId && fieldName && !$cell.hasClass('pm-empty-person')) {
+                // 只更新有数据的单元格的显示样式，不重新获取数据
+                if (!$cell.hasClass('pm-empty-person')) {
                     try {
-                        // 获取当前角色类型
-                        const roleType = fieldName.replace('custom_', '');
-                        const roleMapping = {
-                            'action_person': 'Action Person',
-                            'preparer': 'Preparer',
-                            'reviewer': 'Reviewer',
-                            'partner': 'Partner'
-                        };
-                        const mappedRoleType = roleMapping[roleType] || roleType;
-                        
-                        // 重新渲染这个单元格的头像
-                        if (window.PersonSelectorManager) {
-                            await window.PersonSelectorManager.updatePersonCellDisplay($cell, taskId, mappedRoleType);
-                            refreshedCount++;
-                        }
+                        // 触发CSS重新计算以适应新的列宽
+                        $cell.find('.pm-user-avatars').addClass('pm-width-adjusted');
+                        refreshedCount++;
                     } catch (error) {
-                        console.warn('Error refreshing avatar for cell:', error);
+                        console.warn('Error refreshing avatar display for cell:', error);
                     }
                 }
             });
         });
         
-        console.log(`✅ Refreshed ${refreshedCount} user avatar cells`);
+        console.log(`✅ Refreshed ${refreshedCount} user avatar cells (display only, no API calls)`);
     }
 
     // Force immediate table width recalculation (public method)

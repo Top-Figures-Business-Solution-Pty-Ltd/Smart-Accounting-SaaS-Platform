@@ -947,7 +947,7 @@ class CombinationViewManager {
                                  data-field="custom_action_person" 
                                  data-task-id="${taskId}"
                                  data-field-type="person_selector"
-                                 data-role-filter="Action Person">
+                                 data-role-filter="${window.AppConfig?.mapFieldToRole('action_person') || 'Action Person'}">
                                 <div class="pm-user-avatars">
                                     <div class="pm-avatar pm-primary-user" title="${person.full_name}" data-email="${person.email}">${person.initials}</div>
                                 </div>
@@ -961,7 +961,7 @@ class CombinationViewManager {
                                  data-field="custom_action_person" 
                                  data-task-id="${taskId}"
                                  data-field-type="person_selector"
-                                 data-role-filter="Action Person">
+                                 data-role-filter="${window.AppConfig?.mapFieldToRole('action_person') || 'Action Person'}">
                                 <div class="pm-user-avatars">
                                     <div class="pm-avatar pm-primary-user" title="${primaryPerson.full_name}" data-email="${primaryPerson.email}">${primaryPerson.initials}</div>
                                     <div class="pm-avatar-more" title="Total ${task.action_person_info.length} people assigned">+${task.action_person_info.length - 1}</div>
@@ -997,7 +997,7 @@ class CombinationViewManager {
                                  data-field="custom_preparer" 
                                  data-task-id="${taskId}"
                                  data-field-type="person_selector"
-                                 data-role-filter="Preparer">
+                                 data-role-filter="${window.AppConfig?.mapFieldToRole('preparer') || 'Preparer'}">
                                 <div class="pm-user-avatars">
                                     <div class="pm-avatar pm-primary-user" title="${person.full_name}" data-email="${person.email}">${person.initials}</div>
                                 </div>
@@ -1011,7 +1011,7 @@ class CombinationViewManager {
                                  data-field="custom_preparer" 
                                  data-task-id="${taskId}"
                                  data-field-type="person_selector"
-                                 data-role-filter="Preparer">
+                                 data-role-filter="${window.AppConfig?.mapFieldToRole('preparer') || 'Preparer'}">
                                 <div class="pm-user-avatars">
                                     <div class="pm-avatar pm-primary-user" title="${primaryPerson.full_name}" data-email="${primaryPerson.email}">${primaryPerson.initials}</div>
                                     <div class="pm-avatar-more" title="Total ${task.preparer_info.length} people assigned">+${task.preparer_info.length - 1}</div>
@@ -1047,7 +1047,7 @@ class CombinationViewManager {
                                  data-field="custom_reviewer" 
                                  data-task-id="${taskId}"
                                  data-field-type="person_selector"
-                                 data-role-filter="Reviewer">
+                                 data-role-filter="${window.AppConfig?.mapFieldToRole('reviewer') || 'Reviewer'}">
                                 <div class="pm-user-avatars">
                                     <div class="pm-avatar pm-primary-user" title="${person.full_name}" data-email="${person.email}">${person.initials}</div>
                                 </div>
@@ -1061,7 +1061,7 @@ class CombinationViewManager {
                                  data-field="custom_reviewer" 
                                  data-task-id="${taskId}"
                                  data-field-type="person_selector"
-                                 data-role-filter="Reviewer">
+                                 data-role-filter="${window.AppConfig?.mapFieldToRole('reviewer') || 'Reviewer'}">
                                 <div class="pm-user-avatars">
                                     <div class="pm-avatar pm-primary-user" title="${primaryPerson.full_name}" data-email="${primaryPerson.email}">${primaryPerson.initials}</div>
                                     <div class="pm-avatar-more" title="Total ${task.reviewer_info.length} people assigned">+${task.reviewer_info.length - 1}</div>
@@ -1097,7 +1097,7 @@ class CombinationViewManager {
                                  data-field="custom_partner" 
                                  data-task-id="${taskId}"
                                  data-field-type="person_selector"
-                                 data-role-filter="Partner">
+                                 data-role-filter="${window.AppConfig?.mapFieldToRole('partner') || 'Partner'}">
                                 <div class="pm-user-avatars">
                                     <div class="pm-avatar pm-primary-user" title="${person.full_name}" data-email="${person.email}">${person.initials}</div>
                                 </div>
@@ -1111,7 +1111,7 @@ class CombinationViewManager {
                                  data-field="custom_partner" 
                                  data-task-id="${taskId}"
                                  data-field-type="person_selector"
-                                 data-role-filter="Partner">
+                                 data-role-filter="${window.AppConfig?.mapFieldToRole('partner') || 'Partner'}">
                                 <div class="pm-user-avatars">
                                     <div class="pm-avatar pm-primary-user" title="${primaryPerson.full_name}" data-email="${primaryPerson.email}">${primaryPerson.initials}</div>
                                     <div class="pm-avatar-more" title="Total ${task.partner_info.length} people assigned">+${task.partner_info.length - 1}</div>
@@ -1512,10 +1512,10 @@ class CombinationViewManager {
             'target-month': 'Target Month',
             'budget': 'Budget',
             'actual': 'Actual',
-            'action-person': 'Action Person',
-            'preparer': 'Preparer',
-            'reviewer': 'Reviewer',
-            'partner': 'Partner',
+            'action-person': window.AppConfig?.mapFieldToRole('action_person') || 'Action Person',
+            'preparer': window.AppConfig?.mapFieldToRole('preparer') || 'Preparer',
+            'reviewer': window.AppConfig?.mapFieldToRole('reviewer') || 'Reviewer',
+            'partner': window.AppConfig?.mapFieldToRole('partner') || 'Partner',
             'lodgment-due': 'Lodgment Due',
             'engagement': 'Engagement',
             'group': 'Group',

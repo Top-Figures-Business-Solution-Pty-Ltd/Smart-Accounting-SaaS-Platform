@@ -549,3 +549,22 @@ header.navbar {
         transform: translateY(0);
     }
 }
+
+/* 用户头像显示优化 - 减少不必要的API调用 */
+.pm-user-avatars {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    transition: all 0.2s ease;
+}
+
+/* 宽度调整时的优化显示 */
+.pm-user-avatars.pm-width-adjusted {
+    animation: width-adjust 0.3s ease-out;
+}
+
+@keyframes width-adjust {
+    0% { opacity: 0.8; }
+    100% { opacity: 1; }
+}

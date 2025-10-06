@@ -2446,6 +2446,51 @@ def get_task_roles(task_id):
         return {'success': False, 'error': str(e)}
 
 @frappe.whitelist()
+def get_bulk_task_roles(task_ids):
+    """
+    批量获取多个任务的角色信息，优化性能
+    """
+    try:
+        if isinstance(task_ids, str):
+            task_ids = frappe.parse_json(task_ids)
+        
+        if not task_ids:
+            return {'success': False, 'error': 'Task IDs are required'}
+        
+        # 批量获取所有角色信息
+        all_roles = frappe.get_all("Task Role Assignment",
+            filters={"parent": ["in", task_ids]},
+            fields=["parent", "role", "user", "is_primary"],
+            order_by="parent, is_primary desc, role, user"
+        )
+        
+        # 按任务ID分组
+        task_roles = {}
+        for role in all_roles:
+            task_id = role.parent
+            if task_id not in task_roles:
+                task_roles[task_id] = []
+            task_roles[task_id].append({
+                'role': role.role,
+                'user': role.user,
+                'is_primary': role.is_primary
+            })
+        
+        # 确保所有请求的任务ID都有返回值（即使是空数组）
+        for task_id in task_ids:
+            if task_id not in task_roles:
+                task_roles[task_id] = []
+        
+        return {
+            'success': True,
+            'task_roles': task_roles
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting bulk task roles: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+@frappe.whitelist()
 def set_task_roles(task_id, roles_data):
     """
     Set task role assignments and sync with legacy fields
