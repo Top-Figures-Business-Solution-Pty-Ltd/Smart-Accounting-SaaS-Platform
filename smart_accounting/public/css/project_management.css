@@ -45,17 +45,7 @@
     font-size: 13px;
 }
 
-.pm-advanced-filter-panel {
-    position: fixed !important;
-    background: white;
-    border: 1px solid var(--monday-border);
-    border-radius: 6px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-    z-index: 1000;
-    display: none;
-    min-width: 300px;
-    padding: 16px;
-}
+/* Removed duplicate definition - using the one below */
 
 .pm-context-menu-item {
     display: flex;
@@ -93,9 +83,10 @@
 }
 
 .pm-advanced-filter-panel {
-    position: absolute;
-    top: 100%;
-    right: 0;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     min-width: 420px;
     max-width: 600px;
     width: max-content;
@@ -104,7 +95,18 @@
     border-radius: 8px;
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
     z-index: 1000;
-    margin-top: 4px;
+    display: none;
+    cursor: move; /* 显示可拖动光标 */
+}
+
+/* 添加拖动功能的样式 */
+.pm-advanced-filter-panel.dragging {
+    user-select: none;
+    cursor: grabbing;
+}
+
+.pm-advanced-filter-panel .pm-filter-header {
+    cursor: move; /* 头部区域可拖动 */
 }
 
 .pm-filter-header {

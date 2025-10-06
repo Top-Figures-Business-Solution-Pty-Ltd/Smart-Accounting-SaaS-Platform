@@ -159,12 +159,17 @@ class FilterManager {
         $(document).on('click', '.pm-advanced-filter-btn', (e) => {
             e.stopPropagation();
             this.openDropdown('pm-advanced-filter-dropdown', 'pm-advanced-filter-panel');
+            // 重置面板位置到屏幕中央
+            this.centerFilterPanel();
         });
 
         // Close filter panel
         $(document).on('click', '.pm-filter-close', () => {
             this.closeAllDropdowns();
         });
+
+        // 添加拖动功能
+        this.initFilterPanelDrag();
 
         // Column selection change
         $(document).on('change', '.pm-filter-column', (e) => {
@@ -663,6 +668,92 @@ class FilterManager {
 
         const clientManager = new window.ClientManagementSystem();
         clientManager.showClientManagementDialog();
+    }
+
+    // 居中显示过滤器面板
+    centerFilterPanel() {
+        const $panel = $('.pm-advanced-filter-panel');
+        if ($panel.length) {
+            // 重置transform，确保居中
+            $panel.css({
+                'top': '50%',
+                'left': '50%',
+                'transform': 'translate(-50%, -50%)'
+            });
+        }
+    }
+
+    // 初始化拖动功能
+    initFilterPanelDrag() {
+        let isDragging = false;
+        let startX, startY, startLeft, startTop;
+
+        // 鼠标按下事件（仅在头部区域）
+        $(document).on('mousedown', '.pm-filter-header', (e) => {
+            // 不要在关闭按钮上触发拖动
+            if ($(e.target).closest('.pm-filter-close').length) {
+                return;
+            }
+
+            isDragging = true;
+            const $panel = $('.pm-advanced-filter-panel');
+            
+            // 获取当前位置
+            const rect = $panel[0].getBoundingClientRect();
+            startX = e.clientX;
+            startY = e.clientY;
+            startLeft = rect.left;
+            startTop = rect.top;
+
+            // 添加拖动样式
+            $panel.addClass('dragging');
+            
+            // 阻止文本选择
+            e.preventDefault();
+        });
+
+        // 鼠标移动事件
+        $(document).on('mousemove', (e) => {
+            if (!isDragging) return;
+
+            const $panel = $('.pm-advanced-filter-panel');
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+            
+            const newLeft = startLeft + deltaX;
+            const newTop = startTop + deltaY;
+
+            // 确保面板不会移出屏幕
+            const windowWidth = $(window).width();
+            const windowHeight = $(window).height();
+            const panelWidth = $panel.outerWidth();
+            const panelHeight = $panel.outerHeight();
+
+            const constrainedLeft = Math.max(0, Math.min(newLeft, windowWidth - panelWidth));
+            const constrainedTop = Math.max(0, Math.min(newTop, windowHeight - panelHeight));
+
+            // 设置新位置（不使用transform，直接设置left和top）
+            $panel.css({
+                'left': constrainedLeft + 'px',
+                'top': constrainedTop + 'px',
+                'transform': 'none'
+            });
+        });
+
+        // 鼠标释放事件
+        $(document).on('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                $('.pm-advanced-filter-panel').removeClass('dragging');
+            }
+        });
+
+        // 防止拖动时选择文本
+        $(document).on('selectstart', '.pm-advanced-filter-panel', (e) => {
+            if (isDragging) {
+                e.preventDefault();
+            }
+        });
     }
 }
 
