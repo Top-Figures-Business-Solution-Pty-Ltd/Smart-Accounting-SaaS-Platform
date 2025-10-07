@@ -4,6 +4,42 @@
 class EditorsManager {
     constructor() {
         this.utils = window.PMUtils;
+        
+        // Performance optimization: Cache DocType metadata
+        this.metaCache = new Map();
+        this.cacheExpiry = 5 * 60 * 1000; // 5 minutes cache
+        this.lastCacheClean = Date.now();
+        
+        // Preload commonly used field options
+        this.preloadCommonFieldOptions();
+    }
+
+    // Preload commonly used field options for better performance
+    preloadCommonFieldOptions() {
+        const commonFields = ['custom_target_month', 'custom_year_end', 'custom_frequency'];
+        
+        // Preload in background without blocking UI
+        setTimeout(() => {
+            commonFields.forEach(fieldName => {
+                frappe.call({
+                    method: 'smart_accounting.www.project_management.index.get_field_options',
+                    args: {
+                        doctype: 'Task',
+                        fieldname: fieldName
+                    },
+                    callback: (response) => {
+                        if (response.message && response.message.success) {
+                            const cacheKey = `Task.${fieldName}`;
+                            this.metaCache.set(cacheKey, {
+                                options: response.message.options,
+                                timestamp: Date.now()
+                            });
+                        }
+                    }
+                });
+            });
+            console.debug('📦 Preloading field options for better performance');
+        }, 1000); // Delay 1 second to not interfere with page load
     }
 
     // Inline editing initialization
@@ -158,18 +194,20 @@ class EditorsManager {
     }
 
     createSelectEditor($cell, currentValue) {
-        const displayOptions = $cell.data('options').split(','); // TF,TG
-        const backendOptions = $cell.data('backend-options') ? $cell.data('backend-options').split(',') : displayOptions; // Top Figures,Top Grants
+        const displayOptions = $cell.data('options').split(',');
+        const backendOptions = $cell.data('backend-options') ? $cell.data('backend-options').split(',') : displayOptions;
         
-        // Find current selected option
-        let selectedIndex = 0;
-        if (currentValue === 'TG' || currentValue === 'Top Grants') {
-            selectedIndex = 1;
+        // Find current selected option by matching the value
+        let selectedIndex = displayOptions.findIndex(option => option.trim() === currentValue);
+        if (selectedIndex === -1) {
+            selectedIndex = 0; // Default to first option if not found
         }
         
         let optionsHtml = displayOptions.map((displayText, index) => {
+            const cleanText = displayText.trim();
             const isSelected = index === selectedIndex;
-            return `<option value="${displayText}" data-backend-value="${backendOptions[index] || displayText}" ${isSelected ? 'selected' : ''}>${displayText}</option>`;
+            const backendValue = backendOptions[index] || cleanText;
+            return `<option value="${cleanText}" data-backend-value="${backendValue}" ${isSelected ? 'selected' : ''}>${cleanText}</option>`;
         }).join('');
         
         return `<select class="pm-inline-select">${optionsHtml}</select>`;
@@ -1079,23 +1117,35 @@ class EditorsManager {
         const taskId = $cell.data('task-id');
         const currentValue = $cell.find('.editable-field').text().trim();
         
+        // Debug: Check what data attributes are available
+        const optionsSource = $cell.data('options-source');
+        const options = $cell.data('options');
+        
         // Handle different field types
         if (fieldName === 'custom_tftg') {
             this.showCompanySelector($cell);
         } else {
             // Regular select field
-            const options = $cell.data('options');
-            const optionsSource = $cell.data('options-source');
             const backendOptions = $cell.data('backend-options');
             
-            // Handle dynamic options loading
+            // Handle dynamic options loading FIRST (before checking static options)
             if (optionsSource === 'custom_task_status') {
                 this.showTaskStatusSelector($cell);
                 return;
             }
             
+            if (optionsSource === 'dynamic') {
+                this.showDynamicFieldSelector($cell);
+                return;
+            }
+            
+            // Only check for static options if no dynamic source is specified
+            if (!options && !optionsSource) {
+                return;
+            }
+            
+            // Handle static options (only if options exist)
             if (!options) {
-                console.log('No options available for select field');
                 return;
             }
             
@@ -1360,6 +1410,153 @@ class EditorsManager {
                 const originalStatusClass = originalValue.toLowerCase().replace(/\s+/g, '-');
                 $cell.html(`<span class="pm-status-badge status-${originalStatusClass}">${originalValue}</span>`);
                 $cell.removeClass('editing');
+            }
+        });
+    }
+
+    // Show dynamic field selector (loads options from DocType with caching)
+    showDynamicFieldSelector($cell) {
+        const fieldName = $cell.data('field');
+        const taskId = $cell.data('task-id');
+        const currentValue = $cell.find('.editable-field').text().trim();
+        
+        console.debug(`📋 Dynamic field selector called for: ${fieldName}, current value: "${currentValue}"`);
+        
+        // Clean expired cache periodically
+        this.cleanExpiredCache();
+        
+        // Check cache first
+        const cacheKey = `Task.${fieldName}`;
+        const cached = this.metaCache.get(cacheKey);
+        
+        if (cached && (Date.now() - cached.timestamp) < this.cacheExpiry) {
+            // Use cached options - instant response
+            console.debug(`⚡ Using cached options for ${fieldName}:`, cached.options);
+            this.renderDynamicSelect($cell, cached.options, currentValue, taskId, fieldName);
+            return;
+        }
+        
+        // Show loading state
+        $cell.html('<div class="pm-loading-options">Loading options...</div>');
+        
+        // Get field options using a more reliable method
+        frappe.call({
+            method: 'smart_accounting.www.project_management.index.get_field_options',
+            args: {
+                doctype: 'Task',
+                fieldname: fieldName
+            },
+            callback: (response) => {
+                console.debug(`📡 API response for ${fieldName}:`, response);
+                
+                if (response.message && response.message.success) {
+                    const options = response.message.options;
+                    console.debug(`✅ Got dynamic options for ${fieldName}:`, options);
+                    
+                    // Cache the options
+                    this.metaCache.set(cacheKey, {
+                        options: options,
+                        timestamp: Date.now()
+                    });
+                    
+                    this.renderDynamicSelect($cell, options, currentValue, taskId, fieldName);
+                } else {
+                    // Fallback to default options if field not found
+                    console.warn(`❌ Field ${fieldName} not found, using fallback. Response:`, response);
+                    this.useFallbackOptions($cell, fieldName, currentValue, taskId);
+                }
+            },
+            error: (error) => {
+                console.error('Error loading field options:', error);
+                this.useFallbackOptions($cell, fieldName, currentValue, taskId);
+            }
+        });
+    }
+
+    // Use fallback options when dynamic loading fails
+    useFallbackOptions($cell, fieldName, currentValue, taskId) {
+        let fallbackOptions = [];
+        
+        // Define fallback options for known fields - avoid hardcoding, use minimal fallbacks
+        switch (fieldName) {
+            case 'custom_target_month':
+            case 'custom_year_end':
+                // Minimal fallback - let user know there's an issue
+                console.warn(`⚠️ Failed to load options for ${fieldName}, using minimal fallback`);
+                fallbackOptions = [currentValue || '-', '-', 'January', 'February', 'March', 'April', 'May', 'June',
+                                 'July', 'August', 'September', 'October', 'November', 'December'];
+                break;
+            case 'custom_frequency':
+                console.warn(`⚠️ Failed to load options for ${fieldName}, using minimal fallback`);
+                fallbackOptions = [currentValue || 'Annually', 'Annually', 'Half Yearly', 'Quarterly', 'Monthly', 'Fortnightly', 'Weekly', 'Daily', 'Ad-Hoc', 'Other'];
+                break;
+            default:
+                // If no fallback available, show error message and current value
+                console.error(`❌ No fallback options available for field: ${fieldName}`);
+                $cell.html(`<span class="editable-field error" title="Failed to load options for ${fieldName}">${currentValue}</span>`);
+                return;
+        }
+        
+        // Remove duplicates while preserving order
+        fallbackOptions = [...new Set(fallbackOptions)];
+        
+        this.renderDynamicSelect($cell, fallbackOptions, currentValue, taskId, fieldName);
+    }
+
+    // Clean expired cache entries
+    cleanExpiredCache() {
+        const now = Date.now();
+        
+        // Only clean every 2 minutes to avoid frequent operations
+        if (now - this.lastCacheClean < 2 * 60 * 1000) {
+            return;
+        }
+        
+        this.lastCacheClean = now;
+        
+        for (const [key, value] of this.metaCache.entries()) {
+            if (now - value.timestamp > this.cacheExpiry) {
+                this.metaCache.delete(key);
+            }
+        }
+    }
+
+    // Render dynamic select dropdown
+    renderDynamicSelect($cell, options, currentValue, taskId, fieldName) {
+        console.debug(`🎨 Rendering select for ${fieldName} with options:`, options, `current: "${currentValue}"`);
+        
+        let selectHTML = '<select class="pm-inline-select">';
+        
+        options.forEach(option => {
+            const selected = currentValue === option ? 'selected' : '';
+            selectHTML += `<option value="${option}" ${selected}>${option}</option>`;
+        });
+        
+        selectHTML += '</select>';
+        
+        $cell.html(selectHTML);
+        const $select = $cell.find('.pm-inline-select');
+        
+        // Focus and show dropdown
+        $select.focus();
+        
+        // Handle selection
+        $select.on('change blur', (e) => {
+            const newValue = $select.val();
+            
+            if (newValue !== currentValue) {
+                // Update the field
+                this.updateTaskField(taskId, fieldName, newValue, $cell);
+            } else {
+                // No change, revert to display
+                $cell.html(`<span class="editable-field">${currentValue}</span>`);
+            }
+        });
+
+        // Handle escape key
+        $select.on('keydown', (e) => {
+            if (e.key === 'Escape') {
+                $cell.html(`<span class="editable-field">${currentValue}</span>`);
             }
         });
     }

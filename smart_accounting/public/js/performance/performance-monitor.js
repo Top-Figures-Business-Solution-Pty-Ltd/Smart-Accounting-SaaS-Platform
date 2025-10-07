@@ -112,25 +112,31 @@ class PerformanceMonitor {
         });
         
         // 尝试自动修复
-        this.attemptCLSFix();
+        this.attemptCLSFix(entry);
     }
     
     // 尝试修复CLS问题
     attemptCLSFix(entry) {
-        // 确保图片有尺寸属性
-        this.fixImageDimensions();
-        
-        // 确保字体加载不影响布局
-        this.fixFontLoading();
-        
-        // 确保动态内容有预留空间
-        this.fixDynamicContent();
-        
-        // 针对具体元素进行修复
-        if (entry.sources) {
-            entry.sources.forEach(source => {
-                this.fixSpecificElement(source.node);
-            });
+        try {
+            // 确保图片有尺寸属性
+            this.fixImageDimensions();
+            
+            // 确保字体加载不影响布局
+            this.fixFontLoading();
+            
+            // 确保动态内容有预留空间
+            this.fixDynamicContent();
+            
+            // 针对具体元素进行修复
+            if (entry && entry.sources && Array.isArray(entry.sources)) {
+                entry.sources.forEach(source => {
+                    if (source && source.node) {
+                        this.fixSpecificElement(source.node);
+                    }
+                });
+            }
+        } catch (error) {
+            console.debug('CLS fix attempt failed:', error);
         }
     }
     

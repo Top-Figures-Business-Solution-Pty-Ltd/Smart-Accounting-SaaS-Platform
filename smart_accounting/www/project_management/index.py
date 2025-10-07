@@ -569,7 +569,7 @@ def load_partition_data(view='main', enable_adaptive_loading=True):
             
             if total_count > 1000:
                 # 大数据量：分批加载但保持在同一页面
-                console.log(f"Large dataset detected ({total_count} items), using chunked loading")
+                print(f"Large dataset detected ({total_count} items), using chunked loading")
                 data = get_project_management_data_chunked(view, chunk_size=200)
             else:
                 # 正常数据量：使用原有逻辑
@@ -888,9 +888,9 @@ def get_project_management_data(view='main'):
             task_filters["project"] = ["in", []]
         
         tasks = frappe.db.get_all("Task",
-            fields=["name", "subject", "custom_task_status", "priority", "exp_end_date", "project", "description", "modified", "company", "custom_note", "custom_frequency", "custom_reset_date"],
+            fields=["name", "subject", "custom_task_status", "priority", "exp_end_date", "project", "description", "modified", "company", "custom_note", "custom_frequency", "custom_reset_date", "custom_client"],
             filters=task_filters,
-            order_by="exp_end_date"
+            order_by="modified desc"  # Initial order, will be sorted later
         )
         
         
@@ -1153,6 +1153,12 @@ def get_project_management_data(view='main'):
                 'project_name': project.project_name or project.name,
                 'tasks': []
             }
+        
+        # Sort tasks by client name (alphabetical) and then by task name
+        tasks.sort(key=lambda task: (
+            (task.client_name or "").lower(),  # Primary sort: client name alphabetical
+            (task.task_name or task.subject or "").lower()  # Secondary sort: task name alphabetical
+        ))
         
         # Add tasks to their projects
         for task in tasks:
@@ -2602,60 +2608,55 @@ def get_project_management_data_paginated(view='main', offset=0, limit=50, filte
     优化的分页数据获取，支持大数据量
     """
     try:
-        # 构建基础查询
+        # Build base query with table aliases
         conditions = ["1=1"]
         values = []
         
         if view != 'main':
-            # 获取特定视图的项目
+            # Get projects for specific view
             partition_projects = frappe.get_all("Project", 
                 filters={"custom_partition": view},
                 fields=["name"]
             )
             if partition_projects:
                 project_names = [p.name for p in partition_projects]
-                conditions.append("project IN ({})".format(','.join(['%s'] * len(project_names))))
+                conditions.append("t.project IN ({})".format(','.join(['%s'] * len(project_names))))
                 values.extend(project_names)
         
-        # 应用过滤器
+        # Apply filters with table aliases
         if filters:
             if filters.get('client'):
-                conditions.append("custom_client = %s")
+                conditions.append("t.custom_client = %s")
                 values.append(filters['client'])
             if filters.get('status'):
-                conditions.append("status = %s")
+                conditions.append("t.status = %s")
                 values.append(filters['status'])
         
         where_clause = " AND ".join(conditions)
         
-        # 优化的SQL查询 - 只获取必要字段
+        # Optimized SQL query with JOIN for proper client name sorting
         tasks_data = frappe.db.sql(f"""
             SELECT 
-                name as task_id,
-                subject as task_name,
-                custom_client,
-                status,
-                custom_entity_type,
-                custom_action_person,
-                custom_preparer,
-                custom_reviewer,
-                custom_partner,
-                modified as last_modified
-            FROM `tabTask`
+                t.name as task_id,
+                t.subject as task_name,
+                t.custom_client,
+                t.status,
+                t.custom_entity_type,
+                t.custom_action_person,
+                t.custom_preparer,
+                t.custom_reviewer,
+                t.custom_partner,
+                t.modified as last_modified,
+                COALESCE(c.customer_name, 'No Client') as client_name
+            FROM `tabTask` t
+            LEFT JOIN `tabCustomer` c ON t.custom_client = c.name
             WHERE {where_clause}
-            ORDER BY modified DESC
+            ORDER BY COALESCE(c.customer_name, 'No Client'), t.subject
             LIMIT %s OFFSET %s
         """, values + [limit, offset], as_dict=True)
         
-        # 批量获取客户信息
-        client_ids = [t.custom_client for t in tasks_data if t.custom_client]
-        clients_info = {}
-        if client_ids:
-            clients = frappe.get_all("Customer",
-                filters={"name": ["in", client_ids]},
-                fields=["name", "customer_name"]
-            )
-            clients_info = {c.name: c.customer_name for c in clients}
+        # Client info is already included in the SQL query via JOIN
+        # No need for separate client lookup
         
         # 批量获取角色信息（只获取必要的）
         task_ids = [t.task_id for t in tasks_data]
@@ -2667,7 +2668,7 @@ def get_project_management_data_paginated(view='main', offset=0, limit=50, filte
             enriched_task = {
                 'task_id': task.task_id,
                 'task_name': task.task_name,
-                'client_name': clients_info.get(task.custom_client, 'No Client'),
+                'client_name': task.client_name,  # Already from SQL JOIN
                 'status': task.status,
                 'entity_type': task.custom_entity_type or 'Company',
                 'action_person_info': roles_info.get(task.task_id, {}).get('action_person', []),
@@ -4671,4 +4672,47 @@ def get_combination_view_data(board_ids):
             'success': False,
             'error': str(e),
             'boards_data': []
+        }
+
+@frappe.whitelist()
+def get_field_options(doctype, fieldname):
+    """
+    Get options for a specific field from DocType or Custom Field
+    """
+    try:
+        # First check if it's a custom field
+        custom_field = frappe.db.get_value("Custom Field", 
+            {"dt": doctype, "fieldname": fieldname}, 
+            ["options"], as_dict=True)
+        
+        if custom_field and custom_field.options:
+            options = [opt.strip() for opt in custom_field.options.split('\n') if opt.strip()]
+            return {
+                'success': True,
+                'options': options,
+                'source': 'custom_field'
+            }
+        
+        # If not custom field, check standard DocType field
+        doctype_meta = frappe.get_meta(doctype)
+        field = doctype_meta.get_field(fieldname)
+        
+        if field and field.options:
+            options = [opt.strip() for opt in field.options.split('\n') if opt.strip()]
+            return {
+                'success': True,
+                'options': options,
+                'source': 'doctype_field'
+            }
+        
+        return {
+            'success': False,
+            'error': f'Field {fieldname} not found or has no options'
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting field options: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
         }

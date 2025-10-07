@@ -2473,3 +2473,26 @@
     text-align: center;
     border: 1px solid rgba(255, 255, 255, 0.3);
 }
+
+/* Dynamic Options Loading Styles */
+.pm-loading-options {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    color: var(--monday-gray);
+    font-size: 12px;
+    background: var(--monday-light-gray);
+    border-radius: 4px;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.pm-loading-options::before {
+    content: "⏳";
+    margin-right: 6px;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}

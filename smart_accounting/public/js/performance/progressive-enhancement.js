@@ -92,6 +92,21 @@ class ProgressiveEnhancement {
     
     // 处理错误
     handleError(type, error) {
+        // Skip certain non-critical errors to prevent unnecessary safe mode activation
+        const skipErrors = [
+            'Cannot read properties of undefined (reading \'sources\')',
+            'ResizeObserver loop limit exceeded',
+            'Non-passive event listener'
+        ];
+        
+        const errorMessage = error?.message || error?.toString() || '';
+        const shouldSkip = skipErrors.some(skipError => errorMessage.includes(skipError));
+        
+        if (shouldSkip) {
+            console.debug(`🔍 Skipping non-critical error: ${type}`, error);
+            return;
+        }
+        
         this.errorCount++;
         
         console.warn(`⚠️ ${type}:`, error);

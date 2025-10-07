@@ -1230,7 +1230,7 @@ class CombinationViewManager {
                          data-field="custom_target_month"
                          data-task-id="${taskId}"
                          data-field-type="select"
-                         data-options="January,February,March,April,May,June,July,August,September,October,November,December">
+                         data-options-source="dynamic">
                         <span class="editable-field">${task.target_month || '-'}</span>
                     </div>
                 `;
@@ -1328,7 +1328,7 @@ class CombinationViewManager {
                          data-field="custom_year_end"
                          data-task-id="${taskId}"
                          data-field-type="select"
-                         data-options="January,February,March,April,May,June,July,August,September,October,November,December">
+                         data-options-source="dynamic">
                         <span class="editable-field">${task.year_end || '-'}</span>
                     </div>
                 `;

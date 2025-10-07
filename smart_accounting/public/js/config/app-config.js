@@ -85,10 +85,7 @@ class AppConfigManager {
                         resizable: true, 
                         sortable: true,
                         type: 'select',
-                        options: [
-                            'January', 'February', 'March', 'April', 'May', 'June',
-                            'July', 'August', 'September', 'October', 'November', 'December'
-                        ]
+                        options: 'dynamic' // Will be loaded dynamically from DocType
                     },
                     'budget': { 
                         label: 'Budget', 
@@ -170,10 +167,7 @@ class AppConfigManager {
                         resizable: true, 
                         sortable: true,
                         type: 'select',
-                        options: [
-                            'January', 'February', 'March', 'April', 'May', 'June',
-                            'July', 'August', 'September', 'October', 'November', 'December'
-                        ]
+                        options: 'dynamic' // Will be loaded dynamically from DocType
                     },
                     'last-updated': { 
                         label: 'Last Updated', 

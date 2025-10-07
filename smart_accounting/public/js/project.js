@@ -175,8 +175,8 @@ class ProjectManager {
             <div class="pm-cell pm-cell-status">
                 <span class="pm-status-badge status-${statusClass}">${statusValue}</span>
             </div>
-            <div class="pm-cell pm-cell-target-month" data-editable="true" data-field="custom_target_month" data-task-id="${taskData.task_id}" data-field-type="select" data-options="January,February,March,April,May,June,July,August,September,October,November,December">
-                <span class="editable-field">-</span>
+            <div class="pm-cell pm-cell-target-month" data-editable="true" data-field="custom_target_month" data-task-id="${taskData.task_id}" data-field-type="select" data-options-source="dynamic">
+                <span class="editable-field">${taskData.target_month || '-'}</span>
             </div>
             <div class="pm-cell pm-cell-budget" data-editable="true" data-field="custom_budget_planning" data-task-id="${taskData.task_id}" data-field-type="currency">
                 <span class="pm-no-amount editable-field">-</span>
@@ -231,8 +231,8 @@ class ProjectManager {
                     <span class="pm-group-display">-</span>
                 </div>
             </div>
-            <div class="pm-cell pm-cell-year-end" data-editable="true" data-field="custom_year_end" data-task-id="${taskData.task_id}" data-field-type="select" data-options="January,February,March,April,May,June,July,August,September,October,November,December">
-                <span class="editable-field">-</span>
+            <div class="pm-cell pm-cell-year-end" data-editable="true" data-field="custom_year_end" data-task-id="${taskData.task_id}" data-field-type="select" data-options-source="dynamic">
+                <span class="editable-field">${taskData.year_end || '-'}</span>
             </div>
             <div class="pm-cell pm-cell-note" data-editable="true" data-field="custom_note" data-task-id="${taskData.task_id}" data-field-type="text">
                 <span class="editable-field">-</span>
