@@ -284,10 +284,13 @@ class EngagementManager {
             this.deleteEngagementFile(taskId, engagementId, fileName);
         });
 
-        // Create new engagement
+        // Create new engagement - 使用自定义模态框而不是跳转
         modal.on('click.engagement-modal', '.pm-create-engagement, .pm-create-new-engagement', (e) => {
             e.stopPropagation();
-            window.open('/app/engagement/new', '_blank');
+            // 关闭当前选择器模态框
+            $('.pm-engagement-modal').remove();
+            // 打开自定义创建模态框
+            this.showCustomEngagementCreator(taskId);
         });
     }
 
@@ -312,9 +315,12 @@ class EngagementManager {
             this.linkEngagement(taskId, engagementId, engagementName);
         });
 
-        // Create new engagement
+        // Create new engagement - 使用自定义模态框
         modal.on('click', '.pm-create-new-engagement', () => {
-            window.open('/app/engagement/new', '_blank');
+            // 关闭当前选择器模态框
+            $('.pm-engagement-modal').remove();
+            // 打开自定义创建模态框
+            this.showCustomEngagementCreator(taskId);
         });
     }
 
@@ -369,6 +375,164 @@ class EngagementManager {
     }
 
     async linkEngagement(taskId, engagementId, engagementName) {
+        // Validate service line consistency before linking
+        this.validateServiceLineConsistency(taskId, engagementId, engagementName);
+    }
+
+    // Validate service line consistency using frontend data
+    async validateServiceLineConsistency(taskId, engagementId, engagementName) {
+        try {
+            // Get task data
+            const taskResponse = await frappe.call({
+                method: 'frappe.client.get',
+                args: {
+                    doctype: 'Task',
+                    name: taskId
+                }
+            });
+
+            // Get engagement data
+            const engagementResponse = await frappe.call({
+                method: 'frappe.client.get',
+                args: {
+                    doctype: 'Engagement',
+                    name: engagementId
+                }
+            });
+
+            if (!taskResponse.message || !engagementResponse.message) {
+                // If we can't get data, proceed with linking
+                this.performEngagementLink(taskId, engagementId, engagementName);
+                return;
+            }
+
+            const task = taskResponse.message;
+            const engagement = engagementResponse.message;
+
+            // Get project data if task has a project
+            let project = null;
+            if (task.project) {
+                const projectResponse = await frappe.call({
+                    method: 'frappe.client.get',
+                    args: {
+                        doctype: 'Project',
+                        name: task.project
+                    }
+                });
+                project = projectResponse.message;
+            }
+
+            // Compare service lines
+            const taskServiceLine = task.custom_service_line || '';
+            const engagementServiceLine = engagement.service_line || '';
+            const projectServiceLine = project ? (project.custom_service_line || '') : '';
+
+            // Check if there's a mismatch
+            let hasMismatch = false;
+            let mismatchDetails = [];
+
+            // If project has service line and engagement has service line, they should match
+            if (projectServiceLine && engagementServiceLine && projectServiceLine !== engagementServiceLine) {
+                hasMismatch = true;
+                mismatchDetails.push('Project and Engagement service lines do not match');
+            }
+
+            // If task has service line and engagement has service line, they should match
+            if (taskServiceLine && engagementServiceLine && taskServiceLine !== engagementServiceLine) {
+                hasMismatch = true;
+                mismatchDetails.push('Task and Engagement service lines do not match');
+            }
+
+            if (hasMismatch) {
+                // Show confirmation dialog
+                this.showServiceLineConfirmation(taskId, engagementId, engagementName, {
+                    project_service_line: projectServiceLine,
+                    task_service_line: taskServiceLine,
+                    engagement_service_line: engagementServiceLine,
+                    mismatch_details: mismatchDetails
+                });
+            } else {
+                // No mismatch, proceed with linking
+                this.performEngagementLink(taskId, engagementId, engagementName);
+            }
+
+        } catch (error) {
+            console.warn('Service line validation failed, proceeding with link:', error);
+            // If validation fails, still allow linking
+            this.performEngagementLink(taskId, engagementId, engagementName);
+        }
+    }
+
+    // Show service line mismatch confirmation dialog
+    showServiceLineConfirmation(taskId, engagementId, engagementName, validation) {
+        const confirmHtml = `
+            <div class="pm-service-line-confirm-modal" style="display: block;">
+                <div class="pm-modal-overlay"></div>
+                <div class="pm-modal-container">
+                    <div class="pm-modal-header">
+                        <h3><i class="fa fa-exclamation-triangle" style="color: #ff9800;"></i> Service Line Mismatch</h3>
+                    </div>
+                    <div class="pm-modal-body">
+                        <div class="pm-warning-content">
+                            <p><strong>We detected a service line mismatch:</strong></p>
+                            <div class="pm-service-line-comparison">
+                                <div class="pm-comparison-row">
+                                    <label>Project Service Line:</label>
+                                    <span class="pm-service-value">${validation.project_service_line || 'Not set'}</span>
+                                </div>
+                                <div class="pm-comparison-row">
+                                    <label>Engagement Service Line:</label>
+                                    <span class="pm-service-value">${validation.engagement_service_line || 'Not set'}</span>
+                                </div>
+                                <div class="pm-comparison-row">
+                                    <label>Task Service Line:</label>
+                                    <span class="pm-service-value">${validation.task_service_line || 'Will inherit from project'}</span>
+                                </div>
+                            </div>
+                            <div class="pm-mismatch-details">
+                                ${validation.mismatch_details.map(detail => `<div class="pm-mismatch-item">• ${detail}</div>`).join('')}
+                            </div>
+                            <p class="pm-warning-text">
+                                <i class="fa fa-info-circle"></i>
+                                This might be a special case. Do you want to proceed with linking this engagement?
+                            </p>
+                        </div>
+                    </div>
+                    <div class="pm-modal-footer">
+                        <button type="button" class="pm-btn pm-btn-secondary pm-cancel-link">Cancel</button>
+                        <button type="button" class="pm-btn pm-btn-warning pm-confirm-link" 
+                                data-task-id="${taskId}" 
+                                data-engagement-id="${engagementId}" 
+                                data-engagement-name="${engagementName}">
+                            <i class="fa fa-link"></i> Link Anyway
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        $('.pm-service-line-confirm-modal').remove();
+        $('body').append(confirmHtml);
+
+        // Bind confirmation events
+        $(document).on('click', '.pm-confirm-link', (e) => {
+            const $btn = $(e.target);
+            const taskId = $btn.data('task-id');
+            const engagementId = $btn.data('engagement-id');
+            const engagementName = $btn.data('engagement-name');
+            
+            $('.pm-service-line-confirm-modal').remove();
+            this.performEngagementLink(taskId, engagementId, engagementName);
+        });
+
+        // Bind cancel events
+        $(document).on('click', '.pm-cancel-link, .pm-service-line-confirm-modal .pm-modal-overlay', () => {
+            $('.pm-service-line-confirm-modal').remove();
+        });
+    }
+
+    // Execute actual engagement linking
+    async performEngagementLink(taskId, engagementId, engagementName) {
         try {
             const response = await frappe.call({
                 method: 'smart_accounting.www.project_management.index.update_task_field',
@@ -517,6 +681,351 @@ class EngagementManager {
                 }
             });
         }
+    }
+
+    // Custom Engagement creation modal
+    showCustomEngagementCreator(taskId) {
+        // Get current task info for pre-filling
+        const $taskRow = $(`.pm-task-row[data-task-id="${taskId}"]`);
+        const clientName = $taskRow.find('.pm-cell-client-name').text().trim();
+        
+        const modalHtml = `
+            <div class="pm-engagement-creator-modal" style="display: block;">
+                <div class="pm-modal-overlay"></div>
+                <div class="pm-modal-container pm-large-modal">
+                    <div class="pm-modal-header">
+                        <h3><i class="fa fa-handshake-o"></i> Create New Engagement</h3>
+                        <button class="pm-modal-close" type="button">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="pm-modal-body">
+                        <form class="pm-engagement-form" data-current-client="${clientName}">
+                            <div class="pm-form-row">
+                                <div class="pm-form-group">
+                                    <label>Customer <span class="pm-required">*</span></label>
+                                    <div class="pm-customer-search-container">
+                                        <input type="text" name="customer" class="pm-form-control pm-customer-search" 
+                                               placeholder="Type to search customers..." 
+                                               value="${clientName}" 
+                                               autocomplete="off" required>
+                                        <div class="pm-customer-dropdown" style="display: none;">
+                                            <div class="pm-customer-loading">Loading customers...</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="pm-form-group">
+                                    <label>Company</label>
+                                    <select name="company" class="pm-form-control">
+                                        <option value="">Select Company</option>
+                                        <option value="Top Figures">Top Figures</option>
+                                        <option value="Top Grants">Top Grants</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="pm-form-row">
+                                <div class="pm-form-group">
+                                    <label>Service Line <span class="pm-required">*</span></label>
+                                    <select name="service_line" class="pm-form-control" required>
+                                        <option value="">Select Service Line</option>
+                                    </select>
+                                </div>
+                                <div class="pm-form-group">
+                                    <label>Frequency</label>
+                                    <select name="frequency" class="pm-form-control">
+                                        <option value="">Select Frequency</option>
+                                        <option value="Annually">Annually</option>
+                                        <option value="Quarterly">Quarterly</option>
+                                        <option value="Monthly">Monthly</option>
+                                        <option value="One-time">One-time</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="pm-form-row">
+                                <div class="pm-form-group">
+                                    <label>Fiscal Year <span class="pm-required">*</span></label>
+                                    <select name="fiscal_year" class="pm-form-control" required>
+                                        <option value="">Select Fiscal Year</option>
+                                    </select>
+                                </div>
+                                <div class="pm-form-group">
+                                    <label>Owner Partner</label>
+                                    <select name="owner_partner" class="pm-form-control">
+                                        <option value="">Select Partner</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="pm-modal-footer">
+                        <button type="button" class="pm-btn pm-btn-secondary pm-modal-close">Cancel</button>
+                        <button type="button" class="pm-btn pm-btn-primary pm-save-engagement" data-task-id="${taskId}">
+                            <i class="fa fa-save"></i> Create Engagement
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        $('.pm-engagement-creator-modal').remove();
+        $('body').append(modalHtml);
+        
+        // Load dropdown options
+        this.loadEngagementFormOptions();
+        
+        // Bind events
+        this.bindEngagementCreatorEvents(taskId);
+    }
+
+    // Load form options
+    loadEngagementFormOptions() {
+        // Initialize customer search functionality
+        this.initCustomerSearch();
+        
+        // Load all customers for search (cache them)
+        this.loadCustomerCache();
+
+        // Load Service Lines
+        frappe.call({
+            method: 'frappe.client.get_list',
+            args: {
+                doctype: 'Service Line',
+                fields: ['name', 'service_name'],
+                filters: { is_active: 1 }
+            },
+            callback: (response) => {
+                if (response.message) {
+                    const $select = $('select[name="service_line"]');
+                    response.message.forEach(item => {
+                        $select.append(`<option value="${item.name}">${item.service_name}</option>`);
+                    });
+                }
+            }
+        });
+
+        // Load Fiscal Years
+        frappe.call({
+            method: 'frappe.client.get_list',
+            args: {
+                doctype: 'Fiscal Year',
+                fields: ['name', 'year'],
+                order_by: 'year_start_date desc'
+            },
+            callback: (response) => {
+                if (response.message) {
+                    const $select = $('select[name="fiscal_year"]');
+                    response.message.forEach(item => {
+                        $select.append(`<option value="${item.name}">${item.year}</option>`);
+                    });
+                }
+            }
+        });
+
+        // Load Users (Partners)
+        frappe.call({
+            method: 'frappe.client.get_list',
+            args: {
+                doctype: 'User',
+                fields: ['name', 'full_name'],
+                filters: { enabled: 1, user_type: 'System User' }
+            },
+            callback: (response) => {
+                if (response.message) {
+                    const $select = $('select[name="owner_partner"]');
+                    response.message.forEach(item => {
+                        $select.append(`<option value="${item.name}">${item.full_name}</option>`);
+                    });
+                }
+            }
+        });
+    }
+
+    // Bind creation form events
+    bindEngagementCreatorEvents(taskId) {
+        // Save Engagement
+        $(document).on('click', '.pm-save-engagement', (e) => {
+            const $btn = $(e.target);
+            const $form = $('.pm-engagement-form');
+            
+            // Collect form data
+            const $customerInput = $form.find('[name="customer"]');
+            const customerId = $customerInput.data('customer-id') || $customerInput.val();
+            
+            const formData = {
+                customer: customerId,
+                company: $form.find('[name="company"]').val(),
+                service_line: $form.find('[name="service_line"]').val(),
+                frequency: $form.find('[name="frequency"]').val(),
+                fiscal_year: $form.find('[name="fiscal_year"]').val(),
+                owner_partner: $form.find('[name="owner_partner"]').val()
+            };
+
+            // Validate required fields (Company is optional)
+            if (!formData.customer || !formData.service_line || !formData.fiscal_year) {
+                frappe.show_alert({
+                    message: 'Please fill all required fields (Customer, Service Line, Fiscal Year)',
+                    indicator: 'red'
+                });
+                return;
+            }
+
+            // Show loading state
+            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Creating...');
+
+            // Create Engagement
+            frappe.call({
+                method: 'frappe.client.insert',
+                args: {
+                    doc: {
+                        doctype: 'Engagement',
+                        customer: formData.customer,
+                        company: formData.company || '',
+                        service_line: formData.service_line,
+                        frequency: formData.frequency || '',
+                        fiscal_year: formData.fiscal_year,
+                        owner_partner: formData.owner_partner || ''
+                    }
+                },
+                callback: (response) => {
+                    if (response.message && response.message.name) {
+                        // Successfully created engagement
+                        const engagementId = response.message.name;
+                        
+                        frappe.show_alert({
+                            message: 'Engagement created successfully',
+                            indicator: 'green'
+                        });
+                        
+                        // Close modal
+                        $('.pm-engagement-creator-modal').remove();
+                        
+                        // Automatically link the new engagement to the task
+                        this.performEngagementLink(taskId, engagementId, formData.customer);
+                    } else {
+                        frappe.show_alert({
+                            message: 'Failed to create engagement',
+                            indicator: 'red'
+                        });
+                        $btn.prop('disabled', false).html('<i class="fa fa-save"></i> Create Engagement');
+                    }
+                },
+                error: (error) => {
+                    console.error('Error creating engagement:', error);
+                    frappe.show_alert({
+                        message: 'Failed to create engagement',
+                        indicator: 'red'
+                    });
+                    $btn.prop('disabled', false).html('<i class="fa fa-save"></i> Create Engagement');
+                }
+            });
+        });
+
+        // Close modal
+        $(document).on('click', '.pm-engagement-creator-modal .pm-modal-close, .pm-engagement-creator-modal .pm-modal-overlay', () => {
+            $('.pm-engagement-creator-modal').remove();
+        });
+    }
+
+    // Initialize customer search functionality
+    initCustomerSearch() {
+        let searchTimeout;
+        
+        // Input event for search
+        $(document).on('input', '.pm-customer-search', (e) => {
+            const $input = $(e.target);
+            const searchTerm = $input.val().toLowerCase();
+            const $dropdown = $input.siblings('.pm-customer-dropdown');
+            
+            clearTimeout(searchTimeout);
+            
+            if (searchTerm.length < 1) {
+                $dropdown.hide();
+                return;
+            }
+            
+            searchTimeout = setTimeout(() => {
+                this.searchCustomers(searchTerm, $dropdown);
+            }, 300);
+        });
+
+        // Focus event to show dropdown
+        $(document).on('focus', '.pm-customer-search', (e) => {
+            const $input = $(e.target);
+            const $dropdown = $input.siblings('.pm-customer-dropdown');
+            
+            if ($input.val().length > 0) {
+                this.searchCustomers($input.val().toLowerCase(), $dropdown);
+            }
+        });
+
+        // Click outside to hide dropdown
+        $(document).on('click', (e) => {
+            if (!$(e.target).closest('.pm-customer-search-container').length) {
+                $('.pm-customer-dropdown').hide();
+            }
+        });
+
+        // Customer selection
+        $(document).on('click', '.pm-customer-option', (e) => {
+            const $option = $(e.target);
+            const customerName = $option.data('customer-name');
+            const customerDisplayName = $option.text();
+            
+            const $input = $option.closest('.pm-customer-search-container').find('.pm-customer-search');
+            $input.val(customerDisplayName);
+            $input.data('customer-id', customerName);
+            
+            $('.pm-customer-dropdown').hide();
+        });
+    }
+
+    // Load customer cache
+    loadCustomerCache() {
+        if (!this.customerCache) {
+            frappe.call({
+                method: 'frappe.client.get_list',
+                args: {
+                    doctype: 'Customer',
+                    fields: ['name', 'customer_name'],
+                    limit_page_length: 0, // Get all customers
+                    order_by: 'customer_name asc'
+                },
+                callback: (response) => {
+                    if (response.message) {
+                        this.customerCache = response.message;
+                    }
+                }
+            });
+        }
+    }
+
+    // Search customers in cache
+    searchCustomers(searchTerm, $dropdown) {
+        if (!this.customerCache) {
+            $dropdown.html('<div class="pm-customer-loading">Loading customers...</div>').show();
+            this.loadCustomerCache();
+            return;
+        }
+
+        const filteredCustomers = this.customerCache.filter(customer => {
+            const name = (customer.customer_name || customer.name).toLowerCase();
+            return name.includes(searchTerm);
+        });
+
+        if (filteredCustomers.length === 0) {
+            $dropdown.html('<div class="pm-customer-no-results">No customers found</div>').show();
+            return;
+        }
+
+        const optionsHtml = filteredCustomers.slice(0, 10).map(customer => `
+            <div class="pm-customer-option" data-customer-name="${customer.name}">
+                ${customer.customer_name || customer.name}
+            </div>
+        `).join('');
+
+        $dropdown.html(optionsHtml).show();
     }
 }
 
