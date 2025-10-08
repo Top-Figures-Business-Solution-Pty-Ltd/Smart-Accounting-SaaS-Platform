@@ -1,6 +1,6 @@
 /* Workspace and Navigation Styles */
 
-/* Header Section - Fixed Below ERPNext Navbar */
+/* Header Section - Fixed Below Custom System Navbar */
 .pm-header {
     background: white;
     padding: 20px 24px;
@@ -9,10 +9,10 @@
     flex-direction: column; /* 垂直布局 */
     box-shadow: var(--monday-shadow);
     position: fixed;
-    top: 48px; /* ERPNext navbar height */
+    top: 60px; /* Custom system navbar height */
     left: 0;
     right: 0;
-    z-index: 99; /* Below ERPNext navbar but above content */
+    z-index: 99; /* Below system navbar but above content */
     margin: 0;
     gap: 16px; /* 垂直间距 */
 }
@@ -416,7 +416,7 @@ body.main-dashboard-view .pm-content {
     height: auto !important;
     background: #f6f7fb !important;
     min-height: auto !important;
-    padding-top: 200px !important; /* Maximum spacing to ensure complete visibility */
+    padding-top: 140px !important; /* Space for custom navbar + pm-header */
 }
 
 /* Reset any table-specific styles for main dashboard */

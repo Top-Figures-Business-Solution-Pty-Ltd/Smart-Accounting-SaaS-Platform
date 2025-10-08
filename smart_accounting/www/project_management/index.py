@@ -4716,3 +4716,104 @@ def get_field_options(doctype, fieldname):
             'success': False,
             'error': str(e)
         }
+
+@frappe.whitelist()
+def get_current_user_info():
+    """
+    Get current user information including roles and permissions
+    """
+    try:
+        current_user = frappe.session.user
+        if current_user == 'Guest':
+            return {
+                'success': True,
+                'user': 'Guest',
+                'full_name': 'Guest User',
+                'roles': ['Guest'],
+                'permissions': 'Guest Access'
+            }
+        
+        # Get user roles using the correct method found in existing code
+        user_roles = frappe.get_roles()
+        # Filter out system roles
+        filtered_roles = [role for role in user_roles if role not in ['All', 'Guest']]
+        
+        # Get user full name
+        full_name = frappe.get_cached_value('User', current_user, 'full_name') or current_user
+        
+        # Determine permission level
+        permissions = 'Guest Access'
+        if current_user == 'Administrator':
+            permissions = 'Full System Access'
+        elif 'System Manager' in user_roles:
+            permissions = 'System Manager Access'
+        else:
+            permissions = 'Smart Accounting User'
+        
+        return {
+            'success': True,
+            'user': current_user,
+            'full_name': full_name,
+            'roles': filtered_roles,
+            'permissions': permissions
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting current user info: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def grant_dev_access(password):
+    """
+    验证开发者密码并授予系统访问权限
+    """
+    try:
+        # 只允许管理员角色申请开发者访问
+        user_roles = frappe.get_roles()
+        if 'System Manager' not in user_roles and 'Administrator' not in user_roles:
+            return {
+                'success': False,
+                'message': 'Only administrators can request developer access'
+            }
+        
+        # 验证密码（硬编码为devdev）
+        if password == 'devdev':
+            frappe.session['dev_system_access'] = True
+            return {
+                'success': True,
+                'message': 'Developer access granted',
+                'redirect_url': '/app'
+            }
+        else:
+            return {
+                'success': False,
+                'message': 'Invalid password'
+            }
+            
+    except Exception as e:
+        frappe.log_error(f"Error granting dev access: {str(e)}")
+        return {
+            'success': False,
+            'message': 'Error processing request'
+        }
+
+@frappe.whitelist()
+def revoke_dev_access():
+    """
+    撤销开发者系统访问权限
+    """
+    try:
+        frappe.session.pop('dev_system_access', None)
+        return {
+            'success': True,
+            'message': 'Developer access revoked'
+        }
+    except Exception as e:
+        frappe.log_error(f"Error revoking dev access: {str(e)}")
+        return {
+            'success': False,
+            'message': 'Error processing request'
+        }

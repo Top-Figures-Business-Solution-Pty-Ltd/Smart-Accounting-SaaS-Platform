@@ -1,0 +1,132 @@
+<!-- Smart Accounting System Navbar -->
+<!-- Replaces ERPNext default navbar with custom SaaS-focused navigation -->
+<nav class="sa-system-navbar">
+    <div class="sa-navbar-container">
+        <!-- Left side - Brand -->
+        <div class="sa-navbar-left">
+            <a href="/project_management" class="sa-navbar-brand">
+                <i class="fa fa-calculator"></i>
+                <span>Smart Accounting</span>
+            </a>
+        </div>
+        
+        <!-- Right side - User controls -->
+        <div class="sa-navbar-right">
+            <!-- Dev System Button - Only for authorized users -->
+            {% if frappe.session.user == 'Administrator' or 'System Manager' in frappe.get_roles() %}
+            <button class="sa-dev-system-btn" onclick="saDevAccess.requestAccess()" title="Developer System Access">
+                <i class="fa fa-code"></i>
+                <span>Dev System</span>
+            </button>
+            {% endif %}
+            
+            <!-- User Profile Dropdown -->
+            <div class="sa-user-profile-dropdown">
+                <button class="sa-user-profile-btn" onclick="saUserProfile.toggle()" title="User Profile">
+                    <div class="sa-user-avatar">
+                        {% if frappe.session.user %}
+                            {{ frappe.session.user[0].upper() }}
+                        {% else %}
+                            ?
+                        {% endif %}
+                    </div>
+                    <span class="sa-user-name">
+                        {% if frappe.session.user and frappe.session.user != 'Guest' %}
+                            {{ frappe.get_fullname(frappe.session.user) or frappe.session.user }}
+                        {% else %}
+                            Guest
+                        {% endif %}
+                    </span>
+                    <i class="fa fa-chevron-down"></i>
+                </button>
+                
+                <!-- Profile Menu -->
+                <div class="sa-profile-menu" id="sa-profile-menu" style="display: none;">
+                    <div class="sa-profile-header">
+                        <div class="sa-profile-avatar-large">
+                            {% if frappe.session.user %}
+                                {{ frappe.session.user[0].upper() }}
+                            {% else %}
+                                ?
+                            {% endif %}
+                        </div>
+                        <div class="sa-profile-info">
+                            <h4>
+                                {% if frappe.session.user and frappe.session.user != 'Guest' %}
+                                    {{ frappe.get_fullname(frappe.session.user) or frappe.session.user }}
+                                {% else %}
+                                    Guest User
+                                {% endif %}
+                            </h4>
+                            <small>{{ frappe.session.user or 'guest@example.com' }}</small>
+                        </div>
+                    </div>
+                    
+                    <div class="sa-profile-content">
+                        <!-- User Information Section -->
+                        <div class="sa-profile-section">
+                            <h5>Account Information</h5>
+                            <div class="sa-profile-item">
+                                <span class="sa-profile-label">Email:</span>
+                                <span class="sa-profile-value">{{ frappe.session.user or 'N/A' }}</span>
+                            </div>
+                            <div class="sa-profile-item">
+                                <span class="sa-profile-label">Roles:</span>
+                                <span class="sa-profile-value" id="sa-user-roles">Loading...</span>
+                            </div>
+                            <div class="sa-profile-item">
+                                <span class="sa-profile-label">Permissions:</span>
+                                <span class="sa-profile-value" id="sa-user-permissions">Loading...</span>
+                            </div>
+                        </div>
+                        
+                        <div class="sa-profile-divider"></div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="sa-profile-actions">
+                            <button class="sa-profile-action" onclick="saUserProfile.editProfile()">
+                                <i class="fa fa-user"></i>
+                                <span>My Account</span>
+                            </button>
+                            <button class="sa-profile-action" onclick="saUserProfile.changePassword()">
+                                <i class="fa fa-key"></i>
+                                <span>Change Password</span>
+                            </button>
+                            <button class="sa-profile-action" onclick="saUserProfile.viewSettings()">
+                                <i class="fa fa-cog"></i>
+                                <span>Settings</span>
+                            </button>
+                        </div>
+                        
+                        <div class="sa-profile-divider"></div>
+                        
+                        <!-- Logout Button -->
+                        <button class="sa-profile-logout" onclick="saUserProfile.logout()">
+                            <i class="fa fa-sign-out"></i>
+                            <span>Logout</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<!-- Template data for JavaScript -->
+<div id="template-data" style="display: none;" 
+     data-session-user="{{ frappe.session.user or 'Guest' }}"
+     data-csrf-token="{{ frappe.session.csrf_token or '' }}">
+</div>
+
+<!-- Initialize frappe object for API calls if not present -->
+<script>
+if (typeof window.frappe === 'undefined') {
+    window.frappe = {
+        session: {
+            user: '{{ frappe.session.user or "Guest" }}',
+            csrf_token: '{{ frappe.session.csrf_token or "" }}'
+        },
+        csrf_token: '{{ frappe.session.csrf_token or "" }}'
+    };
+}
+</script>

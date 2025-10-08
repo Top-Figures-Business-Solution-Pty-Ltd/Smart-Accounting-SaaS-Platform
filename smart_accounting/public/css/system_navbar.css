@@ -1,0 +1,345 @@
+/* Smart Accounting System Navbar Styles */
+.sa-system-navbar {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 0;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.sa-navbar-container {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 0 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 60px;
+}
+
+/* Left side - Brand */
+.sa-navbar-left {
+    display: flex;
+    align-items: center;
+}
+
+.sa-navbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: white;
+    text-decoration: none;
+    font-size: 1.25rem;
+    font-weight: 600;
+    transition: opacity 0.3s ease;
+}
+
+.sa-navbar-brand:hover {
+    color: white;
+    text-decoration: none;
+    opacity: 0.9;
+}
+
+.sa-navbar-brand i {
+    font-size: 1.5rem;
+}
+
+/* Right side - User controls */
+.sa-navbar-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* Dev System Button */
+.sa-dev-system-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.sa-dev-system-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    text-decoration: none;
+    transform: translateY(-1px);
+}
+
+/* User Profile Dropdown */
+.sa-user-profile-dropdown {
+    position: relative;
+}
+
+.sa-user-profile-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.9rem;
+}
+
+.sa-user-profile-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+.sa-user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.sa-user-name {
+    font-weight: 500;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Profile Menu */
+.sa-profile-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.5rem;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    min-width: 320px;
+    max-width: 400px;
+    z-index: 1001;
+    color: #333;
+    border: 1px solid #e1e5e9;
+}
+
+.sa-profile-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e1e5e9;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px 8px 0 0;
+}
+
+.sa-profile-avatar-large {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1.2rem;
+}
+
+.sa-profile-info h4 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.sa-profile-info small {
+    color: #6c757d;
+    font-size: 0.85rem;
+}
+
+.sa-profile-content {
+    padding: 1rem;
+}
+
+.sa-profile-section {
+    margin-bottom: 1rem;
+}
+
+.sa-profile-section h5 {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #495057;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.sa-profile-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f1f3f4;
+}
+
+.sa-profile-item:last-child {
+    border-bottom: none;
+}
+
+.sa-profile-label {
+    font-weight: 500;
+    color: #495057;
+    font-size: 0.9rem;
+}
+
+.sa-profile-value {
+    color: #6c757d;
+    font-size: 0.9rem;
+    max-width: 180px;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sa-profile-divider {
+    height: 1px;
+    background: #e1e5e9;
+    margin: 1rem 0;
+}
+
+.sa-profile-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.sa-profile-action {
+    background: none;
+    border: none;
+    padding: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.2s ease;
+    font-size: 0.9rem;
+    color: #495057;
+    width: 100%;
+    text-align: left;
+}
+
+.sa-profile-action:hover {
+    background: #f8f9fa;
+    color: #2c3e50;
+}
+
+.sa-profile-action i {
+    width: 16px;
+    text-align: center;
+    color: #6c757d;
+}
+
+.sa-profile-logout {
+    background: none;
+    border: none;
+    padding: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+    color: #dc3545;
+    width: 100%;
+    text-align: left;
+    font-weight: 500;
+}
+
+.sa-profile-logout:hover {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.sa-profile-logout i {
+    width: 16px;
+    text-align: center;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .sa-navbar-container {
+        padding: 0 0.75rem;
+    }
+    
+    .sa-user-name {
+        display: none;
+    }
+    
+    .sa-profile-menu {
+        min-width: 280px;
+        right: -1rem;
+    }
+    
+    .sa-dev-system-btn span {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .sa-navbar-container {
+        height: 56px;
+    }
+    
+    .sa-navbar-brand span {
+        display: none;
+    }
+    
+    .sa-profile-menu {
+        min-width: 260px;
+        right: -1.5rem;
+    }
+}
+
+/* Animation for dropdown */
+.sa-profile-menu {
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: all 0.2s ease;
+    pointer-events: none;
+}
+
+.sa-profile-menu.show {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: all;
+}
+
+/* Overlay for mobile */
+.sa-profile-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.1);
+    z-index: 1000;
+    display: none;
+}
+
+.sa-profile-overlay.show {
+    display: block;
+}

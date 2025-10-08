@@ -3,7 +3,7 @@
 /* Main Content - Fixed Header Layout */
 .pm-content {
     padding: 24px 12px;
-    padding-top: 240px; /* Maximum space for fixed headers to ensure complete visibility */
+    padding-top: 140px; /* Space for custom navbar + pm-header */
     width: 100%;
     overflow: visible;
     min-width: fit-content;
