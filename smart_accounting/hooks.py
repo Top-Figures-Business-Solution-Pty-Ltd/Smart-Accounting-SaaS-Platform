@@ -26,11 +26,11 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/smart_accounting/css/smart_accounting.css"
-# app_include_js = "/assets/smart_accounting/js/smart_accounting.js"
+# app_include_js = "/assets/smart_accounting/js/access-guard.js"  # Temporarily disabled
 
 # include js, css files in header of web template
 # web_include_css = "/assets/smart_accounting/css/smart_accounting.css"
-# web_include_js = "/assets/smart_accounting/js/smart_accounting.js"
+# web_include_js = "/assets/smart_accounting/js/access-guard.js"  # Temporarily disabled
 
 # include custom scss in every website theme (without file extension ".scss")
 # website_theme_scss = "smart_accounting/public/scss/website"
@@ -57,7 +57,7 @@ app_license = "mit"
 # ----------
 
 # application home page (will override Website Settings)
-home_page = "/app/smart-accounting"
+home_page = "/project_management"
 
 
 # website user home page (by Role)
@@ -197,7 +197,7 @@ home_page = "/app/smart-accounting"
 
 # Request Events
 # ----------------
-# before_request = ["smart_accounting.utils.before_request"]
+before_request = ["smart_accounting.access_control.before_request"]  # Enabled for Administrator-only ERPNext access
 # after_request = ["smart_accounting.utils.after_request"]
 
 # Job Events

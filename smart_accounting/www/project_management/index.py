@@ -86,6 +86,21 @@ def get_context(context):
         # Get data based on view
         context.project_data = get_project_management_data(view)
     
+    # Add user role information for template use
+    try:
+        current_user = frappe.session.user
+        user_roles = frappe.get_roles() if current_user != 'Guest' else []
+        context.user_roles = user_roles
+        context.is_administrator = current_user == 'Administrator'
+        context.is_system_manager = 'System Manager' in user_roles
+        context.can_access_dev_system = context.is_administrator or context.is_system_manager
+    except Exception as e:
+        frappe.log_error(f"Error getting user roles in context: {str(e)}")
+        context.user_roles = []
+        context.is_administrator = False
+        context.is_system_manager = False
+        context.can_access_dev_system = False
+    
     return context
 
 def get_workspace_title(view):
@@ -4771,6 +4786,9 @@ def grant_dev_access(password):
     验证开发者密码并授予系统访问权限
     """
     try:
+        # 调试信息
+        frappe.log_error(f"Dev access request - User: {frappe.session.user}, Password received: '{password}', Type: {type(password)}")
+        
         # 只允许管理员角色申请开发者访问
         user_roles = frappe.get_roles()
         if 'System Manager' not in user_roles and 'Administrator' not in user_roles:
@@ -4780,17 +4798,22 @@ def grant_dev_access(password):
             }
         
         # 验证密码（硬编码为devdev）
-        if password == 'devdev':
+        # 确保密码是字符串并去除空格
+        password_clean = str(password).strip() if password else ""
+        
+        if password_clean == 'devdev':
             frappe.session['dev_system_access'] = True
+            frappe.log_error(f"Dev access granted to user: {frappe.session.user}")
             return {
                 'success': True,
                 'message': 'Developer access granted',
                 'redirect_url': '/app'
             }
         else:
+            frappe.log_error(f"Invalid password attempt - Expected: 'devdev', Received: '{password_clean}'")
             return {
                 'success': False,
-                'message': 'Invalid password'
+                'message': f'Invalid password. Received: "{password_clean}"'
             }
             
     except Exception as e:
@@ -4815,5 +4838,31 @@ def revoke_dev_access():
         frappe.log_error(f"Error revoking dev access: {str(e)}")
         return {
             'success': False,
+            'message': 'Error processing request'
+        }
+
+@frappe.whitelist(allow_guest=True)
+def handle_login_redirect():
+    """
+    Handle post-login redirect to ensure users go to project management
+    """
+    try:
+        if frappe.session.user != 'Guest':
+            return {
+                'success': True,
+                'redirect_url': '/project_management',
+                'user': frappe.session.user
+            }
+        else:
+            return {
+                'success': False,
+                'redirect_url': '/login',
+                'message': 'Not logged in'
+            }
+    except Exception as e:
+        frappe.log_error(f"Error handling login redirect: {str(e)}")
+        return {
+            'success': False,
+            'redirect_url': '/login',
             'message': 'Error processing request'
         }

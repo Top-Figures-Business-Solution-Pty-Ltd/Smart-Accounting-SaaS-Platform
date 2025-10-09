@@ -12,11 +12,11 @@
         
         <!-- Right side - User controls -->
         <div class="sa-navbar-right">
-            <!-- Dev System Button - Only for authorized users -->
-            {% if frappe.session.user == 'Administrator' or 'System Manager' in frappe.get_roles() %}
-            <button class="sa-dev-system-btn" onclick="saDevAccess.requestAccess()" title="Developer System Access">
-                <i class="fa fa-code"></i>
-                <span>Dev System</span>
+            <!-- ERPNext System Button - Only for Administrator -->
+            {% if frappe.session.user == 'Administrator' %}
+            <button class="sa-dev-system-btn" onclick="window.location.href='/app'" title="Access ERPNext System">
+                <i class="fa fa-cogs"></i>
+                <span>ERPNext System</span>
             </button>
             {% endif %}
             
@@ -63,20 +63,42 @@
                     </div>
                     
                     <div class="sa-profile-content">
-                        <!-- User Information Section -->
+                        <!-- User Information Section - Simplified for Development -->
                         <div class="sa-profile-section">
                             <h5>Account Information</h5>
                             <div class="sa-profile-item">
                                 <span class="sa-profile-label">Email:</span>
                                 <span class="sa-profile-value">{{ frappe.session.user or 'N/A' }}</span>
                             </div>
+                            <!-- Development Mode: Show roles/permissions only when needed -->
+                            {% if frappe.session.user == 'Administrator' %}
                             <div class="sa-profile-item">
-                                <span class="sa-profile-label">Roles:</span>
-                                <span class="sa-profile-value" id="sa-user-roles">Loading...</span>
+                                <span class="sa-profile-label">Access Level:</span>
+                                <span class="sa-profile-value">Administrator</span>
+                            </div>
+                            {% else %}
+                            <div class="sa-profile-item">
+                                <span class="sa-profile-label">Access Level:</span>
+                                <span class="sa-profile-value">Standard User</span>
+                            </div>
+                            {% endif %}
+                            <!-- Advanced info only shown on demand -->
+                            <div class="sa-profile-item" style="display: none;" id="sa-advanced-info">
+                                <div style="margin-top: 8px;">
+                                    <div class="sa-profile-item">
+                                        <span class="sa-profile-label">Roles:</span>
+                                        <span class="sa-profile-value" id="sa-user-roles">Click to load</span>
+                                    </div>
+                                    <div class="sa-profile-item">
+                                        <span class="sa-profile-label">Permissions:</span>
+                                        <span class="sa-profile-value" id="sa-user-permissions">Click to load</span>
+                                    </div>
+                                </div>
                             </div>
                             <div class="sa-profile-item">
-                                <span class="sa-profile-label">Permissions:</span>
-                                <span class="sa-profile-value" id="sa-user-permissions">Loading...</span>
+                                <button class="sa-profile-toggle-advanced" onclick="saUserProfile.toggleAdvancedInfo()" style="background: none; border: none; color: #666; font-size: 12px; cursor: pointer; padding: 4px 0;">
+                                    <i class="fa fa-chevron-down"></i> Show Advanced Info
+                                </button>
                             </div>
                         </div>
                         
