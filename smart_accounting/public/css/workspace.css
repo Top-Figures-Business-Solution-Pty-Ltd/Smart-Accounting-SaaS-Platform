@@ -12,7 +12,7 @@
     top: 60px; /* Custom system navbar height */
     left: 0;
     right: 0;
-    z-index: 99; /* Below system navbar but above content */
+    z-index: 999; /* Below system navbar (1000) but above content */
     margin: 0;
     gap: 16px; /* 垂直间距 */
 }
@@ -397,6 +397,7 @@ body.main-dashboard-view .pm-table-container {
     display: block !important;
     width: 100% !important;
     min-width: auto !important;
+    margin-top: 40px !important; /* Space below header to prevent content being hidden */
     flex: none !important;
 }
 
@@ -416,7 +417,7 @@ body.main-dashboard-view .pm-content {
     height: auto !important;
     background: #f6f7fb !important;
     min-height: auto !important;
-    padding-top: 140px !important; /* Space for custom navbar + pm-header */
+    padding-top: 208px !important; /* Space for system navbar (60px) + pm-header (128px) + margin (20px) */
 }
 
 /* Reset any table-specific styles for main dashboard */

@@ -754,7 +754,7 @@ g
         var(--pm-col-preparer, 120px)
         var(--pm-col-reviewer, 120px)
         var(--pm-col-partner, 120px);
-    height: var(--pm-header-height, 56px);
+    height: 48px; /* Fixed height for table header row */
     background: #f8f9fa;
     border-bottom: 2px solid #e5e5e5;
     position: sticky;

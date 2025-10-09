@@ -608,10 +608,15 @@ class FilterManager {
                     partition_name: partitionName
                 },
                 callback: (response) => {
-                    if (response.message && response.message.success) {
-                        resolve(response.message);
+                    console.log('API Response:', response);
+                    if (response && response.message) {
+                        if (response.message.success) {
+                            resolve(response.message);
+                        } else {
+                            reject(response.message.error || 'Failed to load configuration');
+                        }
                     } else {
-                        reject(response.message?.error || 'Failed to load configuration');
+                        reject('Invalid response format');
                     }
                 },
                 error: (error) => {

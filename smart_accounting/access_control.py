@@ -45,13 +45,25 @@ def check_erpnext_system_access(path, current_user):
     """
     Check access to other ERPNext system paths
     """
-    other_erpnext_paths = [
-        '/desk', '/api/resource', '/printview', '/report', '/query-report',
+    # ERPNext system paths that require administrator access
+    restricted_erpnext_paths = [
+        '/desk', '/printview', '/report', '/query-report',
         '/dashboard', '/list', '/form', '/tree', '/kanban', '/calendar',
         '/gantt', '/image', '/setup'
     ]
     
-    if any(path.startswith(erpnext_path) for erpnext_path in other_erpnext_paths):
+    # ERPNext API paths that require administrator access
+    restricted_api_paths = [
+        '/api/resource', 
+        '/api/method/erpnext.',
+        '/api/method/frappe.desk.',
+        '/api/method/frappe.core.doctype.',
+        '/api/method/frappe.email.',
+        '/api/method/frappe.utils.print_format.'
+    ]
+    
+    # Check restricted paths
+    if any(path.startswith(erpnext_path) for erpnext_path in restricted_erpnext_paths):
         if not is_administrator(current_user):
             redirect_user(PROJECT_MANAGEMENT_PATH)
             frappe.log_error(
@@ -60,13 +72,26 @@ def check_erpnext_system_access(path, current_user):
             )
             return True  # Handled
         return True  # Handled (allowed)
+    
+    # Check restricted API paths
+    if any(path.startswith(api_path) for api_path in restricted_api_paths):
+        if not is_administrator(current_user):
+            redirect_user(PROJECT_MANAGEMENT_PATH)
+            frappe.log_error(
+                f"Non-administrator API access attempt by {current_user} to {path}",
+                "Security Alert - ERPNext API Access Denied"
+            )
+            return True  # Handled
+        return True  # Handled (allowed)
+    
     return False  # Not handled
 
 def before_request():
     """
     Smart Accounting Access Control System
-    Multi-layer security strategy: Complete isolation of ERPNext system access, only Administrator allowed
+    Simple strategy: Only restrict specific ERPNext UI pages, allow everything else
     """
+    
     # Early return if frappe.local or request doesn't exist
     if not hasattr(frappe, 'local') or not frappe.local or \
        not hasattr(frappe.local, 'request') or not frappe.local.request:
@@ -76,28 +101,43 @@ def before_request():
     path = frappe.local.request.path
     current_user = frappe.session.user
     
-    # Early return for static assets and API calls (performance optimization)
+    # Early return for static assets, API calls, and private files
     if path.startswith(('/assets/', '/files/', '/private/', '/api/')):
         return
     
-    # Check /app access first (most specific)
-    if check_app_access(path, current_user):
-        return
-    
-    # Check other ERPNext system paths
-    if check_erpnext_system_access(path, current_user):
-        return
-    
-    # Check public paths
+    # Allow public paths (login and project management)
     public_paths = (LOGIN_PATH, PROJECT_MANAGEMENT_PATH)
     if path.startswith(public_paths):
         return
     
-    # Handle all other disallowed paths
-    if frappe.session.user != 'Guest':
-        redirect_user(PROJECT_MANAGEMENT_PATH)
-    else:
-        redirect_user(LOGIN_PATH)
+    # Only restrict specific ERPNext UI pages for non-administrators
+    restricted_ui_paths = [
+        '/app',
+        '/desk', 
+        '/list', 
+        '/form', 
+        '/tree', 
+        '/kanban', 
+        '/calendar',
+        '/gantt', 
+        '/dashboard', 
+        '/report', 
+        '/query-report',
+        '/printview', 
+        '/setup'
+    ]
+    
+    # Check if current path is restricted and user is not administrator
+    if any(path.startswith(ui_path) for ui_path in restricted_ui_paths):
+        if not is_administrator(current_user):
+            redirect_user(PROJECT_MANAGEMENT_PATH)
+            frappe.log_error(
+                f"Non-administrator UI access attempt by {current_user} to {path}",
+                "Security Alert - ERPNext UI Access Denied"
+            )
+            return
+    
+    # Allow all other paths (including all API calls)
 
 @frappe.whitelist()
 def check_erpnext_access():

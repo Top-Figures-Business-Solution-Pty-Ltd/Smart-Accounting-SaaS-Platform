@@ -169,7 +169,7 @@ class LayoutPreloader {
             },
             tableWidth: 1400,
             rowHeight: 48,
-            headerHeight: 56
+            headerHeight: 128
         };
     }
     
@@ -347,7 +347,7 @@ class LayoutPreloader {
             columns: {},
             tableWidth: 0,
             rowHeight: 48,
-            headerHeight: 56
+            headerHeight: 128
         };
         
         // 提取列配置

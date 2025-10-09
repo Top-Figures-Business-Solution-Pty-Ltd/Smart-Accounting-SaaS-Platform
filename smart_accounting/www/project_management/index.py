@@ -400,10 +400,13 @@ def get_breadcrumb_path(view):
             frappe.log_error(f"Error generating breadcrumb path: {str(e)}")
         return None
 
-@frappe.whitelist()
+@frappe.whitelist(allow_guest=False)
 def get_partition_column_config(partition_name):
     """Get column configuration for a specific partition"""
     try:
+        # Log the request for debugging
+        frappe.logger().info(f"Getting column config for partition: {partition_name}, User: {frappe.session.user}")
+        
         if partition_name == 'main':
             # Default configuration for main view - show all current columns
             # 使用动态的默认列配置而不是硬编码
@@ -413,13 +416,15 @@ def get_partition_column_config(partition_name):
                 'preparer', 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 
                 'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'
             ]
-            return {
+            result = {
                 'success': True,
                 'visible_columns': default_visible_columns,
                 'column_config': {
                     'column_order': default_visible_columns  # 提供默认排序
                 }
             }
+            frappe.logger().info(f"Returning main config: {result}")
+            return result
         
         # Get partition configuration
         if not frappe.db.exists("Partition", partition_name):
@@ -458,10 +463,13 @@ def get_partition_column_config(partition_name):
         }
         
     except Exception as e:
-        frappe.log_error(f"Error getting partition column config: {str(e)}")
+        error_msg = f"Error getting partition column config for '{partition_name}': {str(e)}"
+        frappe.logger().error(error_msg)
+        frappe.log_error(error_msg, "Column Config Error")
         return {
             'success': False,
             'error': str(e),
+            'partition_name': partition_name,
             'visible_columns': ['client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'note', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'],
             'column_config': {}
         }

@@ -3,7 +3,7 @@
 /* Main Content - Fixed Header Layout */
 .pm-content {
     padding: 24px 12px;
-    padding-top: 140px; /* Space for custom navbar + pm-header */
+    padding-top: 208px; /* Space for system navbar (60px) + pm-header (128px) + margin (20px) */
     width: 100%;
     overflow: visible;
     min-width: fit-content;
@@ -20,6 +20,7 @@
     border: 1px solid rgba(208, 212, 228, 0.5);
     backdrop-filter: blur(10px);
     transition: all 0.3s ease;
+    margin-top: 40px; /* Space below header to prevent content being hidden */
     /* No internal scrollbars - use browser native only */
 }
 
@@ -128,6 +129,7 @@
     margin-bottom: 4px;
     width: 100%; /* Use full width */
     min-width: fit-content; /* Expand if needed */
+    height: 48px; /* Fixed height for table header */
     /* Remove sticky positioning to prevent overlap with fixed pm-header */
     position: relative;
     z-index: 12;
