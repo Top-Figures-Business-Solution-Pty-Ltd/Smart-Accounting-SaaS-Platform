@@ -453,3 +453,453 @@
     }
     
 })();
+
+// ==================== NOTIFICATIONS SYSTEM ====================
+
+window.saNotifications = {
+    isOpen: false,
+    currentTab: 'notifications',
+    
+    init() {
+        this.bindEvents();
+        this.loadNotifications();
+    },
+    
+    bindEvents() {
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.sa-notifications-dropdown')) {
+                this.close();
+            }
+        });
+        
+        // Prevent dropdown from closing when clicking inside
+        const menu = document.getElementById('sa-notifications-menu');
+        if (menu) {
+            menu.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+        }
+    },
+    
+    toggle() {
+        if (this.isOpen) {
+            this.close();
+        } else {
+            this.open();
+        }
+    },
+    
+    open() {
+        const menu = document.getElementById('sa-notifications-menu');
+        if (menu) {
+            menu.style.display = 'block';
+            this.isOpen = true;
+            
+            // Load fresh data when opening
+            this.loadNotifications();
+        }
+    },
+    
+    close() {
+        const menu = document.getElementById('sa-notifications-menu');
+        if (menu) {
+            menu.style.display = 'none';
+            this.isOpen = false;
+        }
+    },
+    
+    switchTab(tabName) {
+        // Update active tab button
+        document.querySelectorAll('.sa-tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        
+        // Update active tab content
+        document.querySelectorAll('.sa-tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        document.getElementById(`${tabName}-tab`).classList.add('active');
+        
+        this.currentTab = tabName;
+        
+        // Load content for the selected tab
+        switch(tabName) {
+            case 'notifications':
+                this.loadNotifications();
+                break;
+            case 'events':
+                this.loadEvents();
+                break;
+            case 'whats-new':
+                this.loadWhatsNew();
+                break;
+        }
+    },
+    
+    loadNotifications() {
+        // Use ERPNext's actual notification API (same as the built-in system)
+        if (window.frappe && frappe.call) {
+            frappe.call({
+                method: 'frappe.desk.doctype.notification_log.notification_log.get_notification_logs',
+                args: {
+                    limit: 20  // Same as ERPNext default
+                },
+                callback: (r) => {
+                    try {
+                        if (r && r.message && Array.isArray(r.message)) {
+                            console.log('Loaded notifications:', r.message.length);
+                            this.renderNotifications(r.message);
+                        } else {
+                            console.log('No notifications found or invalid format');
+                            this.showEmptyState('notifications');
+                        }
+                    } catch (error) {
+                        console.error('Error processing notifications:', error);
+                        this.showEmptyState('notifications');
+                    }
+                },
+                error: (error) => {
+                    console.error('Error loading notifications:', error);
+                    this.showEmptyState('notifications');
+                }
+            });
+        } else {
+            console.log('Frappe not available, showing empty state');
+            this.showEmptyState('notifications');
+        }
+    },
+    
+    loadEvents() {
+        // Try to use ERPNext's event system if available
+        if (window.frappe && frappe.call && frappe.datetime) {
+            try {
+                frappe.call({
+                    method: 'frappe.desk.calendar.get_events',
+                    args: {
+                        start: frappe.datetime.get_today(),
+                        end: frappe.datetime.add_days(frappe.datetime.get_today(), 7)
+                    },
+                    callback: (r) => {
+                        try {
+                            if (r && r.message && Array.isArray(r.message) && r.message.length > 0) {
+                                this.renderEvents(r.message);
+                            } else {
+                                console.log('No events found or invalid format');
+                                this.showEmptyState('events');
+                            }
+                        } catch (error) {
+                            console.error('Error processing events:', error);
+                            this.showEmptyState('events');
+                        }
+                    },
+                    error: (error) => {
+                        console.error('Error loading events:', error);
+                        this.showEmptyState('events');
+                    }
+                });
+            } catch (error) {
+                console.error('Error calling events API:', error);
+                this.showEmptyState('events');
+            }
+        } else {
+            console.log('Frappe datetime not available, showing empty state');
+            this.showEmptyState('events');
+        }
+    },
+    
+    loadWhatsNew() {
+        // For now, show empty state since ERPNext doesn't have a standard "What's New" API
+        // In the future, we can implement our own Smart Accounting updates system
+        this.showEmptyState('whats-new');
+        
+        // Alternative: Try to get recent system updates or changelog
+        // if (window.frappe && frappe.call) {
+        //     frappe.call({
+        //         method: 'frappe.desk.notifications.get_system_updates',
+        //         callback: (r) => {
+        //             if (r.message && r.message.length > 0) {
+        //                 this.renderWhatsNew(r.message);
+        //             } else {
+        //                 this.showEmptyState('whats-new');
+        //             }
+        //         },
+        //         error: () => {
+        //             this.showEmptyState('whats-new');
+        //         }
+        //     });
+        // } else {
+        //     this.showEmptyState('whats-new');
+        // }
+    },
+    
+    renderNotifications(notifications) {
+        const container = document.getElementById('sa-notification-list');
+        if (!container) return;
+        
+        // Ensure notifications is an array
+        if (!notifications || !Array.isArray(notifications) || notifications.length === 0) {
+            this.showEmptyState('notifications');
+            return;
+        }
+        
+        try {
+            // Use ERPNext's exact notification rendering logic
+            container.innerHTML = notifications.map(notification_log => {
+                const doc_link = this.getItemLink(notification_log);
+                const read_class = notification_log.read ? '' : 'unread';
+                let message = notification_log.subject || '';
+                
+                // Process message same as ERPNext
+                const title = message.match(/<b class="subject-title">(.*?)<\/b>/);
+                if (title && window.frappe && frappe.ellipsis && window.strip_html) {
+                    message = message.replace(title[1], frappe.ellipsis(strip_html(title[1]), 100));
+                }
+                
+                const timestamp = this.formatTime(notification_log.creation);
+                const user = notification_log.from_user || '';
+                const user_avatar = this.getUserAvatar(user);
+                
+                return `
+                    <a class="sa-notification-item recent-item notification-item ${read_class}"
+                       href="${doc_link}"
+                       data-name="${notification_log.name || ''}"
+                       onclick="saNotifications.handleNotificationClick(event, '${notification_log.name || ''}')">
+                        <div class="notification-body">
+                            ${user_avatar}
+                            <div class="message">
+                                <div>${message}</div>
+                                <div class="notification-timestamp text-muted">
+                                    ${timestamp}
+                                </div>
+                            </div>
+                        </div>
+                        ${!notification_log.read ? '<div class="mark-as-read" title="Mark as Read"></div>' : ''}
+                    </a>
+                `;
+            }).join('');
+            
+            // Update notification count
+            this.updateNotificationCount(notifications.filter(n => !n.read).length);
+        } catch (error) {
+            console.error('Error rendering notifications:', error);
+            this.showEmptyState('notifications');
+        }
+    },
+    
+    renderEvents(events) {
+        const container = document.getElementById('sa-event-list');
+        if (!container) return;
+        
+        // Ensure events is an array
+        if (!events || !Array.isArray(events) || events.length === 0) {
+            this.showEmptyState('events');
+            return;
+        }
+        
+        try {
+            container.innerHTML = events.map(event => `
+                <div class="sa-notification-item">
+                    <div class="sa-notification-title">${this.escapeHtml(event.title || event.subject || 'Event')}</div>
+                    <div class="sa-notification-message">${this.escapeHtml(event.description || '')}</div>
+                    <div class="sa-notification-time">${this.formatTime(event.start)}</div>
+                </div>
+            `).join('');
+        } catch (error) {
+            console.error('Error rendering events:', error);
+            this.showEmptyState('events');
+        }
+    },
+    
+    renderWhatsNew(updates) {
+        const container = document.getElementById('sa-whats-new-list');
+        if (!container) return;
+        
+        // Ensure updates is an array
+        if (!updates || !Array.isArray(updates) || updates.length === 0) {
+            this.showEmptyState('whats-new');
+            return;
+        }
+        
+        try {
+            container.innerHTML = updates.map(update => `
+                <div class="sa-notification-item">
+                    <div class="sa-notification-title">${this.escapeHtml(update.title || 'Update')}</div>
+                    <div class="sa-notification-message">${this.escapeHtml(update.content || '')}</div>
+                    <div class="sa-notification-time">${this.formatTime(update.creation)}</div>
+                </div>
+            `).join('');
+        } catch (error) {
+            console.error('Error rendering what\'s new:', error);
+            this.showEmptyState('whats-new');
+        }
+    },
+    
+    showEmptyState(type) {
+        const containers = {
+            'notifications': 'sa-notification-list',
+            'events': 'sa-event-list', 
+            'whats-new': 'sa-whats-new-list'
+        };
+        
+        const container = document.getElementById(containers[type]);
+        if (!container) return;
+        
+        const emptyStates = {
+            'notifications': '<div class="sa-no-notifications"><i class="fa fa-bell-slash"></i><p>No notifications</p></div>',
+            'events': '<div class="sa-no-events"><i class="fa fa-calendar-o"></i><p>No upcoming events</p></div>',
+            'whats-new': '<div class="sa-no-updates"><i class="fa fa-star-o"></i><p>Nothing new to show</p></div>'
+        };
+        
+        container.innerHTML = emptyStates[type];
+        
+        if (type === 'notifications') {
+            this.updateNotificationCount(0);
+        }
+    },
+    
+    updateNotificationCount(count) {
+        const badge = document.getElementById('sa-notification-count');
+        if (!badge) return;
+        
+        if (count > 0) {
+            badge.textContent = count > 99 ? '99+' : count;
+            badge.style.display = 'flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    },
+    
+    markAsRead(notificationId) {
+        if (window.frappe && frappe.call) {
+            frappe.call({
+                method: 'frappe.desk.doctype.notification_log.notification_log.mark_as_read',
+                args: { notification_log: notificationId },
+                callback: () => {
+                    // Update the UI immediately
+                    const notificationElement = document.querySelector(`[data-name="${notificationId}"]`);
+                    if (notificationElement) {
+                        notificationElement.classList.remove('unread');
+                        const markButton = notificationElement.querySelector('.mark-as-read');
+                        if (markButton) {
+                            markButton.remove();
+                        }
+                    }
+                    // Reload notifications to get updated count
+                    this.loadNotifications();
+                }
+            });
+        }
+    },
+    
+    viewAll() {
+        // Navigate to full notifications page if available
+        if (window.frappe) {
+            frappe.set_route('List', 'Notification Log');
+        }
+        this.close();
+    },
+    
+    formatTime(timestamp) {
+        if (!timestamp) return '';
+        
+        try {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+            
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+            
+            if (minutes < 1) return 'Just now';
+            if (minutes < 60) return `${minutes}m ago`;
+            if (hours < 24) return `${hours}h ago`;
+            if (days < 7) return `${days}d ago`;
+            
+            return date.toLocaleDateString();
+        } catch (e) {
+            return '';
+        }
+    },
+    
+    escapeHtml(unsafe) {
+        if (!unsafe) return '';
+        return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    },
+    
+    getItemLink(notification_doc) {
+        // Same logic as ERPNext
+        if (notification_doc.link) {
+            return notification_doc.link;
+        }
+        const link_doctype = notification_doc.document_type 
+            ? notification_doc.document_type 
+            : "Notification Log";
+        const link_docname = notification_doc.document_name 
+            ? notification_doc.document_name 
+            : notification_doc.name;
+        
+        // Use frappe's form link if available, otherwise construct manually
+        if (window.frappe && frappe.utils && frappe.utils.get_form_link) {
+            return frappe.utils.get_form_link(link_doctype, link_docname);
+        } else {
+            return `/app/${link_doctype.replace(' ', '%20')}/${link_docname}`;
+        }
+    },
+    
+    getUserAvatar(user) {
+        // Use frappe's avatar if available, otherwise create simple avatar
+        if (window.frappe && frappe.avatar) {
+            return frappe.avatar(user, "avatar-medium user-avatar");
+        } else {
+            // Fallback simple avatar
+            const initial = user ? user.charAt(0).toUpperCase() : '?';
+            return `<div class="avatar avatar-medium user-avatar" title="${user}">
+                        <div class="avatar-frame standard-image" style="background-color: #667eea; color: white;">
+                            ${initial}
+                        </div>
+                    </div>`;
+        }
+    },
+    
+    handleNotificationClick(event, notificationId) {
+        // Handle notification click - mark as read and navigate
+        event.preventDefault();
+        if (notificationId) {
+            this.markAsRead(notificationId);
+        }
+        // Let the link navigate normally after marking as read
+        setTimeout(() => {
+            window.location.href = event.currentTarget.href;
+        }, 100);
+    }
+};
+
+// ==================== SETTINGS SYSTEM ====================
+
+window.saSettings = {
+    showUnderDevelopment() {
+        if (window.frappe && frappe.show_alert) {
+            frappe.show_alert({
+                message: 'Settings feature is under development',
+                indicator: 'blue'
+            });
+        } else {
+            alert('Settings feature is under development');
+        }
+    }
+};
+
+// Initialize notifications when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.saNotifications) {
+        saNotifications.init();
+    }
+});

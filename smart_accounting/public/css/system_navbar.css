@@ -354,3 +354,350 @@
 .sa-profile-overlay.show {
     display: block;
 }
+
+/* ==================== NOTIFICATIONS STYLES ==================== */
+
+/* Notifications Dropdown */
+.sa-notifications-dropdown {
+    position: relative;
+    margin-right: 1rem;
+}
+
+.sa-notifications-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.sa-notifications-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.sa-notification-text {
+    color: white;
+    font-weight: 500;
+}
+
+/* Notification Count Badge */
+.sa-notification-count {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #ff4757;
+    color: white;
+    border-radius: 10px;
+    padding: 3px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    min-width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    border: 2px solid rgba(255, 255, 255, 0.9);
+}
+
+/* Notifications Menu */
+.sa-notifications-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    width: 380px;
+    max-height: 500px;
+    z-index: 1001;
+    overflow: hidden;
+    border: 1px solid #e1e8ed;
+}
+
+.sa-notifications-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid #e1e8ed;
+    background: #f8f9fa;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sa-notifications-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+/* Notification Tabs */
+.sa-notification-tabs {
+    display: flex;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e1e8ed;
+}
+
+.sa-tab-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 12px 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: #6c757d;
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-bottom: 2px solid transparent;
+}
+
+.sa-tab-btn:hover {
+    background: rgba(102, 126, 234, 0.1);
+    color: #667eea;
+}
+
+.sa-tab-btn.active {
+    color: #667eea;
+    border-bottom-color: #667eea;
+    background: white;
+}
+
+.sa-tab-btn i {
+    font-size: 12px;
+}
+
+/* Notification Content */
+.sa-notification-content {
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.sa-tab-content {
+    display: none;
+    padding: 16px 0;
+}
+
+.sa-tab-content.active {
+    display: block;
+}
+
+/* Empty States */
+.sa-no-notifications,
+.sa-no-events,
+.sa-no-updates {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6c757d;
+}
+
+.sa-no-notifications i,
+.sa-no-events i,
+.sa-no-updates i {
+    font-size: 32px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.sa-no-notifications p,
+.sa-no-events p,
+.sa-no-updates p {
+    margin: 0;
+    font-size: 14px;
+}
+
+/* Notification Items - ERPNext Style */
+.sa-notification-item {
+    display: block;
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f3f4;
+    text-decoration: none;
+    color: inherit;
+    transition: background-color 0.2s ease;
+    position: relative;
+}
+
+.sa-notification-item:hover {
+    background: #f8f9fa;
+    text-decoration: none;
+    color: inherit;
+}
+
+.sa-notification-item:last-child {
+    border-bottom: none;
+}
+
+.sa-notification-item.unread {
+    background: #f0f7ff;
+    border-left: 3px solid #667eea;
+}
+
+.sa-notification-item.unread::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px;
+    height: 8px;
+    background: #667eea;
+    border-radius: 50%;
+}
+
+/* Notification Body */
+.notification-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+/* Avatar Styles */
+.avatar {
+    flex-shrink: 0;
+}
+
+.avatar-medium {
+    width: 32px;
+    height: 32px;
+}
+
+.avatar-frame {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+/* Message Content */
+.message {
+    flex: 1;
+    min-width: 0;
+}
+
+.message > div:first-child {
+    font-size: 14px;
+    color: #2c3e50;
+    line-height: 1.4;
+    margin-bottom: 4px;
+    word-wrap: break-word;
+}
+
+.notification-timestamp {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+/* Mark as Read Button */
+.mark-as-read {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(102, 126, 234, 0.1);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.sa-notification-item:hover .mark-as-read {
+    opacity: 1;
+}
+
+.mark-as-read:hover {
+    background: rgba(102, 126, 234, 0.2);
+}
+
+.mark-as-read::before {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 12px;
+    color: #667eea;
+}
+
+/* Footer */
+.sa-notifications-footer {
+    padding: 12px 20px;
+    border-top: 1px solid #e1e8ed;
+    background: #f8f9fa;
+    text-align: center;
+}
+
+.sa-view-all-btn {
+    background: none;
+    border: none;
+    color: #667eea;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.sa-view-all-btn:hover {
+    background: rgba(102, 126, 234, 0.1);
+}
+
+/* ==================== SETTINGS STYLES ==================== */
+
+/* Settings Button in Notification Header */
+.sa-settings-btn {
+    background: rgba(102, 126, 234, 0.1);
+    border: 1px solid rgba(102, 126, 234, 0.2);
+    color: #667eea;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.sa-settings-btn:hover {
+    background: rgba(102, 126, 234, 0.15);
+    color: #5a67d8;
+    border-color: rgba(102, 126, 234, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .sa-notifications-menu {
+        width: 320px;
+        right: -20px;
+    }
+    
+    .sa-tab-btn {
+        font-size: 12px;
+        padding: 10px 6px;
+    }
+    
+    .sa-tab-btn span {
+        display: none;
+    }
+}
