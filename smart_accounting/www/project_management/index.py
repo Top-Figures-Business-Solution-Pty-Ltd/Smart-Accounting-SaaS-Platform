@@ -94,7 +94,8 @@ def get_context(context):
         context.is_administrator = current_user == 'Administrator'
         context.is_system_manager = 'System Manager' in user_roles
         context.can_access_dev_system = context.is_administrator or context.is_system_manager
-    except Exception as e:
+    except (AttributeError, frappe.AuthenticationError) as e:
+        # Handle specific expected exceptions only
         frappe.log_error(f"Error getting user roles in context: {str(e)}")
         context.user_roles = []
         context.is_administrator = False
