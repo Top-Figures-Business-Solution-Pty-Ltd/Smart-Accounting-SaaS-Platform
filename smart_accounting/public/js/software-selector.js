@@ -219,6 +219,14 @@ class SoftwareSelectorManager {
                     message: `Software updated (${selectedSoftwares.length} selected)`,
                     indicator: 'green'
                 });
+                
+                // Trigger bulk update event
+                $(document).trigger('pm:cell:changed', {
+                    taskId: $cell.data('task-id'),
+                    field: 'custom_softwares',
+                    newValue: selectedSoftwares,
+                    oldValue: null
+                });
             }
         } catch (error) {
             console.error('Error saving software selections:', error);

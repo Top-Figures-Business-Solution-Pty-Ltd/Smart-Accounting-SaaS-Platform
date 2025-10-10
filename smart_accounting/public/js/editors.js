@@ -496,6 +496,14 @@ class EditorsManager {
                     message: 'Date updated successfully',
                     indicator: 'green'
                 });
+                
+                // Trigger bulk update event
+                $(document).trigger('pm:cell:changed', {
+                    taskId: taskId,
+                    field: fieldName,
+                    newValue: backendValue,
+                    oldValue: null
+                });
             } else {
                 throw new Error(response.message?.error || 'Unknown error');
             }
@@ -539,6 +547,14 @@ class EditorsManager {
                 frappe.show_alert({
                     message: 'Field updated successfully',
                     indicator: 'green'
+                });
+                
+                // Trigger bulk update event
+                $(document).trigger('pm:cell:changed', {
+                    taskId: taskId,
+                    field: field,
+                    newValue: newValue,
+                    oldValue: null
                 });
             } else {
                 throw new Error('Update failed');
@@ -1067,6 +1083,14 @@ class EditorsManager {
                     message: 'Task name updated successfully',
                     indicator: 'green'
                 });
+                
+                // Trigger bulk update event
+                $(document).trigger('pm:cell:changed', {
+                    taskId: taskId,
+                    field: 'subject',
+                    newValue: newTaskName || 'Untitled Task',
+                    oldValue: null
+                });
             } else {
                 throw new Error('Update failed');
             }
@@ -1290,6 +1314,14 @@ class EditorsManager {
                     message: 'Field updated successfully',
                     indicator: 'green'
                 });
+                
+                // Trigger bulk update event
+                $(document).trigger('pm:cell:changed', {
+                    taskId: taskId,
+                    field: fieldName,
+                    newValue: newValue,
+                    oldValue: null
+                });
             } else {
                 throw new Error(response.message?.error || 'Update failed');
             }
@@ -1378,6 +1410,14 @@ class EditorsManager {
                             frappe.show_alert({
                                 message: 'Status updated successfully',
                                 indicator: 'green'
+                            });
+                            
+                            // Trigger bulk update event
+                            $(document).trigger('pm:cell:changed', {
+                                taskId: taskId,
+                                field: fieldName,
+                                newValue: newValue,
+                                oldValue: originalValue
                             });
                         } else {
                             throw new Error(response.message?.error || 'Update failed');

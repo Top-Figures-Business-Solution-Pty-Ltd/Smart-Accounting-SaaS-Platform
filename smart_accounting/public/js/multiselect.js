@@ -11,6 +11,7 @@ class MultiSelectManager {
     init() {
         this.bindEvents();
         this.initializeMultiSelectMenu();
+        this.setupBulkUpdateListener();
     }
 
     bindEvents() {
@@ -157,6 +158,10 @@ class MultiSelectManager {
                         <i class="fa fa-check-square"></i>
                         <span class="pm-multiselect-count">0</span>
                         <span>tasks selected</span>
+                    </div>
+                    <div class="pm-bulk-update-hint">
+                        <i class="fa fa-magic"></i>
+                        <span>Edit any field to apply to all selected tasks</span>
                     </div>
                     <div class="pm-multiselect-actions">
                         <button class="pm-multiselect-action archive" data-action="archive">
@@ -372,6 +377,374 @@ class MultiSelectManager {
                 }
             });
         }, 350);
+    }
+
+    setupBulkUpdateListener() {
+        // Listen for cell value changes on selected tasks
+        $(document).on('pm:cell:changed', (e, data) => {
+            const { taskId, field, newValue, oldValue } = data;
+            
+            // Only proceed if this task is selected and there are other selected tasks
+            if (this.selectedTasks.has(taskId) && this.selectedTasks.size > 1) {
+                this.applyBulkUpdate(taskId, field, newValue, oldValue);
+            }
+        });
+        
+        // Listen for task editor changes
+        $(document).on('task:field:updated', (e, data) => {
+            const { taskId, field, newValue } = data;
+            
+            if (this.selectedTasks.has(taskId) && this.selectedTasks.size > 1) {
+                this.applyBulkUpdate(taskId, field, newValue);
+            }
+        });
+    }
+    
+    applyBulkUpdate(sourceTaskId, field, newValue, oldValue = null) {
+        // Check if this field is allowed for bulk update
+        if (!this.isBulkUpdateAllowed(field)) {
+            console.log(`Bulk update not allowed for field: ${field}`);
+            return;
+        }
+        
+        // Show confirmation for bulk update
+        const otherTasks = Array.from(this.selectedTasks).filter(id => id !== sourceTaskId);
+        
+        if (otherTasks.length === 0) return;
+        
+        const fieldDisplayName = this.getFieldDisplayName(field);
+        const valueDisplay = this.getValueDisplayName(newValue);
+        
+        // Show confirmation dialog
+        frappe.confirm(
+            `Apply this change to all ${this.selectedTasks.size} selected tasks?<br><br>
+             <strong>Field:</strong> ${fieldDisplayName}<br>
+             <strong>New Value:</strong> ${valueDisplay}<br><br>
+             This will update ${otherTasks.length} other selected task${otherTasks.length > 1 ? 's' : ''}.`,
+            () => {
+                this.executeBulkUpdate(otherTasks, field, newValue);
+            },
+            () => {
+                // User cancelled - optionally revert the source task change
+                console.log('Bulk update cancelled by user');
+            }
+        );
+    }
+    
+    isBulkUpdateAllowed(field) {
+        // Get bulk update configuration - designed for scalability
+        const bulkUpdateConfig = this.getBulkUpdateConfig();
+        
+        // Check if field is explicitly restricted
+        if (bulkUpdateConfig.restrictedFields.includes(field)) {
+            return false;
+        }
+        
+        // Check if field is in allowed list (if allowedFields is defined)
+        if (bulkUpdateConfig.allowedFields && bulkUpdateConfig.allowedFields.length > 0) {
+            return bulkUpdateConfig.allowedFields.includes(field);
+        }
+        
+        // Default: allow if not restricted
+        return true;
+    }
+    
+    getBulkUpdateConfig() {
+        // Scalable configuration system for bulk updates
+        // Can be extended to load from user preferences or admin settings
+        
+        // Check if there's a custom configuration
+        if (window.BulkUpdateConfig) {
+            return window.BulkUpdateConfig;
+        }
+        
+        // Default configuration
+        return {
+            // Fields that cannot be bulk updated
+            restrictedFields: [
+                'client',           // Client cannot be bulk changed - different tasks may belong to different clients
+                'custom_client',    // Same as above
+                'engagement',       // Engagement is specific to each task
+                'custom_engagement', // Same as above
+                'subject',          // Task names should remain unique
+                'project',          // Tasks belong to specific projects
+                'custom_entity'     // Entity may be task-specific
+            ],
+            
+            // Fields that can be bulk updated (if this array is empty, all non-restricted fields are allowed)
+            allowedFields: [
+                'status',
+                'custom_action_person',
+                'custom_preparer', 
+                'custom_reviewer',
+                'custom_partner',
+                'custom_softwares',
+                'custom_target_month',
+                'custom_budget',
+                'custom_actual',
+                'priority',
+                'custom_tftg',
+                'custom_note',
+                'custom_review_note'
+            ],
+            
+            // Future extension points
+            enableUserCustomization: true,  // Allow users to customize bulk update settings
+            enableAdminOverride: true,      // Allow admins to override restrictions
+            logBulkOperations: true         // Log bulk operations for audit
+        };
+    }
+    
+    async executeBulkUpdate(taskIds, field, newValue) {
+        try {
+            // Show progress
+            frappe.show_progress('Updating Tasks', 0, taskIds.length, 'Applying changes...');
+            
+            // Update tasks one by one for better error handling
+            let successCount = 0;
+            let errorCount = 0;
+            
+            for (let i = 0; i < taskIds.length; i++) {
+                const taskId = taskIds[i];
+                
+                try {
+                    await this.updateSingleTask(taskId, field, newValue);
+                    successCount++;
+                    
+                    // Update UI immediately
+                    this.updateTaskUI(taskId, field, newValue);
+                    
+                    // Update progress
+                    frappe.show_progress('Updating Tasks', i + 1, taskIds.length, 
+                        `Updated ${successCount} of ${taskIds.length} tasks...`);
+                        
+                } catch (error) {
+                    console.error(`Error updating task ${taskId}:`, error);
+                    errorCount++;
+                }
+            }
+            
+            frappe.hide_progress();
+            
+            // Show result
+            if (successCount > 0) {
+                frappe.show_alert({
+                    message: `Successfully updated ${successCount} task${successCount > 1 ? 's' : ''}`,
+                    indicator: 'green'
+                });
+            }
+            
+            if (errorCount > 0) {
+                frappe.show_alert({
+                    message: `Failed to update ${errorCount} task${errorCount > 1 ? 's' : ''}`,
+                    indicator: 'orange'
+                });
+            }
+            
+        } catch (error) {
+            frappe.hide_progress();
+            console.error('Bulk update error:', error);
+            frappe.msgprint('Error during bulk update');
+        }
+    }
+    
+    async updateSingleTask(taskId, field, newValue) {
+        // Use the configuration-based API mapping for scalability
+        return new Promise((resolve, reject) => {
+            const bulkConfig = this.getBulkUpdateConfig();
+            let apiCall;
+            
+            // Check if field has specific API mapping
+            if (bulkConfig.fieldApiMapping && bulkConfig.fieldApiMapping[field]) {
+                const apiConfig = bulkConfig.fieldApiMapping[field];
+                apiCall = {
+                    method: apiConfig.method,
+                    args: apiConfig.argsMapper(taskId, newValue)
+                };
+            } else {
+                // Use default API
+                const defaultConfig = bulkConfig.defaultApi;
+                apiCall = {
+                    method: defaultConfig.method,
+                    args: defaultConfig.argsMapper(taskId, field, newValue)
+                };
+            }
+            
+            console.log(`Updating task ${taskId}, field ${field}:`, apiCall);
+            
+            frappe.call({
+                ...apiCall,
+                callback: (r) => {
+                    if (r.message && r.message.success) {
+                        resolve(r.message);
+                    } else {
+                        reject(new Error(r.message?.error || 'Update failed'));
+                    }
+                },
+                error: (error) => {
+                    reject(error);
+                }
+            });
+        });
+    }
+    
+    async updateTaskUI(taskId, field, newValue) {
+        // Update the UI for the task using the same logic as single updates
+        const $taskRow = $(`.pm-task-row[data-task-id="${taskId}"]`);
+        const $cell = $taskRow.find(`[data-field="${field}"]`);
+        
+        if (!$cell.length) return;
+        
+        try {
+            // Use the same UI update logic as the original editors
+            if (field === 'status') {
+                // Use same logic as project.js updateTaskStatus method
+                const $statusBadge = $cell.find('.pm-status-badge');
+                const $progressBar = $taskRow.find('.pm-progress-fill');
+                
+                // Remove all existing status classes and add new one
+                if ($statusBadge.length) {
+                    $statusBadge.attr('class', 'pm-status-badge')
+                               .addClass(`status-${newValue.toLowerCase().replace(/\s+/g, '-')}`)
+                               .text(newValue);
+                } else {
+                    // Fallback if no status badge found
+                    $cell.html(`<span class="pm-status-badge status-${newValue.toLowerCase().replace(/\s+/g, '-')}">${newValue}</span>`);
+                }
+                
+                // Update progress bar if exists
+                if ($progressBar.length) {
+                    const progressPercentage = newValue === 'Completed' ? 100 : 
+                                             newValue === 'In Progress' ? 50 : 0;
+                    $progressBar.css('width', `${progressPercentage}%`);
+                }
+            } 
+            else if (field === 'custom_softwares') {
+                // Use software selector's update method
+                if (window.SoftwareSelectorManager && window.SoftwareSelectorManager.updateSoftwareCellDisplay) {
+                    await window.SoftwareSelectorManager.updateSoftwareCellDisplay($cell, newValue);
+                } else {
+                    // Fallback
+                    this.updateSoftwareCellFallback($cell, newValue);
+                }
+            }
+            else if (field.includes('person') || field.includes('preparer') || field.includes('reviewer') || field.includes('partner')) {
+                // Use person selector's update method if available
+                if (window.PersonSelectorManager && window.PersonSelectorManager.updatePersonFieldDisplay) {
+                    // For person fields, newValue should be email, we need to get the name
+                    const name = await this.getPersonNameFromEmail(newValue);
+                    window.PersonSelectorManager.updatePersonFieldDisplay($cell, newValue, name);
+                } else {
+                    // Fallback
+                    this.updatePersonCellFallback($cell, newValue);
+                }
+            }
+            else if (field === 'custom_tftg') {
+                // Handle TF/TG display
+                let displayValue = newValue;
+                if (newValue === 'Top Figures') displayValue = 'TF';
+                else if (newValue === 'Top Grants') displayValue = 'TG';
+                $cell.html(`<span class="pm-tf-tg-badge ${displayValue.toLowerCase()}">${displayValue}</span>`);
+            }
+            else {
+                // Default text update
+                $cell.text(newValue || '');
+            }
+        } catch (error) {
+            console.error(`Error updating UI for task ${taskId}, field ${field}:`, error);
+            // Fallback to simple text update
+            $cell.text(newValue || '');
+        }
+    }
+    
+    updateSoftwareCellFallback($cell, softwares) {
+        if (!softwares || softwares.length === 0) {
+            $cell.html(`
+                <div class="pm-software-tags pm-empty-software">
+                    <span class="pm-software-badge pm-empty-badge">
+                        <i class="fa fa-plus"></i>
+                        Add software
+                    </span>
+                </div>
+            `);
+        } else {
+            const primarySoftware = softwares.find(s => s.is_primary) || softwares[0];
+            if (softwares.length === 1) {
+                $cell.html(`
+                    <div class="pm-software-tags">
+                        <span class="pm-software-badge pm-primary-software">${primarySoftware.software}</span>
+                    </div>
+                `);
+            } else {
+                $cell.html(`
+                    <div class="pm-software-tags">
+                        <span class="pm-software-badge pm-primary-software">${primarySoftware.software}</span>
+                        <span class="pm-software-more">+${softwares.length - 1}</span>
+                    </div>
+                `);
+            }
+        }
+    }
+    
+    updatePersonCellFallback($cell, personData) {
+        if (typeof personData === 'string') {
+            $cell.text(personData);
+        } else if (personData && personData.name) {
+            $cell.text(personData.name);
+        } else {
+            $cell.text('');
+        }
+    }
+    
+    async getPersonNameFromEmail(email) {
+        // Get person name from email for UI display
+        try {
+            if (!email) return '';
+            
+            const response = await frappe.call({
+                method: 'frappe.client.get_value',
+                args: {
+                    doctype: 'User',
+                    filters: { email: email },
+                    fieldname: ['full_name', 'first_name', 'last_name']
+                }
+            });
+            
+            if (response.message) {
+                return response.message.full_name || 
+                       `${response.message.first_name || ''} ${response.message.last_name || ''}`.trim() ||
+                       email;
+            }
+            
+            return email;
+        } catch (error) {
+            console.error('Error getting person name:', error);
+            return email || '';
+        }
+    }
+    
+    getFieldDisplayName(field) {
+        const fieldNames = {
+            'status': 'Status',
+            'custom_action_person': 'Action Person',
+            'custom_preparer': 'Preparer', 
+            'custom_reviewer': 'Reviewer',
+            'custom_partner': 'Partner',
+            'custom_softwares': 'Software',
+            'custom_target_month': 'Target Month',
+            'custom_budget': 'Budget',
+            'custom_actual': 'Actual',
+            'priority': 'Priority'
+        };
+        return fieldNames[field] || field;
+    }
+    
+    getValueDisplayName(value) {
+        if (!value) return 'Empty';
+        if (typeof value === 'object') {
+            return value.name || value.title || JSON.stringify(value);
+        }
+        return String(value);
     }
 
     // Public methods for external access

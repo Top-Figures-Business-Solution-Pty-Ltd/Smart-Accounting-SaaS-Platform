@@ -844,6 +844,14 @@ class ProjectManager {
                     message: 'Task status updated successfully',
                     indicator: 'green'
                 });
+                
+                // Trigger bulk update event
+                $(document).trigger('pm:cell:changed', {
+                    taskId: taskId,
+                    field: 'status',
+                    newValue: newStatus,
+                    oldValue: null
+                });
             } else {
                 frappe.show_alert({
                     message: 'Failed to update task status',

@@ -420,6 +420,18 @@ class PersonSelectorManager {
                     message: `${name} added as ${roleType}`,
                     indicator: 'green'
                 });
+                
+                // Trigger bulk update event with role data format
+                $(document).trigger('pm:cell:changed', {
+                    taskId: taskId,
+                    field: this.roleTypeToField(roleType),
+                    newValue: [{
+                        role: roleType,
+                        user: email,
+                        is_primary: true
+                    }],
+                    oldValue: null
+                });
             }
         } catch (error) {
             console.error('Error adding person to role:', error);
@@ -663,16 +675,22 @@ class PersonSelectorManager {
         console.log('Current people updated in selector');
     }
 
-    // Legacy single person assignment
+    // Legacy single person assignment - DEPRECATED, use set_task_roles instead
     async selectPerson($cell, taskId, fieldName, email, name) {
         try {
-            // Update task field
+            // Convert field name to role type
+            const roleType = this.fieldToRoleType(fieldName);
+            
+            // Use the modern roles API
             const response = await frappe.call({
-                method: 'smart_accounting.www.project_management.index.update_task_field',
+                method: 'smart_accounting.www.project_management.index.set_task_roles',
                 args: {
                     task_id: taskId,
-                    field_name: fieldName,
-                    new_value: email
+                    roles_data: JSON.stringify([{
+                        role: roleType,
+                        user: email,
+                        is_primary: true
+                    }])
                 }
             });
             
@@ -683,6 +701,14 @@ class PersonSelectorManager {
                 frappe.show_alert({
                     message: 'Person assignment updated',
                     indicator: 'green'
+                });
+                
+                // Trigger bulk update event
+                $(document).trigger('pm:cell:changed', {
+                    taskId: taskId,
+                    field: fieldName,
+                    newValue: email,
+                    oldValue: null
                 });
             } else {
                 throw new Error(response.message?.error || 'Update failed');
@@ -944,6 +970,28 @@ class PersonSelectorManager {
         console.log('📐 Optimized capacity strategy: Show max 2 avatars, then 1 avatar + more indicator');
         
         return fixedCapacity;
+    }
+    
+    fieldToRoleType(fieldName) {
+        // Convert field name to role type for the roles API
+        const fieldToRoleMap = {
+            'custom_action_person': 'action_person',
+            'custom_preparer': 'preparer',
+            'custom_reviewer': 'reviewer',
+            'custom_partner': 'partner'
+        };
+        return fieldToRoleMap[fieldName] || fieldName;
+    }
+    
+    roleTypeToField(roleType) {
+        // Convert role type back to field name
+        const roleToFieldMap = {
+            'action_person': 'custom_action_person',
+            'preparer': 'custom_preparer',
+            'reviewer': 'custom_reviewer',
+            'partner': 'custom_partner'
+        };
+        return roleToFieldMap[roleType] || roleType;
     }
 }
 
