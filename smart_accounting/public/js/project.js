@@ -774,6 +774,115 @@ class ProjectManager {
         // Remove existing menus
         $('.pm-context-menu').remove();
 
+        // Determine if this is a status menu (for grid layout)
+        const isStatusMenu = $trigger.hasClass('pm-status-badge') || $trigger.closest('.pm-cell-status').length > 0;
+        
+        if (isStatusMenu) {
+            this.showStatusGridMenu($trigger, options, callback);
+        } else {
+            this.showStandardContextMenu($trigger, options, callback);
+        }
+    }
+
+    showStatusGridMenu($trigger, options, callback) {
+        // Create grid-based status menu (3 columns per row)
+        const columnsPerRow = 3;
+        const rows = [];
+        
+        for (let i = 0; i < options.length; i += columnsPerRow) {
+            const rowOptions = options.slice(i, i + columnsPerRow);
+            rows.push(rowOptions);
+        }
+
+        const menu = $(`
+            <div class="pm-context-menu pm-status-grid-menu">
+                <div class="pm-status-grid-header">
+                    <span class="pm-grid-title">Select Status</span>
+                    <button class="pm-grid-close" type="button">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+                <div class="pm-status-grid-container">
+                    ${rows.map(row => `
+                        <div class="pm-status-grid-row">
+                            ${row.map(option => `
+                                <div class="pm-status-grid-item" data-value="${option.value}" title="${option.label}">
+                                    <div class="pm-status-color-indicator" style="background: ${option.color}"></div>
+                                    <span class="pm-status-label">${option.label}</span>
+                                </div>
+                            `).join('')}
+                            ${row.length < columnsPerRow ? 
+                                Array(columnsPerRow - row.length).fill('<div class="pm-status-grid-item pm-empty-slot"></div>').join('') 
+                                : ''
+                            }
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `);
+
+        // Position menu with better positioning logic
+        const offset = $trigger.offset();
+        const menuWidth = 320; // Approximate width for 3 columns
+        const menuHeight = Math.ceil(options.length / columnsPerRow) * 50 + 60; // Approximate height
+        
+        let left = offset.left;
+        let top = offset.top + $trigger.outerHeight() + 8;
+        
+        // Adjust position if menu would go off-screen
+        const windowWidth = $(window).width();
+        const windowHeight = $(window).height();
+        const scrollTop = $(window).scrollTop();
+        
+        if (left + menuWidth > windowWidth - 20) {
+            left = windowWidth - menuWidth - 20;
+        }
+        
+        if (top + menuHeight > windowHeight + scrollTop - 20) {
+            top = offset.top - menuHeight - 8; // Show above trigger
+        }
+
+        menu.css({
+            position: 'fixed',
+            top: top - scrollTop,
+            left: left,
+            zIndex: 9999
+        });
+
+        $('body').append(menu);
+
+        // Handle menu clicks
+        menu.on('click', '.pm-status-grid-item:not(.pm-empty-slot)', function() {
+            const value = $(this).data('value');
+            callback(value);
+            menu.remove();
+        });
+
+        // Handle close button
+        menu.on('click', '.pm-grid-close', function(e) {
+            e.stopPropagation();
+            menu.remove();
+        });
+
+        // Close menu on outside click
+        setTimeout(() => {
+            $(document).one('click', (e) => {
+                if (!$(e.target).closest('.pm-status-grid-menu').length) {
+                    menu.remove();
+                }
+            });
+        }, 100);
+
+        // Close on escape key
+        $(document).one('keydown', (e) => {
+            if (e.key === 'Escape') {
+                menu.remove();
+            }
+        });
+    }
+
+    showStandardContextMenu($trigger, options, callback) {
+        // Original vertical menu for non-status items
         const menu = $(`
             <div class="pm-context-menu">
                 ${options.map(option => `
