@@ -240,10 +240,20 @@ class ProjectManager {
             <div class="pm-cell pm-cell-last-updated">
                 <span class="pm-last-updated">Just now</span>
             </div>
-            <div class="pm-cell pm-cell-priority">
-                <span class="pm-priority-badge priority-medium">Medium</span>
+            <div class="pm-cell pm-cell-priority"
+                 data-editable="true"
+                 data-field="priority"
+                 data-task-id="${taskData.task_id}"
+                 data-field-type="select"
+                 data-options="Low,Medium,High,Urgent">
+                <span class="pm-priority-badge priority-medium editable-field">Medium</span>
             </div>
-            <div class="pm-cell pm-cell-frequency" data-editable="true" data-field="custom_frequency" data-task-id="${taskData.task_id}" data-field-type="select" data-options-source="custom_frequency">
+            <div class="pm-cell pm-cell-frequency" 
+                 data-editable="true" 
+                 data-field="custom_frequency" 
+                 data-task-id="${taskData.task_id}" 
+                 data-field-type="select" 
+                 data-options="Annually,Half Yearly,Quarterly,Monthly,Fortnightly,Weekly,Daily,Ad-Hoc,Other">
                 <span class="editable-field">-</span>
             </div>
             <div class="pm-cell pm-cell-reset-date" data-editable="true" data-field="custom_reset_date" data-task-id="${taskData.task_id}" data-field-type="date">
@@ -750,47 +760,40 @@ class ProjectManager {
         }));
 
         this.showContextMenu($badge, statusOptions, (newStatus) => {
-            // Store original status before any changes
-            const originalStatus = $badge.text().trim();
-            
-            // Check if this task is part of a multi-selection
-            const multiSelectManager = window.multiSelectManager || window.MultiSelectManager;
-            if (multiSelectManager && multiSelectManager.selectedTasks && multiSelectManager.selectedTasks.has(taskId) && multiSelectManager.selectedTasks.size > 1) {
-                // If multiple tasks are selected, show confirmation first before any UI changes
-                frappe.confirm(
-                    `Apply this status change to all ${multiSelectManager.selectedTasks.size} selected tasks?<br><br>
-                     <strong>Field:</strong> Status<br>
-                     <strong>New Value:</strong> ${newStatus}<br><br>
-                     This will update ${multiSelectManager.selectedTasks.size} task${multiSelectManager.selectedTasks.size > 1 ? 's' : ''}.`,
-                    () => {
-                        // User confirmed - proceed with bulk update
-                        multiSelectManager.executeBulkUpdate(Array.from(multiSelectManager.selectedTasks), 'status', newStatus);
-                    },
-                    () => {
-                        // User cancelled - no changes needed since we haven't updated UI yet
-                        console.log('Bulk status update cancelled by user');
-                    }
-                );
-            } else {
-                // Single task update
-                this.updateTaskStatus(taskId, newStatus);
-            }
+            // Always update the current task first, let multiselect.js handle bulk update confirmation
+            this.updateTaskStatus(taskId, newStatus);
         });
     }
 
     showPriorityMenu(priorityBadge) {
         const $badge = $(priorityBadge);
+        const $taskRow = $badge.closest('.pm-task-row');
+        const taskId = $taskRow.data('task-id');
+        
+        console.log(`🔍 DEBUG showPriorityMenu:`);
+        console.log(`🔍   - priorityBadge element:`, priorityBadge);
+        console.log(`🔍   - $badge jQuery object:`, $badge);
+        console.log(`🔍   - $badge length:`, $badge.length);
+        console.log(`🔍   - $badge text:`, $badge.text());
+        console.log(`🔍   - $badge classes:`, $badge.attr('class'));
+        console.log(`🔍   - $taskRow:`, $taskRow);
+        console.log(`🔍   - taskId:`, taskId);
         
         const priorityOptions = [
-            { value: 'High', label: 'High', color: 'var(--monday-red)' },
+            { value: 'Low', label: 'Low', color: 'var(--monday-blue)' },
             { value: 'Medium', label: 'Medium', color: 'var(--monday-orange)' },
-            { value: 'Low', label: 'Low', color: 'var(--monday-blue)' }
+            { value: 'High', label: 'High', color: 'var(--monday-red)' },
+            { value: 'Urgent', label: 'Urgent', color: 'var(--monday-purple)' }
         ];
 
         this.showContextMenu($badge, priorityOptions, (newPriority) => {
-            $badge.removeClass('priority-high priority-medium priority-low')
-                  .addClass(`priority-${newPriority.toLowerCase()}`)
-                  .text(newPriority);
+            // CRITICAL FIX: Store original value BEFORE any changes, then call API
+            // Don't update UI here - let the API success handler do it (like status field)
+            const originalValue = $badge.text().trim();
+            console.log(`🎯 Priority Menu Click: taskId=${taskId}, originalValue="${originalValue}", newValue="${newPriority}"`);
+            
+            // Call API directly - UI will be updated in success handler
+            this.updateTaskPriority(taskId, newPriority);
         });
     }
 
@@ -932,6 +935,8 @@ class ProjectManager {
         // Handle menu clicks
         menu.on('click', '.pm-menu-item', function() {
             const value = $(this).data('value');
+            console.log(`🎯 Menu item clicked: value="${value}"`);
+            console.log(`🎯 About to call callback with value:`, value);
             callback(value);
             menu.remove();
         });
@@ -944,6 +949,12 @@ class ProjectManager {
 
     async updateTaskStatus(taskId, newStatus) {
         try {
+            // CRITICAL FIX: Store original value BEFORE making API call
+            const $row = $(`.pm-task-row[data-task-id="${taskId}"]`);
+            const $statusBadge = $row.find('.pm-status-badge');
+            const $progressBar = $row.find('.pm-progress-fill');
+            const originalValue = $statusBadge.text().trim();
+            
             const response = await frappe.call({
                 method: 'smart_accounting.www.project_management.index.update_task_status',
                 args: {
@@ -953,12 +964,19 @@ class ProjectManager {
             });
 
             if (response.message && response.message.success) {
-                // Update UI
-                const $row = $(`.pm-task-row[data-task-id="${taskId}"]`);
-                const $statusBadge = $row.find('.pm-status-badge');
-                const $progressBar = $row.find('.pm-progress-fill');
+                
+                // Trigger bulk update event BEFORE UI update to avoid DOM reading issues
+                if (!window.bulkUpdateInProgress) {
+                    console.log(`🚀 Triggering pm:cell:changed event: taskId=${taskId}, field=status, newValue=${newStatus}, originalValue=${originalValue}`);
+                    $(document).trigger('pm:cell:changed', {
+                        taskId: taskId,
+                        field: 'status',
+                        newValue: newStatus,
+                        oldValue: originalValue
+                    });
+                }
 
-                // Remove all existing status classes and add new one
+                // Update UI after triggering event
                 $statusBadge.attr('class', 'pm-status-badge')
                            .addClass(`status-${this.utils.getStatusClass(newStatus)}`)
                            .text(newStatus);
@@ -980,19 +998,6 @@ class ProjectManager {
                         indicator: 'green'
                     });
                 }
-                
-                // Only trigger bulk update event if not already in bulk mode and not part of multi-selection
-                const multiSelectManager = window.multiSelectManager || window.MultiSelectManager;
-                const isMultiSelected = multiSelectManager && multiSelectManager.selectedTasks && multiSelectManager.selectedTasks.has(taskId) && multiSelectManager.selectedTasks.size > 1;
-                
-                if (!window.bulkUpdateInProgress && !isMultiSelected) {
-                    $(document).trigger('pm:cell:changed', {
-                        taskId: taskId,
-                        field: 'status',
-                        newValue: newStatus,
-                        oldValue: null
-                    });
-                }
             } else {
                 frappe.show_alert({
                     message: 'Failed to update task status',
@@ -1003,6 +1008,76 @@ class ProjectManager {
             console.error('Status update error:', error);
             frappe.show_alert({
                 message: 'Error updating task status',
+                indicator: 'red'
+            });
+        }
+    }
+
+
+    async updateTaskPriority(taskId, newPriority) {
+        try {
+            // CRITICAL FIX: Follow same pattern as updateTaskStatus
+            const $row = $(`.pm-task-row[data-task-id="${taskId}"]`);
+            const $priorityBadge = $row.find('.pm-priority-badge');
+            const originalValue = $priorityBadge.text().trim();
+            
+            console.log(`🔧 Priority Update START: taskId=${taskId}, originalValue="${originalValue}", newValue="${newPriority}"`);
+            
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.update_task_field',
+                args: {
+                    task_id: taskId,
+                    field_name: 'priority',
+                    new_value: newPriority
+                }
+            });
+
+            if (response.message && response.message.success) {
+                
+                // Trigger bulk update event BEFORE UI update (same as status field)
+                if (!window.bulkUpdateInProgress && window.multiSelectManager && 
+                    window.multiSelectManager.selectedTasks.has(taskId) && 
+                    window.multiSelectManager.selectedTasks.size > 1) {
+                    
+                    console.log(`🚀 Triggering pm:cell:changed event: taskId=${taskId}, field=priority, newValue=${newPriority}, originalValue=${originalValue}`);
+                    $(document).trigger('pm:cell:changed', {
+                        taskId: taskId,
+                        field: 'priority',
+                        newValue: newPriority,
+                        oldValue: originalValue
+                    });
+                }
+
+                // CRITICAL FIX: Re-find DOM elements after API call (same as status field)
+                const $updatedRow = $(`.pm-task-row[data-task-id="${taskId}"]`);
+                const $updatedPriorityBadge = $updatedRow.find('.pm-priority-badge');
+                
+                console.log(`🔧 Re-found elements: row=${$updatedRow.length}, badge=${$updatedPriorityBadge.length}`);
+                
+                // Update UI after triggering event (same as status field)
+                $updatedPriorityBadge.attr('class', 'pm-priority-badge editable-field')
+                                   .addClass(`priority-${newPriority.toLowerCase()}`)
+                                   .text(newPriority);
+
+                console.log(`🔧 UI Updated: text="${$updatedPriorityBadge.text()}", classes="${$updatedPriorityBadge.attr('class')}"`);
+
+                // Only show individual success message if not in bulk update mode
+                if (!window.bulkUpdateInProgress) {
+                    frappe.show_alert({
+                        message: 'Task priority updated successfully',
+                        indicator: 'green'
+                    });
+                }
+            } else {
+                frappe.show_alert({
+                    message: 'Failed to update task priority',
+                    indicator: 'red'
+                });
+            }
+        } catch (error) {
+            console.error('Priority update error:', error);
+            frappe.show_alert({
+                message: 'Error updating task priority: ' + error.message,
                 indicator: 'red'
             });
         }

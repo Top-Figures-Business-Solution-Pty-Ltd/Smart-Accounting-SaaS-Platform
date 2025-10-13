@@ -185,9 +185,12 @@ class ProjectManagement {
     }
 
     initializeMultiSelect() {
-        // Initialize multi-select functionality
-        if (this.multiSelectManager && typeof this.multiSelectManager === 'function') {
-            this.multiSelectInstance = new this.multiSelectManager();
+        // Multi-select functionality is already initialized in multiselect.js
+        // Just reference the existing instance
+        this.multiSelectInstance = window.multiSelectManager;
+        
+        if (!this.multiSelectInstance) {
+            console.warn('MultiSelectManager instance not found');
         }
     }
 

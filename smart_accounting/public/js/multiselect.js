@@ -5,6 +5,9 @@ class MultiSelectManager {
     constructor() {
         this.selectedTasks = new Set();
         this.isSelectAllActive = false;
+        this.bulkUpdateDebounceTimer = null;
+        this.lastBulkUpdateKey = null;
+        this.confirmationDialogOpen = false;
         this.init();
     }
 
@@ -380,23 +383,58 @@ class MultiSelectManager {
     }
 
     setupBulkUpdateListener() {
-        // Listen for cell value changes on selected tasks
-        $(document).on('pm:cell:changed', (e, data) => {
+        // Remove any existing listeners to prevent duplicates
+        $(document).off('pm:cell:changed.multiselect');
+        
+        // Listen for cell value changes on selected tasks with namespace
+        $(document).on('pm:cell:changed.multiselect', (e, data) => {
             const { taskId, field, newValue, oldValue } = data;
+            
+            // Enhanced debugging for priority field
+            if (field === 'priority') {
+                console.log(`🎯 ========== MultiSelect received pm:cell:changed ==========`);
+                console.log(`🎯 taskId: ${taskId}`);
+                console.log(`🎯 field: ${field}`);
+                console.log(`🎯 newValue: "${newValue}" (type: ${typeof newValue})`);
+                console.log(`🎯 oldValue: "${oldValue}" (type: ${typeof oldValue})`);
+                console.log(`🎯 Selected tasks:`, Array.from(this.selectedTasks));
+                console.log(`🎯 Bulk update in progress:`, window.bulkUpdateInProgress);
+                console.log(`🎯 Reverting task change:`, window.revertingTaskChange);
+                console.log(`🎯 Confirmation dialog open:`, this.confirmationDialogOpen);
+                
+                // Check the actual DOM state at this moment
+                const $row = $(`.pm-task-row[data-task-id="${taskId}"]`);
+                const $badge = $row.find('.pm-priority-badge');
+                console.log(`🎯 DOM State when event received: badge text="${$badge.text().trim()}"`);
+                console.log(`🎯 ================================================`);
+            }
             
             // Prevent recursive calls during revert operations
             if (window.revertingTaskChange || window.bulkUpdateInProgress) {
+                if (field === 'priority') {
+                    console.log(`🎯 Skipping bulk update due to flags`);
+                }
                 return;
             }
             
             // Only proceed if this task is selected and there are other selected tasks
             if (this.selectedTasks.has(taskId) && this.selectedTasks.size > 1) {
+                if (field === 'priority') {
+                    console.log(`🎯 Proceeding with bulk update`);
+                }
                 this.applyBulkUpdate(taskId, field, newValue, oldValue);
+            } else {
+                if (field === 'priority') {
+                    console.log(`🎯 Not proceeding: task selected=${this.selectedTasks.has(taskId)}, selected count=${this.selectedTasks.size}`);
+                }
             }
         });
         
-        // Listen for task editor changes
-        $(document).on('task:field:updated', (e, data) => {
+        // Remove any existing listeners to prevent duplicates
+        $(document).off('task:field:updated.multiselect');
+        
+        // Listen for task editor changes with namespace
+        $(document).on('task:field:updated.multiselect', (e, data) => {
             const { taskId, field, newValue } = data;
             
             if (this.selectedTasks.has(taskId) && this.selectedTasks.size > 1) {
@@ -408,21 +446,29 @@ class MultiSelectManager {
     applyBulkUpdate(sourceTaskId, field, newValue, oldValue = null) {
         // Check if this field is allowed for bulk update
         if (!this.isBulkUpdateAllowed(field)) {
-            console.log(`Bulk update not allowed for field: ${field}`);
             return;
         }
         
+        // If bulk update is already in progress or confirmation dialog is open, skip
+        if (window.bulkUpdateInProgress || this.confirmationDialogOpen) {
+            return;
+        }
+        
+        // Execute immediately to avoid DOM reading issues
+        this.performBulkUpdate(sourceTaskId, field, newValue, oldValue);
+    }
+    
+    performBulkUpdate(sourceTaskId, field, newValue, oldValue = null) {
         // Show confirmation for bulk update
         const otherTasks = Array.from(this.selectedTasks).filter(id => id !== sourceTaskId);
         
         if (otherTasks.length === 0) return;
         
+        
         // Normalize newValue for person fields (handle array format from PersonSelectorManager)
         let normalizedValue = newValue;
         if (field.includes('person') || field.includes('preparer') || field.includes('reviewer') || field.includes('partner')) {
             if (Array.isArray(newValue)) {
-                // PersonSelectorManager sends complete role assignments
-                // Keep the full array for proper multi-person assignment
                 normalizedValue = newValue;
             }
         }
@@ -430,7 +476,19 @@ class MultiSelectManager {
         const fieldDisplayName = this.getFieldDisplayName(field);
         const valueDisplay = this.getValueDisplayName(normalizedValue);
         
+        // Set flag to prevent duplicate confirmations
+        this.confirmationDialogOpen = true;
+        
         // Show confirmation dialog
+        console.log(`🎯 ========== SHOWING CONFIRMATION DIALOG ==========`);
+        console.log(`🎯 Field: ${field}`);
+        console.log(`🎯 fieldDisplayName: ${fieldDisplayName}`);
+        console.log(`🎯 normalizedValue:`, normalizedValue);
+        console.log(`🎯 valueDisplay: ${valueDisplay}`);
+        console.log(`🎯 selectedTasks.size: ${this.selectedTasks.size}`);
+        console.log(`🎯 otherTasks.length: ${otherTasks.length}`);
+        console.log(`🎯 ===============================================`);
+        
         frappe.confirm(
             `Apply this change to all ${this.selectedTasks.size} selected tasks?<br><br>
              <strong>Field:</strong> ${fieldDisplayName}<br>
@@ -438,10 +496,12 @@ class MultiSelectManager {
              This will update ${otherTasks.length} other selected task${otherTasks.length > 1 ? 's' : ''}.`,
             () => {
                 // User confirmed - proceed with bulk update
+                this.confirmationDialogOpen = false;
                 this.executeBulkUpdate(otherTasks, field, normalizedValue);
             },
             () => {
                 // User cancelled - revert the source task change if needed
+                this.confirmationDialogOpen = false;
                 console.log('Bulk update cancelled by user');
                 this.revertSourceTaskChange(sourceTaskId, field, oldValue);
             }
@@ -514,11 +574,15 @@ class MultiSelectManager {
     
     async executeBulkUpdate(taskIds, field, newValue) {
         try {
-            // Set flag to suppress individual task success messages during bulk update
+            // Set flags to prevent any new confirmations during bulk update
             window.bulkUpdateInProgress = true;
+            this.confirmationDialogOpen = true;
             
-            // Show progress
-            frappe.show_progress('Updating Tasks', 0, taskIds.length, 'Applying changes...');
+            // Show simple loading message instead of progress bar
+            frappe.show_alert({
+                message: `Updating ${taskIds.length} tasks...`,
+                indicator: 'blue'
+            });
             
             // Update tasks one by one for better error handling
             let successCount = 0;
@@ -533,10 +597,6 @@ class MultiSelectManager {
                     
                     // Update UI immediately
                     this.updateTaskUI(taskId, field, newValue);
-                    
-                    // Update progress
-                    frappe.show_progress('Updating Tasks', i + 1, taskIds.length, 
-                        `Updated ${successCount} of ${taskIds.length} tasks...`);
                         
                 } catch (error) {
                     console.error(`Error updating task ${taskId}:`, error);
@@ -544,10 +604,9 @@ class MultiSelectManager {
                 }
             }
             
-            frappe.hide_progress();
-            
-            // Clear the bulk update flag
+            // Clear both flags
             window.bulkUpdateInProgress = false;
+            this.confirmationDialogOpen = false;
             
             // Show consolidated result (only one message)
             if (successCount > 0) {
@@ -589,8 +648,9 @@ class MultiSelectManager {
             }
             
         } catch (error) {
-            frappe.hide_progress();
-            window.bulkUpdateInProgress = false; // Clear flag on error
+            // Clear both flags on error
+            window.bulkUpdateInProgress = false;
+            this.confirmationDialogOpen = false;
             console.error('Bulk update error:', error);
             frappe.msgprint('Error during bulk update');
         }
@@ -718,6 +778,26 @@ class MultiSelectManager {
                 if (newValue === 'Top Figures') displayValue = 'TF';
                 else if (newValue === 'Top Grants') displayValue = 'TG';
                 $cell.html(`<span class="pm-tf-tg-badge ${displayValue.toLowerCase()}">${displayValue}</span>`);
+            }
+            else if (field === 'priority') {
+                // CRITICAL FIX: Use same logic as project.js updateTaskPriority method
+                const $priorityBadge = $cell.find('.pm-priority-badge');
+                
+                if ($priorityBadge.length) {
+                    // Update existing badge (same as single update)
+                    const priorityClass = newValue ? newValue.toLowerCase() : 'medium';
+                    const displayValue = newValue || 'Medium';
+                    $priorityBadge.attr('class', 'pm-priority-badge editable-field')
+                                 .addClass(`priority-${priorityClass}`)
+                                 .text(displayValue);
+                    console.log(`🔧 Bulk UI Update - Priority badge updated: text="${$priorityBadge.text()}", classes="${$priorityBadge.attr('class')}"`);
+                } else {
+                    // Fallback if no priority badge found
+                    const priorityClass = newValue ? newValue.toLowerCase() : 'medium';
+                    const displayValue = newValue || 'Medium';
+                    $cell.html(`<span class="pm-priority-badge priority-${priorityClass} editable-field">${displayValue}</span>`);
+                    console.log(`🔧 Bulk UI Update - Priority badge created via fallback`);
+                }
             }
             else if (field.includes('date') || field.includes('due')) {
                 // Handle date fields
@@ -943,6 +1023,15 @@ class MultiSelectManager {
                         window.PMUtils.applyStatusColor($statusBadge, oldValue);
                     }
                 }
+            } else if (field === 'priority') {
+                // CRITICAL FIX: Add priority field reversion support
+                const $priorityBadge = $cell.find('.pm-priority-badge');
+                if ($priorityBadge.length) {
+                    const priorityClass = oldValue.toLowerCase().replace(/\s+/g, '-');
+                    $priorityBadge.attr('class', 'pm-priority-badge editable-field')
+                                 .addClass(`priority-${priorityClass}`)
+                                 .text(oldValue);
+                }
             }
             // Add more field type reversions as needed
             
@@ -1023,11 +1112,11 @@ class MultiSelectManager {
             if (typeof dateValue === 'string') {
                 const date = new Date(dateValue);
                 if (!isNaN(date.getTime())) {
-                    return date.toLocaleDateString('en-AU', {
-                        day: '2-digit',
-                        month: '2-digit', 
-                        year: 'numeric'
-                    });
+                    // Use DD-MM-YYYY format with dash separators for consistency
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const year = date.getFullYear();
+                    return `${day}-${month}-${year}`;
                 }
             }
             return dateValue;
@@ -1093,3 +1182,4 @@ $(document).ready(() => {
         window.multiSelectManager = new MultiSelectManager();
     }
 });
+

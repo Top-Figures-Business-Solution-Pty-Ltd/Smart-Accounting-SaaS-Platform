@@ -209,6 +209,11 @@ header.navbar:not(.sa-system-navbar) {
     color: white;
 }
 
+.priority-urgent {
+    background: var(--monday-purple);
+    color: white;
+}
+
 /* Enhanced TF/TG Badges */
 .pm-tf-tg-badge {
     background: var(--monday-gradient-blue);

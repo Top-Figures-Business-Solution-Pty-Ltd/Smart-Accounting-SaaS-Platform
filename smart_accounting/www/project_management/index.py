@@ -1264,7 +1264,7 @@ def update_task_field(task_id, field_name, new_value):
             'custom_budget_planning', 'custom_actual_billing', 'custom_year_end', 'custom_task_status',
             'custom_service_line', 'custom_client', 'custom_lodgement_due_date', 'subject',
             'custom_engagement', 'custom_roles', 'custom_due_date', 'description', 'custom_note',
-            'custom_frequency', 'custom_reset_date'
+            'custom_frequency', 'custom_reset_date', 'priority', 'status'
         ]
         
         if field_name not in allowed_fields:

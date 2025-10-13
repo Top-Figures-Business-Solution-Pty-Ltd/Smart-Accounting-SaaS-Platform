@@ -509,11 +509,9 @@ class PerformanceMonitor {
     sendFinalReport() {
         const report = this.generatePerformanceReport();
         
-        // 使用sendBeacon发送数据（如果支持）
-        if ('sendBeacon' in navigator) {
-            const data = JSON.stringify(report);
-            navigator.sendBeacon('/api/performance-metrics', data);
-        }
+        // Performance metrics logging temporarily disabled to avoid API errors
+        // TODO: Implement proper performance metrics endpoint if needed
+        console.debug('Performance metrics collected but not sent (endpoint disabled)');
     }
     
     // 公共API

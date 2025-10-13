@@ -71,9 +71,14 @@ class EditorsManager {
                 return;
             }
             
+            // Don't trigger inline editing for priority field - it has its own menu system
+            const fieldName = $(e.currentTarget).data('field');
+            if (fieldName === 'priority') {
+                return;
+            }
+            
             const fieldType = $(e.currentTarget).data('field-type');
             const taskId = $(e.currentTarget).data('task-id');
-            const fieldName = $(e.currentTarget).data('field');
             
             if (fieldType === 'person_selector') {
                 if (window.PersonSelectorManager) {
@@ -194,23 +199,38 @@ class EditorsManager {
     }
 
     createSelectEditor($cell, currentValue) {
-        const displayOptions = $cell.data('options').split(',');
-        const backendOptions = $cell.data('backend-options') ? $cell.data('backend-options').split(',') : displayOptions;
+        // Check if options are provided directly or need to be loaded dynamically
+        const directOptions = $cell.data('options');
+        const optionsSource = $cell.data('options-source');
         
-        // Find current selected option by matching the value
-        let selectedIndex = displayOptions.findIndex(option => option.trim() === currentValue);
-        if (selectedIndex === -1) {
-            selectedIndex = 0; // Default to first option if not found
+        if (directOptions) {
+            // Handle direct options (e.g., TF/TG field)
+            const displayOptions = directOptions.split(',');
+            const backendOptions = $cell.data('backend-options') ? $cell.data('backend-options').split(',') : displayOptions;
+            
+            // Find current selected option by matching the value
+            let selectedIndex = displayOptions.findIndex(option => option.trim() === currentValue);
+            if (selectedIndex === -1) {
+                selectedIndex = 0; // Default to first option if not found
+            }
+            
+            let optionsHtml = displayOptions.map((displayText, index) => {
+                const cleanText = displayText.trim();
+                const isSelected = index === selectedIndex;
+                const backendValue = backendOptions[index] || cleanText;
+                return `<option value="${cleanText}" data-backend-value="${backendValue}" ${isSelected ? 'selected' : ''}>${cleanText}</option>`;
+            }).join('');
+            
+            return `<select class="pm-inline-select">${optionsHtml}</select>`;
+        } else if (optionsSource) {
+            // Handle dynamic options (e.g., frequency, target_month fields)
+            this.createDynamicSelectEditor($cell, currentValue, optionsSource);
+            return `<div class="pm-loading-options">Loading options...</div>`;
+        } else {
+            // Fallback to text editor if no options defined
+            console.warn(`No options defined for select field: ${$cell.data('field')}`);
+            return this.createTextEditor($cell, currentValue);
         }
-        
-        let optionsHtml = displayOptions.map((displayText, index) => {
-            const cleanText = displayText.trim();
-            const isSelected = index === selectedIndex;
-            const backendValue = backendOptions[index] || cleanText;
-            return `<option value="${cleanText}" data-backend-value="${backendValue}" ${isSelected ? 'selected' : ''}>${cleanText}</option>`;
-        }).join('');
-        
-        return `<select class="pm-inline-select">${optionsHtml}</select>`;
     }
 
     createCurrencyEditor($cell, currentValue) {
@@ -222,6 +242,91 @@ class EditorsManager {
     createTextEditor($cell, currentValue) {
         const cleanValue = currentValue === '-' ? '' : currentValue;
         return `<input type="text" class="pm-inline-input" value="${cleanValue}" placeholder="Enter text">`;
+    }
+
+    async createDynamicSelectEditor($cell, currentValue, optionsSource) {
+        // Create dynamic select editor for fields with options-source
+        try {
+            const taskId = $cell.data('task-id');
+            const fieldName = $cell.data('field');
+            
+            // Try to get options from cache first
+            const cacheKey = `${optionsSource}_options`;
+            let options = this.getCachedOptions(cacheKey);
+            
+            if (!options) {
+                // Load options from backend
+                const response = await frappe.call({
+                    method: 'smart_accounting.www.project_management.index.get_field_options',
+                    args: {
+                        doctype: 'Task',
+                        fieldname: fieldName
+                    }
+                });
+                
+                if (response.message && response.message.success) {
+                    options = response.message.options;
+                    this.setCachedOptions(cacheKey, options);
+                } else {
+                    // Use fallback options
+                    options = this.getFallbackOptions(fieldName, currentValue);
+                }
+            }
+            
+            // Create select element
+            let optionsHtml = options.map(option => {
+                const isSelected = option === currentValue;
+                return `<option value="${option}" ${isSelected ? 'selected' : ''}>${option}</option>`;
+            }).join('');
+            
+            // Replace loading indicator with actual select
+            $cell.html(`<select class="pm-inline-select">${optionsHtml}</select>`);
+            
+            // Focus the select
+            const $select = $cell.find('select');
+            $select.focus();
+            
+        } catch (error) {
+            console.error('Error creating dynamic select editor:', error);
+            // Fallback to text editor
+            $cell.html(this.createTextEditor($cell, currentValue));
+        }
+    }
+
+    getCachedOptions(cacheKey) {
+        // Get options from cache if available and not expired
+        const cached = this.metaCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp) < this.cacheExpiry) {
+            return cached.options;
+        }
+        return null;
+    }
+
+    setCachedOptions(cacheKey, options) {
+        // Cache options for future use
+        this.metaCache.set(cacheKey, {
+            options: options,
+            timestamp: Date.now()
+        });
+    }
+
+    getFallbackOptions(fieldName, currentValue) {
+        // Provide fallback options for common fields
+        const fallbackMap = {
+            'custom_frequency': ['Annually', 'Half Yearly', 'Quarterly', 'Monthly', 'Fortnightly', 'Weekly', 'Daily', 'Ad-Hoc', 'Other'],
+            'custom_target_month': ['January', 'February', 'March', 'April', 'May', 'June', 
+                                   'July', 'August', 'September', 'October', 'November', 'December'],
+            'custom_year_end': ['June', 'December', 'March', 'September']
+        };
+        
+        let options = fallbackMap[fieldName] || ['Option 1', 'Option 2', 'Option 3'];
+        
+        // Ensure current value is in options
+        if (currentValue && currentValue !== '-' && !options.includes(currentValue)) {
+            options.unshift(currentValue);
+        }
+        
+        return options;
     }
 
     createDateEditor($cell, currentValue) {
@@ -592,6 +697,11 @@ class EditorsManager {
                     else if (value === 'Top Grants') displayValue = 'TG';
                     
                     $cell.html(`<span class="pm-tf-tg-badge editable-field">${displayValue}</span>`);
+                } else if (field === 'priority') {
+                    // Handle priority field with proper badge styling
+                    const priorityClass = value ? value.toLowerCase() : 'medium';
+                    const displayValue = value || 'Medium';
+                    $cell.html(`<span class="pm-priority-badge priority-${priorityClass} editable-field">${displayValue}</span>`);
                 } else {
                     $cell.html(`<span class="editable-field">${value || '-'}</span>`);
                 }

@@ -509,11 +509,16 @@
                                                 <span class="pm-no-date">-</span>
                                             {% endif %}
                                         </div>
-                                        <div class="pm-cell pm-cell-priority">
+                                        <div class="pm-cell pm-cell-priority"
+                                             data-editable="true"
+                                             data-field="priority"
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="select"
+                                             data-options="Low,Medium,High,Urgent">
                                             {% if task.priority %}
-                                                <span class="pm-priority-badge priority-{{ task.priority.lower() }}">{{ task.priority }}</span>
+                                                <span class="pm-priority-badge priority-{{ task.priority.lower() }} editable-field">{{ task.priority }}</span>
                                             {% else %}
-                                                <span class="pm-priority-badge priority-medium">Medium</span>
+                                                <span class="pm-priority-badge priority-medium editable-field">Medium</span>
                                             {% endif %}
                                         </div>
                                         <div class="pm-cell pm-cell-frequency"
@@ -521,7 +526,7 @@
                                              data-field="custom_frequency"
                                              data-task-id="{{ task.task_id }}"
                                              data-field-type="select"
-                                             data-options-source="custom_frequency">
+                                             data-options="Annually,Half Yearly,Quarterly,Monthly,Fortnightly,Weekly,Daily,Ad-Hoc,Other">
                                             <span class="editable-field">{{ task.custom_frequency or '-' }}</span>
                                         </div>
                                         <div class="pm-cell pm-cell-reset-date"

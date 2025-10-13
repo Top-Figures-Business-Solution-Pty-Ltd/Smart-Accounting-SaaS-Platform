@@ -76,6 +76,14 @@ window.BulkUpdateConfig = {
                 new_status: newValue
             })
         },
+        'priority': {
+            method: 'smart_accounting.www.project_management.index.update_task_field',
+            argsMapper: (taskId, newValue) => ({
+                task_id: taskId,
+                field_name: 'priority',
+                new_value: newValue
+            })
+        },
         'custom_action_person': {
             method: 'smart_accounting.www.project_management.index.set_task_roles',
             argsMapper: (taskId, newValue) => ({
