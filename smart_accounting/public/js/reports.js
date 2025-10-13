@@ -546,21 +546,30 @@ class ReportsManager {
     updateValueOptions($columnSelect) {
         const column = $columnSelect.val();
         const $valueSelect = $columnSelect.closest('.pm-filter-condition').find('.pm-filter-value');
+        const currentCondition = $columnSelect.closest('.pm-filter-condition');
+        const conditionIndex = $('.pm-filter-condition').index(currentCondition);
         
         // Clear existing options
         $valueSelect.empty().append('<option value="">Value</option>');
         
         if (!column) return;
         
-        // Get unique values for selected column
+        // Get filtered rows based on previous conditions (cascade filtering)
+        const $filteredRows = this.getFilteredRowsUpToIndex(conditionIndex);
+        console.log(`🔗 Cascade filtering: Using ${$filteredRows.length} rows for condition ${conditionIndex + 1}`);
+        
+        // Get unique values for selected column from filtered rows only
         const values = new Set();
-        $('.pm-task-row').each((i, row) => {
+        $filteredRows.each((i, row) => {
             const $row = $(row);
             let value = '';
             
             switch (column) {
                 case 'client_name':
                     value = $row.find('.pm-cell-client .client-display').text().trim();
+                    break;
+                case 'task_name':
+                    value = $row.find('.pm-cell-task-name .task-name-display').text().trim();
                     break;
                 case 'entity':
                     value = $row.find('.pm-cell-entity .pm-entity-badge').text().trim();
@@ -570,12 +579,67 @@ class ReportsManager {
                     break;
                 case 'software':
                     value = $row.find('.pm-cell-software .pm-primary-software').text().trim();
+                    if (!value) {
+                        // Try to get software from tags
+                        const softwareTags = $row.find('.pm-cell-software .pm-software-badge').map(function() {
+                            return $(this).text().trim();
+                        }).get();
+                        value = softwareTags.join(', ');
+                    }
                     break;
                 case 'status':
                     value = $row.find('.pm-cell-status .pm-status-badge').text().trim();
                     break;
                 case 'target_month':
                     value = $row.find('.pm-cell-target-month .editable-field').text().trim();
+                    break;
+                case 'budget':
+                    value = $row.find('.pm-cell-budget .editable-field').text().trim();
+                    break;
+                case 'actual':
+                    value = $row.find('.pm-cell-actual .editable-field').text().trim();
+                    break;
+                case 'note':
+                    value = $row.find('.pm-cell-note .editable-field').text().trim();
+                    break;
+                case 'review_note':
+                    value = $row.find('.pm-cell-review-note .pm-review-note-indicator').text().trim();
+                    break;
+                case 'action_person':
+                    value = $row.find('.pm-cell-action-person .pm-avatar').attr('title') || '';
+                    break;
+                case 'preparer':
+                    value = $row.find('.pm-cell-preparer .pm-avatar').attr('title') || '';
+                    break;
+                case 'reviewer':
+                    value = $row.find('.pm-cell-reviewer .pm-avatar').attr('title') || '';
+                    break;
+                case 'partner':
+                    value = $row.find('.pm-cell-partner .pm-avatar').attr('title') || '';
+                    break;
+                case 'lodgment_due':
+                    value = $row.find('.pm-cell-lodgment-due .editable-field').text().trim();
+                    break;
+                case 'engagement':
+                    value = $row.find('.pm-cell-engagement .pm-engagement-display').text().trim();
+                    break;
+                case 'group':
+                    value = $row.find('.pm-cell-group .pm-group-display').text().trim();
+                    break;
+                case 'year_end':
+                    value = $row.find('.pm-cell-year-end .editable-field').text().trim();
+                    break;
+                case 'priority':
+                    value = $row.find('.pm-cell-priority .pm-priority-badge').text().trim();
+                    break;
+                case 'frequency':
+                    value = $row.find('.pm-cell-frequency .editable-field').text().trim();
+                    break;
+                case 'reset_date':
+                    value = $row.find('.pm-cell-reset-date .editable-field').text().trim();
+                    break;
+                case 'last_updated':
+                    value = $row.find('.pm-cell-last-updated .pm-last-updated').text().trim();
                     break;
             }
             
@@ -584,8 +648,9 @@ class ReportsManager {
             }
         });
         
-        // Add options to select
-        Array.from(values).sort().forEach(value => {
+        // Add options to select with smart sorting
+        const sortedValues = this.smartSortValues(Array.from(values), column);
+        sortedValues.forEach(value => {
             $valueSelect.append(`<option value="${value}">${value}</option>`);
         });
     }
@@ -600,17 +665,68 @@ class ReportsManager {
             const conditionType = $condition.find('.pm-filter-condition-type').val();
             const value = $condition.find('.pm-filter-value').val();
             
-            if (column && conditionType && (value || conditionType === 'is_empty' || conditionType === 'is_not_empty')) {
-                filters.push({ column, condition: conditionType, value });
+            // Enhanced validation for edge cases
+            if (column && conditionType) {
+                // For empty/not empty conditions, value is not required
+                if (conditionType === 'is_empty' || conditionType === 'is_not_empty') {
+                    filters.push({ column, condition: conditionType, value: null });
+                }
+                // For other conditions, value is required
+                else if (value && value.trim() !== '') {
+                    filters.push({ column, condition: conditionType, value: value.trim() });
+                }
+                // Skip incomplete conditions but don't log them as errors (too noisy)
             }
         });
         
+        // Store previous filter state for comparison
+        const previousFilterCount = this.activeFilters ? this.activeFilters.length : 0;
         this.activeFilters = filters;
+        
+        // Apply filters with enhanced logging for debugging
+        console.log(`🔍 Applying ${filters.length} filter(s):`, filters);
         this.filterTasks();
         this.updateTaskCount();
+        
+        // Enhanced edge case handling
+        const visibleTasks = $('.pm-task-row:not(.pm-add-task-row):visible').length;
+        const totalTasks = $('.pm-task-row:not(.pm-add-task-row)').length;
+        
+        if (filters.length === 0 && previousFilterCount > 0) {
+            console.log('✅ All filters cleared - showing all tasks');
+            // Force show all tasks and project groups
+            $('.pm-task-row').show();
+            $('.pm-project-group').show();
+        } else if (filters.length > 0) {
+            if (visibleTasks === 0) {
+                console.log('⚠️ No tasks match current filter criteria');
+                // Show a subtle indication that no results were found
+                if (typeof this.showNoResultsIndicator === 'function') {
+                    this.showNoResultsIndicator();
+                }
+            } else {
+                console.log(`✅ ${visibleTasks} task(s) match current filters`);
+                if (typeof this.hideNoResultsIndicator === 'function') {
+                    this.hideNoResultsIndicator();
+                }
+            }
+        }
+        
+        // Force update project visibility in edge cases
+        setTimeout(() => {
+            this.updateProjectVisibility();
+        }, 50);
     }
 
     filterTasks() {
+        // If no active filters, show all tasks
+        if (!this.activeFilters || this.activeFilters.length === 0) {
+            $('.pm-task-row').show();
+            $('.pm-project-group').show();
+            this.updateProjectVisibility();
+            return;
+        }
+
         $('.pm-task-row').each((i, row) => {
             const $row = $(row);
             let shouldShow = true;
@@ -620,20 +736,25 @@ class ReportsManager {
                 const cellValue = this.getCellValue($row, filter.column);
                 
                 switch (filter.condition) {
+                    case 'is':
                     case 'equals':
                         if (cellValue !== filter.value) shouldShow = false;
+                        break;
+                    case 'is_not':
+                    case 'not_equals':
+                        if (cellValue === filter.value) shouldShow = false;
                         break;
                     case 'contains':
                         if (!cellValue.toLowerCase().includes(filter.value.toLowerCase())) shouldShow = false;
                         break;
-                    case 'not_equals':
-                        if (cellValue === filter.value) shouldShow = false;
+                    case 'not_contains':
+                        if (cellValue.toLowerCase().includes(filter.value.toLowerCase())) shouldShow = false;
                         break;
                     case 'is_empty':
-                        if (cellValue && cellValue !== '-') shouldShow = false;
+                        if (cellValue && cellValue !== '-' && cellValue.trim() !== '') shouldShow = false;
                         break;
                     case 'is_not_empty':
-                        if (!cellValue || cellValue === '-') shouldShow = false;
+                        if (!cellValue || cellValue === '-' || cellValue.trim() === '') shouldShow = false;
                         break;
                 }
             });
@@ -675,19 +796,17 @@ class ReportsManager {
                 <div class="pm-filter-where">And</div>
                 <select class="pm-filter-column">
                     <option value="">Column</option>
-                    <option value="client_name">Client Name</option>
-                    <option value="entity">Entity</option>
-                    <option value="tf_tg">TF/TG</option>
-                    <option value="software">Software</option>
-                    <option value="status">Status</option>
-                    <option value="target_month">Target Month</option>
-                    <option value="budget">Budget</option>
-                    <option value="actual">Actual</option>
+                    <!-- Options will be populated by FilterManager -->
                 </select>
                 <select class="pm-filter-condition-type">
-                    <option value="">Condition</option>
+                    <option value="is" selected>is</option>
+                    <option value="is_not">is not</option>
                     <option value="equals">equals</option>
                     <option value="not_equals">doesn't equal</option>
+                    <option value="contains">contains</option>
+                    <option value="not_contains">doesn't contain</option>
+                    <option value="is_empty">is empty</option>
+                    <option value="is_not_empty">is not empty</option>
                 </select>
                 <select class="pm-filter-value">
                     <option value="">Value</option>
@@ -700,6 +819,14 @@ class ReportsManager {
         
         $('.pm-filter-conditions').append(newCondition);
         this.updateRemoveButtons();
+        
+        // Update column options for the new condition
+        if (window.FilterManager && window.FilterManager.updateFilterColumnOptions) {
+            window.FilterManager.updateFilterColumnOptions();
+        }
+        
+        // Apply existing filters to maintain current filter state
+        this.applyAdvancedFilters();
     }
 
     updateRemoveButtons() {
@@ -718,19 +845,17 @@ class ReportsManager {
                 <div class="pm-filter-where">Where</div>
                 <select class="pm-filter-column">
                     <option value="">Column</option>
-                    <option value="client_name">Client Name</option>
-                    <option value="entity">Entity</option>
-                    <option value="tf_tg">TF/TG</option>
-                    <option value="software">Software</option>
-                    <option value="status">Status</option>
-                    <option value="target_month">Target Month</option>
-                    <option value="budget">Budget</option>
-                    <option value="actual">Actual</option>
+                    <!-- Options will be populated by FilterManager -->
                 </select>
                 <select class="pm-filter-condition-type">
-                    <option value="">Condition</option>
+                    <option value="is" selected>is</option>
+                    <option value="is_not">is not</option>
                     <option value="equals">equals</option>
                     <option value="not_equals">doesn't equal</option>
+                    <option value="contains">contains</option>
+                    <option value="not_contains">doesn't contain</option>
+                    <option value="is_empty">is empty</option>
+                    <option value="is_not_empty">is not empty</option>
                 </select>
                 <select class="pm-filter-value">
                     <option value="">Value</option>
@@ -738,11 +863,14 @@ class ReportsManager {
             </div>
         `);
         
-        // Clear advanced filters (different from dropdown filters)
-        this.advancedFilters = [];
+        // Update column options for the cleared condition
+        if (window.FilterManager && window.FilterManager.updateFilterColumnOptions) {
+            window.FilterManager.updateFilterColumnOptions();
+        }
         
-        // Don't automatically show all tasks - respect dropdown filters
-        this.reapplyActiveFilters();
+        // Clear advanced filters and apply
+        this.advancedFilters = [];
+        this.applyAdvancedFilters();
         this.updateTaskCount();
     }
 
@@ -757,6 +885,215 @@ class ReportsManager {
         } else {
             $('.pm-filter-count').html(`Showing all of ${totalTasks} tasks`);
         }
+    }
+
+    showNoResultsIndicator() {
+        // Remove existing indicator
+        $('.pm-no-results-indicator').remove();
+        
+        // Add no results message to the table
+        const noResultsHtml = `
+            <div class="pm-no-results-indicator">
+                <div class="pm-no-results-content">
+                    <i class="fa fa-search"></i>
+                    <h4>No tasks match your filters</h4>
+                    <p>Try adjusting your filter criteria or <button class="pm-btn pm-btn-link pm-clear-filters-inline">clear all filters</button></p>
+                </div>
+            </div>
+        `;
+        
+        $('.pm-table-body').append(noResultsHtml);
+        
+        // Bind clear filters button
+        $('.pm-clear-filters-inline').on('click', (e) => {
+            e.preventDefault();
+            this.clearAllFilters();
+        });
+    }
+
+    hideNoResultsIndicator() {
+        $('.pm-no-results-indicator').remove();
+    }
+
+    // Enhanced project visibility update with edge case handling
+    updateProjectVisibility() {
+        $('.pm-project-group').each((i, group) => {
+            const $group = $(group);
+            const visibleTasks = $group.find('.pm-task-row:visible').length;
+            
+            if (visibleTasks > 0) {
+                $group.show();
+            } else {
+                $group.hide();
+            }
+        });
+        
+        // If no project groups are visible, ensure no results indicator is shown
+        const visibleGroups = $('.pm-project-group:visible').length;
+        if (visibleGroups === 0 && this.activeFilters && this.activeFilters.length > 0) {
+            if (typeof this.showNoResultsIndicator === 'function') {
+                this.showNoResultsIndicator();
+            }
+        } else {
+            if (typeof this.hideNoResultsIndicator === 'function') {
+                this.hideNoResultsIndicator();
+            }
+        }
+    }
+
+    /**
+     * Smart sorting for different column types
+     * @param {Array} values - Array of values to sort
+     * @param {string} column - Column type for context-aware sorting
+     * @returns {Array} Sorted values
+     */
+    smartSortValues(values, column) {
+        if (!values || values.length === 0) return values;
+
+        switch (column) {
+            case 'target_month':
+                // Sort months in chronological order
+                const monthOrder = [
+                    'January', 'February', 'March', 'April', 'May', 'June',
+                    'July', 'August', 'September', 'October', 'November', 'December'
+                ];
+                
+                return values.sort((a, b) => {
+                    const indexA = monthOrder.indexOf(a);
+                    const indexB = monthOrder.indexOf(b);
+                    
+                    // If both are valid months, sort by month order
+                    if (indexA !== -1 && indexB !== -1) {
+                        return indexA - indexB;
+                    }
+                    // If only one is a valid month, put it first
+                    if (indexA !== -1) return -1;
+                    if (indexB !== -1) return 1;
+                    // If neither is a valid month, sort alphabetically
+                    return a.localeCompare(b);
+                });
+
+            case 'priority':
+                // Sort priority in logical order
+                const priorityOrder = ['Low', 'Medium', 'High', 'Urgent'];
+                return values.sort((a, b) => {
+                    const indexA = priorityOrder.indexOf(a);
+                    const indexB = priorityOrder.indexOf(b);
+                    
+                    if (indexA !== -1 && indexB !== -1) {
+                        return indexA - indexB;
+                    }
+                    if (indexA !== -1) return -1;
+                    if (indexB !== -1) return 1;
+                    return a.localeCompare(b);
+                });
+
+            case 'frequency':
+                // Sort frequency in logical order
+                const frequencyOrder = ['Daily', 'Weekly', 'Fortnightly', 'Monthly', 'Quarterly', 'Half Yearly', 'Annually', 'Ad-Hoc', 'Other'];
+                return values.sort((a, b) => {
+                    const indexA = frequencyOrder.indexOf(a);
+                    const indexB = frequencyOrder.indexOf(b);
+                    
+                    if (indexA !== -1 && indexB !== -1) {
+                        return indexA - indexB;
+                    }
+                    if (indexA !== -1) return -1;
+                    if (indexB !== -1) return 1;
+                    return a.localeCompare(b);
+                });
+
+            case 'status':
+                // Sort status in logical workflow order
+                const statusOrder = ['Not Started', 'Open', 'Working', 'Ready To Lodge', 'Completed', 'Done'];
+                return values.sort((a, b) => {
+                    const indexA = statusOrder.indexOf(a);
+                    const indexB = statusOrder.indexOf(b);
+                    
+                    if (indexA !== -1 && indexB !== -1) {
+                        return indexA - indexB;
+                    }
+                    if (indexA !== -1) return -1;
+                    if (indexB !== -1) return 1;
+                    return a.localeCompare(b);
+                });
+
+            case 'budget':
+            case 'actual':
+                // Sort numeric values
+                return values.sort((a, b) => {
+                    const numA = parseFloat(a.replace(/[^0-9.-]/g, '')) || 0;
+                    const numB = parseFloat(b.replace(/[^0-9.-]/g, '')) || 0;
+                    return numA - numB;
+                });
+
+            case 'lodgment_due':
+            case 'reset_date':
+            case 'last_updated':
+                // Sort dates
+                return values.sort((a, b) => {
+                    const dateA = new Date(a);
+                    const dateB = new Date(b);
+                    if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
+                        return a.localeCompare(b);
+                    }
+                    return dateA - dateB;
+                });
+
+            default:
+                // Default alphabetical sorting
+                return values.sort((a, b) => a.localeCompare(b));
+        }
+    }
+
+    /**
+     * Get filtered rows up to a specific condition index for cascade filtering
+     * @param {number} upToIndex - Apply filters up to this index (exclusive)
+     * @returns {jQuery} Filtered rows
+     */
+    getFilteredRowsUpToIndex(upToIndex) {
+        if (upToIndex === 0) {
+            // For the first condition, use all rows
+            return $('.pm-task-row:not(.pm-add-task-row)');
+        }
+
+        // Apply filters from conditions 0 to upToIndex-1
+        let $filteredRows = $('.pm-task-row:not(.pm-add-task-row)');
+        
+        for (let i = 0; i < upToIndex; i++) {
+            const $condition = $(`.pm-filter-condition[data-index="${i}"], .pm-filter-condition:eq(${i})`);
+            const column = $condition.find('.pm-filter-column').val();
+            const conditionType = $condition.find('.pm-filter-condition-type').val();
+            const value = $condition.find('.pm-filter-value').val();
+            
+            if (column && conditionType && (value || conditionType === 'is_empty' || conditionType === 'is_not_empty')) {
+                $filteredRows = $filteredRows.filter((index, row) => {
+                    const $row = $(row);
+                    const cellValue = this.getCellValue($row, column);
+                    
+                    switch (conditionType) {
+                        case 'is':
+                        case 'equals':
+                            return cellValue === value;
+                        case 'is_not':
+                        case 'not_equals':
+                            return cellValue !== value;
+                        case 'contains':
+                            return cellValue.toLowerCase().includes(value.toLowerCase());
+                        case 'not_contains':
+                            return !cellValue.toLowerCase().includes(value.toLowerCase());
+                        case 'is_empty':
+                            return !cellValue || cellValue === '-' || cellValue.trim() === '';
+                        case 'is_not_empty':
+                            return cellValue && cellValue !== '-' && cellValue.trim() !== '';
+                        default:
+                            return true;
+                    }
+                });
+            }
+        }
+        
+        return $filteredRows;
     }
 }
 

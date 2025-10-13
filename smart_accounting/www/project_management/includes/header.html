@@ -161,33 +161,25 @@
                         </button>
                     </div>
                     
-                    <div class="pm-filter-toggle">
-                        <label class="pm-toggle">
-                            <input type="checkbox" id="filter-with-ai">
-                            <span class="pm-toggle-slider"></span>
-                        </label>
-                        <span>Filter with AI</span>
-                        <span class="pm-new-badge">New</span>
-                    </div>
+                    
+                    <!-- AI Filter removed as requested -->
                     
                     <div class="pm-filter-conditions">
                         <div class="pm-filter-condition" data-index="0">
                             <div class="pm-filter-where">Where</div>
                             <select class="pm-filter-column">
                                 <option value="">Column</option>
-                                <option value="client_name">Client Name</option>
-                                <option value="entity">Entity</option>
-                                <option value="tf_tg">TF/TG</option>
-                                <option value="software">Software</option>
-                                <option value="status">Status</option>
-                                <option value="target_month">Target Month</option>
-                                <option value="budget">Budget</option>
-                                <option value="actual">Actual</option>
+                                <!-- Options will be dynamically populated based on visible columns -->
                             </select>
                             <select class="pm-filter-condition-type">
-                                <option value="">Condition</option>
+                                <option value="is" selected>is</option>
+                                <option value="is_not">is not</option>
                                 <option value="equals">equals</option>
                                 <option value="not_equals">doesn't equal</option>
+                                <option value="contains">contains</option>
+                                <option value="not_contains">doesn't contain</option>
+                                <option value="is_empty">is empty</option>
+                                <option value="is_not_empty">is not empty</option>
                             </select>
                             <select class="pm-filter-value">
                                 <option value="">Value</option>
@@ -211,7 +203,6 @@
                     
                     <div class="pm-filter-footer">
                         <button class="pm-btn pm-btn-link pm-clear-all">Clear all</button>
-                        <button class="pm-btn pm-btn-primary pm-save-view">Save as new view</button>
                     </div>
                 </div>
             </div>

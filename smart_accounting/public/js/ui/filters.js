@@ -4,6 +4,7 @@
 class FilterManager {
     constructor() {
         this.utils = window.PMUtils;
+        this.filterChangeTimeout = null;
     }
 
     // Unified Dropdown Management
@@ -22,6 +23,21 @@ class FilterManager {
         $('.pm-status-filter-dropdown').removeClass('active');
         $('.pm-advanced-filter-dropdown').removeClass('active');
     }
+
+    // Close only other dropdowns (not the advanced filter panel)
+    closeOtherDropdowns() {
+        // Close all dropdown menus except advanced filter
+        $('.pm-new-task-menu').hide();
+        $('.pm-person-filter-menu').hide();
+        $('.pm-client-filter-menu').hide();
+        $('.pm-status-filter-menu').hide();
+        
+        // Remove active states for other dropdowns
+        $('.pm-new-task-dropdown').removeClass('active');
+        $('.pm-person-filter-dropdown').removeClass('active');
+        $('.pm-client-filter-dropdown').removeClass('active');
+        $('.pm-status-filter-dropdown').removeClass('active');
+    }
     
     openDropdown(dropdownClass, menuClass) {
         const $dropdown = $(`.${dropdownClass}`);
@@ -34,8 +50,12 @@ class FilterManager {
             return;
         }
         
-        // Close all other dropdowns first
-        this.closeAllDropdowns();
+        // Close other dropdowns (but keep advanced filter open if it's the one being opened)
+        if (dropdownClass === 'pm-advanced-filter-dropdown') {
+            this.closeOtherDropdowns();
+        } else {
+            this.closeAllDropdowns();
+        }
         
         // Position the dropdown menu properly
         this.positionDropdownMenu($btn, $menu);
@@ -161,6 +181,12 @@ class FilterManager {
             this.openDropdown('pm-advanced-filter-dropdown', 'pm-advanced-filter-panel');
             // 重置面板位置到屏幕中央
             this.centerFilterPanel();
+            // Initialize filter column options based on visible columns (only if not already initialized)
+            setTimeout(() => {
+                if ($('.pm-filter-column option').length <= 1) {
+                    this.initializeFilterColumnOptions();
+                }
+            }, 100);
         });
 
         // Close filter panel
@@ -175,37 +201,129 @@ class FilterManager {
         $(document).on('change', '.pm-filter-column', (e) => {
             if (window.ReportsManager) {
                 window.ReportsManager.updateValueOptions($(e.target));
+                // Apply filters immediately after column change to handle edge cases
+                setTimeout(() => {
+                    window.ReportsManager.applyAdvancedFilters();
+                }, 50);
             }
         });
 
-        // Apply filters when condition changes (real-time filtering)
-        $(document).on('change', '.pm-filter-column, .pm-filter-condition-type, .pm-filter-value', () => {
+        // Apply filters when condition changes (real-time filtering with debouncing)
+        $(document).on('change', '.pm-filter-column, .pm-filter-condition-type, .pm-filter-value', (e) => {
             if (window.ReportsManager) {
-                window.ReportsManager.applyAdvancedFilters();
+                // Clear previous timeout to debounce rapid changes
+                clearTimeout(window.FilterManager.filterChangeTimeout);
+                window.FilterManager.filterChangeTimeout = setTimeout(() => {
+                    window.ReportsManager.applyAdvancedFilters();
+                    console.log('🔄 Filters applied due to condition change:', e.target.className, e.target.value);
+                }, 50); // Reduced timeout for more responsive filtering
             }
+        });
+
+        // Additional edge case handlers
+        // Handle when user types in value fields (for future text input support)
+        $(document).on('input', '.pm-filter-value', (e) => {
+            if (window.ReportsManager) {
+                clearTimeout(window.FilterManager.filterChangeTimeout);
+                window.FilterManager.filterChangeTimeout = setTimeout(() => {
+                    window.ReportsManager.applyAdvancedFilters();
+                    console.log('🔄 Filters applied due to value input:', e.target.value);
+                }, 200); // Shorter delay for input events
+            }
+        });
+
+        // Handle focus events to ensure proper state
+        $(document).on('focus', '.pm-filter-column, .pm-filter-condition-type, .pm-filter-value', (e) => {
+            // Ensure the filter panel stays open when interacting with controls
+            e.stopPropagation();
+        });
+
+        // Special handling for value dropdown changes - immediate response
+        $(document).on('change', '.pm-filter-value', (e) => {
+            if (window.ReportsManager) {
+                // Immediate application for value changes (no debouncing)
+                window.ReportsManager.applyAdvancedFilters();
+                console.log('🎯 Immediate filter application due to value change:', e.target.value);
+            }
+        });
+
+        // Listen for column visibility changes to update filter options
+        $(document).on('pm:columns:updated', () => {
+            this.updateFilterColumnOptions();
         });
 
         // Remove filter condition
         $(document).on('click', '.pm-filter-remove', (e) => {
-            $(e.target).closest('.pm-filter-condition').remove();
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const $condition = $(e.target).closest('.pm-filter-condition');
+            
+            // Immediate feedback - don't wait for animation
             if (window.ReportsManager) {
-                window.ReportsManager.applyAdvancedFilters();
-                window.ReportsManager.updateRemoveButtons();
+                // Apply filters immediately to handle edge cases
+                setTimeout(() => {
+                    window.ReportsManager.applyAdvancedFilters();
+                    window.ReportsManager.updateRemoveButtons();
+                }, 10);
             }
+            
+            // Then animate removal
+            $condition.fadeOut(200, function() {
+                $(this).remove();
+                // Apply filters again after removal to ensure consistency
+                if (window.ReportsManager) {
+                    window.ReportsManager.applyAdvancedFilters();
+                    window.ReportsManager.updateRemoveButtons();
+                }
+            });
         });
 
         // Add new filter
-        $(document).on('click', '.pm-add-filter', () => {
+        $(document).on('click', '.pm-add-filter', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
             if (window.ReportsManager) {
                 window.ReportsManager.addNewFilterCondition();
             }
         });
 
+        // Add new group (placeholder for future functionality)
+        $(document).on('click', '.pm-add-group', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            frappe.show_alert({
+                message: 'Filter groups functionality coming soon',
+                indicator: 'blue'
+            });
+        });
+
         // Clear all filters
-        $(document).on('click', '.pm-clear-all', () => {
-            if (window.ReportsManager) {
-                window.ReportsManager.clearAllFilters();
-            }
+        $(document).on('click', '.pm-clear-all', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Add visual feedback
+            const $btn = $(e.currentTarget);
+            const originalText = $btn.html();
+            $btn.html('<i class="fa fa-spinner fa-spin"></i> Clearing...').prop('disabled', true);
+            
+            setTimeout(() => {
+                if (window.ReportsManager) {
+                    window.ReportsManager.clearAllFilters();
+                }
+                
+                // Restore button
+                $btn.html(originalText).prop('disabled', false);
+                
+                // Show success message
+                frappe.show_alert({
+                    message: 'All filters cleared',
+                    indicator: 'blue'
+                });
+            }, 200);
         });
     }
 
@@ -578,6 +696,9 @@ class FilterManager {
                         console.error('❌ TableManager not available');
                     }
                     
+                    // Trigger event to update filter column options
+                    $(document).trigger('pm:columns:updated');
+                    
                     this.closeColumnDialog();
                 } else {
                     frappe.msgprint('Error saving column configuration: ' + (response.message?.error || 'Unknown error'));
@@ -759,6 +880,124 @@ class FilterManager {
                 e.preventDefault();
             }
         });
+    }
+
+    /**
+     * Get currently visible columns from the table
+     * @returns {Array} Array of visible column keys
+     */
+    getCurrentVisibleColumns() {
+        const visibleColumns = [];
+        
+        // Check which header cells are currently visible
+        $('.pm-header-cell').each(function() {
+            const $header = $(this);
+            const columnKey = $header.data('column');
+            
+            // Check if the column is visible (not hidden by CSS or display:none)
+            if (columnKey && $header.is(':visible') && $header.css('display') !== 'none') {
+                visibleColumns.push(columnKey);
+            }
+        });
+        
+        return visibleColumns;
+    }
+
+    /**
+     * Update filter column options based on currently visible columns
+     */
+    updateFilterColumnOptions() {
+        const visibleColumns = this.getCurrentVisibleColumns();
+        const allColumns = window.ColumnConfigManager ? 
+            window.ColumnConfigManager.getAllColumns() : 
+            {
+                'client': 'Client Name',
+                'task-name': 'Task Name',
+                'entity': 'Entity',
+                'tf-tg': 'TF/TG',
+                'software': 'Software',
+                'status': 'Status',
+                'target-month': 'Target Month',
+                'budget': 'Budget',
+                'actual': 'Actual',
+                'review-note': 'Review Note',
+                'action-person': 'Action Person',
+                'preparer': 'Preparer',
+                'reviewer': 'Reviewer',
+                'partner': 'Partner',
+                'lodgment-due': 'Lodgement Due',
+                'engagement': 'Engagement',
+                'group': 'Group',
+                'year-end': 'Year End',
+                'last-updated': 'Last Updated',
+                'priority': 'Priority',
+                'frequency': 'Frequency',
+                'reset-date': 'Reset Date'
+            };
+
+        // Map column keys to filter-compatible names
+        const columnKeyMapping = {
+            'client': 'client_name',
+            'task-name': 'task_name',
+            'entity': 'entity',
+            'tf-tg': 'tf_tg',
+            'software': 'software',
+            'status': 'status',
+            'target-month': 'target_month',
+            'budget': 'budget',
+            'actual': 'actual',
+            'review-note': 'review_note',
+            'action-person': 'action_person',
+            'preparer': 'preparer',
+            'reviewer': 'reviewer',
+            'partner': 'partner',
+            'lodgment-due': 'lodgment_due',
+            'engagement': 'engagement',
+            'group': 'group',
+            'year-end': 'year_end',
+            'last-updated': 'last_updated',
+            'priority': 'priority',
+            'frequency': 'frequency',
+            'reset-date': 'reset_date'
+        };
+
+        // Update all filter column dropdowns
+        $('.pm-filter-column').each(function() {
+            const $select = $(this);
+            const currentValue = $select.val();
+            
+            // Clear all options except the placeholder
+            $select.empty().append('<option value="">Column</option>');
+            
+            // Remove duplicates from visible columns
+            const uniqueVisibleColumns = [...new Set(visibleColumns)];
+            
+            // Add options for visible columns only
+            uniqueVisibleColumns.forEach(columnKey => {
+                const displayName = allColumns[columnKey] || columnKey;
+                const filterValue = columnKeyMapping[columnKey] || columnKey;
+                const isSelected = currentValue === filterValue ? 'selected' : '';
+                $select.append(`<option value="${filterValue}" ${isSelected}>${displayName}</option>`);
+            });
+            
+            // If current value is no longer visible, reset to empty
+            const currentColumnKey = Object.keys(columnKeyMapping).find(key => columnKeyMapping[key] === currentValue);
+            if (currentValue && currentColumnKey && !uniqueVisibleColumns.includes(currentColumnKey)) {
+                $select.val('');
+                // Also clear the value dropdown for this condition
+                $select.closest('.pm-filter-condition').find('.pm-filter-value').html('<option value="">Value</option>');
+            }
+        });
+
+        console.log('🔄 Filter column options updated based on visible columns:', visibleColumns);
+    }
+
+    /**
+     * Initialize filter column options when the filter panel is opened
+     */
+    initializeFilterColumnOptions() {
+        // Update column options when filter panel is first opened
+        this.updateFilterColumnOptions();
     }
 }
 

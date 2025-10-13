@@ -45,6 +45,59 @@
     font-size: 13px;
 }
 
+
+/* No Results Indicator Styles */
+.pm-no-results-indicator {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 60px 20px;
+    background: white;
+    border-radius: 8px;
+    margin: 20px;
+    border: 1px solid var(--monday-border);
+}
+
+.pm-no-results-content {
+    text-align: center;
+    max-width: 400px;
+}
+
+.pm-no-results-content i {
+    font-size: 48px;
+    color: var(--monday-gray);
+    margin-bottom: 16px;
+    opacity: 0.6;
+}
+
+.pm-no-results-content h4 {
+    margin: 0 0 12px 0;
+    color: var(--monday-dark);
+    font-size: 18px;
+    font-weight: 500;
+}
+
+.pm-no-results-content p {
+    margin: 0;
+    color: var(--monday-gray);
+    line-height: 1.5;
+}
+
+.pm-clear-filters-inline {
+    background: none;
+    border: none;
+    color: var(--monday-blue);
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: inherit;
+    padding: 0;
+    margin: 0;
+}
+
+.pm-clear-filters-inline:hover {
+    color: var(--monday-dark-blue);
+}
+
 /* Removed duplicate definition - using the one below */
 
 .pm-context-menu-item {
