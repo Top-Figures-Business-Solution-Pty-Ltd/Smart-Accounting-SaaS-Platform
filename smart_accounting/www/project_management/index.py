@@ -2855,6 +2855,115 @@ def set_task_roles(task_id, roles_data):
         frappe.log_error(f"Error setting task roles: {str(e)}")
         return {'success': False, 'error': str(e)}
 
+
+@frappe.whitelist()
+def update_task_person_role(task_id, role_type, user_email):
+    """
+    Update a single person role for a task - optimized for bulk updates
+    
+    Args:
+        task_id: Task ID to update
+        role_type: Role type (action_person, preparer, reviewer, partner)
+        user_email: User email to assign (can be None to clear)
+    
+    Returns:
+        dict: Success/error response
+    """
+    try:
+        # Get task document
+        task_doc = frappe.get_doc("Task", task_id)
+        
+        # Check if custom_roles field exists
+        if not hasattr(task_doc, 'custom_roles'):
+            return {
+                'success': False, 
+                'error': 'Task Role Assignment sub-table not available.'
+            }
+        
+        # Map role types to display names
+        role_mapping = {
+            'action_person': 'Action Person',
+            'preparer': 'Preparer',
+            'reviewer': 'Reviewer',
+            'partner': 'Partner'
+        }
+        
+        mapped_role = role_mapping.get(role_type, role_type)
+        
+        # Remove existing assignments for this role type
+        task_doc.custom_roles = [
+            role for role in task_doc.custom_roles 
+            if role.role != mapped_role
+        ]
+        
+        # Add new assignment if user_email provided
+        if user_email and user_email.strip():
+            # Validate user exists and is enabled
+            if not frappe.db.exists("User", user_email):
+                return {
+                    'success': False,
+                    'error': f'User {user_email} does not exist'
+                }
+                
+            user_enabled = frappe.db.get_value("User", user_email, "enabled")
+            if not user_enabled:
+                return {
+                    'success': False,
+                    'error': f'User {user_email} is disabled'
+                }
+            
+            # Add new role assignment
+            task_doc.append('custom_roles', {
+                'role': mapped_role,
+                'user': user_email,
+                'is_primary': 1  # Always primary for single role assignments
+            })
+            
+            # Also update the legacy field for backward compatibility
+            legacy_field_map = {
+                'action_person': 'custom_action_person',
+                'preparer': 'custom_preparer',
+                'reviewer': 'custom_reviewer',
+                'partner': 'custom_partner'
+            }
+            
+            legacy_field = legacy_field_map.get(role_type)
+            if legacy_field and hasattr(task_doc, legacy_field):
+                setattr(task_doc, legacy_field, user_email)
+        else:
+            # Clear legacy field if clearing role
+            legacy_field_map = {
+                'action_person': 'custom_action_person',
+                'preparer': 'custom_preparer',
+                'reviewer': 'custom_reviewer',
+                'partner': 'custom_partner'
+            }
+            
+            legacy_field = legacy_field_map.get(role_type)
+            if legacy_field and hasattr(task_doc, legacy_field):
+                setattr(task_doc, legacy_field, None)
+        
+        # Save the task
+        task_doc.save(ignore_permissions=True)
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'message': f'Task {role_type} updated successfully',
+            'task_id': task_id,
+            'role_type': role_type,
+            'user_email': user_email
+        }
+        
+    except Exception as e:
+        frappe.db.rollback()
+        frappe.log_error(f"Error updating task person role for {task_id}: {str(e)}")
+        return {
+            'success': False,
+            'error': f'Failed to update task role: {str(e)}'
+        }
+
+
 @frappe.whitelist()
 def get_software_options():
     """

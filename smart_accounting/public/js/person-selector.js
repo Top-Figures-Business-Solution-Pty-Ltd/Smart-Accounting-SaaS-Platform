@@ -213,6 +213,21 @@ class PersonSelectorManager {
         
         // Done button to close selector
         $selector.find('.pm-done-selecting').on('click', () => {
+            // Get current role assignments for this field
+            const currentRoles = this.getCurrentRoleAssignments($cell, fieldName);
+            
+            // Trigger bulk update event if there are selected tasks
+            const multiSelectManager = window.multiSelectManager || window.MultiSelectManager;
+            if (multiSelectManager && multiSelectManager.selectedTasks && multiSelectManager.selectedTasks.has(taskId) && multiSelectManager.selectedTasks.size > 1) {
+                // Trigger bulk update with current role data
+                $(document).trigger('pm:cell:changed', {
+                    taskId: taskId,
+                    field: fieldName,
+                    newValue: currentRoles,
+                    oldValue: null
+                });
+            }
+            
             $selector.remove();
             $cell.removeClass('editing');
         });
@@ -984,14 +999,53 @@ class PersonSelectorManager {
     }
     
     roleTypeToField(roleType) {
-        // Convert role type back to field name
+        // Convert role type back to field name (handle both formats)
         const roleToFieldMap = {
+            // Title case format (backend format)
+            'Action Person': 'custom_action_person',
+            'Preparer': 'custom_preparer',
+            'Reviewer': 'custom_reviewer',
+            'Partner': 'custom_partner',
+            // Legacy lowercase format (for backward compatibility)
             'action_person': 'custom_action_person',
             'preparer': 'custom_preparer',
             'reviewer': 'custom_reviewer',
             'partner': 'custom_partner'
         };
         return roleToFieldMap[roleType] || roleType;
+    }
+    
+    getCurrentRoleAssignments($cell, fieldName) {
+        // Get current role assignments from the cell's UI
+        const roleType = this.fieldToRoleType(fieldName);
+        const assignments = [];
+        
+        // Find all person avatars in the cell
+        $cell.find('.pm-avatar').each((index, avatar) => {
+            const $avatar = $(avatar);
+            const email = $avatar.data('email') || $avatar.attr('title');
+            
+            if (email && !$avatar.hasClass('pm-empty-avatar')) {
+                assignments.push({
+                    role: roleType,
+                    user: email,
+                    is_primary: index === 0 // First person is primary
+                });
+            }
+        });
+        
+        return assignments;
+    }
+    
+    fieldToRoleType(fieldName) {
+        // Map field names to role types (backend expects title case format)
+        const mapping = {
+            'custom_action_person': 'Action Person',
+            'custom_preparer': 'Preparer',
+            'custom_reviewer': 'Reviewer',
+            'custom_partner': 'Partner'
+        };
+        return mapping[fieldName] || fieldName.replace('custom_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
 }
 

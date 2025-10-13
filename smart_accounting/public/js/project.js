@@ -750,7 +750,31 @@ class ProjectManager {
         }));
 
         this.showContextMenu($badge, statusOptions, (newStatus) => {
-            this.updateTaskStatus(taskId, newStatus);
+            // Store original status before any changes
+            const originalStatus = $badge.text().trim();
+            
+            // Check if this task is part of a multi-selection
+            const multiSelectManager = window.multiSelectManager || window.MultiSelectManager;
+            if (multiSelectManager && multiSelectManager.selectedTasks && multiSelectManager.selectedTasks.has(taskId) && multiSelectManager.selectedTasks.size > 1) {
+                // If multiple tasks are selected, show confirmation first before any UI changes
+                frappe.confirm(
+                    `Apply this status change to all ${multiSelectManager.selectedTasks.size} selected tasks?<br><br>
+                     <strong>Field:</strong> Status<br>
+                     <strong>New Value:</strong> ${newStatus}<br><br>
+                     This will update ${multiSelectManager.selectedTasks.size} task${multiSelectManager.selectedTasks.size > 1 ? 's' : ''}.`,
+                    () => {
+                        // User confirmed - proceed with bulk update
+                        multiSelectManager.executeBulkUpdate(Array.from(multiSelectManager.selectedTasks), 'status', newStatus);
+                    },
+                    () => {
+                        // User cancelled - no changes needed since we haven't updated UI yet
+                        console.log('Bulk status update cancelled by user');
+                    }
+                );
+            } else {
+                // Single task update
+                this.updateTaskStatus(taskId, newStatus);
+            }
         });
     }
 
@@ -949,18 +973,26 @@ class ProjectManager {
                 
                 $progressBar.css('width', `${progress}%`);
 
-                frappe.show_alert({
-                    message: 'Task status updated successfully',
-                    indicator: 'green'
-                });
+                // Only show individual success message if not in bulk update mode
+                if (!window.bulkUpdateInProgress) {
+                    frappe.show_alert({
+                        message: 'Task status updated successfully',
+                        indicator: 'green'
+                    });
+                }
                 
-                // Trigger bulk update event
-                $(document).trigger('pm:cell:changed', {
-                    taskId: taskId,
-                    field: 'status',
-                    newValue: newStatus,
-                    oldValue: null
-                });
+                // Only trigger bulk update event if not already in bulk mode and not part of multi-selection
+                const multiSelectManager = window.multiSelectManager || window.MultiSelectManager;
+                const isMultiSelected = multiSelectManager && multiSelectManager.selectedTasks && multiSelectManager.selectedTasks.has(taskId) && multiSelectManager.selectedTasks.size > 1;
+                
+                if (!window.bulkUpdateInProgress && !isMultiSelected) {
+                    $(document).trigger('pm:cell:changed', {
+                        taskId: taskId,
+                        field: 'status',
+                        newValue: newStatus,
+                        oldValue: null
+                    });
+                }
             } else {
                 frappe.show_alert({
                     message: 'Failed to update task status',
@@ -973,6 +1005,39 @@ class ProjectManager {
                 message: 'Error updating task status',
                 indicator: 'red'
             });
+        }
+    }
+
+    revertTaskStatus(taskId, originalStatus) {
+        // Revert task status to original value (for cancelled bulk updates)
+        try {
+            const $row = $(`.pm-task-row[data-task-id="${taskId}"]`);
+            const $statusBadge = $row.find('.pm-status-badge');
+            const $progressBar = $row.find('.pm-progress-fill');
+
+            if ($statusBadge.length) {
+                // Restore original status
+                const statusClass = originalStatus.toLowerCase().replace(/\s+/g, '-');
+                $statusBadge.attr('class', 'pm-status-badge')
+                           .addClass(`status-${statusClass}`)
+                           .text(originalStatus);
+                
+                // Apply original color
+                if (this.utils && this.utils.applyStatusColor) {
+                    this.utils.applyStatusColor($statusBadge, originalStatus);
+                }
+                
+                // Update progress bar
+                let progress = 0;
+                if (originalStatus === 'Completed') progress = 100;
+                else if (originalStatus === 'Working') progress = 50;
+                
+                if ($progressBar.length) {
+                    $progressBar.css('width', `${progress}%`);
+                }
+            }
+        } catch (error) {
+            console.error('Error reverting task status:', error);
         }
     }
 

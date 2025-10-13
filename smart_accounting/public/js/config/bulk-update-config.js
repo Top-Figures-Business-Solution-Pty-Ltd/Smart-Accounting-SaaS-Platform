@@ -30,7 +30,8 @@ window.BulkUpdateConfig = {
         'custom_tftg',
         'custom_note',
         'custom_review_note',
-        'custom_lodgment_due',
+        'custom_lodgement_due_date',
+        'custom_reset_date',
         'custom_year_end',
         'custom_frequency'
     ],
@@ -80,7 +81,7 @@ window.BulkUpdateConfig = {
             argsMapper: (taskId, newValue) => ({
                 task_id: taskId,
                 roles_data: JSON.stringify(Array.isArray(newValue) ? newValue : [{
-                    role: 'action_person',
+                    role: 'Action Person',  // 使用后端期望的格式
                     user: newValue,
                     is_primary: true
                 }])
@@ -91,7 +92,7 @@ window.BulkUpdateConfig = {
             argsMapper: (taskId, newValue) => ({
                 task_id: taskId,
                 roles_data: JSON.stringify(Array.isArray(newValue) ? newValue : [{
-                    role: 'preparer',
+                    role: 'Preparer',  // 使用后端期望的格式
                     user: newValue,
                     is_primary: true
                 }])
@@ -102,7 +103,7 @@ window.BulkUpdateConfig = {
             argsMapper: (taskId, newValue) => ({
                 task_id: taskId,
                 roles_data: JSON.stringify(Array.isArray(newValue) ? newValue : [{
-                    role: 'reviewer',
+                    role: 'Reviewer',  // 使用后端期望的格式
                     user: newValue,
                     is_primary: true
                 }])
@@ -113,7 +114,7 @@ window.BulkUpdateConfig = {
             argsMapper: (taskId, newValue) => ({
                 task_id: taskId,
                 roles_data: JSON.stringify(Array.isArray(newValue) ? newValue : [{
-                    role: 'partner',
+                    role: 'Partner',  // 使用后端期望的格式
                     user: newValue,
                     is_primary: true
                 }])
