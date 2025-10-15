@@ -22,6 +22,7 @@ class ColumnConfigManager {
             'preparer': window.AppConfig?.mapFieldToRole('preparer') || 'Preparer',
             'reviewer': window.AppConfig?.mapFieldToRole('reviewer') || 'Reviewer',
             'partner': window.AppConfig?.mapFieldToRole('partner') || 'Partner',
+            'process-date': 'Process Date',
             'lodgment-due': 'Lodgement Due',
             'engagement': 'Engagement',
             'group': 'Group',

@@ -2278,6 +2278,49 @@
     transition: background 0.2s ease;
 }
 
+/* Process Date column - default hidden, managed by column visibility system */
+.pm-cell-process-date,
+.pm-header-cell[data-column="process-date"] {
+    display: none;
+}
+
+/* Override default hiding when column is explicitly shown */
+.pm-cell-process-date:not(.column-hidden),
+.pm-header-cell[data-column="process-date"]:not(.column-hidden) {
+    display: flex !important;
+}
+
+/* Column management dialog enhancements */
+.pm-column-actions {
+    border-left: 3px solid #007bff;
+}
+
+.pm-update-columns-btn {
+    background: #17a2b8 !important;
+    border-color: #17a2b8 !important;
+    color: white !important;
+    transition: all 0.2s ease;
+}
+
+.pm-update-columns-btn:hover {
+    background: #138496 !important;
+    border-color: #117a8b !important;
+    transform: translateY(-1px);
+}
+
+.pm-update-columns-btn:disabled {
+    background: #6c757d !important;
+    border-color: #6c757d !important;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.pm-btn-sm {
+    padding: 4px 8px;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
 /* Note content container */
 .pm-note-content {
     width: 100%;

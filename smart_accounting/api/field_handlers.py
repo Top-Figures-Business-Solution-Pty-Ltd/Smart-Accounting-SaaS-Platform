@@ -157,7 +157,7 @@ def get_field_handler(field):
         return FIELD_HANDLERS['status']
     
     # Date fields
-    elif 'date' in field.lower() or field in ['custom_lodgement_due_date', 'custom_reset_date']:
+    elif 'date' in field.lower() or field in ['custom_process_date', 'custom_lodgement_due_date', 'custom_reset_date']:
         return FIELD_HANDLERS['date']
     
     # Currency fields

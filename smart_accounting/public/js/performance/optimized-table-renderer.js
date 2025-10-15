@@ -477,6 +477,7 @@ class OptimizedTableRenderer {
             'budget': 'budget_planning',
             'actual': 'actual_billing',
             'action-person': 'action_person',
+            'process-date': 'process_date',
             'lodgment-due': 'lodgment_due_date',
             'year-end': 'year_end',
             'last-updated': 'last_updated',

@@ -218,6 +218,9 @@ class ProjectManager {
                     </div>
                 </div>
             </div>
+            <div class="pm-cell pm-cell-process-date" data-editable="true" data-field="custom_process_date" data-task-id="${taskData.task_id}" data-field-type="date">
+                <span class="editable-field">-</span>
+            </div>
             <div class="pm-cell pm-cell-lodgment-due" data-editable="true" data-field="custom_lodgement_due_date" data-task-id="${taskData.task_id}" data-field-type="date">
                 <span class="editable-field">-</span>
             </div>
@@ -270,7 +273,7 @@ class ProjectManager {
             // 后备硬编码列表（如果ColumnConfigManager不可用）
             ['client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'target-month', 
              'budget', 'actual', 'review-note', 'action-person', 'preparer', 
-             'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'note', 'last-updated', 'priority', 'frequency', 'reset-date'];
+             'reviewer', 'partner', 'process-date', 'lodgment-due', 'engagement', 'group', 'year-end', 'note', 'last-updated', 'priority', 'frequency', 'reset-date'];
         
         allColumns.forEach(column => {
             const $headerCell = $(`.pm-header-cell[data-column="${column}"]`).first();

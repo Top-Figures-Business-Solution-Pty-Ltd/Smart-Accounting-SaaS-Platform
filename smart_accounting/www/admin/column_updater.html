@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Partition列配置更新工具</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        .container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn-secondary {
+            background: #6c757d;
+        }
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        .alert {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .alert-info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .alert-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .description {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        .feature-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .feature-list li:before {
+            content: "✓";
+            color: #28a745;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>🔧 Partition列配置更新工具</h1>
+            <p class="description">
+                这个工具用于自动为所有现有的Partition添加新的Process Date列配置。
+                Process Date列将被添加到Lodgement Due列的左边，默认隐藏，用户可以通过Manage Columns功能来显示。
+            </p>
+
+            <div class="alert alert-info">
+                <strong>功能说明：</strong>
+                <ul class="feature-list">
+                    <li>自动扫描所有现有的Partition</li>
+                    <li>在列顺序中添加Process Date（位于Lodgement Due前面）</li>
+                    <li>保持Process Date默认隐藏状态</li>
+                    <li>不影响现有的列可见性设置</li>
+                    <li>安全操作，支持事务回滚</li>
+                </ul>
+            </div>
+
+            <div class="alert alert-warning">
+                <strong>注意事项：</strong><br>
+                • 此操作会修改所有Partition的column_config字段<br>
+                • 建议在执行前备份数据库<br>
+                • 只有System Manager角色可以执行此操作
+            </div>
+
+            <div style="margin-top: 30px;">
+                <button class="btn" onclick="updatePartitions()">
+                    🚀 更新所有Partition配置
+                </button>
+                <button class="btn btn-secondary" onclick="validatePartitions()">
+                    🔍 验证配置状态
+                </button>
+            </div>
+
+            <div id="result"></div>
+        </div>
+    </div>
+
+    <script>
+        function updatePartitions() {
+            if (!confirm('确定要为所有Partition添加Process Date列配置吗？\n\n这将会更新所有现有Partition的列顺序。')) {
+                return;
+            }
+
+            showResult('正在更新Partition配置...', 'info');
+
+            frappe.call({
+                method: 'smart_accounting.www.project_management.index.update_all_partitions_with_new_column',
+                callback: function(response) {
+                    if (response.message && response.message.success) {
+                        const result = response.message;
+                        showResult(
+                            `✅ 更新完成！\n\n` +
+                            `总Partition数量: ${result.total_partitions}\n` +
+                            `成功更新: ${result.updated_count}\n` +
+                            `跳过（已存在）: ${result.total_partitions - result.updated_count}\n\n` +
+                            `Process Date列已添加到所有Partition的列配置中。`,
+                            'success'
+                        );
+                    } else {
+                        const errorMsg = response.message?.error || '未知错误';
+                        showResult(`❌ 更新失败: ${errorMsg}`, 'error');
+                    }
+                },
+                error: function(error) {
+                    console.error('Update error:', error);
+                    showResult('❌ 网络错误或服务器错误', 'error');
+                }
+            });
+        }
+
+        function validatePartitions() {
+            showResult('正在验证Partition配置...', 'info');
+
+            frappe.call({
+                method: 'frappe.client.get_list',
+                args: {
+                    doctype: 'Partition',
+                    fields: ['name', 'partition_name', 'column_config']
+                },
+                callback: function(response) {
+                    if (response.message) {
+                        const partitions = response.message;
+                        let hasProcessDate = 0;
+                        let missingProcessDate = 0;
+
+                        partitions.forEach(partition => {
+                            try {
+                                const config = partition.column_config ? JSON.parse(partition.column_config) : {};
+                                const columnOrder = config.column_order || [];
+                                
+                                if (columnOrder.includes('process-date')) {
+                                    hasProcessDate++;
+                                } else {
+                                    missingProcessDate++;
+                                }
+                            } catch (e) {
+                                missingProcessDate++;
+                            }
+                        });
+
+                        showResult(
+                            `📊 配置状态统计：\n\n` +
+                            `总Partition数量: ${partitions.length}\n` +
+                            `已包含Process Date: ${hasProcessDate}\n` +
+                            `缺少Process Date: ${missingProcessDate}\n\n` +
+                            (missingProcessDate > 0 ? 
+                                '⚠️ 有Partition缺少Process Date配置，建议运行更新。' : 
+                                '✅ 所有Partition都已正确配置。'),
+                            missingProcessDate > 0 ? 'warning' : 'success'
+                        );
+                    }
+                },
+                error: function(error) {
+                    showResult('❌ 验证失败', 'error');
+                }
+            });
+        }
+
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.style.display = 'block';
+            resultDiv.className = type;
+            resultDiv.innerHTML = message.replace(/\n/g, '<br>');
+        }
+
+        // 检查用户权限
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!frappe.user.has_role('System Manager')) {
+                showResult('❌ 权限不足：只有System Manager可以使用此工具', 'error');
+                document.querySelectorAll('.btn').forEach(btn => btn.disabled = true);
+            }
+        });
+    </script>
+</body>
+</html>

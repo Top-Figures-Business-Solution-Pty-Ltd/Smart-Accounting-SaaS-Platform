@@ -1085,6 +1085,7 @@ class MultiSelectManager {
             'custom_target_month': 'Target Month',
             'custom_budget_planning': 'Budget',
             'custom_actual_billing': 'Actual',
+            'custom_process_date': 'Process Date',
             'custom_lodgement_due_date': 'Lodgement Due Date',
             'custom_reset_date': 'Reset Date',
             'custom_year_end': 'Year End',

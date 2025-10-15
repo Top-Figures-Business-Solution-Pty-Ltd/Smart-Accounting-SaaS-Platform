@@ -140,6 +140,12 @@ class AppConfigManager {
                         type: 'person_selector',
                         roleFilter: 'Partner'
                     },
+                    'process-date': { 
+                        label: 'Process Date', 
+                        width: 120, 
+                        resizable: true, 
+                        visible: false  // Default hidden
+                    },
                     'lodgment-due': { 
                         label: 'Lodgement Due', 
                         width: 120, 

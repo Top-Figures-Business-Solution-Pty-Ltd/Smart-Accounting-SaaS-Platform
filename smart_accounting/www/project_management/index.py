@@ -400,6 +400,236 @@ def get_breadcrumb_path(view):
             frappe.log_error(f"Error generating breadcrumb path: {str(e)}")
         return None
 
+@frappe.whitelist()
+def update_all_partitions_with_new_column():
+    """
+    自动为所有Partition添加新列配置（如Process Date）
+    """
+    try:
+        import json
+        
+        # 获取所有partition
+        partitions = frappe.get_all("Partition", 
+                                  fields=["name", "partition_name", "visible_columns", "column_config"])
+        
+        if not partitions:
+            return {
+                'success': True,
+                'message': 'No partitions found',
+                'updated_count': 0
+            }
+        
+        updated_count = 0
+        
+        for partition_data in partitions:
+            try:
+                # 获取partition文档
+                partition_doc = frappe.get_doc("Partition", partition_data['name'])
+                
+                # 解析现有配置
+                visible_columns_raw = getattr(partition_doc, 'visible_columns', None)
+                column_config_raw = getattr(partition_doc, 'column_config', None)
+                
+                try:
+                    visible_columns = json.loads(visible_columns_raw) if visible_columns_raw else []
+                    column_config = json.loads(column_config_raw) if column_config_raw else {}
+                except json.JSONDecodeError:
+                    visible_columns = []
+                    column_config = {}
+                
+                # 获取当前列顺序
+                column_order = column_config.get('column_order', [])
+                
+                # 如果没有列顺序，使用默认顺序
+                if not column_order:
+                    column_order = [
+                        'client', 'task-name', 'entity', 'tf-tg', 'software', 'communication-methods', 
+                        'client-contact', 'status', 'note', 'target-month', 'budget', 'actual', 
+                        'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 
+                        'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 
+                        'priority', 'frequency', 'reset-date'
+                    ]
+                
+                # 检查是否需要添加process-date
+                needs_update = False
+                if 'process-date' not in column_order:
+                    # 在lodgment-due前面插入process-date
+                    new_order = []
+                    process_date_inserted = False
+                    
+                    for column in column_order:
+                        if column == 'lodgment-due' and not process_date_inserted:
+                            new_order.append('process-date')
+                            process_date_inserted = True
+                        
+                        if column != 'process-date':  # 避免重复
+                            new_order.append(column)
+                    
+                    # 如果没有找到lodgment-due，在partner后面添加
+                    if not process_date_inserted:
+                        if 'partner' in new_order:
+                            partner_index = new_order.index('partner')
+                            new_order.insert(partner_index + 1, 'process-date')
+                        else:
+                            new_order.append('process-date')
+                    
+                    column_order = new_order
+                    needs_update = True
+                
+                # 如果需要更新，保存配置
+                if needs_update:
+                    column_config['column_order'] = column_order
+                    partition_doc.column_config = json.dumps(column_config, ensure_ascii=False)
+                    partition_doc.save()
+                    updated_count += 1
+                    
+            except Exception as e:
+                frappe.log_error(f"Error updating partition {partition_data['name']}: {str(e)}")
+                continue
+        
+        # 提交更改
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'message': f'Successfully updated {updated_count} partitions with Process Date column',
+            'updated_count': updated_count,
+            'total_partitions': len(partitions)
+        }
+        
+    except Exception as e:
+        frappe.db.rollback()
+        frappe.log_error(f"Error in update_all_partitions_with_new_column: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def update_single_partition_columns(partition_name):
+    """
+    Update column configuration for a single partition by adding missing columns
+    """
+    try:
+        import json
+        
+        # Main view doesn't require updates
+        if partition_name == 'main':
+            return {
+                'success': True,
+                'updated': False,
+                'message': 'Main view does not require column updates'
+            }
+        
+        # Check if partition exists
+        if not frappe.db.exists("Partition", partition_name):
+            return {
+                'success': False,
+                'error': f'Partition "{partition_name}" not found'
+            }
+        
+        # 获取partition文档
+        partition_doc = frappe.get_doc("Partition", partition_name)
+        
+        # 解析现有配置
+        visible_columns_raw = getattr(partition_doc, 'visible_columns', None)
+        column_config_raw = getattr(partition_doc, 'column_config', None)
+        
+        try:
+            visible_columns = json.loads(visible_columns_raw) if visible_columns_raw else []
+            column_config = json.loads(column_config_raw) if column_config_raw else {}
+        except json.JSONDecodeError:
+            visible_columns = []
+            column_config = {}
+        
+        # 获取当前列顺序
+        column_order = column_config.get('column_order', [])
+        
+        # 定义最新的完整列列表（包含所有新增的列）
+        latest_columns = [
+            'client', 'task-name', 'entity', 'tf-tg', 'software', 'communication-methods', 
+            'client-contact', 'status', 'note', 'target-month', 'budget', 'actual', 
+            'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 
+            'process-date', 'lodgment-due', 'engagement', 'group', 'year-end', 
+            'last-updated', 'priority', 'frequency', 'reset-date'
+        ]
+        
+        # 如果没有列顺序，使用最新的完整列表
+        if not column_order:
+            column_order = latest_columns.copy()
+            needs_update = True
+            added_columns = latest_columns.copy()
+        else:
+            # 找出缺失的列
+            missing_columns = [col for col in latest_columns if col not in column_order]
+            added_columns = []
+            
+            if missing_columns:
+                # 智能插入缺失的列到合适的位置
+                new_order = column_order.copy()
+                
+                for missing_col in missing_columns:
+                    # 根据列的类型插入到合适的位置
+                    if missing_col == 'process-date':
+                        # process-date插入到lodgment-due前面
+                        if 'lodgment-due' in new_order:
+                            lodgment_index = new_order.index('lodgment-due')
+                            new_order.insert(lodgment_index, missing_col)
+                        elif 'partner' in new_order:
+                            partner_index = new_order.index('partner')
+                            new_order.insert(partner_index + 1, missing_col)
+                        else:
+                            new_order.append(missing_col)
+                    else:
+                        # 其他新列按照最新列表的顺序插入
+                        latest_index = latest_columns.index(missing_col)
+                        
+                        # 找到在new_order中最接近的位置
+                        insert_position = len(new_order)
+                        for i, existing_col in enumerate(new_order):
+                            if existing_col in latest_columns:
+                                existing_index = latest_columns.index(existing_col)
+                                if existing_index > latest_index:
+                                    insert_position = i
+                                    break
+                        
+                        new_order.insert(insert_position, missing_col)
+                    
+                    added_columns.append(missing_col)
+                
+                column_order = new_order
+                needs_update = True
+            else:
+                needs_update = False
+        
+        # 如果需要更新，保存配置
+        if needs_update:
+            column_config['column_order'] = column_order
+            partition_doc.column_config = json.dumps(column_config, ensure_ascii=False)
+            partition_doc.save()
+            frappe.db.commit()
+            
+            return {
+                'success': True,
+                'updated': True,
+                'added_columns': added_columns,
+                'message': f'Successfully added {len(added_columns)} new columns to partition {partition_name}'
+            }
+        else:
+            return {
+                'success': True,
+                'updated': False,
+                'message': 'Partition configuration is already up to date'
+            }
+            
+    except Exception as e:
+        frappe.db.rollback()
+        frappe.log_error(f"Error in update_single_partition_columns: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
 @frappe.whitelist(allow_guest=False)
 def get_partition_column_config(partition_name):
     """Get column configuration for a specific partition"""
@@ -1025,6 +1255,10 @@ def get_project_management_data(view='main'):
                 task.partner = get_primary_role_user(task_doc, 'partner') or ""
                 task.reviewer = get_primary_role_user(task_doc, 'reviewer') or ""
                 task.preparer = get_primary_role_user(task_doc, 'preparer') or ""
+                # Format process date for display (convert YYYY-MM-DD to DD-MM-YYYY)
+                process_date_raw = getattr(task_doc, 'custom_process_date', None)
+                task.process_date = format_date_for_display(process_date_raw) if process_date_raw else ""
+                
                 # Format lodgement due date for display (convert YYYY-MM-DD to DD-MM-YYYY)
                 lodgement_due_raw = getattr(task_doc, 'custom_lodgement_due_date', None)
                 task.lodgment_due_date = format_date_for_display(lodgement_due_raw) if lodgement_due_raw else ""
@@ -1270,7 +1504,7 @@ def update_task_field(task_id, field_name, new_value):
         allowed_fields = [
             'custom_tftg', 'custom_tf_tg', 'custom_target_month',
             'custom_budget_planning', 'custom_actual_billing', 'custom_year_end', 'custom_task_status',
-            'custom_service_line', 'custom_client', 'custom_lodgement_due_date', 'subject',
+            'custom_service_line', 'custom_client', 'custom_process_date', 'custom_lodgement_due_date', 'subject',
             'custom_engagement', 'custom_roles', 'custom_due_date', 'description', 'custom_note',
             'custom_frequency', 'custom_reset_date', 'priority', 'status'
         ]
@@ -1291,7 +1525,7 @@ def update_task_field(task_id, field_name, new_value):
             if new_value and new_value not in valid_months:
                 return {'success': False, 'error': f'Year End must be a valid month. Invalid value: {new_value}'}
             print(f"DEBUG: Year End validation passed for value: {new_value}")
-        elif field_name in ['custom_lodgment_due_date', 'custom_lodgement_due_date', 'custom_due_date', 'custom_reset_date']:
+        elif field_name in ['custom_process_date', 'custom_lodgment_due_date', 'custom_lodgement_due_date', 'custom_due_date', 'custom_reset_date']:
             # Enhanced date validation for date fields - support multiple formats
             if new_value and new_value.strip():
                 try:

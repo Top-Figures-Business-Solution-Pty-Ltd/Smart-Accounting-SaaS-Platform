@@ -489,9 +489,17 @@ class FilterManager {
                         </button>
                     </div>
                     <div class="pm-dialog-body">
-                        <p class="pm-dialog-description">
-                            Choose which columns to display and drag to reorder them.
-                        </p>
+                        <div class="pm-dialog-description">
+                            <p>Choose which columns to display and drag to reorder them.</p>
+                            <div class="pm-column-actions" style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                                <button class="pm-btn pm-btn-info pm-btn-sm pm-update-columns-btn" style="font-size: 12px;">
+                                    <i class="fa fa-refresh"></i> Sync Latest Columns
+                                </button>
+                                <small class="text-muted" style="margin-left: 10px;">
+                                    Automatically add newly available columns to current configuration
+                                </small>
+                            </div>
+                        </div>
                         <div class="pm-column-list" id="pm-sortable-columns">
                             ${currentColumnOrder.map((columnKey, index) => {
                                 const displayName = window.ColumnConfigManager.getColumnDisplayName(columnKey);
@@ -597,6 +605,11 @@ class FilterManager {
             }
             
             // Note: Don't apply changes to table immediately - wait for save
+        });
+
+        // Update columns button
+        dialog.on('click', '.pm-update-columns-btn', () => {
+            this.updatePartitionWithLatestColumns(currentView);
         });
 
         // Save button
@@ -707,6 +720,127 @@ class FilterManager {
             error: (error) => {
                 console.error('Error saving column config:', error);
                 frappe.msgprint('Error saving column configuration');
+            }
+        });
+    }
+
+    updatePartitionWithLatestColumns(currentView) {
+        // Create custom confirmation dialog with proper z-index
+        const confirmDialog = $(`
+            <div class="pm-custom-confirm-overlay" style="
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                z-index: 10001;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            ">
+                <div class="pm-custom-confirm-dialog" style="
+                    background: white;
+                    border-radius: 8px;
+                    padding: 24px;
+                    max-width: 480px;
+                    width: 90%;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                ">
+                    <div style="margin-bottom: 16px;">
+                        <h4 style="margin: 0 0 8px 0; color: #333;">Sync Latest Columns</h4>
+                        <p style="margin: 0; color: #666; line-height: 1.5;">
+                            This will automatically add newly available columns to the current partition configuration. 
+                            New columns will be hidden by default and can be enabled through column management.
+                        </p>
+                    </div>
+                    <div style="text-align: right; margin-top: 20px;">
+                        <button class="pm-btn pm-btn-secondary pm-confirm-cancel" style="margin-right: 8px;">
+                            Cancel
+                        </button>
+                        <button class="pm-btn pm-btn-primary pm-confirm-sync">
+                            <i class="fa fa-refresh"></i> Sync Columns
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `);
+        
+        $('body').append(confirmDialog);
+        
+        // Bind events
+        confirmDialog.on('click', '.pm-confirm-cancel, .pm-custom-confirm-overlay', (e) => {
+            if (e.target === e.currentTarget) {
+                confirmDialog.remove();
+            }
+        });
+        
+        confirmDialog.on('click', '.pm-confirm-sync', () => {
+            confirmDialog.remove();
+            this.executePartitionUpdate(currentView);
+        });
+        
+        // Prevent dialog content clicks from closing
+        confirmDialog.on('click', '.pm-custom-confirm-dialog', (e) => {
+            e.stopPropagation();
+        });
+    }
+
+    executePartitionUpdate(currentView) {
+        // Show loading state
+        const updateBtn = $('.pm-update-columns-btn');
+        const originalText = updateBtn.html();
+        updateBtn.html('<i class="fa fa-spinner fa-spin"></i> Syncing...').prop('disabled', true);
+
+        frappe.call({
+            method: 'smart_accounting.www.project_management.index.update_single_partition_columns',
+            args: {
+                partition_name: currentView
+            },
+            callback: (response) => {
+                // Restore button state
+                updateBtn.html(originalText).prop('disabled', false);
+
+                if (response.message && response.message.success) {
+                    const result = response.message;
+                    
+                    if (result.updated) {
+                        // Show success message
+                        frappe.show_alert({
+                            message: `✅ Successfully added ${result.added_columns.length} new column(s): ${result.added_columns.join(', ')}`,
+                            indicator: 'green'
+                        }, 5);
+
+                        // Close current dialog and reopen to show updated configuration
+                        this.closeColumnDialog();
+                        setTimeout(() => {
+                            this.showColumnManagementDialog();
+                        }, 500);
+
+                    } else {
+                        frappe.show_alert({
+                            message: '✅ Configuration is already up to date',
+                            indicator: 'blue'
+                        }, 3);
+                    }
+
+                } else {
+                    const errorMsg = response.message?.error || 'Update failed';
+                    frappe.show_alert({
+                        message: `❌ Sync failed: ${errorMsg}`,
+                        indicator: 'red'
+                    }, 8);
+                }
+            },
+            error: (error) => {
+                // Restore button state
+                updateBtn.html(originalText).prop('disabled', false);
+                
+                console.error('Update error:', error);
+                frappe.show_alert({
+                    message: '❌ Network error or server error',
+                    indicator: 'red'
+                }, 8);
             }
         });
     }
@@ -927,6 +1061,7 @@ class FilterManager {
                 'preparer': 'Preparer',
                 'reviewer': 'Reviewer',
                 'partner': 'Partner',
+                'process-date': 'Process Date',
                 'lodgment-due': 'Lodgement Due',
                 'engagement': 'Engagement',
                 'group': 'Group',
@@ -953,6 +1088,7 @@ class FilterManager {
             'preparer': 'preparer',
             'reviewer': 'reviewer',
             'partner': 'partner',
+            'process-date': 'process_date',
             'lodgment-due': 'lodgment_due',
             'engagement': 'engagement',
             'group': 'group',

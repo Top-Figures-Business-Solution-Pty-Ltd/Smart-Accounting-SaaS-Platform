@@ -704,6 +704,12 @@ $(document).ready(function() {
     window.projectManagement = new ProjectManagement();
     
     console.log('Project Management interface initialized');
+    
+    // 开发者工具：在控制台中提供列配置更新功能
+    if (frappe.user.has_role('System Manager')) {
+        console.log('🔧 开发者工具已加载：');
+        console.log('   使用 ColumnUpdater.updateAllPartitionsWithProcessDate() 来更新所有Partition配置');
+    }
 });
 
 // Export for module systems if available

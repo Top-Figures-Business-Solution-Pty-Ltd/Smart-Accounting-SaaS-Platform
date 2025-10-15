@@ -30,6 +30,7 @@ window.BulkUpdateConfig = {
         'custom_tftg',
         'custom_note',
         'custom_review_note',
+        'custom_process_date',
         'custom_lodgement_due_date',
         'custom_reset_date',
         'custom_year_end',

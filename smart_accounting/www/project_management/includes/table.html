@@ -212,6 +212,10 @@
                                     <span>Partner</span>
                                     <div class="pm-column-resizer"></div>
                                 </div>
+                                <div class="pm-header-cell pm-cell-process-date" data-column="process-date">
+                                    <span>Process Date</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
                                 <div class="pm-header-cell pm-cell-lodgment-due" data-column="lodgment-due">
                                     <span>Lodgement Due</span>
                                     <div class="pm-column-resizer"></div>
@@ -522,6 +526,19 @@
                                                     </div>
                                                 </div>
                                             {% endif %}
+                                        </div>
+                                        <div class="pm-cell pm-cell-process-date"
+                                             data-editable="true"
+                                             data-field="custom_process_date"
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="date">
+                                            <span class="editable-field">
+                                                {% if task.process_date %}
+                                                    {{ task.process_date }}
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </span>
                                         </div>
                                         <div class="pm-cell pm-cell-lodgment-due"
                                              data-editable="true"

@@ -617,6 +617,9 @@ class ReportsManager {
                 case 'partner':
                     value = $row.find('.pm-cell-partner .pm-avatar').attr('title') || '';
                     break;
+                case 'process_date':
+                    value = $row.find('.pm-cell-process-date .editable-field').text().trim();
+                    break;
                 case 'lodgment_due':
                     value = $row.find('.pm-cell-lodgment-due .editable-field').text().trim();
                     break;

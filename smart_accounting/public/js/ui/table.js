@@ -214,6 +214,7 @@ class TableManager {
             'preparer': 'pm-cell-preparer',
             'reviewer': 'pm-cell-reviewer',
             'partner': 'pm-cell-partner',
+            'process-date': 'pm-cell-process-date',
             'lodgment-due': 'pm-cell-lodgment-due',
             'engagement': 'pm-cell-engagement',
             'group': 'pm-cell-group',
@@ -351,6 +352,7 @@ class TableManager {
             'preparer': 120,
             'reviewer': 120,
             'partner': 120,
+            'process-date': 130,
             'lodgment-due': 130,
             'engagement': 120,
             'group': 100,
@@ -679,15 +681,15 @@ class TableManager {
             const shouldShow = visibleColumns.includes(column);
             
             if (shouldShow) {
-                // Show header cells
-                $(`.pm-header-cell[data-column="${column}"]`).show().css('display', '').removeClass('column-hidden');
-                // Show data cells
-                $(`.pm-cell-${column}`).show().css('display', '').removeClass('column-hidden');
+                // Show header cells - use flex for proper layout
+                $(`.pm-header-cell[data-column="${column}"]`).removeClass('column-hidden').css('display', 'flex').show();
+                // Show data cells - use flex for proper layout
+                $(`.pm-cell-${column}`).removeClass('column-hidden').css('display', 'flex').show();
             } else {
                 // Hide header cells with strong CSS
-                $(`.pm-header-cell[data-column="${column}"]`).hide().css('display', 'none !important').addClass('column-hidden');
+                $(`.pm-header-cell[data-column="${column}"]`).addClass('column-hidden').css('display', 'none !important').hide();
                 // Hide data cells with strong CSS
-                $(`.pm-cell-${column}`).hide().css('display', 'none !important').addClass('column-hidden');
+                $(`.pm-cell-${column}`).addClass('column-hidden').css('display', 'none !important').hide();
             }
         });
         
@@ -798,6 +800,7 @@ class TableManager {
                 'preparer': 'pm-cell-preparer',
                 'reviewer': 'pm-cell-reviewer',
                 'partner': 'pm-cell-partner',
+                'process-date': 'pm-cell-process-date',
                 'lodgment-due': 'pm-cell-lodgment-due',
                 'engagement': 'pm-cell-engagement',
                 'group': 'pm-cell-group',

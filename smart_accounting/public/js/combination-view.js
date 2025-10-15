@@ -1298,6 +1298,17 @@ class CombinationViewManager {
                     </div>
                 `;
             
+            case 'process-date':
+                return `
+                    <div class="pm-cell pm-cell-process-date"
+                         data-editable="true"
+                         data-field="custom_process_date"
+                         data-task-id="${taskId}"
+                         data-field-type="date">
+                        <span class="editable-field">${taskData.process_date || '-'}</span>
+                    </div>
+                `;
+            
             case 'lodgment-due':
                 // Exact match with table.html - uses custom_lodgement_due_date
                 return `
@@ -1602,6 +1613,7 @@ class CombinationViewManager {
             'preparer': window.AppConfig?.mapFieldToRole('preparer') || 'Preparer',
             'reviewer': window.AppConfig?.mapFieldToRole('reviewer') || 'Reviewer',
             'partner': window.AppConfig?.mapFieldToRole('partner') || 'Partner',
+            'process-date': 'Process Date',
             'lodgment-due': 'Lodgment Due',
             'engagement': 'Engagement',
             'group': 'Group',
@@ -1631,6 +1643,7 @@ class CombinationViewManager {
             'preparer': 'custom_preparer',
             'reviewer': 'custom_reviewer',
             'partner': 'custom_partner',
+            'process-date': 'custom_process_date',
             'lodgment-due': 'custom_lodgment_due',
             'engagement': 'custom_engagement',
             'group': 'custom_group',
@@ -1646,7 +1659,7 @@ class CombinationViewManager {
         const editableColumns = [
             'client', 'task-name', 'status', 'entity', 'tf-tg', 'software', 'note', 
             'target-month', 'budget', 'actual', 'action-person', 'preparer', 
-            'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 
+            'reviewer', 'partner', 'process-date', 'lodgment-due', 'engagement', 'group', 
             'year-end', 'priority', 'frequency', 'reset-date'
         ];
         return editableColumns.includes(column);
@@ -2205,6 +2218,7 @@ class CombinationViewManager {
             'preparer': 100,
             'reviewer': 100,
             'partner': 100,
+            'process-date': 120,
             'lodgment-due': 120,
             'engagement': 100,
             'group': 120,
