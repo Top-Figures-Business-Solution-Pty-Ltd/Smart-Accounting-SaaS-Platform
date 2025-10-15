@@ -1573,9 +1573,532 @@
     white-space: nowrap;
 }
 
+.pm-primary-software {
+    background: #0073ea;
+    color: white;
+}
+
+.pm-software-more {
+    background: #f1f3f4;
+    color: #5e6c84;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.pm-empty-software .pm-empty-badge {
+    background: #f8f9fa;
+    color: #6b7280;
+    border: 1px dashed #d1d5db;
+}
+
+.pm-empty-software .pm-empty-badge:hover {
+    background: #e5e7eb;
+    border-color: #9ca3af;
+}
+
+/* Communication Methods styles - matching Software */
+.pm-communication-methods-tags {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+}
+
+.pm-communication-method-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.pm-primary-method {
+    background: #0073ea;
+    color: white;
+}
+
+.pm-communication-method-more {
+    background: #f1f3f4;
+    color: #5e6c84;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.pm-empty-communication-methods .pm-empty-badge {
+    background: #f8f9fa;
+    color: #6b7280;
+    border: 1px dashed #d1d5db;
+}
+
+.pm-empty-communication-methods .pm-empty-badge:hover {
+    background: #e5e7eb;
+    border-color: #9ca3af;
+}
+
+/* Client Contact styles - matching Client Name selector */
+.pm-client-contacts-display {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.pm-client-contacts-display .pm-contact-name:hover {
+    text-decoration: underline;
+}
+
+.pm-contact-more {
+    background: #f1f3f4;
+    color: #5e6c84;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.pm-empty-contacts .pm-contact-empty {
+    color: #6b7280;
+    font-style: italic;
+}
+
+.pm-empty-contacts .pm-contact-empty:hover {
+    color: #0073ea;
+}
+
 /* Fix software cell click area */
 .pm-cell[data-field-type="software_selector"] {
     cursor: pointer;
+}
+
+/* Communication Methods selector styles */
+.pm-communication-methods-selector-modal {
+    position: fixed;
+    z-index: 9999;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--monday-border);
+    min-width: 300px;
+    max-width: 400px;
+    display: none;
+}
+
+.pm-communication-methods-selector-content {
+    padding: 0;
+}
+
+.pm-communication-methods-selector-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--monday-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pm-communication-methods-selector-header h4 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--monday-text);
+}
+
+.pm-communication-methods-selector-close {
+    background: none;
+    border: none;
+    font-size: 16px;
+    color: var(--monday-gray);
+    cursor: pointer;
+    padding: 4px;
+}
+
+.pm-communication-methods-selector-close:hover {
+    color: var(--monday-text);
+}
+
+.pm-communication-methods-selector-body {
+    padding: 16px 20px;
+}
+
+.pm-communication-methods-options {
+    margin-bottom: 16px;
+}
+
+.pm-communication-method-option {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-bottom: 4px;
+    border: 1px solid transparent;
+}
+
+.pm-communication-method-option:hover {
+    background: #f8f9fa;
+}
+
+.pm-communication-method-option.selected {
+    background: rgba(0, 115, 234, 0.1);
+    border-color: var(--monday-blue);
+}
+
+.pm-communication-method-checkbox {
+    margin-right: 12px;
+    color: var(--monday-blue);
+    font-size: 14px;
+}
+
+.pm-communication-method-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.pm-communication-methods-selector-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pm-communication-methods-selector-footer .pm-btn {
+    padding: 8px 16px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.pm-communication-methods-selector-footer .pm-btn-secondary {
+    background: #f8f9fa;
+    color: var(--monday-text);
+}
+
+.pm-communication-methods-selector-footer .pm-btn-primary {
+    background: var(--monday-blue);
+    color: white;
+}
+
+/* Fix communication methods cell click area */
+.pm-cell[data-field-type="communication_methods_selector"] {
+    cursor: pointer;
+}
+
+/* Client Contact selector styles */
+.pm-client-contact-selector-modal {
+    position: fixed;
+    z-index: 9999;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--monday-border);
+    min-width: 400px;
+    max-width: 500px;
+    max-height: 500px;
+    display: none;
+}
+
+.pm-client-contact-selector-content {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.pm-client-contact-selector-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--monday-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pm-client-contact-selector-header h4 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--monday-text);
+}
+
+.pm-client-contact-selector-close {
+    background: none;
+    border: none;
+    font-size: 16px;
+    color: var(--monday-gray);
+    cursor: pointer;
+    padding: 4px;
+}
+
+.pm-client-contact-selector-close:hover {
+    color: var(--monday-text);
+}
+
+.pm-client-contact-selector-body {
+    padding: 16px 20px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.pm-client-contacts-list {
+    margin-bottom: 16px;
+}
+
+.pm-contact-option {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-bottom: 8px;
+    border: 1px solid #e1e5e9;
+    transition: all 0.2s ease;
+}
+
+.pm-contact-option:hover {
+    background: #f8f9fa;
+    border-color: #d1d5db;
+}
+
+.pm-contact-option.selected {
+    background: rgba(0, 115, 234, 0.1);
+    border-color: var(--monday-blue);
+}
+
+.pm-contact-checkbox {
+    margin-right: 12px;
+    color: var(--monday-blue);
+    font-size: 14px;
+}
+
+.pm-contact-info {
+    flex: 1;
+}
+
+.pm-contact-option .pm-contact-name {
+    font-weight: 600;
+    color: var(--monday-text);
+    margin-bottom: 4px;
+}
+
+.pm-client-contacts-display .pm-contact-name {
+    color: #0073ea;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.pm-contact-details {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--monday-gray);
+}
+
+.pm-contact-email,
+.pm-contact-phone {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.pm-no-contacts {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--monday-gray);
+}
+
+.pm-no-contacts i {
+    font-size: 32px;
+    margin-bottom: 12px;
+    opacity: 0.6;
+}
+
+.pm-no-contacts p {
+    margin: 0;
+    font-size: 14px;
+}
+
+.pm-client-contact-selector-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--monday-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pm-footer-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.pm-client-contact-selector-footer .pm-btn {
+    padding: 8px 16px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.pm-client-contact-selector-footer .pm-btn-secondary {
+    background: #f8f9fa;
+    color: var(--monday-text);
+}
+
+.pm-client-contact-selector-footer .pm-btn-primary {
+    background: var(--monday-blue);
+    color: white;
+}
+
+/* Fix client contact cell click area */
+.pm-cell[data-field-type="client_contact_selector"] {
+    cursor: pointer;
+}
+
+/* Add New Contact Dialog styles */
+.pm-add-contact-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    display: none;
+    justify-content: center;
+    align-items: center;
+}
+
+.pm-add-contact-content {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    width: 500px;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: hidden;
+}
+
+.pm-add-contact-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--monday-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pm-add-contact-header h4 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--monday-text);
+}
+
+.pm-add-contact-close {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: var(--monday-gray);
+    cursor: pointer;
+    padding: 4px;
+}
+
+.pm-add-contact-close:hover {
+    color: var(--monday-text);
+}
+
+.pm-add-contact-body {
+    padding: 24px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.pm-contact-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.pm-form-row {
+    display: flex;
+    gap: 16px;
+}
+
+.pm-form-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.pm-form-group.full-width {
+    flex: none;
+    width: 100%;
+}
+
+.pm-form-group label {
+    font-weight: 500;
+    color: var(--monday-text);
+    margin-bottom: 6px;
+    font-size: 14px;
+}
+
+.pm-form-group input {
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: border-color 0.2s ease;
+}
+
+.pm-form-group input:focus {
+    outline: none;
+    border-color: var(--monday-blue);
+    box-shadow: 0 0 0 2px rgba(0, 115, 234, 0.1);
+}
+
+.pm-form-group input.error {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.1);
+}
+
+.pm-add-contact-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--monday-border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.pm-add-contact-footer .pm-btn {
+    padding: 10px 20px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.pm-add-contact-footer .pm-btn-secondary {
+    background: #f8f9fa;
+    color: var(--monday-text);
+}
+
+.pm-add-contact-footer .pm-btn-secondary:hover {
+    background: #e9ecef;
+}
+
+.pm-add-contact-footer .pm-btn-primary {
+    background: var(--monday-blue);
+    color: white;
+}
+
+.pm-add-contact-footer .pm-btn-primary:hover {
+    background: #0056b3;
+}
+
+.pm-add-contact-footer .pm-btn-primary:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
 }
 
 /* Fix software selector positioning */

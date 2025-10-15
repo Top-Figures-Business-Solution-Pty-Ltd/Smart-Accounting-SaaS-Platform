@@ -22,6 +22,8 @@ class ProjectManagement {
         this.editorsManager = window.EditorsManager;
         this.personSelectorManager = window.PersonSelectorManager;
         this.softwareSelectorManager = window.SoftwareSelectorManager;
+        this.communicationMethodsSelectorManager = window.CommunicationMethodsSelectorManager;
+        this.clientContactSelectorManager = window.ClientContactSelectorManager;
         this.workspaceManager = window.WorkspaceManager;
         this.subtaskManager = window.SubtaskManager;
         this.multiSelectManager = window.MultiSelectManager;

@@ -10,6 +10,8 @@ class ColumnConfigManager {
             'entity': 'Entity',
             'tf-tg': 'TF/TG',
             'software': 'Software',
+            'communication-methods': 'Communication Methods',
+            'client-contact': 'Client Contact',
             'status': 'Status',
             'note': 'Note',
             'target-month': 'Target Month',
@@ -32,7 +34,7 @@ class ColumnConfigManager {
 
         // 默认可见列（用于main视图和新partition的默认配置）
         this.defaultVisibleColumns = [
-            'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 
+            'client', 'task-name', 'entity', 'tf-tg', 'software', 'communication-methods', 'client-contact', 'status', 
             'note', 'target-month', 'budget', 'actual', 'review-note', 
             'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 
             'engagement', 'group', 'year-end', 'last-updated', 'priority'

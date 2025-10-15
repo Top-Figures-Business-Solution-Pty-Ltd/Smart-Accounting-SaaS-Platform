@@ -164,6 +164,14 @@
                                     <span>Software</span>
                                     <div class="pm-column-resizer"></div>
                                 </div>
+                                <div class="pm-header-cell pm-cell-communication-methods" data-column="communication-methods">
+                                    <span>Communication Methods</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
+                                <div class="pm-header-cell pm-cell-client-contact" data-column="client-contact">
+                                    <span>Client Contact</span>
+                                    <div class="pm-column-resizer"></div>
+                                </div>
                                 <div class="pm-header-cell pm-cell-status" data-column="status">
                                     <span>Status</span>
                                     <div class="pm-column-resizer"></div>
@@ -314,6 +322,54 @@
                                                     <span class="pm-software-badge pm-empty-badge">
                                                         <i class="fa fa-plus"></i>
                                                         Add software
+                                                    </span>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="pm-cell pm-cell-communication-methods"
+                                             data-editable="true"
+                                             data-field="custom_communication_methods" 
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="communication_methods_selector">
+                                            {% if task.communication_methods_info %}
+                                                <div class="pm-communication-methods-tags">
+                                                    {% if task.communication_methods_info|length == 1 %}
+                                                        <span class="pm-communication-method-badge pm-primary-method">{{ task.communication_methods_info[0].communication_method }}</span>
+                                                    {% elif task.communication_methods_info|length > 1 %}
+                                                        {% set primary_method = task.communication_methods_info|selectattr('is_primary')|first or task.communication_methods_info[0] %}
+                                                        <span class="pm-communication-method-badge pm-primary-method">{{ primary_method.communication_method }}</span>
+                                                        <span class="pm-communication-method-more">+{{ task.communication_methods_info|length - 1 }}</span>
+                                                    {% endif %}
+                                                </div>
+                                            {% else %}
+                                                <div class="pm-communication-methods-tags pm-empty-communication-methods">
+                                                    <span class="pm-communication-method-badge pm-empty-badge">
+                                                        <i class="fa fa-plus"></i>
+                                                        Add method
+                                                    </span>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="pm-cell pm-cell-client-contact"
+                                             data-editable="true"
+                                             data-field="custom_client_contacts" 
+                                             data-task-id="{{ task.task_id }}"
+                                             data-field-type="client_contact_selector"
+                                             data-client-id="{{ task.custom_client or '' }}">
+                                            {% if task.client_contacts_info %}
+                                                <div class="pm-client-contacts-display">
+                                                    {% if task.client_contacts_info|length == 1 %}
+                                                        <span class="pm-contact-name">{{ task.client_contacts_info[0].contact_name }}</span>
+                                                    {% elif task.client_contacts_info|length > 1 %}
+                                                        <span class="pm-contact-name">{{ task.client_contacts_info[0].contact_name }}</span>
+                                                        <span class="pm-contact-more">+{{ task.client_contacts_info|length - 1 }}</span>
+                                                    {% endif %}
+                                                </div>
+                                            {% else %}
+                                                <div class="pm-client-contacts-display pm-empty-contacts">
+                                                    <span class="pm-contact-empty">
+                                                        <i class="fa fa-user-plus"></i>
+                                                        Select contact
                                                     </span>
                                                 </div>
                                             {% endif %}

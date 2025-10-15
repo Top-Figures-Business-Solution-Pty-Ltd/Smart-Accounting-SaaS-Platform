@@ -229,18 +229,18 @@ def create_partition(partition_name, is_workspace=False, parent_partition=None, 
                     new_partition.visible_columns = parent_doc.visible_columns
                     new_partition.column_config = parent_doc.column_config or "{}"
                 else:
-                    # Use comprehensive default columns
-                    default_columns = ["client", "task-name", "entity", "tf-tg", "software", "status", "note", "target-month", "budget", "actual", "review-note", "action-person", "preparer", "reviewer", "partner", "lodgment-due", "engagement", "group", "year-end", "last-updated", "priority", "frequency", "reset-date"]
+                    # Use comprehensive default columns including new ones
+                    default_columns = ["client", "task-name", "entity", "tf-tg", "software", "communication-methods", "client-contact", "status", "note", "target-month", "budget", "actual", "review-note", "action-person", "preparer", "reviewer", "partner", "lodgment-due", "engagement", "group", "year-end", "last-updated", "priority", "frequency", "reset-date"]
                     new_partition.visible_columns = json.dumps(default_columns)
                     new_partition.column_config = json.dumps({"column_order": default_columns})
             except:
-                # Use comprehensive default columns
-                default_columns = ["client", "task-name", "entity", "tf-tg", "software", "status", "note", "target-month", "budget", "actual", "review-note", "action-person", "preparer", "reviewer", "partner", "lodgment-due", "engagement", "group", "year-end", "last-updated", "priority", "frequency", "reset-date"]
+                # Use comprehensive default columns including new ones
+                default_columns = ["client", "task-name", "entity", "tf-tg", "software", "communication-methods", "client-contact", "status", "note", "target-month", "budget", "actual", "review-note", "action-person", "preparer", "reviewer", "partner", "lodgment-due", "engagement", "group", "year-end", "last-updated", "priority", "frequency", "reset-date"]
                 new_partition.visible_columns = json.dumps(default_columns)
                 new_partition.column_config = json.dumps({"column_order": default_columns})
         else:
-            # Default columns for new top-level partition - use comprehensive list
-            default_columns = ["client", "task-name", "entity", "tf-tg", "software", "status", "note", "target-month", "budget", "actual", "review-note", "action-person", "preparer", "reviewer", "partner", "lodgment-due", "engagement", "group", "year-end", "last-updated", "priority", "frequency", "reset-date"]
+            # Default columns for new top-level partition - use comprehensive list including new ones
+            default_columns = ["client", "task-name", "entity", "tf-tg", "software", "communication-methods", "client-contact", "status", "note", "target-month", "budget", "actual", "review-note", "action-person", "preparer", "reviewer", "partner", "lodgment-due", "engagement", "group", "year-end", "last-updated", "priority", "frequency", "reset-date"]
             new_partition.visible_columns = json.dumps(default_columns)
             new_partition.column_config = json.dumps({"column_order": default_columns})
         
@@ -411,7 +411,7 @@ def get_partition_column_config(partition_name):
             # Default configuration for main view - show all current columns
             # 使用动态的默认列配置而不是硬编码
             default_visible_columns = [
-                'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'note', 
+                'client', 'task-name', 'entity', 'tf-tg', 'software', 'communication-methods', 'client-contact', 'status', 'note', 
                 'target-month', 'budget', 'actual', 'review-note', 'action-person', 
                 'preparer', 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 
                 'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'
@@ -446,7 +446,7 @@ def get_partition_column_config(partition_name):
         # If no configuration, use default
         if not visible_columns:
             visible_columns = [
-                'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'note', 
+                'client', 'task-name', 'entity', 'tf-tg', 'software', 'communication-methods', 'client-contact', 'status', 'note', 
                 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 
                 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 
                 'last-updated', 'priority', 'frequency', 'reset-date'
@@ -470,7 +470,7 @@ def get_partition_column_config(partition_name):
             'success': False,
             'error': str(e),
             'partition_name': partition_name,
-            'visible_columns': ['client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'note', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'],
+            'visible_columns': ['client', 'task-name', 'entity', 'tf-tg', 'software', 'communication-methods', 'client-contact', 'status', 'note', 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'],
             'column_config': {}
         }
 
@@ -512,7 +512,7 @@ def save_partition_column_config(partition_name, visible_columns, column_config=
         # Handle main view - don't save, always use default
         if partition_name == 'main':
             default_columns = [
-                'client', 'task-name', 'entity', 'tf-tg', 'software', 'status', 'note', 
+                'client', 'task-name', 'entity', 'tf-tg', 'software', 'communication-methods', 'client-contact', 'status', 'note', 
                 'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 
                 'reviewer', 'partner', 'lodgment-due', 'engagement', 'group', 'year-end', 
                 'last-updated', 'priority', 'frequency', 'reset-date'
@@ -1080,6 +1080,12 @@ def get_project_management_data(view='main'):
                 # Get software info for display (from sub-table)
                 task.software_info = get_software_info(task_doc)
                 
+                # Get communication methods info for display (from sub-table)
+                task.communication_methods_info = get_communication_methods_info(task_doc)
+                
+                # Get client contacts info for display (from sub-table)
+                task.client_contacts_info = get_client_contacts_info(task_doc)
+                
                 # Format last updated date (DD-MM-YYYY format to match other date fields)
                 if hasattr(task, 'modified') and task.modified:
                     task.last_updated = task.modified.strftime("%d-%m-%Y") if hasattr(task.modified, 'strftime') else str(task.modified)
@@ -1156,6 +1162,8 @@ def get_project_management_data(view='main'):
                 task.partner_info = None
                 task.action_person_info = None
                 task.software_info = None
+                task.communication_methods_info = None
+                task.client_contacts_info = None
                 # Set default comment count - 实时计算
                 task.comment_count = frappe.db.count('Comment', {
                     'reference_doctype': 'Task',
@@ -1952,6 +1960,48 @@ def get_software_info(task_doc):
     except:
         return None
 
+def get_communication_methods_info(task_doc):
+    """
+    Get all communication methods assignments for display
+    """
+    try:
+        if not hasattr(task_doc, 'custom_communication_methods') or not task_doc.custom_communication_methods:
+            return None
+        
+        # Get all communication methods assignments
+        methods = []
+        for method_assignment in task_doc.custom_communication_methods:
+            methods.append({
+                'communication_method': method_assignment.communication_method,
+                'is_primary': method_assignment.is_primary
+            })
+        
+        return methods if methods else None
+        
+    except:
+        return None
+
+def get_client_contacts_info(task_doc):
+    """
+    Get all client contacts assignments for display
+    """
+    try:
+        if not hasattr(task_doc, 'custom_client_contacts') or not task_doc.custom_client_contacts:
+            return None
+        
+        # Get all client contacts assignments
+        contacts = []
+        for contact_assignment in task_doc.custom_client_contacts:
+            contacts.append({
+                'contact': contact_assignment.contact,
+                'contact_name': contact_assignment.contact_name
+            })
+        
+        return contacts if contacts else None
+        
+    except:
+        return None
+
 def get_initials(name):
     """
     Generate initials from name or email
@@ -2155,6 +2205,459 @@ def delete_task_comment(comment_id):
             'error': str(e)
         }
 
+
+@frappe.whitelist()
+def get_task_communication_methods(task_id):
+    """
+    Get communication methods for a task
+    """
+    try:
+        task_doc = frappe.get_doc('Task', task_id)
+        
+        if not hasattr(task_doc, 'custom_communication_methods') or not task_doc.custom_communication_methods:
+            return {
+                'success': True,
+                'communication_methods': []
+            }
+        
+        methods = []
+        for method_assignment in task_doc.custom_communication_methods:
+            methods.append({
+                'communication_method': method_assignment.communication_method,
+                'is_primary': method_assignment.is_primary
+            })
+        
+        return {
+            'success': True,
+            'communication_methods': methods
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting task communication methods: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'communication_methods': []
+        }
+
+@frappe.whitelist()
+def update_task_communication_methods(task_id, communication_methods):
+    """
+    Update communication methods for a task
+    """
+    try:
+        import json
+        
+        # Parse communication methods if it's a string
+        if isinstance(communication_methods, str):
+            communication_methods = json.loads(communication_methods)
+        
+        task_doc = frappe.get_doc('Task', task_id)
+        
+        # Clear existing communication methods
+        task_doc.custom_communication_methods = []
+        
+        # Add new communication methods
+        for method_data in communication_methods:
+            task_doc.append('custom_communication_methods', {
+                'communication_method': method_data.get('communication_method'),
+                'is_primary': method_data.get('is_primary', 0)
+            })
+        
+        # Save the task
+        task_doc.save()
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'message': 'Communication methods updated successfully'
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error updating task communication methods: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def get_client_contacts(client_id):
+    """
+    Get all contacts for a specific client
+    """
+    try:
+        if not client_id:
+            return {
+                'success': False,
+                'error': 'Client ID is required',
+                'contacts': []
+            }
+        
+        # Get client name
+        client_doc = frappe.get_doc('Customer', client_id)
+        client_name = client_doc.customer_name or client_doc.name
+        
+        # Get contacts linked to this customer
+        contacts = frappe.get_all('Contact', 
+            filters={
+                'status': 'Open'  # Only active contacts
+            },
+            fields=['name', 'first_name', 'last_name', 'email_id', 'phone', 'mobile_no']
+        )
+        
+        # Filter contacts that are linked to this customer
+        linked_contacts = []
+        for contact in contacts:
+            # Check if this contact is linked to the customer
+            contact_links = frappe.get_all('Dynamic Link',
+                filters={
+                    'parent': contact.name,
+                    'parenttype': 'Contact',
+                    'link_doctype': 'Customer',
+                    'link_name': client_id
+                }
+            )
+            
+            if contact_links:
+                # Add phone number (prefer mobile over phone)
+                contact['phone'] = contact.get('mobile_no') or contact.get('phone')
+                linked_contacts.append(contact)
+        
+        return {
+            'success': True,
+            'client_name': client_name,
+            'contacts': linked_contacts
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting client contacts: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'contacts': []
+        }
+
+@frappe.whitelist()
+def get_task_client(task_id):
+    """
+    Get the client ID for a task
+    """
+    try:
+        task_doc = frappe.get_doc('Task', task_id)
+        client_id = getattr(task_doc, 'custom_client', None)
+        
+        return {
+            'success': True,
+            'client_id': client_id
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting task client: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'client_id': None
+        }
+
+@frappe.whitelist()
+def get_task_contacts(task_id):
+    """
+    Get contacts for a task
+    """
+    try:
+        task_doc = frappe.get_doc('Task', task_id)
+        
+        if not hasattr(task_doc, 'custom_client_contacts') or not task_doc.custom_client_contacts:
+            return {
+                'success': True,
+                'contacts': []
+            }
+        
+        contacts = []
+        for contact_assignment in task_doc.custom_client_contacts:
+            contacts.append({
+                'contact': contact_assignment.contact,
+                'contact_name': contact_assignment.contact_name
+            })
+        
+        return {
+            'success': True,
+            'contacts': contacts
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting task contacts: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'contacts': []
+        }
+
+@frappe.whitelist()
+def update_task_contacts(task_id, contacts):
+    """
+    Update contacts for a task
+    """
+    try:
+        import json
+        
+        # Parse contacts if it's a string
+        if isinstance(contacts, str):
+            contacts = json.loads(contacts)
+        
+        task_doc = frappe.get_doc('Task', task_id)
+        
+        # Clear existing contacts
+        task_doc.custom_client_contacts = []
+        
+        # Add new contacts
+        for contact_data in contacts:
+            task_doc.append('custom_client_contacts', {
+                'contact': contact_data.get('contact'),
+                'contact_name': contact_data.get('contact_name')
+            })
+        
+        # Save the task
+        task_doc.save()
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'message': 'Client contacts updated successfully'
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error updating task contacts: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def create_client_contact(client_id, contact_data):
+    """
+    Create a new contact for a client
+    """
+    try:
+        import json
+        
+        # Parse contact data if it's a string
+        if isinstance(contact_data, str):
+            contact_data = json.loads(contact_data)
+        
+        # Validate required fields
+        if not contact_data.get('first_name') or not contact_data.get('email_id'):
+            return {
+                'success': False,
+                'error': 'First name and email are required'
+            }
+        
+        # Check if contact with this email already exists
+        existing_contact = frappe.db.exists('Contact', {'email_id': contact_data.get('email_id')})
+        if existing_contact:
+            return {
+                'success': False,
+                'error': 'A contact with this email already exists'
+            }
+        
+        # Create new contact
+        contact_doc = frappe.get_doc({
+            'doctype': 'Contact',
+            'first_name': contact_data.get('first_name'),
+            'last_name': contact_data.get('last_name', ''),
+            'email_id': contact_data.get('email_id'),
+            'phone': contact_data.get('phone', ''),
+            'mobile_no': contact_data.get('mobile_no', ''),
+            'designation': contact_data.get('designation', ''),
+            'status': 'Open'
+        })
+        
+        # Insert the contact
+        contact_doc.insert()
+        
+        # Link the contact to the customer
+        contact_doc.append('links', {
+            'link_doctype': 'Customer',
+            'link_name': client_id
+        })
+        
+        # Save the contact with the link
+        contact_doc.save()
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'message': 'Contact created successfully',
+            'contact_id': contact_doc.name,
+            'contact_name': f"{contact_data.get('first_name', '')} {contact_data.get('last_name', '')}".strip()
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error creating client contact: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def auto_update_partition_column_configs():
+    """
+    Automatically update all partition column configs to include new columns
+    """
+    try:
+        # Get the latest column definitions from ColumnConfigManager
+        latest_columns = [
+            'client', 'task-name', 'entity', 'tf-tg', 'software', 'communication-methods', 'client-contact', 'status', 
+            'note', 'target-month', 'budget', 'actual', 'review-note', 
+            'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 
+            'engagement', 'group', 'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'
+        ]
+        
+        # Get all partitions
+        partitions = frappe.get_all('Partition', fields=['name', 'visible_columns', 'column_config'])
+        
+        updated_count = 0
+        
+        for partition in partitions:
+            try:
+                import json
+                
+                # Parse current configuration
+                current_visible = json.loads(partition.visible_columns) if partition.visible_columns else []
+                current_config = json.loads(partition.column_config) if partition.column_config else {}
+                
+                # Check if we need to add new columns
+                new_columns_to_add = []
+                for col in ['communication-methods', 'client-contact']:
+                    if col not in current_visible:
+                        new_columns_to_add.append(col)
+                
+                if new_columns_to_add:
+                    # Add new columns after 'software' column
+                    updated_visible = current_visible.copy()
+                    
+                    # Find the position of 'software' column
+                    software_index = -1
+                    try:
+                        software_index = updated_visible.index('software')
+                    except ValueError:
+                        # If 'software' not found, add at the end
+                        software_index = len(updated_visible) - 1
+                    
+                    # Insert new columns after software
+                    insert_position = software_index + 1
+                    for i, col in enumerate(new_columns_to_add):
+                        updated_visible.insert(insert_position + i, col)
+                    
+                    # Update column order in config
+                    if 'column_order' not in current_config:
+                        current_config['column_order'] = updated_visible.copy()
+                    else:
+                        # Update column order to match visible columns
+                        config_order = current_config['column_order'].copy()
+                        for col in new_columns_to_add:
+                            if col not in config_order:
+                                # Insert after software in column order too
+                                try:
+                                    software_order_index = config_order.index('software')
+                                    config_order.insert(software_order_index + 1, col)
+                                except ValueError:
+                                    config_order.append(col)
+                        current_config['column_order'] = config_order
+                    
+                    # Update the partition document
+                    partition_doc = frappe.get_doc('Partition', partition.name)
+                    partition_doc.visible_columns = json.dumps(updated_visible)
+                    partition_doc.column_config = json.dumps(current_config)
+                    partition_doc.save()
+                    
+                    updated_count += 1
+                    
+                    frappe.logger().info(f"Updated partition '{partition.name}' with new columns: {new_columns_to_add}")
+                
+            except Exception as e:
+                frappe.log_error(f"Error updating partition {partition.name}: {str(e)}")
+                continue
+        
+        if updated_count > 0:
+            frappe.db.commit()
+        
+        return {
+            'success': True,
+            'message': f'Successfully updated {updated_count} partitions with new column configurations',
+            'updated_count': updated_count,
+            'total_partitions': len(partitions)
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error in auto_update_partition_column_configs: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def sync_all_partition_columns():
+    """
+    Sync all partition columns with the latest column definitions
+    This is a more comprehensive update that ensures all partitions have the latest column structure
+    """
+    try:
+        # Get the complete latest column definitions
+        latest_columns = [
+            'client', 'task-name', 'entity', 'tf-tg', 'software', 'communication-methods', 'client-contact', 'status', 
+            'note', 'target-month', 'budget', 'actual', 'review-note', 
+            'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 
+            'engagement', 'group', 'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'
+        ]
+        
+        # Get all partitions
+        partitions = frappe.get_all('Partition', fields=['name', 'partition_name'])
+        
+        updated_count = 0
+        
+        for partition in partitions:
+            try:
+                import json
+                
+                # Update the partition with latest column structure
+                partition_doc = frappe.get_doc('Partition', partition.name)
+                
+                # Set the latest visible columns
+                partition_doc.visible_columns = json.dumps(latest_columns)
+                
+                # Set the latest column config
+                column_config = {
+                    'column_order': latest_columns.copy()
+                }
+                partition_doc.column_config = json.dumps(column_config)
+                
+                partition_doc.save()
+                updated_count += 1
+                
+                frappe.logger().info(f"Synced partition '{partition.partition_name}' ({partition.name}) with latest columns")
+                
+            except Exception as e:
+                frappe.log_error(f"Error syncing partition {partition.name}: {str(e)}")
+                continue
+        
+        if updated_count > 0:
+            frappe.db.commit()
+        
+        return {
+            'success': True,
+            'message': f'Successfully synced {updated_count} partitions with latest column structure',
+            'updated_count': updated_count,
+            'total_partitions': len(partitions),
+            'latest_columns': latest_columns
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error in sync_all_partition_columns: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
 
 @frappe.whitelist()
 def update_task_comment(comment_id, new_content):

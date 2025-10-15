@@ -916,6 +916,8 @@ class FilterManager {
                 'entity': 'Entity',
                 'tf-tg': 'TF/TG',
                 'software': 'Software',
+                'communication-methods': 'Communication Methods',
+                'client-contact': 'Client Contact',
                 'status': 'Status',
                 'target-month': 'Target Month',
                 'budget': 'Budget',

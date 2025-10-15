@@ -88,6 +88,14 @@ class EditorsManager {
                 if (window.SoftwareSelectorManager) {
                     window.SoftwareSelectorManager.showSoftwareSelector($(e.currentTarget), taskId, fieldName);
                 }
+            } else if (fieldType === 'communication_methods_selector') {
+                if (window.CommunicationMethodsSelectorManager) {
+                    window.CommunicationMethodsSelectorManager.showCommunicationMethodsSelector($(e.currentTarget), taskId, fieldName);
+                }
+            } else if (fieldType === 'client_contact_selector') {
+                if (window.ClientContactSelectorManager) {
+                    window.ClientContactSelectorManager.showClientContactSelector($(e.currentTarget), taskId, fieldName);
+                }
             } else if (fieldType === 'date') {
                 // Date fields directly show date picker, never text editor
                 console.log('📅 Opening date picker for:', fieldName);
@@ -117,7 +125,7 @@ class EditorsManager {
         const fieldType = $cell.data('field-type');
         
         // Don't allow text editing for special selector fields and date fields
-        if (fieldType === 'person_selector' || fieldType === 'software_selector' || fieldType === 'date') {
+        if (fieldType === 'person_selector' || fieldType === 'software_selector' || fieldType === 'communication_methods_selector' || fieldType === 'client_contact_selector' || fieldType === 'date') {
             // Date fields should use the date picker, not text editing
             if (fieldType === 'date') {
                 this.showDatePicker($cell, taskId, field);
