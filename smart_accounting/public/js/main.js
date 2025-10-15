@@ -706,9 +706,47 @@ $(document).ready(function() {
     console.log('Project Management interface initialized');
     
     // 开发者工具：在控制台中提供列配置更新功能
-    if (frappe.user.has_role('System Manager')) {
-        console.log('🔧 开发者工具已加载：');
-        console.log('   使用 ColumnUpdater.updateAllPartitionsWithProcessDate() 来更新所有Partition配置');
+    // 安全检查frappe.user是否已初始化
+    if (frappe && frappe.user && typeof frappe.user.has_role === 'function') {
+        try {
+            if (frappe.user.has_role('System Manager')) {
+                console.log('🔧 开发者工具已加载：');
+                console.log('   使用 ColumnUpdater.updateAllPartitionsWithProcessDate() 来更新所有Partition配置');
+                
+                // 添加Process Date列调试功能
+                window.debugProcessDate = function() {
+                    console.log('🔍 调试Process Date列状态：');
+                    
+                    // 检查DOM元素
+                    const headers = document.querySelectorAll('.pm-header-cell[data-column="process-date"]');
+                    const cells = document.querySelectorAll('.pm-cell-process-date');
+                    console.log(`找到 ${headers.length} 个表头，${cells.length} 个数据单元格`);
+                    
+                    // 检查CSS样式
+                    if (headers.length > 0) {
+                        const style = window.getComputedStyle(headers[0]);
+                        console.log(`表头样式 - display: ${style.display}, visibility: ${style.visibility}`);
+                    }
+                    
+                    // 强制显示Process Date列
+                    headers.forEach(h => {
+                        h.style.display = 'flex';
+                        h.classList.remove('column-hidden');
+                    });
+                    cells.forEach(c => {
+                        c.style.display = 'flex';
+                        c.classList.remove('column-hidden');
+                    });
+                    
+                    console.log('✅ 已强制显示Process Date列');
+                };
+                
+                console.log('   使用 debugProcessDate() 来调试Process Date列显示问题');
+            }
+        } catch (e) {
+            // 静默处理权限检查错误
+            console.log('🔧 开发者工具已加载（权限检查跳过）');
+        }
     }
 });
 

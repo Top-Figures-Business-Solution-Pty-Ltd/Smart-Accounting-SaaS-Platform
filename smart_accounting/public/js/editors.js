@@ -33,10 +33,10 @@ class EditorsManager {
                             this.metaCache.set(cacheKey, {
                                 options: response.message.options,
                                 timestamp: Date.now()
-                            });
-                        }
-                    }
                 });
+            }
+        }
+    });
             });
             console.debug('📦 Preloading field options for better performance');
         }, 1000); // Delay 1 second to not interfere with page load
@@ -181,37 +181,36 @@ class EditorsManager {
             // Focus the input
             const $input = $cell.find('input, select, textarea');
             $input.focus();
-        }
-        
-        // For date inputs, trigger click to show date picker
-        if (fieldType === 'date' && $input.attr('type') === 'date') {
-            // Force English locale for date picker
-            $input.attr('lang', 'en-US');
-            $input.css('color-scheme', 'light');
             
-            setTimeout(() => {
-                try {
-                    // Try different methods to trigger date picker
-                    if ($input[0].showPicker) {
-                        $input[0].showPicker();
-                    } else {
-                        // Fallback: trigger click event
-                        $input[0].click();
+            // For date inputs, trigger click to show date picker
+            if (fieldType === 'date' && $input.attr('type') === 'date') {
+                // Force English locale for date picker
+                $input.attr('lang', 'en-US');
+                $input.css('color-scheme', 'light');
+                
+                setTimeout(() => {
+                    try {
+                        // Try different methods to trigger date picker
+                        if ($input[0].showPicker) {
+                            $input[0].showPicker();
+                        } else {
+                            // Fallback: trigger click event
+                            $input[0].click();
+                            $input[0].focus();
+                        }
+                    } catch (e) {
+                        // Just focus the input
                         $input[0].focus();
                     }
-                } catch (e) {
-                    // Just focus the input
-                    $input[0].focus();
-                }
-            }, 150);
-        }
-        
-        // Handle save/cancel - special handling for note fields
-        if (field === 'custom_note') {
-            this.bindNoteEditorEvents($input, $cell, taskId, field, currentValue, fieldType);
-        } else {
-            // Original logic for other fields
-            $input.on('blur keydown', (e) => {
+                }, 150);
+            }
+            
+            // Handle save/cancel - special handling for note fields
+            if (field === 'custom_note') {
+                this.bindNoteEditorEvents($input, $cell, taskId, field, currentValue, fieldType);
+            } else {
+                // Original logic for other fields
+                $input.on('blur keydown', (e) => {
                 if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== 'Escape') return;
                 
                 if (e.key === 'Escape') {
@@ -229,6 +228,7 @@ class EditorsManager {
                     this.saveEdit($cell, taskId, field, valueToSave, fieldType);
                 }
             });
+        }
         }
     }
 
