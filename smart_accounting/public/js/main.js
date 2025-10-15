@@ -260,7 +260,18 @@ class ProjectManagement {
         // This handler is for text fields with .editable-field class
         $(document).on('click', '.editable-field', (e) => {
             e.stopPropagation();
-            this.editorsManager.startFieldEditing(e.currentTarget);
+            
+            // Check if this is a note field - use the new floating editor system
+            const $cell = $(e.currentTarget).closest('.pm-cell');
+            const fieldName = $cell.data('field');
+            
+            if (fieldName === 'custom_note') {
+                // For note fields, trigger the cell-level editor instead
+                this.editorsManager.makeEditable($cell[0]);
+            } else {
+                // For other fields, use the original system
+                this.editorsManager.startFieldEditing(e.currentTarget);
+            }
         });
         
         // Note: Person selector and other special fields are handled by 

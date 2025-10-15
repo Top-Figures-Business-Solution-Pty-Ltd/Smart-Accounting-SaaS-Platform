@@ -149,18 +149,39 @@ class EditorsManager {
                 editor = this.createCurrencyEditor($cell, currentValue);
                 break;
             case 'text':
-                editor = this.createTextEditor($cell, currentValue);
+                // Check if this is a note field for special handling
+                if (field === 'custom_note') {
+                    editor = this.createNoteEditor($cell, currentValue);
+                } else {
+                    editor = this.createTextEditor($cell, currentValue);
+                }
                 break;
             default:
                 editor = this.createTextEditor($cell, currentValue);
         }
         
-        // Replace content with editor
-        $cell.html(editor);
-        
-        // Focus the input
-        const $input = $cell.find('input, select');
-        $input.focus();
+        // For note fields, create floating editor and placeholder
+        if (field === 'custom_note') {
+            // Create placeholder in the cell
+            $cell.html('<div class="pm-note-editing-placeholder"><i class="fa fa-edit"></i> Editing note...</div>');
+            
+            // Create floating editor
+            const $floatingEditor = $(editor);
+            $('body').append($floatingEditor);
+            
+            // Setup note editor behavior
+            this.setupNoteEditorBehavior($cell, $floatingEditor);
+            
+            // Focus the floating editor
+            $floatingEditor.focus();
+        } else {
+            // Replace content with editor for other fields
+            $cell.html(editor);
+            
+            // Focus the input
+            const $input = $cell.find('input, select, textarea');
+            $input.focus();
+        }
         
         // For date inputs, trigger click to show date picker
         if (fieldType === 'date' && $input.attr('type') === 'date') {
@@ -185,25 +206,30 @@ class EditorsManager {
             }, 150);
         }
         
-        // Handle save/cancel
-        $input.on('blur keydown', (e) => {
-            if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== 'Escape') return;
-            
-            if (e.key === 'Escape') {
-                this.cancelEdit($cell, currentValue, fieldType);
-            } else {
-                let valueToSave = $input.val();
+        // Handle save/cancel - special handling for note fields
+        if (field === 'custom_note') {
+            this.bindNoteEditorEvents($input, $cell, taskId, field, currentValue, fieldType);
+        } else {
+            // Original logic for other fields
+            $input.on('blur keydown', (e) => {
+                if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== 'Escape') return;
                 
-                // For select fields, get the backend value
-                if (fieldType === 'select' && $input.is('select')) {
-                    const selectedOption = $input.find('option:selected');
-                    const backendValue = selectedOption.data('backend-value');
-                    valueToSave = backendValue || valueToSave;
+                if (e.key === 'Escape') {
+                    this.cancelEdit($cell, currentValue, fieldType);
+                } else {
+                    let valueToSave = $input.val();
+                    
+                    // For select fields, get the backend value
+                    if (fieldType === 'select' && $input.is('select')) {
+                        const selectedOption = $input.find('option:selected');
+                        const backendValue = selectedOption.data('backend-value');
+                        valueToSave = backendValue || valueToSave;
+                    }
+                    
+                    this.saveEdit($cell, taskId, field, valueToSave, fieldType);
                 }
-                
-                this.saveEdit($cell, taskId, field, valueToSave, fieldType);
-            }
-        });
+            });
+        }
     }
 
     createSelectEditor($cell, currentValue) {
@@ -250,6 +276,264 @@ class EditorsManager {
     createTextEditor($cell, currentValue) {
         const cleanValue = currentValue === '-' ? '' : currentValue;
         return `<input type="text" class="pm-inline-input" value="${cleanValue}" placeholder="Enter text">`;
+    }
+
+    createNoteEditor($cell, currentValue) {
+        const cleanValue = currentValue === '-' ? '' : currentValue;
+        
+        // Calculate optimal size for Monday.com style expansion
+        const contentLength = cleanValue.length;
+        
+        // Always create a generous size for better UX - Monday.com style
+        let optimalWidth = Math.max(350, Math.min(600, contentLength * 7 + 150));
+        let optimalHeight = Math.max(100, Math.min(250, Math.ceil(contentLength / 60) * 25 + 80));
+        
+        // Create a complete floating note editor with header and close button
+        return `
+            <div class="pm-floating-note-container pm-expandable-note" 
+                 style="width: ${optimalWidth}px;">
+                <div class="pm-floating-note-header">
+                    <span class="pm-floating-note-title">📝 Edit Note</span>
+                    <button class="pm-floating-note-close" type="button">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+                <textarea class="pm-floating-note-textarea" 
+                          style="height: ${optimalHeight}px; min-height: 80px;"
+                          placeholder="Enter your note here...">${cleanValue}</textarea>
+                <div class="pm-floating-note-footer">
+                    <span class="pm-floating-note-hint">💡 Ctrl+Enter to save • Esc to cancel</span>
+                    <div class="pm-floating-note-actions">
+                        <button class="pm-btn pm-btn-secondary pm-floating-note-cancel" type="button">Cancel</button>
+                        <button class="pm-btn pm-btn-primary pm-floating-note-save" type="button">
+                            <i class="fa fa-check"></i> Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    setupNoteEditorBehavior($cell, $floatingContainer) {
+        // Find the textarea within the floating container
+        const $textarea = $floatingContainer.find('.pm-floating-note-textarea');
+        const originalValue = $textarea.val() || '';
+        
+        // Add expanded class to cell for styling
+        $cell.addClass('pm-note-editing');
+        
+        // Position the floating container
+        this.positionFloatingNoteEditor($cell, $floatingContainer);
+        
+        // Auto-resize functionality for textarea
+        this.setupTextareaAutoResize($textarea);
+        
+        // Bind all events for the floating editor
+        this.bindFloatingNoteEvents($cell, $floatingContainer, $textarea, originalValue);
+    }
+
+    setupTextareaAutoResize($textarea) {
+        // Auto-resize textarea based on content for floating note editors
+        const autoResize = () => {
+            $textarea[0].style.height = 'auto';
+            const scrollHeight = $textarea[0].scrollHeight;
+            
+            // Generous sizing for floating note editors
+            const newHeight = Math.max(80, Math.min(300, scrollHeight + 20));
+            $textarea[0].style.height = newHeight + 'px';
+            
+            // Also adjust container width if content is very long
+            const contentLength = $textarea.val().length;
+            const $container = $textarea.closest('.pm-floating-note-container');
+            
+            if (contentLength > 200) {
+                const newWidth = Math.max(400, Math.min(700, contentLength * 4 + 250));
+                $container.css('width', newWidth + 'px');
+            }
+        };
+        
+        // Initial resize
+        setTimeout(autoResize, 10);
+        
+        // Resize on input
+        $textarea.on('input', autoResize);
+    }
+
+    setupInputToTextareaConversion($input, $cell) {
+        // Convert input to textarea if content gets long
+        $input.on('input', () => {
+            const content = $input.val();
+            if (content.length > 50 && $input.is('input')) {
+                // Convert to textarea
+                const $textarea = $(`<textarea class="pm-inline-textarea pm-note-editor" 
+                                        style="width: ${Math.min(500, content.length * 8 + 100)}px; min-height: 32px;"
+                                        placeholder="Enter note...">${content}</textarea>`);
+                
+                $input.replaceWith($textarea);
+                $textarea.focus();
+                
+                // Set cursor position to end
+                const textLength = $textarea.val().length;
+                $textarea[0].setSelectionRange(textLength, textLength);
+                
+                // Setup auto-resize for the new textarea
+                this.setupTextareaAutoResize($textarea);
+                
+                // Re-bind the save/cancel events for the new textarea
+                const $cell_ref = $cell;
+                const taskId = $cell.data('task-id');
+                const field = $cell.data('field');
+                const fieldType = $cell.data('field-type');
+                const currentValue = $input.data('original-value') || '';
+                
+                $textarea.on('blur keydown', (e) => {
+                    // For note fields (textarea), only save on blur or Ctrl+Enter, not just Enter
+                    if (field === 'custom_note' && $textarea.is('textarea')) {
+                        if (e.type === 'keydown') {
+                            if (e.key === 'Escape') {
+                                this.cancelEdit($cell_ref, currentValue, fieldType);
+                                return;
+                            } else if (e.key === 'Enter' && e.ctrlKey) {
+                                // Ctrl+Enter saves for textarea
+                                let valueToSave = $textarea.val();
+                                this.saveEdit($cell_ref, taskId, field, valueToSave, fieldType);
+                                return;
+                            } else if (e.key === 'Enter') {
+                                // Regular Enter just adds new line in textarea
+                                return;
+                            } else {
+                                return; // Don't handle other keys
+                            }
+                        } else if (e.type === 'blur') {
+                            // Save on blur for textarea
+                            let valueToSave = $textarea.val();
+                            this.saveEdit($cell_ref, taskId, field, valueToSave, fieldType);
+                        }
+                    }
+                });
+            } else if (content.length > 20) {
+                // Just expand the input width
+                const newWidth = Math.max(200, Math.min(400, content.length * 8 + 50));
+                $input.css('width', newWidth + 'px');
+            }
+        });
+    }
+
+    positionFloatingNoteEditor($cell, $floatingContainer) {
+        // Get cell position relative to viewport
+        const cellRect = $cell[0].getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // Get container dimensions
+        const containerWidth = $floatingContainer.outerWidth();
+        const containerHeight = $floatingContainer.outerHeight();
+        
+        // Calculate optimal position
+        let topPosition = cellRect.top - containerHeight - 10;
+        if (topPosition < 20) {
+            // Not enough space above, position below
+            topPosition = cellRect.bottom + 10;
+            if (topPosition + containerHeight > viewportHeight - 20) {
+                // Not enough space below either, center vertically
+                topPosition = Math.max(20, (viewportHeight - containerHeight) / 2);
+            }
+        }
+        
+        // Ensure it doesn't go off the horizontal edges
+        let leftPosition = Math.max(20, Math.min(cellRect.left, viewportWidth - containerWidth - 20));
+        
+        // Apply positioning
+        $floatingContainer.css({
+            'position': 'fixed',
+            'top': topPosition + 'px',
+            'left': leftPosition + 'px',
+            'z-index': '1001'
+        });
+    }
+
+    bindFloatingNoteEvents($cell, $floatingContainer, $textarea, originalValue) {
+        const taskId = $cell.data('task-id');
+        const field = $cell.data('field');
+        const fieldType = $cell.data('field-type');
+        
+        // Save function
+        const saveNote = () => {
+            const valueToSave = $textarea.val();
+            this.saveEdit($cell, taskId, field, valueToSave, fieldType);
+        };
+        
+        // Cancel function
+        const cancelNote = () => {
+            this.cancelEdit($cell, originalValue, fieldType);
+        };
+        
+        // Textarea events
+        $textarea.on('keydown', (e) => {
+            if (e.key === 'Escape') {
+                cancelNote();
+                return;
+            } else if (e.key === 'Enter' && e.ctrlKey) {
+                saveNote();
+                return;
+            }
+        });
+        
+        // Button events
+        $floatingContainer.on('click', '.pm-floating-note-save', saveNote);
+        $floatingContainer.on('click', '.pm-floating-note-cancel', cancelNote);
+        $floatingContainer.on('click', '.pm-floating-note-close', cancelNote);
+        
+        // Outside click to save
+        setTimeout(() => {
+            $(document).on('click.floating-note', (e) => {
+                if (!$(e.target).closest('.pm-floating-note-container').length) {
+                    saveNote();
+                    $(document).off('click.floating-note');
+                }
+            });
+        }, 100);
+        
+        // Prevent container clicks from bubbling
+        $floatingContainer.on('click', (e) => {
+            e.stopPropagation();
+        });
+    }
+
+
+    addNoteEditingIndicator($cell) {
+        // Add a subtle indicator that this is an expanded note
+        const $indicator = $('<div class="pm-note-editing-indicator">📝</div>');
+        $cell.append($indicator);
+    }
+
+    cleanupNoteEditor($cell) {
+        // Remove editing classes and styles
+        $cell.removeClass('pm-note-editing');
+        $cell.css({
+            'position': '',
+            'z-index': '',
+            'overflow': ''
+        });
+        
+        // Remove indicator and placeholder
+        $cell.find('.pm-note-editing-indicator, .pm-note-editing-placeholder').remove();
+        
+        // Clean up any floating note editors
+        $('.pm-floating-note-container').remove();
+        
+        // Remove document event listeners
+        $(document).off('click.floating-note');
+        
+        // Smooth transition back to normal size
+        setTimeout(() => {
+            $cell.css({
+                'width': '',
+                'height': '',
+                'max-width': '',
+                'max-height': ''
+            });
+        }, 200);
     }
 
     async createDynamicSelectEditor($cell, currentValue, optionsSource) {
@@ -685,12 +969,24 @@ class EditorsManager {
         // Remove editing state
         $cell.removeClass('editing');
         $cell.closest('.pm-task-row').removeClass('editing');
+        
+        // Special cleanup for note editor
+        if (field === 'custom_note') {
+            this.cleanupNoteEditor($cell);
+        }
     }
 
     cancelEdit($cell, originalValue, fieldType) {
+        const field = $cell.data('field');
+        
         this.updateCellDisplay($cell, originalValue, fieldType);
         $cell.removeClass('editing');
         $cell.closest('.pm-task-row').removeClass('editing');
+        
+        // Special cleanup for note editor
+        if (field === 'custom_note') {
+            this.cleanupNoteEditor($cell);
+        }
     }
 
     updateCellDisplay($cell, value, fieldType) {
@@ -721,8 +1017,29 @@ class EditorsManager {
                     $cell.html(`<span class="pm-no-amount editable-field">-</span>`);
                 }
                 break;
+            case 'text':
+                if (field === 'custom_note') {
+                    // Special handling for note fields - use the new structure
+                    $cell.html(`
+                        <div class="pm-note-content">
+                            <span class="editable-field note-display">${value || '-'}</span>
+                        </div>
+                    `);
+                } else {
+                    $cell.html(`<span class="editable-field">${value || '-'}</span>`);
+                }
+                break;
             default:
-                $cell.html(`<span class="editable-field">${value || '-'}</span>`);
+                if (field === 'custom_note') {
+                    // Ensure note fields always use the correct structure
+                    $cell.html(`
+                        <div class="pm-note-content">
+                            <span class="editable-field note-display">${value || '-'}</span>
+                        </div>
+                    `);
+                } else {
+                    $cell.html(`<span class="editable-field">${value || '-'}</span>`);
+                }
         }
         
         // Force CSS reflow and ensure proper styling

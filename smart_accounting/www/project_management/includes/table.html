@@ -384,7 +384,9 @@
                                              data-field="custom_note"
                                              data-task-id="{{ task.task_id }}"
                                              data-field-type="text">
-                                            <span class="editable-field">{{ task.custom_note or '-' }}</span>
+                                            <div class="pm-note-content">
+                                                <span class="editable-field note-display">{{ task.custom_note or '-' }}</span>
+                                            </div>
                                         </div>
                                         <div class="pm-cell pm-cell-target-month"
                                              data-editable="true"

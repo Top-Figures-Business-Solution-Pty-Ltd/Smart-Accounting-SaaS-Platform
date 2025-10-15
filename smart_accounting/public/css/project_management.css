@@ -2101,6 +2101,264 @@
     cursor: not-allowed;
 }
 
+/* Smart Note Editor Styles - Monday.com inspired */
+.pm-note-editing {
+    position: relative !important;
+    z-index: 1000 !important;
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    border: 2px solid var(--monday-blue);
+    transition: all 0.3s ease;
+    /* Allow content to overflow the row */
+    overflow: visible !important;
+}
+
+.pm-note-editor {
+    border: none !important;
+    outline: none !important;
+    background: transparent;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.4;
+    padding: 8px 12px;
+    resize: none;
+    transition: all 0.2s ease;
+}
+
+.pm-inline-textarea.pm-note-editor {
+    min-height: 32px;
+    max-height: 200px;
+    overflow-y: auto;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+/* Floating note editor container - breaks free from row constraints */
+.pm-floating-note-container {
+    position: fixed !important;
+    z-index: 1001 !important;
+    background: white !important;
+    border: 2px solid var(--monday-blue) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15) !important;
+    min-width: 350px !important;
+    max-width: 700px !important;
+    overflow: hidden;
+}
+
+/* Floating note header */
+.pm-floating-note-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.pm-floating-note-title {
+    font-weight: 600;
+    color: var(--monday-text);
+    font-size: 14px;
+}
+
+.pm-floating-note-close {
+    background: none;
+    border: none;
+    color: var(--monday-gray);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 3px;
+    font-size: 14px;
+}
+
+.pm-floating-note-close:hover {
+    background: #e9ecef;
+    color: var(--monday-text);
+}
+
+/* Floating note textarea */
+.pm-floating-note-textarea {
+    width: 100% !important;
+    border: none !important;
+    outline: none !important;
+    background: transparent !important;
+    font-family: inherit !important;
+    font-size: 14px !important;
+    line-height: 1.5 !important;
+    padding: 16px !important;
+    resize: none !important;
+    min-height: 100px !important;
+    max-height: 300px !important;
+    overflow-y: auto;
+}
+
+.pm-floating-note-textarea:focus {
+    background: rgba(0, 115, 234, 0.02) !important;
+}
+
+/* Floating note footer */
+.pm-floating-note-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+}
+
+.pm-floating-note-hint {
+    font-size: 11px;
+    color: var(--monday-gray);
+}
+
+.pm-floating-note-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.pm-floating-note-actions .pm-btn {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 12px;
+}
+
+.pm-floating-note-actions .pm-btn-secondary {
+    background: #e9ecef;
+    color: var(--monday-text);
+}
+
+.pm-floating-note-actions .pm-btn-secondary:hover {
+    background: #dee2e6;
+}
+
+.pm-floating-note-actions .pm-btn-primary {
+    background: var(--monday-blue);
+    color: white;
+}
+
+.pm-floating-note-actions .pm-btn-primary:hover {
+    background: #0056b3;
+}
+
+.pm-note-editing-indicator {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: var(--monday-blue);
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    z-index: 1001;
+    animation: pm-note-indicator-pulse 2s infinite;
+}
+
+@keyframes pm-note-indicator-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+/* Note cell subtle hover effect - just indicate it's clickable */
+.pm-cell[data-field="custom_note"]:not(.editing) {
+    cursor: pointer;
+}
+
+.pm-cell[data-field="custom_note"]:not(.editing):hover {
+    background: rgba(0, 115, 234, 0.05);
+    border-radius: 4px;
+    transition: background 0.2s ease;
+}
+
+/* Note content container */
+.pm-note-content {
+    width: 100%;
+    min-height: 20px;
+    display: flex;
+    align-items: flex-start;
+    padding: 2px 0;
+}
+
+.pm-note-content .note-display {
+    flex: 1;
+    word-break: break-word;
+    white-space: pre-wrap;
+    line-height: 1.4;
+}
+
+/* Enhanced note display - show full content with proper wrapping */
+.pm-cell[data-field="custom_note"] .editable-field {
+    display: block;
+    min-height: 20px;
+    max-height: none;
+    overflow: visible;
+    text-overflow: ellipsis;
+    white-space: pre-wrap;
+    line-height: 1.4;
+    word-break: break-word;
+    padding: 4px 0;
+}
+
+/* Note editing placeholder */
+.pm-note-editing-placeholder {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--monday-blue);
+    font-style: italic;
+    font-size: 12px;
+    padding: 4px 8px;
+    background: rgba(0, 115, 234, 0.1);
+    border-radius: 3px;
+    animation: pm-editing-pulse 1.5s infinite;
+}
+
+@keyframes pm-editing-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+
+/* Ensure note editor appears above other cells */
+.pm-note-editing {
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
+    border: 2px solid var(--monday-blue) !important;
+    background: white !important;
+}
+
+/* Smooth transitions for note expansion */
+.pm-cell[data-field="custom_note"] {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+
+/* Improved textarea scrollbar */
+.pm-inline-textarea.pm-note-editor::-webkit-scrollbar {
+    width: 6px;
+}
+
+.pm-inline-textarea.pm-note-editor::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.pm-inline-textarea.pm-note-editor::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.pm-inline-textarea.pm-note-editor::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
 /* Fix software selector positioning */
 .pm-software-selector-modal {
     position: fixed !important;
