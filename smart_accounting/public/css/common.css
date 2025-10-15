@@ -629,18 +629,7 @@ g
     overflow: hidden;
 }
 
-/* 骨架屏样式 */
-.pm-combination-skeleton {
-    width: 100%;
-    padding: 20px;
-    opacity: 1;
-    transition: opacity 0.3s ease-out;
-}
-
-.pm-combination-skeleton.pm-hidden {
-    opacity: 0;
-    pointer-events: none;
-}
+/* 骨架屏样式已移除 - 使用增强加载系统替代 */
 
 /* 真实内容样式 - 防CLS保护 */
 .pm-combination-real-content {
@@ -678,23 +667,7 @@ g
     height: 40px;
 }
 
-.pm-skeleton-board-title {
-    height: 24px;
-    width: 200px;
-    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-    background-size: 200px 100%;
-    animation: skeleton-loading 1.5s infinite;
-    border-radius: 4px;
-}
-
-.pm-skeleton-board-badge {
-    height: 20px;
-    width: 60px;
-    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-    background-size: 200px 100%;
-    animation: skeleton-loading 1.5s infinite;
-    border-radius: 10px;
-}
+/* 骨架屏动画已移除 - 使用增强加载系统替代 */
 
 .pm-skeleton-board-table {
     width: 100%;
@@ -710,15 +683,7 @@ g
     padding: 0 16px;
 }
 
-.pm-skeleton-table-header::before {
-    content: '';
-    height: 16px;
-    width: 100%;
-    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-    background-size: 200px 100%;
-    animation: skeleton-loading 1.5s infinite;
-    border-radius: 4px;
-}
+/* 骨架屏表头动画已移除 */
 
 .pm-skeleton-table-row {
     height: 48px;
@@ -728,15 +693,7 @@ g
     padding: 0 16px;
 }
 
-.pm-skeleton-table-row::before {
-    content: '';
-    height: 16px;
-    width: 80%;
-    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-    background-size: 200px 100%;
-    animation: skeleton-loading 1.5s infinite;
-    border-radius: 4px;
-}
+/* 骨架屏行动画已移除 */
 
 /* 表格头部固定尺寸 */
 .pm-project-table-header,

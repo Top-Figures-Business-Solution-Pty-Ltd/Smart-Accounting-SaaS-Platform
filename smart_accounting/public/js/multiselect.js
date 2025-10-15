@@ -1174,8 +1174,10 @@ class MultiSelectManager {
     }
 }
 
-// Initialize MultiSelectManager globally
-window.MultiSelectManager = MultiSelectManager;
+// Initialize MultiSelectManager globally - avoid duplicate declaration
+if (!window.MultiSelectManager) {
+    window.MultiSelectManager = MultiSelectManager;
+}
 
 // Auto-initialize when DOM is ready
 $(document).ready(() => {

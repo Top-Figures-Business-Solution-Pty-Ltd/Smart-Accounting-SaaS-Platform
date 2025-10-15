@@ -316,8 +316,10 @@ class PMUtils {
     }
 }
 
-// Create global instance
-window.PMUtils = new PMUtils();
+// Create global instance - avoid duplicate declaration
+if (!window.PMUtils) {
+    window.PMUtils = new PMUtils();
+}
 
 // Export for module systems if available
 if (typeof module !== 'undefined' && module.exports) {

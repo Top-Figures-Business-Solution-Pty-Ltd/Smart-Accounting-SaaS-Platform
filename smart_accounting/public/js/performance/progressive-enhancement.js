@@ -90,8 +90,12 @@ class ProgressiveEnhancement {
         }, true);
     }
     
-    // 处理错误
+    // 处理错误 - Safe mode已禁用，仅记录错误
     handleError(type, error) {
+        // Safe mode功能已禁用 - 仅记录错误用于调试
+        console.warn(`Performance Enhancement Warning [${type}]:`, error);
+        return; // 不再激活safe mode
+        
         // Skip certain non-critical errors to prevent unnecessary safe mode activation
         const skipErrors = [
             'Cannot read properties of undefined (reading \'sources\')',
@@ -147,12 +151,19 @@ class ProgressiveEnhancement {
             this.features.set(feature, false);
         });
         
-        // 添加安全模式类
-        document.body.classList.add('pm-safe-mode');
+        // Safe mode功能已禁用
+        console.warn('🚨 Safe Mode activation requested but disabled for performance');
+        return;
+        
+        // 原safe mode代码已禁用
+        // document.body.classList.add('pm-safe-mode');
     }
     
     // 显示安全模式通知
     showSafeModeNotification() {
+        // Safe mode通知已禁用
+        return;
+        
         const notification = document.createElement('div');
         notification.className = 'pm-safe-mode-notification';
         notification.innerHTML = `

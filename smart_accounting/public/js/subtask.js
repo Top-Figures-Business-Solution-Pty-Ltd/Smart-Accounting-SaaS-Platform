@@ -950,8 +950,10 @@ class SubtaskManager {
     }
 }
 
-// Create global instance
-window.SubtaskManager = new SubtaskManager();
+// Create global instance - avoid duplicate declaration
+if (!window.SubtaskManager) {
+    window.SubtaskManager = new SubtaskManager();
+}
 
 // Export for module systems if available
 if (typeof module !== 'undefined' && module.exports) {

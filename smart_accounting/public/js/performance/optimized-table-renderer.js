@@ -53,7 +53,7 @@ class OptimizedTableRenderer {
         this.createViewport();
         this.bindEvents();
         this.setupAdaptiveRendering();
-        console.log('✅ 优化表格渲染器初始化完成');
+        // 优化表格渲染器初始化完成
     }
     
     // 设置自适应渲染
@@ -89,7 +89,7 @@ class OptimizedTableRenderer {
             this.currentConfig = newConfig;
             this.applyNewConfig();
             
-            console.log(`🔄 Adapted to ${dataCount} items with config:`, newConfig);
+            // 配置已自适应调整
         }
     }
     
@@ -171,7 +171,7 @@ class OptimizedTableRenderer {
         this.updateTotalHeight();
         this.scheduleRender();
         
-        console.log(`📊 表格数据已更新，共 ${this.data.length} 行`);
+        // 表格数据已更新
     }
 
     // 过滤数据
@@ -185,7 +185,7 @@ class OptimizedTableRenderer {
         this.updateTotalHeight();
         this.scheduleRender();
         
-        console.log(`🔍 数据过滤完成，显示 ${this.filteredData.length}/${this.data.length} 行`);
+        // 数据过滤完成
     }
 
     // 更新总高度
@@ -260,7 +260,7 @@ class OptimizedTableRenderer {
                 await this.renderVirtual();
             }
         } catch (error) {
-            console.error('❌ 表格渲染错误:', error);
+            // 表格渲染错误，使用回退方案
         } finally {
             this.isRendering = false;
         }
@@ -330,7 +330,7 @@ class OptimizedTableRenderer {
             
             return row;
         } catch (error) {
-            console.error('❌ 行渲染错误:', error, rowData);
+            // 行渲染错误，返回错误行
             return this.createErrorRow(error, index);
         }
     }
@@ -516,7 +516,7 @@ class OptimizedTableRenderer {
 
     // 清理资源
     destroy() {
-        console.log('🧹 清理优化表格渲染器资源...');
+        // 清理优化表格渲染器资源
         
         // 清理缓存
         this.rowCache.clear();

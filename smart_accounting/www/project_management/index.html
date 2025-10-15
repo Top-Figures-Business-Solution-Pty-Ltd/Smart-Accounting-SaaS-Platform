@@ -101,8 +101,10 @@
 
 {% block script %}
 <!-- 优先加载性能关键模块 -->
+<script src="/assets/smart_accounting/js/performance/loading-performance-optimizer.js"></script>
 <script src="/assets/smart_accounting/js/config/app-config.js"></script>
 <script src="/assets/smart_accounting/js/config/bulk-update-config.js"></script>
+<script src="/assets/smart_accounting/js/performance/enhanced-loading-system.js"></script>
 <script src="/assets/smart_accounting/js/performance/progressive-enhancement.js"></script>
 <script src="/assets/smart_accounting/js/performance/performance-monitor.js"></script>
 <script src="/assets/smart_accounting/js/performance/layout-preloader.js"></script>
@@ -136,8 +138,8 @@
 
 {% block style %}
     <!-- 关键CSS优先加载 - 防止CLS -->
-    <link rel="stylesheet" href="/assets/smart_accounting/css/skeleton-loader.css" media="all">
-    <link rel="stylesheet" href="/assets/smart_accounting/css/safe-mode.css" media="all">
+    <!-- skeleton-loader.css 已移除 - 使用增强加载系统 -->
+    <!-- safe-mode.css 已移除 - safe mode功能已禁用 -->
     <link rel="stylesheet" href="/assets/smart_accounting/css/system_navbar.css">
     <link rel="stylesheet" href="/assets/smart_accounting/css/common.css">
     <link rel="stylesheet" href="/assets/smart_accounting/css/workspace.css">

@@ -33,6 +33,11 @@ class ProjectManagement {
     }
 
     init() {
+        // 启动增强加载系统
+        if (window.EnhancedLoadingSystem) {
+            window.EnhancedLoadingSystem.startLoading();
+        }
+        
         // 等待布局预加载完成
         this.waitForLayoutPreload().then(() => {
             this.bindEvents();
@@ -76,7 +81,7 @@ class ProjectManagement {
                         waitTime = 200; // 小数据集快速切换
                     }
                 } catch (error) {
-                    console.warn('Could not determine data count, using default timing');
+                    // 使用默认时间
                 }
                 
                 setTimeout(resolve, waitTime);
@@ -110,7 +115,7 @@ class ProjectManagement {
                 return { data, totalCount, adaptiveUsed: response.message.adaptive_loading_used };
             }
         } catch (error) {
-            console.warn('Intelligent loading failed, using standard method:', error);
+            // 智能加载失败，使用标准方法
         }
         
         return null;
@@ -118,7 +123,7 @@ class ProjectManagement {
     
     // 启用大数据优化（增强现有功能，不破坏原有逻辑）
     enableLargeDataOptimizations(dataCount) {
-        console.log(`📊 Large dataset detected (${dataCount} items), enhancing existing components`);
+        // 大数据集检测，启用优化组件
         
         // 增强现有的表格管理器
         if (this.tableManager) {
@@ -158,7 +163,7 @@ class ProjectManagement {
         document.documentElement.classList.remove('pm-page-loading');
         document.body.classList.add('pm-loaded');
         
-        // 触发自定义事件
+        // 触发自定义事件 - 这将通知增强加载系统完成
         const event = new CustomEvent('pm:loaded', {
             detail: { timestamp: Date.now() }
         });
@@ -703,32 +708,17 @@ $(document).ready(function() {
     // Initialize project management
     window.projectManagement = new ProjectManagement();
     
-    console.log('Project Management interface initialized');
+    // Project Management interface initialized
     
-    // 开发者工具：在控制台中提供列配置更新功能
-    // 安全检查frappe.user是否已初始化
+    // 开发者工具：仅在开发环境中启用
     if (frappe && frappe.user && typeof frappe.user.has_role === 'function') {
         try {
-            if (frappe.user.has_role('System Manager')) {
-                console.log('🔧 开发者工具已加载：');
-                console.log('   使用 ColumnUpdater.updateAllPartitionsWithProcessDate() 来更新所有Partition配置');
-                
-                // 添加Process Date列调试功能
+            if (frappe.user.has_role('System Manager') && frappe.boot.developer_mode) {
+                // 开发者工具仅在开发模式下可用
                 window.debugProcessDate = function() {
-                    console.log('🔍 调试Process Date列状态：');
-                    
-                    // 检查DOM元素
                     const headers = document.querySelectorAll('.pm-header-cell[data-column="process-date"]');
                     const cells = document.querySelectorAll('.pm-cell-process-date');
-                    console.log(`找到 ${headers.length} 个表头，${cells.length} 个数据单元格`);
                     
-                    // 检查CSS样式
-                    if (headers.length > 0) {
-                        const style = window.getComputedStyle(headers[0]);
-                        console.log(`表头样式 - display: ${style.display}, visibility: ${style.visibility}`);
-                    }
-                    
-                    // 强制显示Process Date列
                     headers.forEach(h => {
                         h.style.display = 'flex';
                         h.classList.remove('column-hidden');
@@ -737,15 +727,10 @@ $(document).ready(function() {
                         c.style.display = 'flex';
                         c.classList.remove('column-hidden');
                     });
-                    
-                    console.log('✅ 已强制显示Process Date列');
                 };
-                
-                console.log('   使用 debugProcessDate() 来调试Process Date列显示问题');
             }
         } catch (e) {
-            // 静默处理权限检查错误
-            console.log('🔧 开发者工具已加载（权限检查跳过）');
+            // 权限检查失败，跳过开发者工具
         }
     }
 });
