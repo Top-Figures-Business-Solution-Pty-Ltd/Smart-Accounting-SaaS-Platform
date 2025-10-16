@@ -3576,3 +3576,322 @@
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
 }
+
+/* Dual Column Dialog Styles */
+.pm-dual-column-dialog {
+    width: 800px;
+    max-width: 95vw;
+    max-height: 85vh;
+}
+
+.pm-dual-column-dialog .pm-dialog-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.pm-dual-column-dialog .pm-dialog-header h3 {
+    flex: 1;
+}
+
+/* Base button styles for dual column dialog */
+.pm-dual-column-dialog .pm-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 12px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    background: transparent;
+    color: inherit;
+}
+
+.pm-dual-column-dialog .pm-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.pm-dual-column-dialog .pm-btn-primary {
+    background: var(--monday-blue);
+    color: white;
+    border-color: var(--monday-blue);
+}
+
+.pm-dual-column-dialog .pm-btn-primary:hover:not(:disabled) {
+    background: #0060c2;
+    border-color: #0060c2;
+}
+
+.pm-dual-column-dialog .pm-btn-secondary {
+    background: white;
+    color: #676879;
+    border-color: #e1e5e9;
+}
+
+.pm-dual-column-dialog .pm-btn-secondary:hover:not(:disabled) {
+    background: #f8f9fb;
+    border-color: #c5c7d0;
+}
+
+.pm-dual-column-dialog .pm-btn-sm {
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
+.pm-dual-column-dialog .pm-btn-xs {
+    padding: 4px 8px;
+    font-size: 11px;
+    min-width: 40px;
+    height: 24px;
+    white-space: nowrap;
+}
+
+.pm-dual-column-dialog .pm-btn-ghost {
+    background: transparent;
+    color: #676879;
+    border-color: transparent;
+}
+
+.pm-dual-column-dialog .pm-btn-ghost:hover:not(:disabled) {
+    background: #f0f1f3;
+    color: #323338;
+}
+
+.pm-dual-column-dialog .pm-btn-danger {
+    color: #d83a52;
+}
+
+.pm-dual-column-dialog .pm-btn-danger:hover:not(:disabled) {
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+.pm-dual-column-dialog .pm-btn-outline {
+    background: white;
+    border-color: #e1e5e9;
+    color: #676879;
+}
+
+.pm-dual-column-dialog .pm-btn-outline:hover:not(:disabled) {
+    background: #f8f9fb;
+    border-color: var(--monday-blue);
+    color: var(--monday-blue);
+}
+
+.pm-dual-column-container {
+    display: flex;
+    gap: 16px;
+    height: 400px;
+    margin-top: 16px;
+}
+
+.pm-column-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #e1e5e9;
+    border-radius: 6px;
+    background: #fafbfc;
+}
+
+.pm-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: #f8f9fb;
+    border-bottom: 1px solid #e1e5e9;
+    border-radius: 6px 6px 0 0;
+}
+
+.pm-panel-header h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #323338;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pm-panel-count {
+    background: var(--monday-blue);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    min-width: 20px;
+    text-align: center;
+}
+
+.pm-primary-note {
+    font-size: 11px;
+    color: #676879;
+    font-style: italic;
+}
+
+.pm-column-panel .pm-column-list {
+    flex: 1;
+    overflow-y: auto;
+    background: white;
+    border-radius: 0 0 6px 6px;
+}
+
+.pm-available-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid #f0f1f3;
+    transition: all 0.2s ease;
+}
+
+.pm-available-item:hover {
+    background: #f8f9fb;
+}
+
+.pm-available-item:last-child {
+    border-bottom: none;
+}
+
+.pm-visible-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid #f0f1f3;
+    transition: all 0.2s ease;
+    gap: 8px;
+}
+
+.pm-visible-item:hover {
+    background: #f8f9fb;
+}
+
+.pm-visible-item:last-child {
+    border-bottom: none;
+}
+
+.pm-visible-item.pm-primary-column {
+    background: rgba(0, 115, 234, 0.05);
+    border-left: 3px solid var(--monday-blue);
+}
+
+.pm-visible-item.pm-primary-column .pm-column-name {
+    color: var(--monday-blue);
+    font-weight: 600;
+}
+
+.pm-visible-item .pm-column-drag-handle {
+    color: #c5c7d0;
+    cursor: grab;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+}
+
+.pm-visible-item .pm-column-drag-handle:hover {
+    color: #676879;
+}
+
+.pm-visible-item .pm-column-drag-handle:active {
+    cursor: grabbing;
+}
+
+.pm-visible-item .pm-column-name {
+    flex: 1;
+    font-size: 13px;
+    color: #323338;
+}
+
+.pm-column-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.pm-transfer-controls {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 8px;
+}
+
+.pm-dual-column-dialog .pm-transfer-controls .pm-btn {
+    width: auto;
+    height: 36px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    min-width: 80px;
+    white-space: nowrap;
+}
+
+/* Changes pending indicator */
+.pm-changes-pending {
+    background: #ff6b35 !important;
+    border-color: #ff6b35 !important;
+    animation: pulse-orange 2s ease-in-out infinite;
+}
+
+@keyframes pulse-orange {
+    0%, 100% { 
+        box-shadow: 0 0 0 0 rgba(255, 107, 53, 0.4);
+    }
+    50% { 
+        box-shadow: 0 0 0 4px rgba(255, 107, 53, 0.1);
+    }
+}
+
+/* Responsive design for dual column dialog */
+@media (max-width: 768px) {
+    .pm-dual-column-dialog {
+        width: 95vw;
+        max-height: 90vh;
+    }
+    
+    .pm-dual-column-container {
+        flex-direction: column;
+        height: auto;
+        max-height: 500px;
+    }
+    
+    .pm-column-panel {
+        min-height: 200px;
+    }
+    
+    .pm-transfer-controls {
+        flex-direction: row;
+        justify-content: center;
+        padding: 8px 0;
+    }
+    
+    .pm-column-actions {
+        flex-wrap: wrap;
+        gap: 2px;
+    }
+    
+    .pm-dual-column-dialog .pm-btn-xs {
+        min-width: 35px;
+        height: 26px;
+        font-size: 10px;
+        padding: 3px 6px;
+    }
+    
+    .pm-dual-column-dialog .pm-transfer-controls .pm-btn {
+        min-width: 70px;
+        height: 32px;
+        font-size: 11px;
+        padding: 6px 10px;
+    }
+}

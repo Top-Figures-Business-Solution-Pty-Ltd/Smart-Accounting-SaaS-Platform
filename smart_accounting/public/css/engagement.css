@@ -680,32 +680,41 @@
 
 /* Comment Indicator Styles - Compact for client cell */
 .pm-comment-indicator {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 3px;
     font-size: 11px;
     font-weight: 500;
     cursor: pointer;
     padding: 3px 6px;
-    border-radius: 12px;
+    border-radius: 4px;
     transition: all 0.2s ease;
-    color: var(--monday-gray);
-    background: #f8f9fb;
-    border: 1px solid var(--monday-border);
-    min-width: 32px;
+    color: #6b7280;
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    min-width: 24px;
     justify-content: center;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .pm-comment-indicator:hover {
-    background: rgba(0, 115, 234, 0.05);
-    border-color: rgba(0, 115, 234, 0.2);
+    background: #f3f4f6;
+    border-color: var(--monday-blue);
     color: var(--monday-blue);
+    box-shadow: 0 2px 4px rgba(0, 115, 234, 0.1);
 }
 
 .pm-comment-indicator.has-comments {
     color: white;
     background: var(--monday-blue);
     border-color: var(--monday-blue);
+    box-shadow: 0 2px 4px rgba(0, 115, 234, 0.2);
+}
+
+.pm-comment-indicator.has-comments:hover {
+    background: #0060c2;
+    border-color: #0060c2;
+    box-shadow: 0 2px 6px rgba(0, 115, 234, 0.3);
 }
 
 .pm-comment-indicator i {

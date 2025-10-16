@@ -477,54 +477,98 @@ class FilterManager {
         // 获取当前的列顺序，如果没有则使用默认顺序
         const currentColumnOrder = config.column_config?.column_order || window.ColumnConfigManager.getDefaultColumnOrder();
 
-        // Create dialog HTML
+        // Separate visible and hidden columns
+        const hiddenColumns = currentColumnOrder.filter(col => !visibleColumns.includes(col));
+        const sortedVisibleColumns = currentColumnOrder.filter(col => visibleColumns.includes(col));
+
+        // Create dual-column dialog HTML
         const dialogHtml = `
             <div class="pm-column-management-dialog">
                 <div class="pm-dialog-overlay"></div>
-                <div class="pm-dialog-content">
+                <div class="pm-dialog-content pm-dual-column-dialog">
                     <div class="pm-dialog-header">
                         <h3><i class="fa fa-columns"></i> Manage Columns</h3>
+                        <button class="pm-btn pm-btn-ghost pm-btn-sm pm-update-columns-btn" title="Sync Latest Columns">
+                            <i class="fa fa-refresh"></i>
+                        </button>
                         <button class="pm-dialog-close" type="button">
                             <i class="fa fa-times"></i>
                         </button>
                     </div>
                     <div class="pm-dialog-body">
                         <div class="pm-dialog-description">
-                            <p>Choose which columns to display and drag to reorder them.</p>
-                            <div class="pm-column-actions" style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 4px;">
-                                <button class="pm-btn pm-btn-info pm-btn-sm pm-update-columns-btn" style="font-size: 12px;">
-                                    <i class="fa fa-refresh"></i> Sync Latest Columns
-                                </button>
-                                <small class="text-muted" style="margin-left: 10px;">
-                                    Automatically add newly available columns to current configuration
-                                </small>
-                            </div>
+                            <p>Select columns from the left panel to add them to the visible columns on the right. Drag to reorder visible columns.</p>
                         </div>
                         
-                        <div class="pm-column-list" id="pm-sortable-columns">
-                            ${currentColumnOrder.map((columnKey, index) => {
-                                const displayName = window.ColumnConfigManager.getColumnDisplayName(columnKey);
-                                const isVisible = visibleColumns.includes(columnKey);
-                                const isRequired = window.ColumnConfigManager.isRequiredColumn(columnKey);
-                                
-                                return `
-                                    <div class="pm-column-item ${isVisible ? 'visible' : 'hidden'}" 
-                                         data-column="${columnKey}" 
-                                         data-original-index="${index}">
-                                        <div class="pm-column-drag-handle" title="Drag to reorder">
-                                            <span style="font-size: 14px; color: #9ca3af;">☰</span>
-                                        </div>
-                                        <label class="pm-column-checkbox">
-                                            <input type="checkbox" ${isVisible ? 'checked' : ''} data-column="${columnKey}" ${isRequired ? 'disabled' : ''}>
-                                            <span class="checkmark"></span>
-                                            <span class="pm-column-name">${displayName}${isRequired ? ' (Required)' : ''}</span>
-                                        </label>
-                                        <div class="pm-column-status">
-                                            <i class="fa ${isVisible ? 'fa-eye' : 'fa-eye-slash'}"></i>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
+                        <div class="pm-dual-column-container">
+                            <!-- Left Panel: Available Columns -->
+                            <div class="pm-column-panel pm-available-panel">
+                                <div class="pm-panel-header">
+                                    <h4><i class="fa fa-list"></i> Available Columns</h4>
+                                    <span class="pm-panel-count">${hiddenColumns.length}</span>
+                                </div>
+                                <div class="pm-column-list" id="pm-available-columns">
+                                    ${hiddenColumns.map(columnKey => {
+                                        const displayName = window.ColumnConfigManager.getColumnDisplayName(columnKey);
+                                        const isRequired = window.ColumnConfigManager.isRequiredColumn(columnKey);
+                                        
+                                        return `
+                                            <div class="pm-column-item pm-available-item" data-column="${columnKey}">
+                                                <span class="pm-column-name">${displayName}${isRequired ? ' (Required)' : ''}</span>
+                                                <button class="pm-btn pm-btn-sm pm-btn-primary pm-add-column-btn" data-column="${columnKey}" title="Add to visible columns">
+                                                    Add
+                                                </button>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                            
+                            <!-- Center Controls -->
+                            <div class="pm-transfer-controls">
+                                <button class="pm-btn pm-btn-outline pm-add-all-btn" title="Add all columns">
+                                    Add All
+                                </button>
+                                <button class="pm-btn pm-btn-outline pm-remove-all-btn" title="Remove all non-required columns">
+                                    Remove All
+                                </button>
+                            </div>
+                            
+                            <!-- Right Panel: Visible Columns -->
+                            <div class="pm-column-panel pm-visible-panel">
+                                <div class="pm-panel-header">
+                                    <h4><i class="fa fa-eye"></i> Visible Columns</h4>
+                                    <span class="pm-panel-count">${sortedVisibleColumns.length}</span>
+                                    <small class="pm-primary-note">First column is primary</small>
+                                </div>
+                                <div class="pm-column-list" id="pm-visible-columns">
+                                    ${sortedVisibleColumns.map((columnKey, index) => {
+                                        const displayName = window.ColumnConfigManager.getColumnDisplayName(columnKey);
+                                        const isRequired = window.ColumnConfigManager.isRequiredColumn(columnKey);
+                                        const isPrimary = index === 0;
+                                        
+                                        return `
+                                            <div class="pm-column-item pm-visible-item ${isPrimary ? 'pm-primary-column' : ''}" data-column="${columnKey}">
+                                                <div class="pm-column-drag-handle" title="Drag to reorder">
+                                                    <i class="fa fa-bars"></i>
+                                                </div>
+                                                <span class="pm-column-name">${displayName}${isRequired ? ' (Required)' : ''}${isPrimary ? ' (Primary)' : ''}</span>
+                                                <div class="pm-column-actions">
+                                                    <button class="pm-btn pm-btn-xs pm-btn-ghost pm-move-up-btn" data-column="${columnKey}" title="Move up" ${index === 0 ? 'disabled' : ''}>
+                                                        Up
+                                                    </button>
+                                                    <button class="pm-btn pm-btn-xs pm-btn-ghost pm-move-down-btn" data-column="${columnKey}" title="Move down" ${index === sortedVisibleColumns.length - 1 ? 'disabled' : ''}>
+                                                        Down
+                                                    </button>
+                                                    <button class="pm-btn pm-btn-xs pm-btn-danger pm-remove-column-btn" data-column="${columnKey}" title="Remove from visible columns" ${isRequired ? 'disabled' : ''}>
+                                                        Remove
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="pm-dialog-footer">
@@ -541,36 +585,18 @@ class FilterManager {
         // Add dialog to body
         $('body').append(dialogHtml);
 
-        // 使用setTimeout确保DOM完全渲染后再初始化拖拽功能
+        // Initialize drag functionality for visible columns only
         setTimeout(() => {
-            console.log('🔍 Attempting to initialize drag functionality...');
+            console.log('🔍 Initializing dual-column drag functionality...');
             
-            // 检查DOM元素是否存在
-            const container = document.getElementById('pm-sortable-columns');
-            const items = container ? container.querySelectorAll('.pm-column-item') : [];
-            const handles = container ? container.querySelectorAll('.pm-column-drag-handle') : [];
-            
-            console.log('📊 DOM check:', {
-                container: !!container,
-                itemsCount: items.length,
-                handlesCount: handles.length,
-                DragManagerAvailable: !!window.DragManager
-            });
-            
-            // 使用专门的DragManager来处理拖拽功能
-            if (window.DragManager && container && items.length > 0) {
-                const success = window.DragManager.initializeDragSort('pm-sortable-columns', () => {
-                    this.updateColumnOrder();
+            const visibleContainer = document.getElementById('pm-visible-columns');
+            if (window.DragManager && visibleContainer) {
+                const success = window.DragManager.initializeDragSort('pm-visible-columns', () => {
+                    this.updateVisibleColumnOrder();
                 });
-                console.log('🎯 Drag initialization result:', success);
-            } else {
-                console.error('❌ Drag initialization failed:', {
-                    DragManager: !!window.DragManager,
-                    container: !!container,
-                    itemsCount: items.length
-                });
+                console.log('🎯 Visible columns drag initialization result:', success);
             }
-        }, 200); // 增加延迟时间
+        }, 200);
 
         // Bind dialog events
         this.bindColumnDialogEvents(currentView);
@@ -590,22 +616,37 @@ class FilterManager {
             e.stopPropagation();
         });
 
-        // Checkbox change events - only update visual state, don't apply to table yet
-        dialog.on('change', 'input[type="checkbox"]', (e) => {
-            const checkbox = $(e.target);
-            const columnKey = checkbox.data('column');
-            const columnItem = checkbox.closest('.pm-column-item');
-            const statusIcon = columnItem.find('.pm-column-status i');
+        // Add column to visible list
+        dialog.on('click', '.pm-add-column-btn', (e) => {
+            const columnKey = $(e.currentTarget).data('column');
+            this.moveColumnToVisible(columnKey);
+        });
 
-            if (checkbox.is(':checked')) {
-                columnItem.addClass('visible').removeClass('hidden');
-                statusIcon.removeClass('fa-eye-slash').addClass('fa-eye');
-            } else {
-                columnItem.addClass('hidden').removeClass('visible');
-                statusIcon.removeClass('fa-eye').addClass('fa-eye-slash');
-            }
-            
-            // Note: Don't apply changes to table immediately - wait for save
+        // Remove column from visible list
+        dialog.on('click', '.pm-remove-column-btn', (e) => {
+            const columnKey = $(e.currentTarget).data('column');
+            this.moveColumnToAvailable(columnKey);
+        });
+
+        // Add all columns
+        dialog.on('click', '.pm-add-all-btn', () => {
+            this.addAllColumns();
+        });
+
+        // Remove all non-required columns
+        dialog.on('click', '.pm-remove-all-btn', () => {
+            this.removeAllNonRequiredColumns();
+        });
+
+        // Move up/down buttons
+        dialog.on('click', '.pm-move-up-btn', (e) => {
+            const columnKey = $(e.currentTarget).data('column');
+            this.moveVisibleColumnUp(columnKey);
+        });
+
+        dialog.on('click', '.pm-move-down-btn', (e) => {
+            const columnKey = $(e.currentTarget).data('column');
+            this.moveVisibleColumnDown(columnKey);
         });
 
         // Update columns button
@@ -615,7 +656,7 @@ class FilterManager {
 
         // Save button
         dialog.on('click', '.pm-dialog-save', () => {
-            this.saveColumnConfiguration(currentView);
+            this.saveDualColumnConfiguration(currentView);
         });
 
         // Escape key to close
@@ -626,24 +667,243 @@ class FilterManager {
         });
     }
 
-    updateColumnOrder() {
-        // 提供拖拽排序的视觉反馈
-        console.log('🔄 Column order updated');
+    updateVisibleColumnOrder() {
+        // Update primary column highlighting and save button state
+        this.updatePrimaryColumnHighlight();
+        this.markChangesAsPending();
+        console.log('🔄 Visible column order updated');
+    }
+
+    // Dual Column Management Methods
+    moveColumnToVisible(columnKey) {
+        const $availableItem = $(`.pm-available-item[data-column="${columnKey}"]`);
+        const $visibleContainer = $('#pm-visible-columns');
         
-        // 获取当前顺序
-        const currentOrder = window.DragManager ? window.DragManager.getCurrentOrder() : [];
-        console.log('📋 Current order:', currentOrder);
+        if ($availableItem.length) {
+            // Remove from available
+            $availableItem.remove();
+            
+            // Add to visible at the end
+            const displayName = window.ColumnConfigManager.getColumnDisplayName(columnKey);
+            const isRequired = window.ColumnConfigManager.isRequiredColumn(columnKey);
+            const visibleCount = $visibleContainer.find('.pm-visible-item').length;
+            
+            const newItem = `
+                <div class="pm-column-item pm-visible-item" data-column="${columnKey}">
+                    <div class="pm-column-drag-handle" title="Drag to reorder">
+                        <i class="fa fa-bars"></i>
+                    </div>
+                    <span class="pm-column-name">${displayName}${isRequired ? ' (Required)' : ''}</span>
+                    <div class="pm-column-actions">
+                        <button class="pm-btn pm-btn-xs pm-btn-ghost pm-move-up-btn" data-column="${columnKey}" title="Move up" ${visibleCount === 0 ? 'disabled' : ''}>
+                            Up
+                        </button>
+                        <button class="pm-btn pm-btn-xs pm-btn-ghost pm-move-down-btn" data-column="${columnKey}" title="Move down">
+                            Down
+                        </button>
+                        <button class="pm-btn pm-btn-xs pm-btn-danger pm-remove-column-btn" data-column="${columnKey}" title="Remove from visible columns" ${isRequired ? 'disabled' : ''}>
+                            Remove
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            $visibleContainer.append(newItem);
+            this.updatePanelCounts();
+            this.updatePrimaryColumnHighlight();
+            this.updateMoveButtons();
+            this.markChangesAsPending();
+        }
+    }
+
+    moveColumnToAvailable(columnKey) {
+        const $visibleItem = $(`.pm-visible-item[data-column="${columnKey}"]`);
+        const $availableContainer = $('#pm-available-columns');
         
-        // 显示保存提示
+        if ($visibleItem.length) {
+            // Remove from visible
+            $visibleItem.remove();
+            
+            // Add to available
+            const displayName = window.ColumnConfigManager.getColumnDisplayName(columnKey);
+            const isRequired = window.ColumnConfigManager.isRequiredColumn(columnKey);
+            
+            const newItem = `
+                <div class="pm-column-item pm-available-item" data-column="${columnKey}">
+                    <span class="pm-column-name">${displayName}${isRequired ? ' (Required)' : ''}</span>
+                    <button class="pm-btn pm-btn-sm pm-btn-primary pm-add-column-btn" data-column="${columnKey}" title="Add to visible columns">
+                        Add
+                    </button>
+                </div>
+            `;
+            
+            $availableContainer.append(newItem);
+            this.updatePanelCounts();
+            this.updatePrimaryColumnHighlight();
+            this.updateMoveButtons();
+            this.markChangesAsPending();
+        }
+    }
+
+    addAllColumns() {
+        $('.pm-add-column-btn').each((index, btn) => {
+            const columnKey = $(btn).data('column');
+            this.moveColumnToVisible(columnKey);
+        });
+    }
+
+    removeAllNonRequiredColumns() {
+        $('.pm-remove-column-btn:not(:disabled)').each((index, btn) => {
+            const columnKey = $(btn).data('column');
+            this.moveColumnToAvailable(columnKey);
+        });
+    }
+
+    moveVisibleColumnUp(columnKey) {
+        const $item = $(`.pm-visible-item[data-column="${columnKey}"]`);
+        const $prev = $item.prev('.pm-visible-item');
+        
+        if ($prev.length) {
+            $item.detach().insertBefore($prev);
+            this.updatePrimaryColumnHighlight();
+            this.updateMoveButtons();
+            this.markChangesAsPending();
+        }
+    }
+
+    moveVisibleColumnDown(columnKey) {
+        const $item = $(`.pm-visible-item[data-column="${columnKey}"]`);
+        const $next = $item.next('.pm-visible-item');
+        
+        if ($next.length) {
+            $item.detach().insertAfter($next);
+            this.updatePrimaryColumnHighlight();
+            this.updateMoveButtons();
+            this.markChangesAsPending();
+        }
+    }
+
+    updatePanelCounts() {
+        const availableCount = $('#pm-available-columns .pm-available-item').length;
+        const visibleCount = $('#pm-visible-columns .pm-visible-item').length;
+        
+        $('.pm-available-panel .pm-panel-count').text(availableCount);
+        $('.pm-visible-panel .pm-panel-count').text(visibleCount);
+    }
+
+    updatePrimaryColumnHighlight() {
+        // Remove existing primary highlighting
+        $('.pm-visible-item').removeClass('pm-primary-column');
+        $('.pm-visible-item .pm-column-name').each(function() {
+            $(this).text($(this).text().replace(' (Primary)', ''));
+        });
+        
+        // Add primary highlighting to first item
+        const $firstItem = $('#pm-visible-columns .pm-visible-item').first();
+        if ($firstItem.length) {
+            $firstItem.addClass('pm-primary-column');
+            const $name = $firstItem.find('.pm-column-name');
+            if (!$name.text().includes('(Primary)')) {
+                $name.text($name.text() + ' (Primary)');
+            }
+        }
+    }
+
+    updateMoveButtons() {
+        // Update up/down button states
+        $('#pm-visible-columns .pm-visible-item').each(function(index, item) {
+            const $item = $(item);
+            const $upBtn = $item.find('.pm-move-up-btn');
+            const $downBtn = $item.find('.pm-move-down-btn');
+            const totalItems = $('#pm-visible-columns .pm-visible-item').length;
+            
+            $upBtn.prop('disabled', index === 0);
+            $downBtn.prop('disabled', index === totalItems - 1);
+        });
+    }
+
+    markChangesAsPending() {
         const $saveBtn = $('.pm-dialog-save');
         if (!$saveBtn.hasClass('pm-changes-pending')) {
             $saveBtn.addClass('pm-changes-pending')
                 .text('Save Changes *')
-                .attr('title', 'Column order has been changed');
+                .attr('title', 'Changes have been made');
+        }
+    }
+
+    saveDualColumnConfiguration(currentView) {
+        // Get visible columns in order
+        const visibleColumns = [];
+        const columnOrder = [];
+        
+        $('#pm-visible-columns .pm-visible-item').each(function() {
+            const columnKey = $(this).data('column');
+            visibleColumns.push(columnKey);
+            columnOrder.push(columnKey);
+        });
+        
+        // Add hidden columns to maintain complete order
+        $('#pm-available-columns .pm-available-item').each(function() {
+            const columnKey = $(this).data('column');
+            columnOrder.push(columnKey);
+        });
+        
+        // Validate configuration
+        const validation = window.ColumnConfigManager.validateColumnConfig(visibleColumns, columnOrder);
+        if (!validation.isValid) {
+            frappe.show_alert({
+                message: `❌ Configuration error: ${validation.errors.join(', ')}`,
+                indicator: 'red'
+            }, 8);
+            return;
         }
         
-        // 更新拖拽句柄的提示文本
-        $('.pm-column-drag-handle').attr('title', 'Drag to reorder (changes will be saved when you click Save Changes)');
+        // Save configuration
+        frappe.call({
+            method: 'smart_accounting.www.project_management.index.save_partition_column_config',
+            args: {
+                partition_name: currentView,
+                visible_columns: visibleColumns,
+                column_config: {
+                    column_order: columnOrder,
+                    primary_column: visibleColumns[0] || 'client'
+                }
+            },
+            callback: (response) => {
+                if (response && response.message && response.message.success) {
+                    frappe.show_alert({
+                        message: '✅ Column configuration saved successfully',
+                        indicator: 'green'
+                    }, 3);
+                    
+                    // Apply configuration to current table
+                    if (window.TableManager) {
+                        window.TableManager.applyColumnConfiguration({
+                            visible_columns: visibleColumns,
+                            column_config: {
+                                column_order: columnOrder,
+                                primary_column: visibleColumns[0] || 'client'
+                            }
+                        });
+                    }
+                    
+                    this.closeColumnDialog();
+                } else {
+                    const errorMsg = response.message?.error || 'Save failed';
+                    frappe.show_alert({
+                        message: `❌ Save failed: ${errorMsg}`,
+                        indicator: 'red'
+                    }, 8);
+                }
+            },
+            error: (error) => {
+                console.error('Save error:', error);
+                frappe.show_alert({
+                    message: '❌ Network error or server error',
+                    indicator: 'red'
+                }, 8);
+            }
+        });
     }
 
     saveColumnConfiguration(currentView) {
