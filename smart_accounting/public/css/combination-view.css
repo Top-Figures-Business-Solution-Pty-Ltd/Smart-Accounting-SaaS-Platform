@@ -771,21 +771,74 @@
     color: #007bff;
 }
 
-/* Subtask toggle styling */
+/* Subtask toggle styling - 统一文字标签设计，固定宽度保持对齐 */
 .pm-combination-task-row .pm-subtask-toggle {
-    background: none;
-    border: none;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
     color: #6c757d;
     cursor: pointer;
-    padding: 4px;
-    border-radius: 3px;
+    padding: 3px 8px;
+    border-radius: 12px;
     transition: all 0.2s ease;
-    font-size: 12px;
+    font-size: 11px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0; /* 默认隐藏 */
+    width: 50px; /* 固定宽度，足够容纳两位数子任务 */
+    min-width: 50px;
+    max-width: 50px;
+    font-weight: 500;
+    white-space: nowrap;
+    gap: 2px; /* 减少间距以适应固定宽度 */
+    overflow: hidden; /* 防止内容溢出 */
+    text-overflow: ellipsis;
+}
+
+/* 当行被hover时显示 */
+.pm-combination-task-row:hover .pm-subtask-toggle:not(.has-subtasks) {
+    opacity: 1;
+    color: #6c757d;
 }
 
 .pm-combination-task-row .pm-subtask-toggle:hover {
-    background-color: rgba(0, 123, 255, 0.1);
-    color: #007bff;
+    background: #e3f2fd;
+    border-color: var(--monday-blue);
+    color: var(--monday-blue);
+    opacity: 1;
+    box-shadow: 0 2px 4px rgba(0, 115, 234, 0.1);
+}
+
+/* 有子任务时始终显示，使用蓝色样式 */
+.pm-combination-task-row .pm-subtask-toggle.has-subtasks {
+    opacity: 1 !important;
+    background: var(--monday-blue);
+    color: white;
+    border-color: var(--monday-blue);
+    box-shadow: 0 2px 4px rgba(0, 115, 234, 0.2);
+}
+
+.pm-combination-task-row .pm-subtask-toggle.has-subtasks:hover {
+    background: #0060c2;
+    border-color: #0060c2;
+    box-shadow: 0 2px 6px rgba(0, 115, 234, 0.3);
+}
+
+/* 展开状态的视觉指示 */
+.pm-combination-task-row .pm-subtask-toggle.expanded {
+    background: #1976d2;
+}
+
+/* 子任务数量和指示器 */
+.pm-combination-task-row .pm-subtask-toggle .pm-subtask-count {
+    font-weight: 600;
+    margin-right: 2px;
+}
+
+.pm-combination-task-row .pm-subtask-toggle .pm-expand-indicator {
+    font-size: 9px;
+    margin-left: 2px;
 }
 
 /* Date display styling */

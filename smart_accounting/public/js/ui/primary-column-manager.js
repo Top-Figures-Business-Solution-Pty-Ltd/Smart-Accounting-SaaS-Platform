@@ -142,9 +142,14 @@ class PrimaryColumnManager {
         const $subtaskButton = $fromCell.find('.pm-subtask-toggle');
         const $commentIndicator = $fromCell.find('.pm-comment-indicator');
         
+        // 提取子任务数量
+        const subtaskCountText = $subtaskButton.find('.pm-subtask-count').text() || '0';
+        const subtaskCount = parseInt(subtaskCountText) || 0;
+        
         const buttonState = {
             subtaskState: $subtaskButton.hasClass('expanded') ? 'expanded' : 'collapsed',
             hasSubtasks: $subtaskButton.hasClass('has-subtasks'),
+            subtaskCount: subtaskCount,
             commentCount: $commentIndicator.find('.pm-comment-count').text() || '0'
         };
 
@@ -226,7 +231,7 @@ class PrimaryColumnManager {
                 <div class="pm-client-comments">
                     <div class="pm-comment-indicator" data-task-id="${taskId}" title="Click to view or add comments">
                         <i class="fa fa-comment-o"></i>
-                        <span class="pm-comment-count" style="display: none;">${state.commentCount || '0'}</span>
+                        <span class="pm-comment-count">${state.commentCount || '0'}</span>
                     </div>
                 </div>
             `);
@@ -242,7 +247,7 @@ class PrimaryColumnManager {
                 <div class="pm-column-comments">
                     <div class="pm-comment-indicator" data-task-id="${taskId}" title="Click to view or add comments">
                         <i class="fa fa-comment-o"></i>
-                        <span class="pm-comment-count" style="display: none;">${state.commentCount || '0'}</span>
+                        <span class="pm-comment-count">${state.commentCount || '0'}</span>
                     </div>
                 </div>
             `);
@@ -266,12 +271,43 @@ class PrimaryColumnManager {
      * @returns {string} 按钮HTML
      */
     generateFunctionalButtonsHtml(taskId, state = {}) {
+        const hasSubtasks = state.hasSubtasks;
+        const subtaskCount = state.subtaskCount || 0;
+        const isExpanded = state.subtaskState === 'expanded';
+        
+        let buttonText, title;
+        
+        if (hasSubtasks) {
+            // 有子任务时显示数量 - 优化显示以适应固定宽度
+            if (subtaskCount >= 100) {
+                buttonText = `<span class="pm-subtask-count">99+</span>`;
+            } else if (subtaskCount >= 10) {
+                buttonText = `<span class="pm-subtask-count">${subtaskCount}</span>`;
+            } else {
+                buttonText = `<span class="pm-subtask-count">${subtaskCount}</span>Sub`;
+            }
+            
+            if (isExpanded) {
+                buttonText += '<span class="pm-expand-indicator">▼</span>';
+                title = `Hide ${subtaskCount} subtask${subtaskCount !== 1 ? 's' : ''}`;
+            } else {
+                buttonText += '<span class="pm-expand-indicator">▶</span>';
+                title = `Show ${subtaskCount} subtask${subtaskCount !== 1 ? 's' : ''}`;
+            }
+        } else {
+            // 无子任务时显示添加提示
+            buttonText = '+ Sub';
+            title = 'Click to add subtask';
+        }
+        
         return `
-            <button class="pm-subtask-toggle ${state.subtaskState === 'expanded' ? 'expanded' : ''} ${state.hasSubtasks ? 'has-subtasks' : ''}" 
-                    data-task-id="${taskId}" 
-                    title="Show/hide subtasks">
-                <i class="fa fa-chevron-right"></i>
-            </button>
+            <div class="pm-subtask-button-container">
+                <button class="pm-subtask-toggle ${isExpanded ? 'expanded' : ''} ${hasSubtasks ? 'has-subtasks' : ''}" 
+                        data-task-id="${taskId}" 
+                        title="${title}">
+                    ${buttonText}
+                </button>
+            </div>
         `;
     }
 

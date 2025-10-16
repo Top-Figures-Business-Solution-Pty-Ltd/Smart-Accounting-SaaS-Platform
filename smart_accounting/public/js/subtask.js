@@ -47,11 +47,11 @@ class SubtaskManager {
     async expandSubtasks(taskId) {
         const $toggleBtn = $(`.pm-subtask-toggle[data-task-id="${taskId}"]`);
         const $taskRow = $(`.pm-task-row[data-task-id="${taskId}"]`);
-        const $icon = $toggleBtn.find('i');
 
         try {
-            // Show loading
-            $icon.removeClass('fa-chevron-right').addClass('fa-spinner fa-spin');
+            // Show loading state
+            const originalText = $toggleBtn.html();
+            $toggleBtn.html('Loading...');
 
             // Load subtasks from backend
             const response = await frappe.call({
@@ -67,9 +67,21 @@ class SubtaskManager {
                 
                 // Update toggle state
                 this.expandedTasks.add(taskId);
-                $icon.removeClass('fa-spinner fa-spin').addClass('fa-chevron-down');
                 $toggleBtn.addClass('expanded');
                 $taskRow.addClass('has-expanded-subtasks');
+                
+                // Update button text for expanded state
+                const count = subtasks.length;
+                let buttonText;
+                if (count >= 100) {
+                    buttonText = `<span class="pm-subtask-count">99+</span><span class="pm-expand-indicator">▼</span>`;
+                } else if (count >= 10) {
+                    buttonText = `<span class="pm-subtask-count">${count}</span><span class="pm-expand-indicator">▼</span>`;
+                } else {
+                    buttonText = `<span class="pm-subtask-count">${count}</span>Sub<span class="pm-expand-indicator">▼</span>`;
+                }
+                $toggleBtn.html(buttonText);
+                $toggleBtn.attr('title', `Hide ${count} subtask${count !== 1 ? 's' : ''}`);
 
             } else {
                 throw new Error(response.message?.error || 'Failed to load subtasks');
@@ -77,7 +89,22 @@ class SubtaskManager {
 
         } catch (error) {
             console.error('Error loading subtasks:', error);
-            $icon.removeClass('fa-spinner fa-spin').addClass('fa-chevron-right');
+            
+            // Restore original text
+            const count = parseInt($toggleBtn.find('.pm-subtask-count').text()) || 0;
+            if (count > 0) {
+                let buttonText;
+                if (count >= 100) {
+                    buttonText = `<span class="pm-subtask-count">99+</span><span class="pm-expand-indicator">▶</span>`;
+                } else if (count >= 10) {
+                    buttonText = `<span class="pm-subtask-count">${count}</span><span class="pm-expand-indicator">▶</span>`;
+                } else {
+                    buttonText = `<span class="pm-subtask-count">${count}</span>Sub<span class="pm-expand-indicator">▶</span>`;
+                }
+                $toggleBtn.html(buttonText);
+            } else {
+                $toggleBtn.html('+ Sub');
+            }
             
             frappe.show_alert({
                 message: 'Failed to load subtasks',
@@ -87,9 +114,8 @@ class SubtaskManager {
     }
 
     collapseSubtasks(taskId) {
-        const $toggleBtn = $(`.pm-subtask-dropdown-toggle[data-task-id="${taskId}"]`);
+        const $toggleBtn = $(`.pm-subtask-toggle[data-task-id="${taskId}"]`);
         const $taskRow = $(`.pm-task-row[data-task-id="${taskId}"]`);
-        const $icon = $toggleBtn.find('i');
 
         // Remove subtask container
         $(`.pm-subtask-container[data-parent-task="${taskId}"]`).slideUp(300, function() {
@@ -98,9 +124,26 @@ class SubtaskManager {
 
         // Update toggle state
         this.expandedTasks.delete(taskId);
-        $icon.removeClass('fa-chevron-down').addClass('fa-chevron-right');
         $toggleBtn.removeClass('expanded');
         $taskRow.removeClass('has-expanded-subtasks');
+        
+        // Update button text for collapsed state
+        const count = parseInt($toggleBtn.find('.pm-subtask-count').text()) || 0;
+        if (count > 0) {
+            let buttonText;
+            if (count >= 100) {
+                buttonText = `<span class="pm-subtask-count">99+</span><span class="pm-expand-indicator">▶</span>`;
+            } else if (count >= 10) {
+                buttonText = `<span class="pm-subtask-count">${count}</span><span class="pm-expand-indicator">▶</span>`;
+            } else {
+                buttonText = `<span class="pm-subtask-count">${count}</span>Sub<span class="pm-expand-indicator">▶</span>`;
+            }
+            $toggleBtn.html(buttonText);
+            $toggleBtn.attr('title', `Show ${count} subtask${count !== 1 ? 's' : ''}`);
+        } else {
+            $toggleBtn.html('+ Sub');
+            $toggleBtn.attr('title', 'Click to add subtask');
+        }
     }
 
     renderSubtasks(parentTaskId, subtasks) {
@@ -813,13 +856,33 @@ class SubtaskManager {
 
     updateSubtaskIndicator(taskId, count) {
         const $toggleBtn = $(`.pm-subtask-toggle[data-task-id="${taskId}"]`);
+        const isExpanded = $toggleBtn.hasClass('expanded');
         
         if (count > 0) {
             $toggleBtn.addClass('has-subtasks');
-            $toggleBtn.attr('title', `Show/hide ${count} subtask${count !== 1 ? 's' : ''}`);
+            
+            // 更新按钮文本 - 优化显示以适应固定宽度
+            let buttonText;
+            if (count >= 100) {
+                buttonText = `<span class="pm-subtask-count">99+</span>`;
+            } else if (count >= 10) {
+                buttonText = `<span class="pm-subtask-count">${count}</span>`;
+            } else {
+                buttonText = `<span class="pm-subtask-count">${count}</span>Sub`;
+            }
+            
+            if (isExpanded) {
+                buttonText += '<span class="pm-expand-indicator">▼</span>';
+                $toggleBtn.attr('title', `Hide ${count} subtask${count !== 1 ? 's' : ''}`);
+            } else {
+                buttonText += '<span class="pm-expand-indicator">▶</span>';
+                $toggleBtn.attr('title', `Show ${count} subtask${count !== 1 ? 's' : ''}`);
+            }
+            $toggleBtn.html(buttonText);
         } else {
             $toggleBtn.removeClass('has-subtasks');
-            $toggleBtn.attr('title', 'No subtasks');
+            $toggleBtn.html('+ Sub');
+            $toggleBtn.attr('title', 'Click to add subtask');
         }
     }
 

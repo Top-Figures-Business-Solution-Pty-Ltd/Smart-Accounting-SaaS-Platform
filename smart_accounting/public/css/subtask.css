@@ -8,38 +8,65 @@
     margin-right: 8px;
 }
 
+/* Subtask按钮容器 - 始终占据固定空间 */
+.pm-subtask-button-container {
+    width: 50px;
+    min-width: 50px;
+    max-width: 50px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+/* 统一的subtask按钮样式 - 文字标签设计，固定宽度保持对齐 */
 .pm-subtask-toggle,
 .pm-add-subtask {
-    background: #ffffff;
-    border: 1px solid #d1d5db;
-    color: #6b7280;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    color: #6c757d;
     cursor: pointer;
-    padding: 0;
-    border-radius: 4px;
+    padding: 3px 8px;
+    border-radius: 12px;
     transition: all 0.2s ease;
-    font-size: 10px;
-    width: 20px;
-    height: 20px;
+    font-size: 11px;
+    height: 22px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 20px;
+    opacity: 0; /* 默认隐藏 */
+    width: 50px; /* 固定宽度，足够容纳两位数子任务 */
+    min-width: 50px;
+    max-width: 50px;
     flex-shrink: 0;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     position: relative;
     z-index: 10;
     font-weight: 500;
+    white-space: nowrap;
+    gap: 2px; /* 减少间距以适应固定宽度 */
+    overflow: hidden; /* 防止内容溢出 */
+    text-overflow: ellipsis;
+}
+
+/* 当行被hover时显示 */
+.pm-task-row:hover .pm-subtask-toggle:not(.has-subtasks),
+.pm-task-row:hover .pm-add-subtask {
+    opacity: 1;
+    color: #6c757d;
 }
 
 .pm-subtask-toggle:hover,
 .pm-add-subtask:hover {
-    background: #f3f4f6;
+    background: #e3f2fd;
     border-color: var(--monday-blue);
     color: var(--monday-blue);
+    opacity: 1;
     box-shadow: 0 2px 4px rgba(0, 115, 234, 0.1);
 }
 
+/* 有子任务时始终显示，使用蓝色样式 */
 .pm-subtask-toggle.has-subtasks {
+    opacity: 1 !important;
     background: var(--monday-blue);
     color: white;
     border-color: var(--monday-blue);
@@ -52,18 +79,26 @@
     box-shadow: 0 2px 6px rgba(0, 115, 234, 0.3);
 }
 
-/* Rotation animation for expanded state */
-.pm-subtask-toggle .fa-chevron-right {
-    transition: transform 0.2s ease;
+/* 展开状态的视觉指示 */
+.pm-subtask-toggle.expanded {
+    background: #1976d2;
 }
 
-.pm-subtask-toggle.expanded .fa-chevron-right {
-    transform: rotate(90deg);
+/* 确保行hover时整体显示subtask按钮 */
+.pm-task-row:hover .pm-subtask-toggle {
+    opacity: 1;
 }
 
-/* Make button more prominent when it has subtasks */
-.pm-subtask-toggle.has-subtasks .fa-chevron-right {
-    font-weight: 900;
+/* 子任务数量显示 */
+.pm-subtask-toggle .pm-subtask-count {
+    font-weight: 600;
+    margin-right: 2px;
+}
+
+/* 展开指示器 */
+.pm-subtask-toggle .pm-expand-indicator {
+    font-size: 9px;
+    margin-left: 2px;
 }
 
 .pm-client-content {

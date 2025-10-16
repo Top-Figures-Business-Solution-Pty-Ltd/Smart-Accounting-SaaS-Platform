@@ -678,21 +678,22 @@
     font-size: 14px;
 }
 
-/* Comment Indicator Styles - Compact for client cell */
+/* Comment Indicator Styles - 统一圆形按钮样式 */
 .pm-comment-indicator {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    gap: 4px;
     font-size: 11px;
     font-weight: 500;
     cursor: pointer;
-    padding: 3px 6px;
-    border-radius: 4px;
+    padding: 4px 8px;
+    border-radius: 12px; /* 圆形按钮 */
     transition: all 0.2s ease;
     color: #6b7280;
     background: #ffffff;
     border: 1px solid #d1d5db;
-    min-width: 24px;
+    min-width: 28px;
+    height: 24px;
     justify-content: center;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
@@ -718,7 +719,7 @@
 }
 
 .pm-comment-indicator i {
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .pm-comment-count {
@@ -727,6 +728,7 @@
     min-width: 14px;
     text-align: center;
     line-height: 1;
+    display: inline-block !important; /* 强制显示数字 */
 }
 
 /* Mention Dropdown */
