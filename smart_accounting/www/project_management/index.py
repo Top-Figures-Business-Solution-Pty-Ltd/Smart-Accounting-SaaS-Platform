@@ -1755,6 +1755,28 @@ def get_bulk_subtask_counts(task_ids):
         }
 
 @frappe.whitelist()
+def get_subtask_count(parent_task_id):
+    """Get subtask count for a single parent task"""
+    try:
+        count = frappe.db.count("Task", {
+            "parent_task": parent_task_id,
+            "custom_is_archived": ["!=", 1]  # Exclude archived subtasks from count
+        })
+        
+        return {
+            'success': True,
+            'count': count
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting subtask count for task {parent_task_id}: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'count': 0
+        }
+
+@frappe.whitelist()
 def create_new_task(project_name, client_name=None):
     """
     Create a new task in the specified project

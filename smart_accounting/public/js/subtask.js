@@ -70,18 +70,9 @@ class SubtaskManager {
                 $toggleBtn.addClass('expanded');
                 $taskRow.addClass('has-expanded-subtasks');
                 
-                // Update button text for expanded state
+                // Update button indicator using the centralized method
                 const count = subtasks.length;
-                let buttonText;
-                if (count >= 100) {
-                    buttonText = `<span class="pm-subtask-count">99+</span><span class="pm-expand-indicator">▼</span>`;
-                } else if (count >= 10) {
-                    buttonText = `<span class="pm-subtask-count">${count}</span><span class="pm-expand-indicator">▼</span>`;
-                } else {
-                    buttonText = `<span class="pm-subtask-count">${count}</span>Sub<span class="pm-expand-indicator">▼</span>`;
-                }
-                $toggleBtn.html(buttonText);
-                $toggleBtn.attr('title', `Hide ${count} subtask${count !== 1 ? 's' : ''}`);
+                this.updateSubtaskIndicator(taskId, count);
 
             } else {
                 throw new Error(response.message?.error || 'Failed to load subtasks');
@@ -90,21 +81,9 @@ class SubtaskManager {
         } catch (error) {
             console.error('Error loading subtasks:', error);
             
-            // Restore original text
+            // Restore button state using centralized method
             const count = parseInt($toggleBtn.find('.pm-subtask-count').text()) || 0;
-            if (count > 0) {
-                let buttonText;
-                if (count >= 100) {
-                    buttonText = `<span class="pm-subtask-count">99+</span><span class="pm-expand-indicator">▶</span>`;
-                } else if (count >= 10) {
-                    buttonText = `<span class="pm-subtask-count">${count}</span><span class="pm-expand-indicator">▶</span>`;
-                } else {
-                    buttonText = `<span class="pm-subtask-count">${count}</span>Sub<span class="pm-expand-indicator">▶</span>`;
-                }
-                $toggleBtn.html(buttonText);
-            } else {
-                $toggleBtn.html('+ Sub');
-            }
+            this.updateSubtaskIndicator(taskId, count);
             
             frappe.show_alert({
                 message: 'Failed to load subtasks',
@@ -127,23 +106,9 @@ class SubtaskManager {
         $toggleBtn.removeClass('expanded');
         $taskRow.removeClass('has-expanded-subtasks');
         
-        // Update button text for collapsed state
+        // Get current count and update button indicator using the centralized method
         const count = parseInt($toggleBtn.find('.pm-subtask-count').text()) || 0;
-        if (count > 0) {
-            let buttonText;
-            if (count >= 100) {
-                buttonText = `<span class="pm-subtask-count">99+</span><span class="pm-expand-indicator">▶</span>`;
-            } else if (count >= 10) {
-                buttonText = `<span class="pm-subtask-count">${count}</span><span class="pm-expand-indicator">▶</span>`;
-            } else {
-                buttonText = `<span class="pm-subtask-count">${count}</span>Sub<span class="pm-expand-indicator">▶</span>`;
-            }
-            $toggleBtn.html(buttonText);
-            $toggleBtn.attr('title', `Show ${count} subtask${count !== 1 ? 's' : ''}`);
-        } else {
-            $toggleBtn.html('+ Sub');
-            $toggleBtn.attr('title', 'Click to add subtask');
-        }
+        this.updateSubtaskIndicator(taskId, count);
     }
 
     renderSubtasks(parentTaskId, subtasks) {
@@ -729,6 +694,9 @@ class SubtaskManager {
                     Subtasks (${subtasks.length})
                 `);
                 
+                // Update the parent task's subtask button indicator
+                this.updateSubtaskIndicator(parentTaskId, subtasks.length);
+                
                 // Re-bind events for new content
                 this.bindSubtaskEvents(parentTaskId);
                 
@@ -814,11 +782,33 @@ class SubtaskManager {
         }
     }
 
-    updateSubtaskCount(parentTaskId) {
-        // This could update a badge showing subtask count on the parent task
-        // For now, just update the toggle button to indicate there are subtasks
-        const $toggleBtn = $(`.pm-subtask-toggle[data-task-id="${parentTaskId}"]`);
-        $toggleBtn.addClass('has-subtasks');
+    async updateSubtaskCount(parentTaskId) {
+        // Get the actual current subtask count from the backend
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_subtask_count',
+                args: { parent_task_id: parentTaskId }
+            });
+
+            if (response.message && response.message.success) {
+                const count = response.message.count || 0;
+                this.updateSubtaskIndicator(parentTaskId, count);
+            } else {
+                // Fallback: count from DOM if API fails
+                this.updateSubtaskCountFromDOM(parentTaskId);
+            }
+        } catch (error) {
+            console.warn('Failed to get subtask count from backend, using DOM fallback:', error);
+            // Fallback: count from DOM
+            this.updateSubtaskCountFromDOM(parentTaskId);
+        }
+    }
+
+    updateSubtaskCountFromDOM(parentTaskId) {
+        // Fallback method: count subtasks from the DOM
+        const $container = $(`.pm-subtask-container[data-parent-task="${parentTaskId}"]`);
+        const count = $container.find('.pm-subtask-item[data-subtask-id]').length;
+        this.updateSubtaskIndicator(parentTaskId, count);
     }
 
     // Load subtask counts for all tasks on page load
@@ -884,6 +874,23 @@ class SubtaskManager {
             $toggleBtn.html('+ Sub');
             $toggleBtn.attr('title', 'Click to add subtask');
         }
+    }
+
+    // ===== DEBUG AND TESTING FUNCTIONS =====
+    
+    // Debug function to test subtask button state updates
+    debugSubtaskButtonState(taskId) {
+        const $toggleBtn = $(`.pm-subtask-toggle[data-task-id="${taskId}"]`);
+        console.log(`🔍 Debug Subtask Button State for task ${taskId}:`);
+        console.log(`  - Button exists: ${$toggleBtn.length > 0}`);
+        console.log(`  - Button HTML: ${$toggleBtn.html()}`);
+        console.log(`  - Has 'expanded' class: ${$toggleBtn.hasClass('expanded')}`);
+        console.log(`  - Has 'has-subtasks' class: ${$toggleBtn.hasClass('has-subtasks')}`);
+        console.log(`  - Current count from DOM: ${parseInt($toggleBtn.find('.pm-subtask-count').text()) || 0}`);
+        console.log(`  - Is in expandedTasks set: ${this.expandedTasks.has(taskId)}`);
+        
+        // Test updating the indicator
+        this.updateSubtaskCount(taskId);
     }
 
     // ===== SUBTASK COLUMN MANAGEMENT =====
