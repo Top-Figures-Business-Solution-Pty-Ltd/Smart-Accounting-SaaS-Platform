@@ -117,6 +117,11 @@ class ProjectManager {
         $newRow = $addRow.prev();
         $newRow.css('background-color', '#e8f5e8');
         
+        // Initialize functional buttons for the new task using Primary Column Manager
+        if (window.PrimaryColumnManager && taskData.task_id) {
+            window.PrimaryColumnManager.initializeFunctionalButtonsForNewTask(taskData.task_id, clientName);
+        }
+        
         setTimeout(() => {
             $newRow.css('background-color', '');
         }, 2000);
@@ -133,24 +138,13 @@ class ProjectManager {
                 <input type="checkbox" class="pm-task-checkbox" data-task-id="${taskData.task_id}" title="Select this task">
             </div>
             <div class="pm-cell pm-cell-client pm-client-with-comments" data-field="custom_client" data-task-id="${taskData.task_id}" data-current-client-id="" data-current-client-name="${clientName || 'No Client'}">
-                <div class="pm-client-content">
-                    <button class="pm-subtask-toggle" data-task-id="${taskData.task_id}" title="Show/hide subtasks">
-                        <i class="fa fa-chevron-right"></i>
-                    </button>
-                    <span class="pm-client-selector-trigger client-display" 
-                          data-task-id="${taskData.task_id}"
-                          data-field="custom_client"
-                          data-field-type="client_selector"
-                          data-current-client-id=""
-                          data-current-client-name="${clientName || 'No Client'}"
-                          title="Click to select client">${clientName || 'No Client'}</span>
-                </div>
-                <div class="pm-client-comments">
-                    <div class="pm-comment-indicator" data-task-id="${taskData.task_id}" title="Click to view or add comments">
-                        <i class="fa fa-comment-o"></i>
-                        <span class="pm-comment-count">0</span>
-                    </div>
-                </div>
+                <span class="pm-client-selector-trigger client-display" 
+                      data-task-id="${taskData.task_id}"
+                      data-field="custom_client"
+                      data-field-type="client_selector"
+                      data-current-client-id=""
+                      data-current-client-name="${clientName || 'No Client'}"
+                      title="Click to select client">${clientName || 'No Client'}</span>
             </div>
             <div class="pm-cell pm-cell-task-name pm-editable-task-name" data-editable="true" data-field="subject" data-task-id="${taskData.task_id}" data-field-type="task_name_editor" data-current-task-name="${taskData.task_subject || ''}">
                 <div class="pm-task-name-content">

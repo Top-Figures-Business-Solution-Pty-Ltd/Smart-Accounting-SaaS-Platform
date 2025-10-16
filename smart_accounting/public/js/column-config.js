@@ -41,11 +41,14 @@ class ColumnConfigManager {
             'engagement', 'group', 'year-end', 'last-updated', 'priority'
         ];
 
-        // 必需列（不能隐藏）
-        this.requiredColumns = ['client'];
+        // 必需列（不能隐藏）- 移除client的required属性
+        this.requiredColumns = [];
         
         // 默认列顺序
         this.defaultColumnOrder = Object.keys(this.allColumns);
+        
+        // 默认主列
+        this.defaultPrimaryColumn = 'client';
     }
 
     /**
@@ -186,6 +189,27 @@ class ColumnConfigManager {
         });
 
         return sorted;
+    }
+
+    /**
+     * 获取主列 - 简化逻辑：第一个可见列就是主列
+     * @param {Object} partitionConfig - 分区配置
+     * @param {Array} visibleColumns - 可见列数组
+     * @returns {string} 主列键
+     */
+    getPrimaryColumn(partitionConfig, visibleColumns = []) {
+        // 简化逻辑：第一个可见列就是主列
+        return visibleColumns[0] || this.defaultPrimaryColumn;
+    }
+
+    /**
+     * 检查列是否可以作为主列 - 现在任何列都可以作为主列
+     * @param {string} columnKey - 列键
+     * @returns {boolean} 是否可以作为主列
+     */
+    canBePrimaryColumn(columnKey) {
+        // 简化逻辑：任何存在的列都可以作为主列
+        return this.allColumns.hasOwnProperty(columnKey);
     }
 }
 

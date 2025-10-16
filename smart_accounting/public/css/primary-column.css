@@ -1,0 +1,191 @@
+/* Project Management - Primary Column Styles */
+
+/* Primary Column Content Structure */
+.pm-primary-column-content {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+}
+
+.pm-column-main-content {
+    flex: 1;
+    min-width: 0; /* Allow text truncation */
+}
+
+.pm-column-comments {
+    display: flex;
+    align-items: center;
+    margin-top: 4px;
+}
+
+/* Functional Buttons in Primary Column */
+.pm-primary-column-content .pm-subtask-toggle {
+    background: linear-gradient(135deg, #ffffff 0%, #f1f3f4 100%);
+    border: 1.5px solid #9ca3af;
+    color: #374151;
+    cursor: pointer;
+    padding: 3px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    font-size: 10px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    min-width: 20px;
+    flex-shrink: 0;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    position: relative;
+    z-index: 10;
+    font-weight: 600;
+}
+
+.pm-primary-column-content .pm-subtask-toggle:hover {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border-color: var(--monday-blue);
+    color: var(--monday-blue);
+    opacity: 1;
+    box-shadow: 0 2px 6px rgba(0, 115, 234, 0.2);
+    transform: translateY(-1px);
+}
+
+.pm-primary-column-content .pm-subtask-toggle.has-subtasks {
+    background: linear-gradient(135deg, var(--monday-blue) 0%, #1976d2 100%);
+    color: white;
+    border-color: var(--monday-blue);
+    opacity: 1;
+    box-shadow: 0 2px 6px rgba(0, 115, 234, 0.3);
+}
+
+.pm-primary-column-content .pm-subtask-toggle.has-subtasks:hover {
+    background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(0, 115, 234, 0.4);
+}
+
+/* Rotation animation for expanded state */
+.pm-primary-column-content .pm-subtask-toggle .fa-chevron-right {
+    transition: transform 0.2s ease;
+}
+
+.pm-primary-column-content .pm-subtask-toggle.expanded .fa-chevron-right {
+    transform: rotate(90deg);
+}
+
+/* Comment Indicator in Primary Column */
+.pm-column-comments .pm-comment-indicator {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 4px 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #6c757d;
+}
+
+.pm-column-comments .pm-comment-indicator:hover {
+    background: #e3f2fd;
+    border-color: var(--monday-blue);
+    color: var(--monday-blue);
+}
+
+.pm-column-comments .pm-comment-indicator.has-comments {
+    background: var(--monday-blue);
+    color: white;
+    border-color: var(--monday-blue);
+}
+
+.pm-column-comments .pm-comment-indicator.has-comments:hover {
+    background: #1976d2;
+}
+
+.pm-column-comments .pm-comment-indicator i {
+    font-size: 10px;
+}
+
+.pm-column-comments .pm-comment-count {
+    font-size: 9px;
+    font-weight: 600;
+    min-width: 12px;
+    text-align: center;
+}
+
+/* Ensure primary column buttons work in different column types */
+.pm-cell-task-name .pm-primary-column-content,
+.pm-cell-entity .pm-primary-column-content,
+.pm-cell-status .pm-primary-column-content,
+.pm-cell-note .pm-primary-column-content {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+}
+
+/* Special handling for task name column when it's primary */
+.pm-cell-task-name.pm-primary-column .pm-task-name-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pm-cell-task-name.pm-primary-column .pm-edit-icon {
+    margin-left: auto;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .pm-primary-column-content {
+        gap: 4px;
+    }
+    
+    .pm-primary-column-content .pm-subtask-toggle {
+        width: 18px;
+        height: 18px;
+        font-size: 9px;
+    }
+    
+    .pm-column-comments .pm-comment-indicator {
+        padding: 3px 5px;
+        font-size: 10px;
+    }
+}
+
+/* Animation for primary column changes */
+.pm-primary-column-transition {
+    transition: all 0.3s ease;
+}
+
+.pm-primary-column-highlight {
+    background-color: rgba(0, 115, 234, 0.1);
+    border-left: 3px solid var(--monday-blue);
+}
+
+/* Ensure buttons don't interfere with inline editing */
+.pm-primary-column-content .editable-field {
+    flex: 1;
+    min-width: 0;
+}
+
+.pm-primary-column-content .pm-inline-editor {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Primary column item styling in manage columns dialog */
+.pm-primary-column-item {
+    border-left: 4px solid var(--monday-blue) !important;
+    background-color: rgba(0, 115, 234, 0.05) !important;
+}
+
+.pm-primary-column-item .pm-column-name {
+    font-weight: 600 !important;
+    color: var(--monday-blue) !important;
+}
+

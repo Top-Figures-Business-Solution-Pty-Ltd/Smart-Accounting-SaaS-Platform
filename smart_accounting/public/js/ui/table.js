@@ -712,6 +712,11 @@ class TableManager {
             this.applyColumnOrder(columnConfig.column_order, visibleColumns);
         }
         
+        // Handle primary column change
+        if (columnConfig.primary_column && window.PrimaryColumnManager) {
+            window.PrimaryColumnManager.setPrimaryColumn(columnConfig.primary_column);
+        }
+        
         // Ensure width is recalculated after all configuration changes
         setTimeout(() => {
             this.updateTableWidth();

@@ -805,18 +805,8 @@
 }
 
 /* Fix first column (client name) to prevent it from being cut off */
-.pm-cell-client,
-.pm-header-cell.pm-cell-client {
-    position: sticky !important;
-    left: 0 !important;
-    background: white !important;
-    z-index: 10 !important;
-    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1) !important;
-}
-
-.pm-task-row:hover .pm-cell-client {
-    background: #f8f9fb !important;
-}
+/* Client column styles moved to primary column system - see reports.css */
+/* These styles are now applied dynamically based on primary column status */
 
 /* Project Creation Modal Styles */
 .pm-project-modal-overlay {

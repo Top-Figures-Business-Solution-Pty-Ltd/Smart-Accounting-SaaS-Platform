@@ -500,6 +500,7 @@ class FilterManager {
                                 </small>
                             </div>
                         </div>
+                        
                         <div class="pm-column-list" id="pm-sortable-columns">
                             ${currentColumnOrder.map((columnKey, index) => {
                                 const displayName = window.ColumnConfigManager.getColumnDisplayName(columnKey);
@@ -660,9 +661,16 @@ class FilterManager {
             }
         });
         
+        // 主列就是第一个可见列，不需要额外处理
+        const adjustedColumnOrder = columnOrder;
+        
+        // 获取第一个可见列作为主列
+        const primaryColumn = visibleColumns[0] || 'client';
+        
         console.log('💾 Saving column configuration:', {
-            columnOrder: columnOrder,
+            columnOrder: adjustedColumnOrder,
             visibleColumns: visibleColumns,
+            primaryColumn: primaryColumn,
             currentView: currentView
         });
         
@@ -670,7 +678,7 @@ class FilterManager {
         const normalizedVisibleColumns = window.ColumnConfigManager.normalizeVisibleColumns(visibleColumns);
         
         // 验证配置
-        const validation = window.ColumnConfigManager.validateColumnConfig(normalizedVisibleColumns, columnOrder);
+        const validation = window.ColumnConfigManager.validateColumnConfig(normalizedVisibleColumns, adjustedColumnOrder);
         if (!validation.isValid) {
             console.error('Column configuration validation failed:', validation.errors);
             frappe.msgprint('Invalid column configuration: ' + validation.errors.join(', '));
@@ -684,7 +692,8 @@ class FilterManager {
                 partition_name: currentView,
                 visible_columns: JSON.stringify(normalizedVisibleColumns),
                 column_config: JSON.stringify({
-                    column_order: columnOrder
+                    column_order: adjustedColumnOrder,
+                    primary_column: primaryColumn
                 })
             },
             callback: (response) => {
@@ -701,10 +710,13 @@ class FilterManager {
                             column_order: columnOrder
                         });
                         
-                        window.TableManager.applyColumnConfiguration({
-                            visible_columns: visibleColumns,
-                            column_config: { column_order: columnOrder }
-                        });
+                        // 关闭对话框
+                        $('.pm-column-management-dialog').remove();
+                        
+                        // 刷新页面以确保所有功能按钮正确放置
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 500);
                     } else {
                         console.error('❌ TableManager not available');
                     }
@@ -844,6 +856,7 @@ class FilterManager {
             }
         });
     }
+
 
     closeColumnDialog() {
         // 只清理当前拖拽状态，不销毁整个DragManager

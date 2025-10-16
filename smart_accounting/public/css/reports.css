@@ -400,26 +400,27 @@ div.pm-table-header,
     border-right: none;
 }
 
-/* Fixed First Column Styles */
-.pm-header-cell.pm-cell-client,
-.pm-cell.pm-cell-client {
-    position: sticky;
-    left: 0;
-    background: white;
-    z-index: 10;
-    border-right: 2px solid var(--monday-border);
-    border-bottom: 1px solid var(--monday-border);
+/* Primary Column Styles - Applied to ANY column that becomes primary */
+.pm-header-cell.pm-primary-column,
+.pm-cell.pm-primary-column {
+    position: sticky !important;
+    left: 0 !important;
+    background: white !important;
+    z-index: 10 !important;
+    border-right: 2px solid var(--monday-border) !important;
+    border-bottom: 1px solid var(--monday-border) !important;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1) !important;
 }
 
-.pm-project-table-header .pm-header-cell.pm-cell-client {
-    background: var(--monday-light-gray);
-    z-index: 11;
-    border-bottom: 1px solid var(--monday-border);
+.pm-project-table-header .pm-header-cell.pm-primary-column {
+    background: var(--monday-light-gray) !important;
+    z-index: 11 !important;
+    border-bottom: 1px solid var(--monday-border) !important;
 }
 
-/* Add shadow to indicate sticky column */
-.pm-header-cell.pm-cell-client::after,
-.pm-cell.pm-cell-client::after {
+/* Add shadow to indicate sticky primary column - for ANY primary column */
+.pm-header-cell.pm-primary-column::after,
+.pm-cell.pm-primary-column::after {
     content: '';
     position: absolute;
     top: 0;

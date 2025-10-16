@@ -52,6 +52,7 @@ class ProjectManagement {
             this.initializeSubtasks();
             this.initializeMultiSelect();
             this.initializeCombinationView();
+            this.initializePrimaryColumnManager();
             
             // Apply partition column configuration after DOM is ready
             this.applyPartitionColumnConfig();
@@ -216,6 +217,15 @@ class ProjectManagement {
                 console.log('Decoded board IDs:', boardIds);
                 this.combinationViewManager.initCombinationViewPage(boardIds);
             }
+        }
+    }
+
+    initializePrimaryColumnManager() {
+        if (window.PrimaryColumnManager) {
+            window.PrimaryColumnManager.initialize();
+            console.log('✅ Primary Column Manager initialized');
+        } else {
+            console.warn('⚠️ Primary Column Manager not available');
         }
     }
 

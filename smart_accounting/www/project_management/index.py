@@ -650,7 +650,8 @@ def get_partition_column_config(partition_name):
                 'success': True,
                 'visible_columns': default_visible_columns,
                 'column_config': {
-                    'column_order': default_visible_columns  # 提供默认排序
+                    'column_order': default_visible_columns,  # 提供默认排序
+                    'primary_column': 'client'  # 默认主列
                 }
             }
             frappe.logger().info(f"Returning main config: {result}")
@@ -682,9 +683,11 @@ def get_partition_column_config(partition_name):
                 'last-updated', 'priority', 'frequency', 'reset-date'
             ]
             
-        # 确保column_config包含默认的列顺序
+        # 确保column_config包含默认的列顺序和主列
         if not column_config.get('column_order'):
             column_config['column_order'] = visible_columns.copy()
+        if not column_config.get('primary_column'):
+            column_config['primary_column'] = 'client'  # 默认主列
         
         return {
             'success': True,
@@ -752,7 +755,8 @@ def save_partition_column_config(partition_name, visible_columns, column_config=
                 'message': 'Main view uses default configuration (not saved)',
                 'visible_columns': default_columns,
                 'column_config': {
-                    'column_order': default_columns
+                    'column_order': default_columns,
+                    'primary_column': 'client'
                 }
             }
         
