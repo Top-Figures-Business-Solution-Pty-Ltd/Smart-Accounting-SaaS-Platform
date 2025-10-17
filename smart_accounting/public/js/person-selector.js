@@ -79,31 +79,20 @@ class PersonSelectorManager {
             cellHtml: $cell[0]?.outerHTML?.substring(0, 200) + '...'
         });
         
-        // Check if there's a role filter specified
-        const roleFilter = $cell.data('role-filter');
+        // 立即显示空选择器，不等待数据加载
+        this.showEmptyPersonSelector($cell, taskId, fieldName);
         
-        // Get current person emails from backend (not just from UI)
+        // 异步加载数据，不阻塞UI
+        this.loadPersonDataAsync($cell, taskId, fieldName);
+    }
+
+    showEmptyPersonSelector($cell, taskId, fieldName) {
+        // 从UI快速获取当前选择作为初始状态
         let currentEmails = [];
-        try {
-            const response = await frappe.call({
-                method: 'smart_accounting.www.project_management.index.get_task_role_assignments',
-                args: { 
-                    task_id: taskId,
-                    role_filter: roleFilter 
-                }
-            });
-            
-            if (response.message && response.message.success) {
-                currentEmails = response.message.role_assignments.map(assignment => assignment.user);
-            }
-        } catch (error) {
-            console.warn('Could not load current assignments from backend, falling back to UI:', error);
-            // Fallback to UI-based method
-            $cell.find('.pm-avatar[data-email]').each(function() {
-                const email = $(this).data('email');
-                if (email) currentEmails.push(email);
-            });
-        }
+        $cell.find('.pm-avatar[data-email]').each(function() {
+            const email = $(this).data('email');
+            if (email) currentEmails.push(email);
+        });
         
         // Create person selector dropdown outside the table
         const selectorHTML = `
@@ -116,15 +105,19 @@ class PersonSelectorManager {
                         </button>
                     </div>
                     <div class="pm-person-selector-body">
+                        <div class="pm-person-loading" style="text-align: center; padding: 20px; color: #666;">
+                            <i class="fa fa-spinner fa-spin"></i>
+                            <span style="margin-left: 8px;">Loading assignments...</span>
+                        </div>
                         ${currentEmails.length > 0 ? `
-                        <div class="pm-current-people">
+                        <div class="pm-current-people" style="display: none;">
                             <div class="pm-current-person-list" id="current-person-list-${taskId}-${fieldName}">
                                 <!-- Will be populated by loadCurrentPeople method -->
                             </div>
                         </div>
                         ` : ''}
-                        <h4>Suggested people</h4>
-                        <div class="pm-person-options">
+                        <h4 style="display: none;">Suggested people</h4>
+                        <div class="pm-person-options" style="display: none;">
                             <div class="pm-person-option pm-clear-person" data-email="">
                                 <div class="pm-avatar pm-empty-avatar">
                                     <i class="fa fa-user"></i>
@@ -135,7 +128,7 @@ class PersonSelectorManager {
                                 </div>
                             </div>
                         </div>
-                        <div class="pm-person-list">
+                        <div class="pm-person-list" style="display: none;">
                             <!-- People will be loaded dynamically -->
                         </div>
                         <div class="pm-person-selector-footer">
@@ -1046,6 +1039,95 @@ class PersonSelectorManager {
             'custom_partner': 'Partner'
         };
         return mapping[fieldName] || fieldName.replace('custom_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+    async loadPersonDataAsync($cell, taskId, fieldName) {
+        const $selector = $(`#pm-person-selector-${taskId}-${fieldName}`);
+        if ($selector.length === 0) return;
+
+        const roleFilter = $cell.data('role-filter');
+
+        try {
+            // 加载当前分配，使用超时机制
+            let currentEmails = [];
+            try {
+                currentEmails = await this.getCurrentAssignmentsWithTimeout(taskId, roleFilter);
+                console.log('✅ Current assignments loaded:', currentEmails);
+            } catch (error) {
+                console.warn('⚠️ Could not load current assignments, using UI fallback:', error);
+                // 降级到UI方法
+                $cell.find('.pm-avatar[data-email]').each(function() {
+                    const email = $(this).data('email');
+                    if (email) currentEmails.push(email);
+                });
+            }
+
+            // 隐藏加载状态，显示内容
+            $selector.find('.pm-person-loading').hide();
+            $selector.find('h4').show();
+            $selector.find('.pm-person-options').show();
+            $selector.find('.pm-person-list').show();
+            if (currentEmails.length > 0) {
+                $selector.find('.pm-current-people').show();
+            }
+
+            // 加载当前人员和可用人员
+            this.loadCurrentPeopleIntoSelector($selector, currentEmails, taskId, fieldName);
+            this.loadPeopleForSelector($selector.find('.pm-person-list'));
+
+        } catch (error) {
+            console.error('❌ Error loading person data:', error);
+            this.showPersonLoadError($selector, $cell, taskId, fieldName);
+        }
+    }
+
+    async getCurrentAssignmentsWithTimeout(taskId, roleFilter, timeout = 5000) {
+        return Promise.race([
+            frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_task_role_assignments',
+                args: { 
+                    task_id: taskId,
+                    role_filter: roleFilter 
+                }
+            }).then(response => {
+                if (response.message && response.message.success) {
+                    return response.message.role_assignments.map(assignment => assignment.user);
+                }
+                return [];
+            }),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout')), timeout)
+            )
+        ]);
+    }
+
+    async getAvailablePeopleWithTimeout(timeout = 5000) {
+        // 简化：直接返回空数组，让现有的 loadPeopleForSelector 处理
+        return Promise.resolve([]);
+    }
+
+    showPersonLoadError($selector, $cell, taskId, fieldName) {
+        $selector.find('.pm-person-loading').html(`
+            <div style="text-align: center; padding: 20px; color: #e74c3c;">
+                <i class="fa fa-exclamation-triangle"></i>
+                <div style="margin-top: 8px;">Failed to load assignments</div>
+                <button class="pm-btn pm-btn-secondary pm-retry-person-load" style="margin-top: 8px; font-size: 12px;">Retry</button>
+            </div>
+        `);
+        
+        // 显示基本功能
+        $selector.find('h4').show();
+        $selector.find('.pm-person-options').show();
+        $selector.find('.pm-person-list').show();
+        
+        // 绑定重试事件
+        $selector.find('.pm-retry-person-load').on('click', (e) => {
+            e.stopPropagation();
+            $selector.find('.pm-person-loading').html(`
+                <i class="fa fa-spinner fa-spin"></i>
+                <span style="margin-left: 8px;">Retrying...</span>
+            `);
+            this.loadPersonDataAsync($cell, taskId, fieldName);
+        });
     }
 }
 

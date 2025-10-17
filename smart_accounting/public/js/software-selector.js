@@ -10,22 +10,28 @@ class SoftwareSelectorManager {
         try {
             console.log('showSoftwareSelector called with:', taskId, fieldName);
             
-            // Get software options from server (professional approach)
-            const optionsResponse = await frappe.call({
-                method: 'smart_accounting.www.project_management.index.get_software_options'
+            // 立即显示空选择器，不等待数据加载
+            this.showEmptySoftwareSelector($cell, taskId);
+            
+            // 异步加载数据，不阻塞UI
+            this.loadSoftwareDataAsync($cell, taskId);
+            
+        } catch (error) {
+            console.error('Error in showSoftwareSelector:', error);
+            frappe.show_alert({
+                message: 'Error opening software selector: ' + error.message,
+                indicator: 'red'
             });
-            
-            const softwareOptions = optionsResponse.message?.software_options || [
-                'Xero', 'MYOB', 'QuickBooks', 'Excel', 'Other'
-            ];
-            
-            console.log('Software options loaded:', softwareOptions);
-            
-            // Get current software assignments
-            const currentSoftwares = await this.getCurrentTaskSoftwares(taskId);
-            console.log('Current softwares:', currentSoftwares);
+        }
+    }
+
+    showEmptySoftwareSelector($cell, taskId) {
+        // 默认软件选项，立即可用
+        const defaultSoftwareOptions = [
+            'Xero', 'MYOB', 'QuickBooks', 'Excel', 'Payroller', 'Oracle', 'Logdit', 'Other'
+        ];
         
-        // Create simple multi-select modal (Monday style)
+        // 创建带加载状态的选择器
         const selectorHTML = `
             <div class="pm-software-selector-modal" id="pm-software-selector-${taskId}">
                 <div class="pm-software-selector-content">
@@ -36,17 +42,18 @@ class SoftwareSelectorManager {
                         </button>
                     </div>
                     <div class="pm-software-selector-body">
-                        <div class="pm-software-options">
-                            ${softwareOptions.map(software => {
-                                const isSelected = currentSoftwares.some(s => s.software === software);
-                                const isPrimary = currentSoftwares.find(s => s.software === software && s.is_primary);
+                        <div class="pm-software-loading" style="text-align: center; padding: 20px; color: #666;">
+                            <i class="fa fa-spinner fa-spin"></i>
+                            <span style="margin-left: 8px;">Loading current selections...</span>
+                        </div>
+                        <div class="pm-software-options" style="display: none;">
+                            ${defaultSoftwareOptions.map(software => {
                                 return `
-                                    <div class="pm-software-option ${isSelected ? 'selected' : ''}" data-software="${software}">
+                                    <div class="pm-software-option" data-software="${software}">
                                         <div class="pm-software-checkbox">
-                                            <i class="fa fa-${isSelected ? 'check-' : ''}square-o"></i>
+                                            <i class="fa fa-square-o"></i>
                                         </div>
                                         <span class="pm-software-name">${software}</span>
-                                        ${isPrimary ? '<span class="pm-primary-badge">Primary</span>' : ''}
                                     </div>
                                 `;
                             }).join('')}
@@ -63,14 +70,14 @@ class SoftwareSelectorManager {
             </div>
         `;
         
-        // Remove existing selector
+        // 移除现有选择器
         $('.pm-software-selector-modal').remove();
         
-        // Add to body
+        // 添加到页面
         $('body').append(selectorHTML);
         const $selector = $(`#pm-software-selector-${taskId}`);
         
-        // Position above the cell using viewport coordinates
+        // 定位选择器
         const cellRect = $cell[0].getBoundingClientRect();
         
         $selector.css({
@@ -81,22 +88,119 @@ class SoftwareSelectorManager {
             width: '280px'
         });
         
-        // Show with animation
+        // 立即显示选择器
         $selector.fadeIn(200);
         
-            // Bind events
-            this.bindSoftwareSelectorEvents($selector, $cell, taskId);
+        // 绑定事件
+        this.bindSoftwareSelectorEvents($selector, $cell, taskId);
+    }
+
+    async loadSoftwareDataAsync($cell, taskId) {
+        const $selector = $(`#pm-software-selector-${taskId}`);
+        if ($selector.length === 0) return;
+
+        try {
+            // 并行加载数据，使用 Promise.allSettled 确保不会因为单个失败而全部失败
+            const results = await Promise.allSettled([
+                this.getSoftwareOptionsWithTimeout(),
+                this.getCurrentTaskSoftwaresWithTimeout(taskId)
+            ]);
+
+            const [optionsResult, currentResult] = results;
             
+            // 处理软件选项
+            let softwareOptions = ['Xero', 'MYOB', 'QuickBooks', 'Excel', 'Payroller', 'Oracle', 'Logdit', 'Other'];
+            if (optionsResult.status === 'fulfilled' && optionsResult.value) {
+                softwareOptions = optionsResult.value;
+                console.log('✅ Software options loaded from server:', softwareOptions);
+            } else {
+                console.warn('⚠️ Using default software options:', optionsResult.reason);
+            }
+
+            // 处理当前选择
+            let currentSoftwares = [];
+            if (currentResult.status === 'fulfilled' && currentResult.value) {
+                currentSoftwares = currentResult.value;
+                console.log('✅ Current softwares loaded:', currentSoftwares);
+            } else {
+                console.warn('⚠️ Could not load current softwares:', currentResult.reason);
+            }
+
+            // 更新选择器内容
+            this.updateSoftwareSelectorContent($selector, softwareOptions, currentSoftwares);
+
         } catch (error) {
-            console.error('Error in showSoftwareSelector:', error);
-            frappe.show_alert({
-                message: 'Error opening software selector: ' + error.message,
-                indicator: 'red'
-            });
+            console.error('❌ Error loading software data:', error);
+            // 即使加载失败，也显示默认选项
+            this.showSoftwareLoadError($selector);
         }
     }
 
+    async getSoftwareOptionsWithTimeout(timeout = 5000) {
+        return Promise.race([
+            frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_software_options'
+            }).then(response => response.message?.software_options || null),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout')), timeout)
+            )
+        ]);
+    }
+
+    async getCurrentTaskSoftwaresWithTimeout(taskId, timeout = 5000) {
+        return Promise.race([
+            this.getCurrentTaskSoftwares(taskId),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout')), timeout)
+            )
+        ]);
+    }
+
+    updateSoftwareSelectorContent($selector, softwareOptions, currentSoftwares) {
+        const optionsHTML = softwareOptions.map(software => {
+            const isSelected = currentSoftwares.some(s => s.software === software);
+            const isPrimary = currentSoftwares.find(s => s.software === software && s.is_primary);
+            return `
+                <div class="pm-software-option ${isSelected ? 'selected' : ''}" data-software="${software}">
+                    <div class="pm-software-checkbox">
+                        <i class="fa fa-${isSelected ? 'check-' : ''}square-o"></i>
+                    </div>
+                    <span class="pm-software-name">${software}</span>
+                    ${isPrimary ? '<span class="pm-primary-badge">Primary</span>' : ''}
+                </div>
+            `;
+        }).join('');
+
+        // 隐藏加载状态，显示选项
+        $selector.find('.pm-software-loading').hide();
+        $selector.find('.pm-software-options').html(optionsHTML).show();
+    }
+
+    showSoftwareLoadError($selector) {
+        $selector.find('.pm-software-loading').html(`
+            <div style="text-align: center; padding: 20px; color: #e74c3c;">
+                <i class="fa fa-exclamation-triangle"></i>
+                <div style="margin-top: 8px;">Failed to load current selections</div>
+                <button class="pm-btn pm-btn-secondary pm-retry-load" style="margin-top: 8px; font-size: 12px;">Retry</button>
+            </div>
+        `);
+        
+        // 显示默认选项
+        const defaultOptions = ['Xero', 'MYOB', 'QuickBooks', 'Excel', 'Other'];
+        this.updateSoftwareSelectorContent($selector, defaultOptions, []);
+    }
+
     bindSoftwareSelectorEvents($selector, $cell, taskId) {
+        // 重试加载数据
+        $selector.on('click', '.pm-retry-load', (e) => {
+            e.stopPropagation();
+            $selector.find('.pm-software-loading').html(`
+                <i class="fa fa-spinner fa-spin"></i>
+                <span style="margin-left: 8px;">Retrying...</span>
+            `);
+            this.loadSoftwareDataAsync($cell, taskId);
+        });
+
         // Toggle software selection
         $selector.on('click', '.pm-software-option', (e) => {
             e.stopPropagation();

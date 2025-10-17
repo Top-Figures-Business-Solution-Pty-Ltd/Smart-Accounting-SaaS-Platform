@@ -2470,27 +2470,40 @@ def delete_task_comment(comment_id):
 def get_task_communication_methods(task_id):
     """
     Get communication methods for a task
+    带缓存机制，减少重复查询
     """
     try:
+        # 缓存键
+        cache_key = f"smart_accounting:task_comm_methods:{task_id}"
+        
+        # 尝试从缓存获取
+        cached_result = frappe.cache().get_value(cache_key)
+        if cached_result:
+            return cached_result
+        
         task_doc = frappe.get_doc('Task', task_id)
         
         if not hasattr(task_doc, 'custom_communication_methods') or not task_doc.custom_communication_methods:
-            return {
+            result = {
                 'success': True,
                 'communication_methods': []
             }
+        else:
+            methods = []
+            for method_assignment in task_doc.custom_communication_methods:
+                methods.append({
+                    'communication_method': method_assignment.communication_method,
+                    'is_primary': method_assignment.is_primary
+                })
+            
+            result = {
+                'success': True,
+                'communication_methods': methods
+            }
         
-        methods = []
-        for method_assignment in task_doc.custom_communication_methods:
-            methods.append({
-                'communication_method': method_assignment.communication_method,
-                'is_primary': method_assignment.is_primary
-            })
-        
-        return {
-            'success': True,
-            'communication_methods': methods
-        }
+        # 缓存结果5分钟
+        frappe.cache().set_value(cache_key, result, expires_in_sec=300)
+        return result
         
     except Exception as e:
         frappe.log_error(f"Error getting task communication methods: {str(e)}")
@@ -2527,6 +2540,10 @@ def update_task_communication_methods(task_id, communication_methods):
         # Save the task
         task_doc.save()
         frappe.db.commit()
+        
+        # 清除相关缓存
+        cache_key = f"smart_accounting:task_comm_methods:{task_id}"
+        frappe.cache().delete_value(cache_key)
         
         return {
             'success': True,
@@ -3731,7 +3748,16 @@ def update_task_person_role(task_id, role_type, user_email):
 def get_software_options():
     """
     Get available software options from Task Software DocType
+    带缓存机制，避免重复的元数据查询
     """
+    # 缓存键
+    cache_key = "smart_accounting:software_options"
+    
+    # 尝试从缓存获取
+    cached_result = frappe.cache().get_value(cache_key)
+    if cached_result:
+        return cached_result
+    
     try:
         # Get software field options from Task Software DocType
         task_software_meta = frappe.get_meta("Task Software")
@@ -3745,30 +3771,46 @@ def get_software_options():
         if software_field and hasattr(software_field, 'options') and software_field.options:
             # Split options by newline and clean them
             options = [opt.strip() for opt in software_field.options.split('\n') if opt.strip()]
-            return {'success': True, 'software_options': options}
+            result = {'success': True, 'software_options': options}
         else:
             # Fallback to default options if not configured
-            return {
+            result = {
                 'success': True, 
                 'software_options': ['Xero', 'MYOB', 'QuickBooks', 'Excel', 'Payroller', 'Oracle', 'Logdit', 'Other']
             }
+        
+        # 缓存结果1小时
+        frappe.cache().set_value(cache_key, result, expires_in_sec=3600)
+        return result
             
     except Exception as e:
         frappe.log_error(f"Error getting software options: {str(e)}")
         # Return default options on error
-        return {
+        result = {
             'success': True,
             'software_options': ['Xero', 'MYOB', 'QuickBooks', 'Excel', 'Other']
         }
+        # 缓存错误结果较短时间（5分钟）
+        frappe.cache().set_value(cache_key, result, expires_in_sec=300)
+        return result
 
 @frappe.whitelist()
 def get_task_softwares(task_id):
     """
     Get task software assignments from sub-table
+    带短期缓存机制，减少重复查询
     """
     try:
         if not task_id:
             return {'success': False, 'error': 'Task ID is required'}
+        
+        # 缓存键
+        cache_key = f"smart_accounting:task_softwares:{task_id}"
+        
+        # 尝试从缓存获取
+        cached_result = frappe.cache().get_value(cache_key)
+        if cached_result:
+            return cached_result
         
         # Get softwares from sub-table
         softwares = frappe.get_all("Task Software",
@@ -3777,10 +3819,14 @@ def get_task_softwares(task_id):
             order_by="is_primary desc, software"
         )
         
-        return {
+        result = {
             'success': True,
             'softwares': softwares
         }
+        
+        # 缓存结果5分钟
+        frappe.cache().set_value(cache_key, result, expires_in_sec=300)
+        return result
         
     except Exception as e:
         frappe.log_error(f"Error getting task softwares: {str(e)}")
@@ -3822,6 +3868,10 @@ def set_task_softwares(task_id, softwares_data):
         
         task_doc.save()
         frappe.db.commit()
+        
+        # 清除相关缓存
+        cache_key = f"smart_accounting:task_softwares:{task_id}"
+        frappe.cache().delete_value(cache_key)
         
         return {
             'success': True,
@@ -4393,8 +4443,17 @@ def batch_archive_tasks(task_ids):
 def get_task_role_assignments(task_id, role_filter=None):
     """
     Get all role assignments for a specific task and optional role filter
+    带缓存机制和批量查询优化
     """
     try:
+        # 缓存键
+        cache_key = f"smart_accounting:task_roles:{task_id}:{role_filter or 'all'}"
+        
+        # 尝试从缓存获取
+        cached_result = frappe.cache().get_value(cache_key)
+        if cached_result:
+            return cached_result
+        
         # Build filters
         filters = {"parent": task_id}
         if role_filter:
@@ -4407,12 +4466,28 @@ def get_task_role_assignments(task_id, role_filter=None):
             order_by="is_primary desc, creation asc"
         )
         
-        # Get user info for each assignment
+        # 批量获取用户信息，避免N+1查询问题
         role_assignments = []
-        for assignment in assignments:
-            try:
-                user_info = frappe.get_value("User", assignment.user, 
-                    ["full_name", "email"], as_dict=True)
+        if assignments:
+            # 提取所有用户邮箱
+            user_emails = list(set([assignment.user for assignment in assignments]))
+            
+            # 批量查询用户信息
+            users_info = {}
+            if user_emails:
+                try:
+                    users_data = frappe.get_all("User",
+                        filters={"email": ["in", user_emails]},
+                        fields=["email", "full_name"],
+                        as_dict=True
+                    )
+                    users_info = {user.email: user for user in users_data}
+                except Exception as e:
+                    frappe.log_error(f"Error batch loading user info: {str(e)}")
+            
+            # 组装结果
+            for assignment in assignments:
+                user_info = users_info.get(assignment.user)
                 if user_info:
                     role_assignments.append({
                         "user": assignment.user,
@@ -4421,21 +4496,24 @@ def get_task_role_assignments(task_id, role_filter=None):
                         "full_name": user_info.full_name,
                         "email": user_info.email
                     })
-            except Exception as e:
-                frappe.log_error(f"Error getting user info for {assignment.user}: {str(e)}")
-                # Include assignment even if user info fails
-                role_assignments.append({
-                    "user": assignment.user,
-                    "role": assignment.role,
-                    "is_primary": assignment.is_primary,
-                    "full_name": assignment.user,
-                    "email": assignment.user
-                })
+                else:
+                    # 降级处理：用户信息获取失败时的默认值
+                    role_assignments.append({
+                        "user": assignment.user,
+                        "role": assignment.role,
+                        "is_primary": assignment.is_primary,
+                        "full_name": assignment.user,
+                        "email": assignment.user
+                    })
         
-        return {
+        result = {
             'success': True,
             'role_assignments': role_assignments
         }
+        
+        # 缓存结果5分钟
+        frappe.cache().set_value(cache_key, result, expires_in_sec=300)
+        return result
         
     except Exception as e:
         frappe.log_error(f"Error getting task role assignments: {str(e)}")

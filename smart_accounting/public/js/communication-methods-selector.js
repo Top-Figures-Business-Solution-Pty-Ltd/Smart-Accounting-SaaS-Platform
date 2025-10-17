@@ -10,16 +10,26 @@ class CommunicationMethodsSelectorManager {
         try {
             console.log('showCommunicationMethodsSelector called with:', taskId, fieldName);
             
-            // Get communication methods options from doctype definition
-            const methodOptions = ['WeChat', 'Email', 'Phone Call', 'Teams Group'];
+            // 立即显示空选择器，不等待数据加载
+            this.showEmptyCommunicationMethodsSelector($cell, taskId);
             
-            console.log('Communication methods options loaded:', methodOptions);
+            // 异步加载数据，不阻塞UI
+            this.loadCommunicationMethodsDataAsync($cell, taskId);
             
-            // Get current communication methods assignments
-            const currentMethods = await this.getCurrentTaskCommunicationMethods(taskId);
-            console.log('Current communication methods:', currentMethods);
+        } catch (error) {
+            console.error('Error in showCommunicationMethodsSelector:', error);
+            frappe.show_alert({
+                message: 'Error opening communication methods selector: ' + error.message,
+                indicator: 'red'
+            });
+        }
+    }
+
+    showEmptyCommunicationMethodsSelector($cell, taskId) {
+        // 默认通信方式选项
+        const defaultMethodOptions = ['WeChat', 'Email', 'Phone Call', 'Teams Group'];
         
-        // Create simple multi-select modal (Monday style)
+        // 创建带加载状态的选择器
         const selectorHTML = `
             <div class="pm-communication-methods-selector-modal" id="pm-communication-methods-selector-${taskId}">
                 <div class="pm-communication-methods-selector-content">
@@ -30,17 +40,18 @@ class CommunicationMethodsSelectorManager {
                         </button>
                     </div>
                     <div class="pm-communication-methods-selector-body">
-                        <div class="pm-communication-methods-options">
-                            ${methodOptions.map(method => {
-                                const isSelected = currentMethods.some(m => m.communication_method === method);
-                                const isPrimary = currentMethods.find(m => m.communication_method === method && m.is_primary);
+                        <div class="pm-communication-methods-loading" style="text-align: center; padding: 20px; color: #666;">
+                            <i class="fa fa-spinner fa-spin"></i>
+                            <span style="margin-left: 8px;">Loading current methods...</span>
+                        </div>
+                        <div class="pm-communication-methods-options" style="display: none;">
+                            ${defaultMethodOptions.map(method => {
                                 return `
-                                    <div class="pm-communication-method-option ${isSelected ? 'selected' : ''}" data-method="${method}">
+                                    <div class="pm-communication-method-option" data-method="${method}">
                                         <div class="pm-communication-method-checkbox">
-                                            <i class="fa fa-${isSelected ? 'check-' : ''}square-o"></i>
+                                            <i class="fa fa-square-o"></i>
                                         </div>
                                         <span class="pm-communication-method-name">${method}</span>
-                                        ${isPrimary ? '<span class="pm-primary-badge">Primary</span>' : ''}
                                     </div>
                                 `;
                             }).join('')}
@@ -57,14 +68,14 @@ class CommunicationMethodsSelectorManager {
             </div>
         `;
         
-        // Remove existing selector
+        // 移除现有选择器
         $('.pm-communication-methods-selector-modal').remove();
         
-        // Add to body
+        // 添加到页面
         $('body').append(selectorHTML);
         const $selector = $(`#pm-communication-methods-selector-${taskId}`);
         
-        // Position above the cell using viewport coordinates
+        // 定位选择器
         const cellRect = $cell[0].getBoundingClientRect();
         
         $selector.css({
@@ -75,22 +86,96 @@ class CommunicationMethodsSelectorManager {
             width: '300px'
         });
         
-        // Show with animation
+        // 立即显示选择器
         $selector.fadeIn(200);
         
-            // Bind events
-            this.bindCommunicationMethodsSelectorEvents($selector, $cell, taskId);
-            
+        // 绑定事件
+        this.bindCommunicationMethodsSelectorEvents($selector, $cell, taskId);
+    }
+
+    async loadCommunicationMethodsDataAsync($cell, taskId) {
+        const $selector = $(`#pm-communication-methods-selector-${taskId}`);
+        if ($selector.length === 0) return;
+
+        try {
+            // 加载当前通信方式，使用超时机制
+            const currentMethods = await this.getCurrentTaskCommunicationMethodsWithTimeout(taskId);
+            console.log('✅ Current communication methods loaded:', currentMethods);
+
+            // 更新选择器内容
+            this.updateCommunicationMethodsSelectorContent($selector, currentMethods);
+
         } catch (error) {
-            console.error('Error in showCommunicationMethodsSelector:', error);
-            frappe.show_alert({
-                message: 'Error opening communication methods selector: ' + error.message,
-                indicator: 'red'
-            });
+            console.error('❌ Error loading communication methods data:', error);
+            this.showCommunicationMethodsLoadError($selector, $cell, taskId);
         }
     }
 
+    async getCurrentTaskCommunicationMethodsWithTimeout(taskId, timeout = 5000) {
+        return Promise.race([
+            this.getCurrentTaskCommunicationMethods(taskId),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout')), timeout)
+            )
+        ]);
+    }
+
+    updateCommunicationMethodsSelectorContent($selector, currentMethods) {
+        // 隐藏加载状态
+        $selector.find('.pm-communication-methods-loading').hide();
+        
+        // 显示选项
+        $selector.find('.pm-communication-methods-options').show();
+        
+        // 更新选择状态
+        currentMethods.forEach(method => {
+            const $option = $selector.find(`[data-method="${method.communication_method}"]`);
+            if ($option.length > 0) {
+                $option.addClass('selected');
+                $option.find('.pm-communication-method-checkbox i')
+                    .removeClass('fa-square-o').addClass('fa-check-square-o');
+                
+                if (method.is_primary) {
+                    $option.append('<span class="pm-primary-badge">Primary</span>');
+                }
+            }
+        });
+    }
+
+    showCommunicationMethodsLoadError($selector, $cell, taskId) {
+        $selector.find('.pm-communication-methods-loading').html(`
+            <div style="text-align: center; padding: 20px; color: #e74c3c;">
+                <i class="fa fa-exclamation-triangle"></i>
+                <div style="margin-top: 8px;">Failed to load current methods</div>
+                <button class="pm-btn pm-btn-secondary pm-retry-methods-load" style="margin-top: 8px; font-size: 12px;">Retry</button>
+            </div>
+        `);
+        
+        // 显示默认选项
+        $selector.find('.pm-communication-methods-options').show();
+        
+        // 绑定重试事件
+        $selector.find('.pm-retry-methods-load').on('click', (e) => {
+            e.stopPropagation();
+            $selector.find('.pm-communication-methods-loading').html(`
+                <i class="fa fa-spinner fa-spin"></i>
+                <span style="margin-left: 8px;">Retrying...</span>
+            `);
+            this.loadCommunicationMethodsDataAsync($cell, taskId);
+        });
+    }
+
     bindCommunicationMethodsSelectorEvents($selector, $cell, taskId) {
+        // 重试加载数据
+        $selector.on('click', '.pm-retry-methods-load', (e) => {
+            e.stopPropagation();
+            $selector.find('.pm-communication-methods-loading').html(`
+                <i class="fa fa-spinner fa-spin"></i>
+                <span style="margin-left: 8px;">Retrying...</span>
+            `);
+            this.loadCommunicationMethodsDataAsync($cell, taskId);
+        });
+
         // Toggle method selection
         $selector.on('click', '.pm-communication-method-option', (e) => {
             const $option = $(e.currentTarget);
