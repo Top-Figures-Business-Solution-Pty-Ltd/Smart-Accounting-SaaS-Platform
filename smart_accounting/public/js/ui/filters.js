@@ -1158,7 +1158,22 @@ class FilterManager {
         // Add column management button to the header actions
         if ($('.pm-column-management-btn').length > 0) return; // Already added
         
-        // Add Manage Clients button first (to the left)
+        // Add CSV Export/Import buttons
+        const csvExportBtn = $(`
+            <button class="pm-btn pm-btn-secondary csv-export-btn" style="margin-right: 10px;">
+                <i class="fa fa-download"></i>
+                Export CSV
+            </button>
+        `);
+        
+        const csvImportBtn = $(`
+            <button class="pm-btn pm-btn-secondary csv-import-btn" style="margin-right: 10px;">
+                <i class="fa fa-upload"></i>
+                Import CSV
+            </button>
+        `);
+        
+        // Add Manage Clients button
         const clientsBtn = $(`
             <button class="pm-btn pm-btn-secondary pm-clients-management-btn" style="margin-right: 10px;">
                 <i class="fa fa-users"></i>
@@ -1173,10 +1188,23 @@ class FilterManager {
             </button>
         `);
         
+        // Add buttons to the actions area (in reverse order since we're prepending)
         $('.pm-actions').prepend(columnBtn);
         $('.pm-actions').prepend(clientsBtn);
+        $('.pm-actions').prepend(csvImportBtn);
+        $('.pm-actions').prepend(csvExportBtn);
         
         // Bind events
+        csvExportBtn.on('click', (e) => {
+            e.preventDefault();
+            this.showCSVExportDialog();
+        });
+        
+        csvImportBtn.on('click', (e) => {
+            e.preventDefault();
+            this.showCSVImportDialog();
+        });
+        
         clientsBtn.on('click', (e) => {
             e.preventDefault();
             this.showClientsManagementDialog();
@@ -1186,6 +1214,34 @@ class FilterManager {
             e.preventDefault();
             this.showColumnManagementDialog();
         });
+    }
+
+    showCSVExportDialog() {
+        // Show CSV export dialog using CSVManager
+        if (!window.CSVManager) {
+            console.error('CSVManager not loaded');
+            frappe.show_alert({
+                message: 'CSV export feature not available, please refresh the page',
+                indicator: 'red'
+            });
+            return;
+        }
+
+        window.CSVManager.showExportDialog();
+    }
+
+    showCSVImportDialog() {
+        // Show CSV import dialog using CSVManager
+        if (!window.CSVManager) {
+            console.error('CSVManager not loaded');
+            frappe.show_alert({
+                message: 'CSV import feature not available, please refresh the page',
+                indicator: 'red'
+            });
+            return;
+        }
+
+        window.CSVManager.showImportDialog();
     }
 
     showClientsManagementDialog() {

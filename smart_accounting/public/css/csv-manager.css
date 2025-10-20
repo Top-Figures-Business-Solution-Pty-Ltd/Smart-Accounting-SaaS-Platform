@@ -1,0 +1,548 @@
+/* Smart Accounting - CSV Manager Styles */
+
+/* 对话框遮罩 */
+.csv-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+/* 对话框主体 */
+.csv-dialog {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    max-width: 800px;
+    width: 100%;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 对话框头部 */
+.csv-dialog-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f8f9fa;
+}
+
+.csv-dialog-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.csv-dialog-close {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.csv-dialog-close:hover {
+    background: #e9ecef;
+    color: #495057;
+}
+
+/* 对话框内容 */
+.csv-dialog-content {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* 信息区域 */
+.csv-export-info,
+.csv-import-info {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 24px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.csv-info-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #495057;
+}
+
+.csv-info-item i {
+    color: #6c757d;
+    width: 16px;
+}
+
+/* 字段选择区域 */
+.csv-field-selection {
+    margin-bottom: 24px;
+}
+
+.csv-selection-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.csv-selection-header h4 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #495057;
+}
+
+.csv-selection-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.csv-fields-container {
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    max-height: 300px;
+    overflow-y: auto;
+    background: white;
+}
+
+.csv-field-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f3f4;
+    transition: background-color 0.2s ease;
+}
+
+.csv-field-item:last-child {
+    border-bottom: none;
+}
+
+.csv-field-item:hover {
+    background: #f8f9fa;
+}
+
+.csv-field-checkbox {
+    margin-right: 12px;
+    position: relative;
+}
+
+.csv-field-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.csv-field-info {
+    flex: 1;
+}
+
+.csv-field-label {
+    font-weight: 500;
+    color: #495057;
+    display: block;
+}
+
+.csv-field-key {
+    color: #6c757d;
+    font-size: 12px;
+}
+
+/* 导出选项 */
+.csv-export-options,
+.csv-import-options {
+    margin-bottom: 24px;
+}
+
+.csv-export-options h4,
+.csv-import-options h4 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #495057;
+}
+
+.csv-option-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.csv-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    color: #495057;
+}
+
+.csv-option input[type="checkbox"],
+.csv-option input[type="radio"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+/* 文件上传区域 */
+.csv-upload-section {
+    margin-bottom: 24px;
+}
+
+.csv-upload-section h4 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #495057;
+}
+
+.csv-upload-area {
+    border: 2px dashed #dee2e6;
+    border-radius: 8px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: #fafbfc;
+}
+
+.csv-upload-area:hover,
+.csv-upload-area.csv-drag-over {
+    border-color: #007bff;
+    background: #f0f8ff;
+}
+
+.csv-upload-content i {
+    font-size: 48px;
+    color: #6c757d;
+    margin-bottom: 16px;
+}
+
+.csv-upload-content p {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    color: #495057;
+}
+
+.csv-upload-content small {
+    color: #6c757d;
+}
+
+/* 文件信息显示 */
+.csv-file-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+}
+
+.csv-file-details {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.csv-file-details i {
+    font-size: 24px;
+    color: #28a745;
+}
+
+.csv-file-name {
+    font-weight: 500;
+    color: #495057;
+    margin-right: 8px;
+}
+
+.csv-file-size {
+    color: #6c757d;
+    font-size: 14px;
+}
+
+/* 预览区域 */
+.csv-preview-section {
+    margin-bottom: 24px;
+}
+
+.csv-preview-section h4 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #495057;
+}
+
+.csv-preview-container {
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    overflow: auto;
+    max-height: 200px;
+}
+
+.csv-preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.csv-preview-table th,
+.csv-preview-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f1f3f4;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.csv-preview-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: #495057;
+    position: sticky;
+    top: 0;
+}
+
+.csv-preview-table td {
+    color: #6c757d;
+}
+
+/* 对话框底部 */
+.csv-dialog-footer {
+    padding: 20px 24px;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    background: #f8f9fa;
+}
+
+/* Project selection styles */
+.csv-project-selection-info {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 24px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.csv-projects-container {
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    max-height: 300px;
+    overflow-y: auto;
+    background: white;
+}
+
+.csv-project-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f3f4;
+    transition: background-color 0.2s ease;
+}
+
+.csv-project-item:last-child {
+    border-bottom: none;
+}
+
+.csv-project-item:hover {
+    background: #f8f9fa;
+}
+
+.csv-project-checkbox {
+    margin-right: 12px;
+    position: relative;
+}
+
+.csv-project-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.csv-project-info {
+    flex: 1;
+}
+
+.csv-project-name {
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 4px;
+}
+
+.csv-project-details {
+    display: flex;
+    gap: 16px;
+    font-size: 13px;
+    color: #6c757d;
+}
+
+.csv-project-client {
+    font-weight: 500;
+}
+
+.csv-project-task-count {
+    color: #28a745;
+}
+
+.csv-project-summary {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 16px;
+    margin-top: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.csv-summary-item {
+    color: #495057;
+}
+
+.csv-summary-item strong {
+    color: #007bff;
+    font-size: 16px;
+}
+
+/* 导入结果样式 */
+.csv-import-results {
+    padding: 16px 0;
+}
+
+.csv-import-results h4 {
+    margin: 0 0 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.csv-import-results ul {
+    margin: 0 0 16px 0;
+    padding-left: 20px;
+}
+
+.csv-import-results li {
+    margin-bottom: 4px;
+}
+
+.csv-import-errors {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 4px;
+    padding: 12px;
+    margin-top: 16px;
+}
+
+.csv-import-errors h5 {
+    margin: 0 0 8px 0;
+    color: #856404;
+}
+
+.csv-import-errors ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.csv-import-errors li {
+    color: #856404;
+    font-size: 13px;
+    margin-bottom: 2px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .csv-dialog {
+        margin: 10px;
+        max-width: none;
+        width: calc(100% - 20px);
+    }
+    
+    .csv-dialog-content {
+        padding: 16px;
+    }
+    
+    .csv-export-info,
+    .csv-import-info {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .csv-selection-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .csv-dialog-footer {
+        flex-direction: column;
+    }
+    
+    .csv-dialog-footer .pm-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* 加载状态 */
+.csv-loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* 按钮样式增强 */
+.csv-export-btn,
+.csv-import-btn {
+    margin-right: 10px;
+}
+
+.csv-export-btn i,
+.csv-import-btn i {
+    margin-right: 6px;
+}
+
+/* 工具提示样式 */
+.csv-tooltip {
+    position: relative;
+    cursor: help;
+}
+
+.csv-tooltip:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 1000;
+}
