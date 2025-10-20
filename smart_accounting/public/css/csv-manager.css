@@ -205,6 +205,48 @@
     cursor: pointer;
 }
 
+/* 模板下载区域 */
+.csv-template-section {
+    margin-bottom: 24px;
+}
+
+.csv-template-section h4 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #495057;
+}
+
+.csv-template-info {
+    background: #e8f4fd;
+    border: 1px solid #bee5eb;
+    border-radius: 6px;
+    padding: 16px;
+    text-align: center;
+}
+
+.csv-template-info p {
+    margin: 0 0 16px 0;
+    color: #495057;
+}
+
+.csv-download-template {
+    background: #17a2b8;
+    border-color: #17a2b8;
+    color: white;
+}
+
+.csv-download-template:hover {
+    background: #138496;
+    border-color: #117a8b;
+}
+
+.csv-download-template:disabled {
+    background: #6c757d;
+    border-color: #6c757d;
+    opacity: 0.65;
+}
+
 /* 文件上传区域 */
 .csv-upload-section {
     margin-bottom: 24px;
@@ -231,6 +273,19 @@
 .csv-upload-area.csv-drag-over {
     border-color: #007bff;
     background: #f0f8ff;
+}
+
+.csv-upload-area.csv-error {
+    border-color: #dc3545;
+    background: #fff5f5;
+}
+
+.csv-upload-area.csv-error .csv-upload-content i {
+    color: #dc3545;
+}
+
+.csv-upload-area.csv-error .csv-upload-content p {
+    color: #dc3545;
 }
 
 .csv-upload-content i {
@@ -524,6 +579,68 @@
 .csv-export-btn i,
 .csv-import-btn i {
     margin-right: 6px;
+}
+
+/* 模板字段选择样式 */
+.csv-template-field-info {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 24px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.csv-template-preview {
+    margin-bottom: 24px;
+}
+
+.csv-template-preview h4 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #495057;
+}
+
+.csv-selected-fields-preview {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 16px;
+    min-height: 60px;
+}
+
+.csv-preview-summary {
+    margin-bottom: 12px;
+    color: #495057;
+}
+
+.csv-preview-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.csv-preview-field-tag {
+    background: #007bff;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.csv-template-options {
+    margin-bottom: 24px;
+}
+
+.csv-template-options h4 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #495057;
 }
 
 /* 工具提示样式 */

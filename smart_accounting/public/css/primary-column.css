@@ -267,7 +267,8 @@
 /* 确保在列配置更改后按钮样式保持一致 */
 .pm-cell.pm-primary-column .pm-subtask-toggle,
 .pm-cell.pm-primary-column .pm-comment-indicator {
-    /* 继承主列样式 */
+    position: relative;
+    z-index: 10;
 }
 
 /* 强制刷新后的按钮样式一致性 */

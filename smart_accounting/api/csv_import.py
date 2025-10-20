@@ -585,34 +585,42 @@ def log_import_activity(board_view, import_result):
         frappe.log_error(f"Error logging import activity: {str(e)}")
 
 @frappe.whitelist()
-def get_import_template(board_view):
+def get_import_template(board_view, selected_fields=None, include_examples=True, include_descriptions=False):
     """
     获取导入模板
     
     Args:
         board_view (str): board视图名称
+        selected_fields (list): 用户选择的字段列表
+        include_examples (bool): 是否包含示例数据
+        include_descriptions (bool): 是否包含字段描述
     
     Returns:
         dict: 模板信息
     """
     try:
+        # 解析参数
+        if isinstance(selected_fields, str):
+            import json
+            selected_fields = json.loads(selected_fields) if selected_fields else None
+        if isinstance(include_examples, str):
+            include_examples = include_examples.lower() == 'true'
+        if isinstance(include_descriptions, str):
+            include_descriptions = include_descriptions.lower() == 'true'
+        
         field_labels = get_field_labels()
         
-        # 生成模板CSV内容
-        template_headers = list(field_labels.values())
+        # 根据用户选择过滤字段
+        if selected_fields:
+            filtered_labels = {k: v for k, v in field_labels.items() if k in selected_fields}
+        else:
+            filtered_labels = field_labels
         
-        # 添加示例数据行
-        example_row = {
-            'Client Name': 'Example Client Ltd',
-            'Task Name': 'Annual Tax Return',
-            'Entity': 'Company',
-            'TF/TG': 'TF',
-            'Software': 'Xero',
-            'Status': 'Open',
-            'Target Month': '31-12-2024',
-            'Budget': '1500.00',
-            'Actual': '0.00'
-        }
+        # 生成模板CSV内容
+        template_headers = list(filtered_labels.values())
+        
+        # 动态生成示例数据行，避免hard coding
+        example_row = generate_example_row(filtered_labels) if include_examples else None
         
         # 生成CSV内容
         import csv
@@ -621,21 +629,39 @@ def get_import_template(board_view):
         output = StringIO()
         writer = csv.writer(output)
         
+        # 写入字段描述（如果启用）
+        if include_descriptions:
+            descriptions = []
+            for header in template_headers:
+                # 生成字段描述
+                field_key = next((k for k, v in filtered_labels.items() if v == header), '')
+                description = generate_field_description(field_key, header)
+                descriptions.append(description)
+            writer.writerow([f"# {desc}" for desc in descriptions])
+        
         # 写入标题
         writer.writerow(template_headers)
         
-        # 写入示例行
-        example_values = []
-        for header in template_headers:
-            example_values.append(example_row.get(header, ''))
-        writer.writerow(example_values)
+        # 写入示例行（如果启用）
+        if include_examples and example_row:
+            example_values = []
+            for header in template_headers:
+                example_values.append(example_row.get(header, ''))
+            writer.writerow(example_values)
         
         csv_content = output.getvalue()
+        
+        # 生成描述性文件名
+        field_count = len(filtered_labels)
+        timestamp = frappe.utils.now_datetime().strftime('%Y%m%d_%H%M%S')
+        filename = f'SmartAccounting_ImportTemplate_{board_view}_{field_count}fields_{timestamp}.csv'
         
         return {
             'success': True,
             'csv_content': csv_content,
-            'filename': f'SmartAccounting_ImportTemplate_{board_view}.csv'
+            'filename': filename,
+            'field_count': field_count,
+            'selected_fields': list(filtered_labels.keys())
         }
         
     except Exception as e:
@@ -644,3 +670,114 @@ def get_import_template(board_view):
             'success': False,
             'error': str(e)
         }
+
+def generate_example_row(field_labels):
+    """
+    动态生成示例数据行，避免hard coding
+    
+    Args:
+        field_labels (dict): 字段标签映射
+    
+    Returns:
+        dict: 示例数据行
+    """
+    # 定义字段类型和对应的示例值
+    example_values = {
+        # 文本字段
+        'Client Name': 'Example Client Ltd',
+        'Task Name': 'Annual Tax Return',
+        'Entity': 'Company',
+        'Note': 'Example task note',
+        'Review Note': 'Review completed',
+        'Software': 'Xero',
+        'Communication Methods': 'Email, Phone',
+        'Client Contact': 'John Smith',
+        'Action Person': 'Jane Doe',
+        'Preparer': 'Alice Johnson',
+        'Reviewer': 'Bob Wilson',
+        'Partner': 'Carol Brown',
+        'Engagement': 'Tax Services',
+        'Group': 'SME Clients',
+        'Frequency': 'Annual',
+        
+        # 选择字段
+        'TF/TG': 'TF',
+        'Status': 'Open',
+        'Priority': 'Medium',
+        
+        # 日期字段
+        'Target Month': '31-12-2024',
+        'Process Date': '15-11-2024',
+        'Lodgement Due': '31-01-2025',
+        'Year End': '30-06-2024',
+        'Reset Date': '01-07-2024',
+        'Last Updated': '20-10-2024',
+        
+        # 数值字段
+        'Budget': '1500.00',
+        'Actual': '0.00'
+    }
+    
+    # 根据实际可用字段生成示例行
+    example_row = {}
+    for field_key, field_label in field_labels.items():
+        if field_label in example_values:
+            example_row[field_label] = example_values[field_label]
+        else:
+            # 根据字段名称推断示例值
+            if 'date' in field_label.lower() or 'month' in field_label.lower():
+                example_row[field_label] = '31-12-2024'
+            elif 'budget' in field_label.lower() or 'actual' in field_label.lower() or 'amount' in field_label.lower():
+                example_row[field_label] = '1000.00'
+            elif 'status' in field_label.lower():
+                example_row[field_label] = 'Open'
+            elif 'priority' in field_label.lower():
+                example_row[field_label] = 'Medium'
+            elif 'name' in field_label.lower():
+                example_row[field_label] = f'Example {field_label}'
+            else:
+                example_row[field_label] = f'Sample {field_label}'
+    
+    return example_row
+
+def generate_field_description(field_key, field_label):
+    """
+    生成字段描述，用于模板文件
+    
+    Args:
+        field_key (str): 字段键
+        field_label (str): 字段标签
+    
+    Returns:
+        str: 字段描述
+    """
+    # 字段描述映射
+    field_descriptions = {
+        'client': 'Client company name (required)',
+        'task-name': 'Task or service description (required)',
+        'entity': 'Entity type (Company, Trust, Individual, etc.)',
+        'tf-tg': 'Top Figures or Third Generation (TF/TG)',
+        'software': 'Accounting software used (Xero, MYOB, etc.)',
+        'communication-methods': 'Preferred communication methods',
+        'client-contact': 'Primary client contact person',
+        'status': 'Task status (Open, In Progress, Completed, etc.)',
+        'note': 'Additional notes or comments',
+        'target-month': 'Target completion date (DD-MM-YYYY)',
+        'budget': 'Budgeted amount (decimal format)',
+        'actual': 'Actual amount spent (decimal format)',
+        'review-note': 'Review comments',
+        'action-person': 'Person responsible for action',
+        'preparer': 'Task preparer',
+        'reviewer': 'Task reviewer',
+        'partner': 'Partner assigned',
+        'process-date': 'Processing date (DD-MM-YYYY)',
+        'lodgment-due': 'Lodgement due date (DD-MM-YYYY)',
+        'engagement': 'Engagement type',
+        'group': 'Client group or category',
+        'year-end': 'Financial year end date (DD-MM-YYYY)',
+        'priority': 'Task priority (High, Medium, Low)',
+        'frequency': 'Task frequency (Annual, Quarterly, etc.)',
+        'reset-date': 'Reset date (DD-MM-YYYY)'
+    }
+    
+    return field_descriptions.get(field_key, f'{field_label} field')

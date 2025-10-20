@@ -440,6 +440,17 @@ class CSVManager {
                             </div>
                         </div>
                         
+                        <div class="csv-template-section">
+                            <h4>Download Template</h4>
+                            <div class="csv-template-info">
+                                <p>Download a template with the correct field structure for importing data:</p>
+                                <button class="pm-btn pm-btn-primary csv-download-template">
+                                    <i class="fa fa-download"></i>
+                                    Download Import Template
+                                </button>
+                            </div>
+                        </div>
+                        
                         <div class="csv-upload-section">
                             <h4>Select CSV File</h4>
                             <div class="csv-upload-area" id="csv-upload-area">
@@ -562,8 +573,15 @@ class CSVManager {
             }
         });
         
+        // Download template button
+        $dialog.on('click', '.csv-download-template', () => {
+            this.showTemplateFieldSelectionDialog();
+        });
+        
         // File upload area click
-        $dialog.on('click', '#csv-upload-area', () => {
+        $dialog.on('click', '#csv-upload-area', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             $('#csv-file-input').click();
         });
         
@@ -580,19 +598,32 @@ class CSVManager {
         // Drag and drop upload
         $dialog.on('dragover', '#csv-upload-area', (e) => {
             e.preventDefault();
+            e.stopPropagation();
+            $(e.currentTarget).addClass('csv-drag-over');
+        });
+        
+        $dialog.on('dragenter', '#csv-upload-area', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             $(e.currentTarget).addClass('csv-drag-over');
         });
         
         $dialog.on('dragleave', '#csv-upload-area', (e) => {
             e.preventDefault();
-            $(e.currentTarget).removeClass('csv-drag-over');
+            e.stopPropagation();
+            // Only remove class if leaving the upload area itself, not child elements
+            if (!$(e.currentTarget).is(e.relatedTarget) && !$(e.currentTarget).has(e.relatedTarget).length) {
+                $(e.currentTarget).removeClass('csv-drag-over');
+            }
         });
         
         $dialog.on('drop', '#csv-upload-area', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             $(e.currentTarget).removeClass('csv-drag-over');
+            
             const files = e.originalEvent.dataTransfer.files;
-            if (files.length > 0) {
+            if (files && files.length > 0) {
                 this.handleFileSelection(files[0]);
             }
         });
@@ -631,31 +662,75 @@ class CSVManager {
      * Handle file selection
      */
     handleFileSelection(file) {
-        if (!file) return;
+        if (!file) {
+            console.warn('No file provided to handleFileSelection');
+            return;
+        }
+        
+        // Clear any previous error states
+        $('#csv-upload-area').removeClass('csv-error');
         
         // Validate file type
         if (!file.name.toLowerCase().endsWith('.csv')) {
+            $('#csv-upload-area').addClass('csv-error');
             frappe.show_alert({
-                message: 'Please select a CSV format file',
+                message: 'Please select a CSV format file (.csv)',
                 indicator: 'red'
             });
+            this.resetFileInput();
             return;
         }
         
         // Validate file size (5MB)
         if (file.size > 5 * 1024 * 1024) {
+            $('#csv-upload-area').addClass('csv-error');
             frappe.show_alert({
                 message: 'File size cannot exceed 5MB',
                 indicator: 'red'
             });
+            this.resetFileInput();
             return;
         }
         
-        // Display file information
-        this.displayFileInfo(file);
+        // Validate file is not empty
+        if (file.size === 0) {
+            $('#csv-upload-area').addClass('csv-error');
+            frappe.show_alert({
+                message: 'Selected file is empty',
+                indicator: 'red'
+            });
+            this.resetFileInput();
+            return;
+        }
         
-        // Preview file content
-        this.previewCSVFile(file);
+        try {
+            // Display file information
+            this.displayFileInfo(file);
+            
+            // Preview file content
+            this.previewCSVFile(file);
+            
+            frappe.show_alert({
+                message: 'File loaded successfully',
+                indicator: 'green'
+            });
+        } catch (error) {
+            console.error('Error handling file selection:', error);
+            $('#csv-upload-area').addClass('csv-error');
+            frappe.show_alert({
+                message: 'Error processing file: ' + error.message,
+                indicator: 'red'
+            });
+            this.resetFileInput();
+        }
+    }
+    
+    /**
+     * Reset file input
+     */
+    resetFileInput() {
+        $('#csv-file-input').val('');
+        $('#csv-upload-area').removeClass('csv-drag-over csv-error');
     }
 
     /**
@@ -919,6 +994,284 @@ class CSVManager {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    }
+
+    /**
+     * Show template field selection dialog
+     */
+    showTemplateFieldSelectionDialog() {
+        const dialog = this.createTemplateFieldSelectionDialog();
+        $('body').append(dialog);
+        this.bindTemplateFieldSelectionEvents();
+        $('#csv-template-field-dialog').fadeIn(300);
+    }
+
+    /**
+     * Create template field selection dialog
+     */
+    createTemplateFieldSelectionDialog() {
+        const availableFieldsHtml = Object.entries(this.availableFields)
+            .map(([key, label]) => `
+                <div class="csv-field-item" data-field="${key}">
+                    <div class="csv-field-checkbox">
+                        <input type="checkbox" id="template-field-${key}" ${this.selectedFields.includes(key) ? 'checked' : ''}>
+                        <label for="template-field-${key}"></label>
+                    </div>
+                    <div class="csv-field-info">
+                        <span class="csv-field-label">${label}</span>
+                        <small class="csv-field-key">${key}</small>
+                    </div>
+                </div>
+            `).join('');
+
+        return $(`
+            <div class="csv-dialog-overlay" id="csv-template-field-dialog" style="display: none;">
+                <div class="csv-dialog">
+                    <div class="csv-dialog-header">
+                        <h3><i class="fa fa-download"></i> Select Fields for Template</h3>
+                        <button class="csv-dialog-close" title="Close">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="csv-dialog-content">
+                        <div class="csv-template-field-info">
+                            <div class="csv-info-item">
+                                <i class="fa fa-info-circle"></i>
+                                <span>Select the fields you want to include in the import template</span>
+                            </div>
+                            <div class="csv-info-item">
+                                <i class="fa fa-table"></i>
+                                <span>Board: <strong>${this.getCurrentBoardName()}</strong></span>
+                            </div>
+                        </div>
+                        
+                        <div class="csv-field-selection">
+                            <div class="csv-selection-header">
+                                <h4>Available Fields</h4>
+                                <div class="csv-selection-actions">
+                                    <button class="pm-btn pm-btn-link csv-template-select-all">Select All</button>
+                                    <button class="pm-btn pm-btn-link csv-template-select-none">Select None</button>
+                                    <button class="pm-btn pm-btn-link csv-template-select-visible">Current Visible</button>
+                                    <button class="pm-btn pm-btn-link csv-template-select-essential">Essential Only</button>
+                                </div>
+                            </div>
+                            
+                            <div class="csv-fields-container">
+                                ${availableFieldsHtml}
+                            </div>
+                        </div>
+                        
+                        <div class="csv-template-options">
+                            <h4>Template Options</h4>
+                            <div class="csv-option-group">
+                                <label class="csv-option">
+                                    <input type="checkbox" id="csv-template-include-examples" checked>
+                                    <span>Include example data row</span>
+                                </label>
+                                <label class="csv-option">
+                                    <input type="checkbox" id="csv-template-include-descriptions">
+                                    <span>Include field descriptions in header comments</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="csv-template-preview">
+                            <h4>Selected Fields Preview</h4>
+                            <div class="csv-selected-fields-preview" id="csv-selected-fields-preview">
+                                <em>Select fields to see preview</em>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="csv-dialog-footer">
+                        <button class="pm-btn pm-btn-secondary csv-cancel">Cancel</button>
+                        <button class="pm-btn pm-btn-primary csv-generate-template" disabled>
+                            <i class="fa fa-download"></i>
+                            Generate Template
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `);
+    }
+
+    /**
+     * Bind template field selection events
+     */
+    bindTemplateFieldSelectionEvents() {
+        const $dialog = $('#csv-template-field-dialog');
+        
+        // Close dialog
+        $dialog.on('click', '.csv-dialog-close, .csv-cancel', () => {
+            this.closeDialog('csv-template-field-dialog');
+        });
+        
+        // Click overlay to close
+        $dialog.on('click', (e) => {
+            if (e.target === $dialog[0]) {
+                this.closeDialog('csv-template-field-dialog');
+            }
+        });
+        
+        // Field selection actions
+        $dialog.on('click', '.csv-template-select-all', () => {
+            $dialog.find('.csv-field-item input[type="checkbox"]').prop('checked', true);
+            this.updateTemplateFieldPreview();
+        });
+        
+        $dialog.on('click', '.csv-template-select-none', () => {
+            $dialog.find('.csv-field-item input[type="checkbox"]').prop('checked', false);
+            this.updateTemplateFieldPreview();
+        });
+        
+        $dialog.on('click', '.csv-template-select-visible', () => {
+            $dialog.find('.csv-field-item input[type="checkbox"]').prop('checked', false);
+            this.selectedFields.forEach(field => {
+                $dialog.find(`#template-field-${field}`).prop('checked', true);
+            });
+            this.updateTemplateFieldPreview();
+        });
+        
+        $dialog.on('click', '.csv-template-select-essential', () => {
+            $dialog.find('.csv-field-item input[type="checkbox"]').prop('checked', false);
+            // Select essential fields
+            const essentialFields = ['client', 'task-name', 'status', 'target-month'];
+            essentialFields.forEach(field => {
+                $dialog.find(`#template-field-${field}`).prop('checked', true);
+            });
+            this.updateTemplateFieldPreview();
+        });
+        
+        // Field checkbox change
+        $dialog.on('change', '.csv-field-item input[type="checkbox"]', () => {
+            this.updateTemplateFieldPreview();
+        });
+        
+        // Generate template button
+        $dialog.on('click', '.csv-generate-template', () => {
+            this.generateCustomTemplate();
+        });
+        
+        // Initial preview update
+        this.updateTemplateFieldPreview();
+    }
+
+    /**
+     * Update template field preview
+     */
+    updateTemplateFieldPreview() {
+        const $dialog = $('#csv-template-field-dialog');
+        const selectedFields = [];
+        const selectedLabels = [];
+        
+        $dialog.find('.csv-field-item input[type="checkbox"]:checked').each((index, checkbox) => {
+            const $item = $(checkbox).closest('.csv-field-item');
+            const field = $item.data('field');
+            const label = $item.find('.csv-field-label').text();
+            
+            selectedFields.push(field);
+            selectedLabels.push(label);
+        });
+        
+        // Update preview
+        const $preview = $('#csv-selected-fields-preview');
+        if (selectedFields.length === 0) {
+            $preview.html('<em>No fields selected</em>');
+            $('.csv-generate-template').prop('disabled', true);
+        } else {
+            const previewHtml = `
+                <div class="csv-preview-summary">
+                    <strong>${selectedFields.length} fields selected:</strong>
+                </div>
+                <div class="csv-preview-fields">
+                    ${selectedLabels.map(label => `<span class="csv-preview-field-tag">${label}</span>`).join('')}
+                </div>
+            `;
+            $preview.html(previewHtml);
+            $('.csv-generate-template').prop('disabled', false);
+        }
+        
+        // Store selected fields for template generation
+        this.templateSelectedFields = selectedFields;
+    }
+
+    /**
+     * Generate custom template with selected fields
+     */
+    generateCustomTemplate() {
+        if (!this.templateSelectedFields || this.templateSelectedFields.length === 0) {
+            frappe.show_alert({
+                message: 'Please select at least one field for the template',
+                indicator: 'orange'
+            });
+            return;
+        }
+        
+        const includeExamples = $('#csv-template-include-examples').is(':checked');
+        const includeDescriptions = $('#csv-template-include-descriptions').is(':checked');
+        
+        // Show loading state
+        $('.csv-generate-template').prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Generating...');
+        
+        this.downloadImportTemplate(this.templateSelectedFields, includeExamples, includeDescriptions);
+    }
+
+    /**
+     * Download import template
+     */
+    downloadImportTemplate(selectedFields = null, includeExamples = true, includeDescriptions = false) {
+        // Show loading state
+        $('.csv-download-template').prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Generating...');
+        
+        frappe.call({
+            method: 'smart_accounting.api.csv_import.get_import_template',
+            args: {
+                board_view: this.currentView,
+                selected_fields: selectedFields,
+                include_examples: includeExamples,
+                include_descriptions: includeDescriptions
+            },
+            callback: (response) => {
+                if (response.message && response.message.success) {
+                    // Create and download the template file
+                    const blob = new Blob([response.message.csv_content], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    const url = URL.createObjectURL(blob);
+                    
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', response.message.filename);
+                    link.style.visibility = 'hidden';
+                    
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    frappe.show_alert({
+                        message: 'Template downloaded successfully',
+                        indicator: 'green'
+                    });
+                    
+                    // Close template field selection dialog if open
+                    this.closeDialog('csv-template-field-dialog');
+                } else {
+                    frappe.show_alert({
+                        message: response.message?.error || 'Failed to generate template',
+                        indicator: 'red'
+                    });
+                }
+            },
+            error: (error) => {
+                console.error('Template download error:', error);
+                frappe.show_alert({
+                    message: 'Error occurred while downloading template',
+                    indicator: 'red'
+                });
+            },
+            always: () => {
+                $('.csv-download-template').prop('disabled', false).html('<i class="fa fa-download"></i> Download Import Template');
+            }
+        });
     }
 
     /**

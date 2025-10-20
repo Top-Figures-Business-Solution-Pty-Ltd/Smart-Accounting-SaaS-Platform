@@ -325,41 +325,12 @@ def get_field_mapping():
         # Build dynamic field mapping
         field_mapping = {}
         
-        # Standard ERPNext fields
-        standard_fields = {
-            'task-name': 'subject',
-            'last-updated': 'modified',
-            'priority': 'priority',
-            'project': 'project'
-        }
+        # Standard ERPNext fields - 可扩展配置
+        standard_fields = get_standard_field_mapping()
         field_mapping.update(standard_fields)
         
-        # Discover custom fields dynamically
-        custom_field_patterns = {
-            'client': ['custom_client'],
-            'entity': ['custom_service_line', 'custom_entity', 'custom_entity_type'],
-            'tf-tg': ['custom_tftg', 'custom_tf_tg'],
-            'software': ['custom_softwares', 'custom_software'],
-            'communication-methods': ['custom_communication_methods'],
-            'client-contact': ['custom_companies', 'custom_client_contacts', 'custom_contacts'],
-            'status': ['custom_task_status', 'custom_status'],
-            'note': ['custom_note', 'custom_notes'],
-            'target-month': ['custom_target_month'],
-            'budget': ['custom_budget_planning', 'custom_budget'],
-            'actual': ['custom_actual_billing', 'custom_actual'],
-            'review-note': ['custom_review_notes'],
-            'action-person': ['custom_roles', 'custom_action_person'],
-            'preparer': ['custom_roles', 'custom_preparer'],
-            'reviewer': ['custom_roles', 'custom_reviewer'],
-            'partner': ['custom_roles', 'custom_partner'],
-            'process-date': ['custom_process_date'],
-            'lodgment-due': ['custom_lodgement_due_date', 'custom_lodgement_due', 'custom_due_date'],
-            'engagement': ['custom_engagement'],
-            'group': ['custom_companies', 'custom_client_group', 'custom_group'],
-            'year-end': ['custom_year_end'],
-            'frequency': ['custom_frequency'],
-            'reset-date': ['custom_reset_date']
-        }
+        # Discover custom fields dynamically - 使用可扩展配置
+        custom_field_patterns = get_custom_field_patterns()
         
         # Get all available fields in Task doctype
         available_fields = {field.fieldname: field for field in task_meta.fields}
@@ -401,36 +372,8 @@ def get_field_labels():
         # Build dynamic labels
         field_labels = {}
         
-        # Default labels for standard fields
-        default_labels = {
-            'client': 'Client Name',
-            'task-name': 'Task Name',
-            'project': 'Project Name',
-            'entity': 'Entity',
-            'tf-tg': 'TF/TG',
-            'software': 'Software',
-            'communication-methods': 'Communication Methods',
-            'client-contact': 'Client Contact',
-            'status': 'Status',
-            'note': 'Note',
-            'target-month': 'Target Month',
-            'budget': 'Budget',
-            'actual': 'Actual',
-            'review-note': 'Review Note',
-            'action-person': 'Action Person',
-            'preparer': 'Preparer',
-            'reviewer': 'Reviewer',
-            'partner': 'Partner',
-            'process-date': 'Process Date',
-            'lodgment-due': 'Lodgement Due',
-            'engagement': 'Engagement',
-            'group': 'Group',
-            'year-end': 'Year End',
-            'last-updated': 'Last Updated',
-            'priority': 'Priority',
-            'frequency': 'Frequency',
-            'reset-date': 'Reset Date'
-        }
+        # Default labels for standard fields - 使用可扩展配置
+        default_labels = get_default_field_labels()
         
         # For each mapped field, try to get the actual label from doctype
         for frontend_field, db_field in field_mapping.items():
@@ -614,3 +557,90 @@ def get_export_field_options(board_view):
             'success': False,
             'error': str(e)
         }
+
+def get_standard_field_mapping():
+    """
+    获取标准ERPNext字段映射，便于扩展和维护
+    
+    Returns:
+        dict: 标准字段映射
+    """
+    return {
+        'task-name': 'subject',
+        'last-updated': 'modified',
+        'priority': 'priority',
+        'project': 'project',
+        'creation': 'creation',
+        'owner': 'owner',
+        'modified_by': 'modified_by'
+    }
+
+def get_custom_field_patterns():
+    """
+    获取自定义字段模式，便于扩展新字段
+    
+    Returns:
+        dict: 自定义字段模式映射
+    """
+    return {
+        'client': ['custom_client', 'custom_client_name'],
+        'entity': ['custom_service_line', 'custom_entity', 'custom_entity_type'],
+        'tf-tg': ['custom_tftg', 'custom_tf_tg'],
+        'software': ['custom_softwares', 'custom_software'],
+        'communication-methods': ['custom_communication_methods'],
+        'client-contact': ['custom_companies', 'custom_client_contacts', 'custom_contacts'],
+        'status': ['custom_task_status', 'custom_status'],
+        'note': ['custom_note', 'custom_notes'],
+        'target-month': ['custom_target_month'],
+        'budget': ['custom_budget_planning', 'custom_budget'],
+        'actual': ['custom_actual_billing', 'custom_actual'],
+        'review-note': ['custom_review_notes'],
+        'action-person': ['custom_roles', 'custom_action_person'],
+        'preparer': ['custom_roles', 'custom_preparer'],
+        'reviewer': ['custom_roles', 'custom_reviewer'],
+        'partner': ['custom_roles', 'custom_partner'],
+        'process-date': ['custom_process_date'],
+        'lodgment-due': ['custom_lodgement_due_date', 'custom_lodgement_due', 'custom_due_date'],
+        'engagement': ['custom_engagement'],
+        'group': ['custom_companies', 'custom_client_group', 'custom_group'],
+        'year-end': ['custom_year_end'],
+        'frequency': ['custom_frequency'],
+        'reset-date': ['custom_reset_date']
+    }
+
+def get_default_field_labels():
+    """
+    获取默认字段标签，便于扩展和本地化
+    
+    Returns:
+        dict: 默认字段标签
+    """
+    return {
+        'client': 'Client Name',
+        'task-name': 'Task Name',
+        'project': 'Project Name',
+        'entity': 'Entity',
+        'tf-tg': 'TF/TG',
+        'software': 'Software',
+        'communication-methods': 'Communication Methods',
+        'client-contact': 'Client Contact',
+        'status': 'Status',
+        'note': 'Note',
+        'target-month': 'Target Month',
+        'budget': 'Budget',
+        'actual': 'Actual',
+        'review-note': 'Review Note',
+        'action-person': 'Action Person',
+        'preparer': 'Preparer',
+        'reviewer': 'Reviewer',
+        'partner': 'Partner',
+        'process-date': 'Process Date',
+        'lodgment-due': 'Lodgement Due',
+        'engagement': 'Engagement',
+        'group': 'Group',
+        'year-end': 'Year End',
+        'last-updated': 'Last Updated',
+        'priority': 'Priority',
+        'frequency': 'Frequency',
+        'reset-date': 'Reset Date'
+    }
