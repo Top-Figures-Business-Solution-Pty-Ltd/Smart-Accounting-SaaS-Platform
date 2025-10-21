@@ -58,6 +58,9 @@ class ProjectManagement {
             this.applyPartitionColumnConfig();
             this.addColumnManagementButton();
             
+            // Initialize display type support
+            this.initializeDisplayType();
+            
             // 完成加载，切换到真实内容
             this.finishLoading();
         });
@@ -568,6 +571,10 @@ class ProjectManagement {
 
     addColumnManagementButton() {
         this.filterManager.addColumnManagementButton();
+    }
+
+    initializeDisplayType() {
+        this.tableManager.initializeDisplayType();
     }
 
     bindMainDashboardEvents() {

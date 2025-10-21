@@ -178,7 +178,7 @@ def get_child_partitions(parent_partition):
         return []
 
 @frappe.whitelist()
-def create_partition(partition_name, is_workspace=False, parent_partition=None, description="", icon=""):
+def create_partition(partition_name, is_workspace=False, parent_partition=None, description="", icon="", board_display_type=None):
     """
     Create a new partition (workspace or board)
     """
@@ -214,6 +214,17 @@ def create_partition(partition_name, is_workspace=False, parent_partition=None, 
         new_partition.is_workspace = 1 if is_workspace else 0
         new_partition.description = description
         new_partition.icon = icon
+        
+        # Set board display type for boards (not workspaces)
+        if not is_workspace and board_display_type:
+            # Validate display type
+            valid_types = ["Task-Centric", "Contact-Centric", "Client-Centric"]
+            if board_display_type in valid_types:
+                new_partition.board_display_type = board_display_type
+            else:
+                new_partition.board_display_type = "Task-Centric"  # Default fallback
+        elif not is_workspace:
+            new_partition.board_display_type = "Task-Centric"  # Default for boards
         
         if parent_partition:
             # Validate parent exists
@@ -1082,6 +1093,7 @@ def get_project_management_data(view='main'):
             return get_main_dashboard_data()
         
         # Check if this is a workspace (should not show tasks, only overview)
+        # Also check board display type for different data loading
         if view != 'main':
             try:
                 # First check if partition exists before trying to get it
@@ -1090,6 +1102,14 @@ def get_project_management_data(view='main'):
                     if partition_doc.is_workspace:
                         # For workspaces, return child boards overview instead of tasks
                         return get_workspace_overview_data(view)
+                    else:
+                        # For boards, check display type
+                        board_display_type = getattr(partition_doc, 'board_display_type', 'Task-Centric')
+                        if board_display_type == 'Contact-Centric':
+                            return get_contact_centric_data(view)
+                        elif board_display_type == 'Client-Centric':
+                            return get_client_centric_data(view)
+                        # Continue with Task-Centric (default) below
             except Exception as e:
                 print(f"DEBUG: Error checking workspace status for view {view}: {str(e)}")
                 pass
@@ -5824,4 +5844,186 @@ def handle_login_redirect():
             'success': False,
             'redirect_url': '/login',
             'message': 'Error processing request'
+        }
+
+def get_contact_centric_data(view='main'):
+    """
+    Get contact-centric data for Contact-Centric board display type
+    """
+    try:
+        # Get contacts with custom fields
+        contacts = frappe.db.get_all("Contact", 
+            fields=[
+                'name', 'first_name', 'last_name', 'email_id', 'phone', 'mobile_no',
+                'company_name', 'designation', 'department', 'status', 'address',
+                'custom_last_contact_date', 'custom_contact_notes', 'creation', 'modified'
+            ],
+            filters=[['status', '!=', 'Disabled']],
+            order_by='first_name asc'
+        )
+        
+        # Organize contacts data
+        organized_data = {}
+        total_contacts = len(contacts)
+        
+        for contact in contacts:
+            # Group by company or use 'Individual' for contacts without company
+            company_key = contact.get('company_name') or 'Individual Contacts'
+            
+            if company_key not in organized_data:
+                organized_data[company_key] = {
+                    'company_name': company_key,
+                    'contacts': [],
+                    'contact_count': 0
+                }
+            
+            # Format contact data
+            contact_data = {
+                'name': contact.get('name'),
+                'contact_name': f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip(),
+                'first_name': contact.get('first_name'),
+                'last_name': contact.get('last_name'),
+                'email_id': contact.get('email_id'),
+                'phone': contact.get('phone') or contact.get('mobile_no'),
+                'company_name': contact.get('company_name'),
+                'designation': contact.get('designation'),
+                'department': contact.get('department'),
+                'status': contact.get('status'),
+                'custom_last_contact_date': format_date_for_display(contact.get('custom_last_contact_date')),
+                'custom_contact_notes': contact.get('custom_contact_notes'),
+                'creation': format_date_for_display(contact.get('creation')),
+                'modified': format_date_for_display(contact.get('modified'))
+            }
+            
+            organized_data[company_key]['contacts'].append(contact_data)
+            organized_data[company_key]['contact_count'] += 1
+        
+        return {
+            'organized_data': organized_data,
+            'total_companies': len(organized_data),
+            'total_contacts': total_contacts,
+            'display_type': 'Contact-Centric',
+            'debug_info': {'message': f'Loaded {total_contacts} contacts from {len(organized_data)} companies'}
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error loading contact-centric data: {str(e)}")
+        return {
+            'organized_data': {},
+            'total_companies': 0,
+            'total_contacts': 0,
+            'display_type': 'Contact-Centric',
+            'error': str(e)
+        }
+
+def get_client_centric_data(view='main'):
+    """
+    Get client-centric data for Client-Centric board display type
+    """
+    try:
+        # Get customers (clients)
+        customers = frappe.db.get_all("Customer", 
+            fields=[
+                'name', 'customer_name', 'customer_group', 'territory', 'customer_type',
+                'creation', 'modified', 'disabled'
+            ],
+            filters=[['disabled', '!=', 1]],
+            order_by='customer_name asc'
+        )
+        
+        # Get related Client Project Info data
+        client_project_info = {}
+        if customers:
+            customer_names = [c['name'] for c in customers]
+            project_infos = frappe.db.get_all("Client Project Info",
+                fields=[
+                    'client', 'priority_level', 'accountant', 'darren_progress', 
+                    'darren_risks', 'industry', 'darren_scope'
+                ],
+                filters=[['client', 'in', customer_names]]
+            )
+            
+            for info in project_infos:
+                client_project_info[info['client']] = info
+        
+        # Get related Client Referral data
+        client_referrals = {}
+        if customers:
+            customer_names = [c['name'] for c in customers]
+            referrals = frappe.db.get_all("Client Referral",
+                fields=[
+                    'client', 'referral_person', 'relationship_type', 'referral_status',
+                    'referral_method', 'referral_notes'
+                ],
+                filters=[['client', 'in', customer_names]]
+            )
+            
+            for referral in referrals:
+                if referral['client'] not in client_referrals:
+                    client_referrals[referral['client']] = []
+                client_referrals[referral['client']].append(referral)
+        
+        # Organize client data
+        organized_data = {}
+        total_clients = len(customers)
+        
+        for customer in customers:
+            # Group by customer group or use 'General' for customers without group
+            group_key = customer.get('customer_group') or 'General Clients'
+            
+            if group_key not in organized_data:
+                organized_data[group_key] = {
+                    'group_name': group_key,
+                    'clients': [],
+                    'client_count': 0
+                }
+            
+            # Get related project info and referrals
+            project_info = client_project_info.get(customer['name'], {})
+            referrals = client_referrals.get(customer['name'], [])
+            
+            # Format client data
+            client_data = {
+                'name': customer.get('name'),
+                'customer_name': customer.get('customer_name'),
+                'customer_group': customer.get('customer_group'),
+                'territory': customer.get('territory'),
+                'customer_type': customer.get('customer_type'),
+                'creation': format_date_for_display(customer.get('creation')),
+                'modified': format_date_for_display(customer.get('modified')),
+                
+                # Project info fields
+                'priority_level': project_info.get('priority_level'),
+                'accountant': project_info.get('accountant'),
+                'darren_progress': project_info.get('darren_progress'),
+                'darren_risks': project_info.get('darren_risks'),
+                'industry': project_info.get('industry'),
+                'darren_scope': project_info.get('darren_scope'),
+                
+                # Referral info (use first referral if multiple)
+                'referral_person': referrals[0].get('referral_person') if referrals else None,
+                'relationship_type': referrals[0].get('relationship_type') if referrals else None,
+                'referral_status': referrals[0].get('referral_status') if referrals else None,
+                'referral_count': len(referrals)
+            }
+            
+            organized_data[group_key]['clients'].append(client_data)
+            organized_data[group_key]['client_count'] += 1
+        
+        return {
+            'organized_data': organized_data,
+            'total_groups': len(organized_data),
+            'total_clients': total_clients,
+            'display_type': 'Client-Centric',
+            'debug_info': {'message': f'Loaded {total_clients} clients from {len(organized_data)} groups'}
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error loading client-centric data: {str(e)}")
+        return {
+            'organized_data': {},
+            'total_groups': 0,
+            'total_clients': 0,
+            'display_type': 'Client-Centric',
+            'error': str(e)
         }

@@ -5,6 +5,14 @@ class FilterManager {
     constructor() {
         this.utils = window.PMUtils;
         this.filterChangeTimeout = null;
+        this.displayTypeManager = window.displayTypeManager;
+        this.currentDisplayType = 'Task-Centric';
+        
+        // Listen for display type changes
+        $(document).on('displayTypeChanged', (event, data) => {
+            this.currentDisplayType = data.displayType;
+            this.updateFiltersForDisplayType(data.config);
+        });
     }
 
     // Unified Dropdown Management
@@ -1465,6 +1473,97 @@ class FilterManager {
     initializeFilterColumnOptions() {
         // Update column options when filter panel is first opened
         this.updateFilterColumnOptions();
+    }
+
+    /**
+     * Update filters based on display type
+     */
+    updateFiltersForDisplayType(config) {
+        if (!config || !config.filters) return;
+        
+        // Update filter options based on display type
+        this.updateFilterColumnOptions();
+        
+        // Update filter labels and options
+        this.updateFilterLabels(config);
+        
+        // Reset current filters if they're not applicable to new display type
+        this.resetIncompatibleFilters(config);
+    }
+
+    updateFilterLabels(config) {
+        // Update filter dropdown labels based on display type
+        const $personFilter = $('.pm-person-filter-dropdown .pm-filter-label');
+        const $clientFilter = $('.pm-client-filter-dropdown .pm-filter-label');
+        const $statusFilter = $('.pm-status-filter-dropdown .pm-filter-label');
+        
+        switch (config.name) {
+            case 'Contact-Centric':
+                $personFilter.text('Company');
+                $clientFilter.text('Contact Status');
+                $statusFilter.text('Contact Type');
+                break;
+            case 'Client-Centric':
+                $personFilter.text('Accountant');
+                $clientFilter.text('Customer Group');
+                $statusFilter.text('Priority Level');
+                break;
+            default: // Task-Centric
+                $personFilter.text('Person');
+                $clientFilter.text('Client');
+                $statusFilter.text('Status');
+                break;
+        }
+    }
+
+    resetIncompatibleFilters(config) {
+        // Reset filters that don't apply to the new display type
+        const currentFilters = this.getCurrentFilters();
+        const validFilterKeys = config.filters.map(f => f.key);
+        
+        // Clear filters that are not valid for the new display type
+        Object.keys(currentFilters).forEach(filterKey => {
+            if (!validFilterKeys.includes(filterKey)) {
+                this.clearFilter(filterKey);
+            }
+        });
+    }
+
+    getCurrentFilters() {
+        // Return current active filters
+        return {
+            person: $('.pm-person-filter-dropdown').data('selected-value'),
+            client: $('.pm-client-filter-dropdown').data('selected-value'),
+            status: $('.pm-status-filter-dropdown').data('selected-value')
+        };
+    }
+
+    clearFilter(filterKey) {
+        // Clear specific filter
+        switch (filterKey) {
+            case 'person':
+                $('.pm-person-filter-dropdown').removeData('selected-value');
+                $('.pm-person-filter-dropdown .pm-filter-text').text('All People');
+                break;
+            case 'client':
+                $('.pm-client-filter-dropdown').removeData('selected-value');
+                $('.pm-client-filter-dropdown .pm-filter-text').text('All Clients');
+                break;
+            case 'status':
+                $('.pm-status-filter-dropdown').removeData('selected-value');
+                $('.pm-status-filter-dropdown .pm-filter-text').text('All Status');
+                break;
+        }
+    }
+
+    // Check if current display type supports a specific filter
+    supportsFilter(filterType) {
+        if (!this.displayTypeManager) return true;
+        
+        const config = this.displayTypeManager.getDisplayTypeConfig(this.currentDisplayType);
+        if (!config || !config.filters) return false;
+        
+        return config.filters.some(filter => filter.key === filterType);
     }
 }
 

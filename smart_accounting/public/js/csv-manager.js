@@ -7,9 +7,17 @@ class CSVManager {
         this.currentBoardData = null;
         this.availableFields = {};
         this.selectedFields = [];
+        this.displayTypeManager = window.displayTypeManager;
+        this.currentDisplayType = 'Task-Centric';
         
         // Initialize current view information
         this.initializeCurrentView();
+        
+        // Listen for display type changes
+        $(document).on('displayTypeChanged', (event, data) => {
+            this.currentDisplayType = data.displayType;
+            this.updateFieldsForDisplayType(data.config);
+        });
     }
 
     /**
@@ -1303,6 +1311,114 @@ class CSVManager {
             message: message,
             indicator: 'green'
         });
+    }
+
+    /**
+     * Update available fields based on display type
+     */
+    updateFieldsForDisplayType(config) {
+        if (!config || !config.columns) return;
+        
+        // Update available fields based on display type columns
+        this.availableFields = {};
+        config.columns.forEach(column => {
+            this.availableFields[column.key] = column.label;
+        });
+        
+        // Update selected fields to match display type
+        this.selectedFields = config.columns
+            .filter(column => column.primary || column.key === 'name')
+            .map(column => column.key);
+        
+        // If no primary columns, select first few columns
+        if (this.selectedFields.length === 0) {
+            this.selectedFields = Object.keys(this.availableFields).slice(0, 5);
+        }
+        
+        console.log('CSV Manager updated for display type:', config.name, {
+            availableFields: this.availableFields,
+            selectedFields: this.selectedFields
+        });
+    }
+
+    /**
+     * Get export data based on current display type
+     */
+    getExportDataForDisplayType() {
+        // This method should be called by the export functionality
+        // to get data in the format appropriate for the current display type
+        
+        switch (this.currentDisplayType) {
+            case 'Contact-Centric':
+                return this.getContactCentricExportData();
+            case 'Client-Centric':
+                return this.getClientCentricExportData();
+            default: // Task-Centric
+                return this.getTaskCentricExportData();
+        }
+    }
+
+    getContactCentricExportData() {
+        // Extract contact data from current page
+        const contacts = [];
+        $('.pm-project-group').each(function() {
+            const companyName = $(this).find('.pm-group-header h3').text().trim();
+            $(this).find('.pm-task-row').each(function() {
+                const contactData = {
+                    company_name: companyName,
+                    contact_name: $(this).find('[data-column="contact-name"]').text().trim(),
+                    email_id: $(this).find('[data-column="email"]').text().trim(),
+                    phone: $(this).find('[data-column="phone"]').text().trim(),
+                    status: $(this).find('[data-column="status"]').text().trim(),
+                    custom_last_contact_date: $(this).find('[data-column="last-contact"]').text().trim(),
+                    custom_contact_notes: $(this).find('[data-column="notes"]').text().trim()
+                };
+                contacts.push(contactData);
+            });
+        });
+        return contacts;
+    }
+
+    getClientCentricExportData() {
+        // Extract client data from current page
+        const clients = [];
+        $('.pm-project-group').each(function() {
+            const groupName = $(this).find('.pm-group-header h3').text().trim();
+            $(this).find('.pm-task-row').each(function() {
+                const clientData = {
+                    customer_group: groupName,
+                    customer_name: $(this).find('[data-column="client-name"]').text().trim(),
+                    priority_level: $(this).find('[data-column="priority-level"]').text().trim(),
+                    accountant: $(this).find('[data-column="accountant"]').text().trim(),
+                    darren_progress: $(this).find('[data-column="progress"]').text().trim(),
+                    referral_person: $(this).find('[data-column="referral"]').text().trim(),
+                    industry: $(this).find('[data-column="industry"]').text().trim(),
+                    darren_risks: $(this).find('[data-column="risk-profile"]').text().trim()
+                };
+                clients.push(clientData);
+            });
+        });
+        return clients;
+    }
+
+    getTaskCentricExportData() {
+        // Extract task data from current page (existing functionality)
+        const tasks = [];
+        $('.pm-project-group').each(function() {
+            const clientName = $(this).find('.pm-group-header h3').text().trim();
+            $(this).find('.pm-task-row').each(function() {
+                const taskData = {
+                    client: clientName,
+                    subject: $(this).find('[data-column="task-name"]').text().trim(),
+                    status: $(this).find('[data-column="status"]').text().trim(),
+                    priority: $(this).find('[data-column="priority"]').text().trim(),
+                    assigned_to: $(this).find('[data-column="action-person"]').text().trim(),
+                    exp_end_date: $(this).find('[data-column="target-month"]').text().trim()
+                };
+                tasks.push(taskData);
+            });
+        });
+        return tasks;
     }
 }
 

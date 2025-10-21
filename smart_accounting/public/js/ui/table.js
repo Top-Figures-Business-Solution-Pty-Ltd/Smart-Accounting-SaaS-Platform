@@ -17,6 +17,10 @@ class TableManager {
         this.dataCount = 0;
         this.isLargeDataset = false;
         this.chunkLoadingEnabled = false;
+        
+        // Display Type Support
+        this.currentDisplayType = 'Task-Centric';
+        this.displayTypeManager = window.displayTypeManager;
     }
 
     // Column Resizing Functionality
@@ -944,6 +948,158 @@ class TableManager {
                 }
             },
         });
+    }
+
+    // Display Type Management Methods
+    detectDisplayType() {
+        // Try to detect display type from current data or URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const view = urlParams.get('view') || 'main';
+        
+        if (view === 'main') {
+            this.currentDisplayType = 'Task-Centric';
+            return this.currentDisplayType;
+        }
+        
+        // Check if we have display type information in the data
+        if (window.PM_CONFIG && window.PM_CONFIG.project_data && window.PM_CONFIG.project_data.display_type) {
+            this.currentDisplayType = window.PM_CONFIG.project_data.display_type;
+        } else {
+            // Default to Task-Centric if not specified
+            this.currentDisplayType = 'Task-Centric';
+        }
+        
+        return this.currentDisplayType;
+    }
+
+    setDisplayType(displayType) {
+        if (this.displayTypeManager && this.displayTypeManager.isValidDisplayType(displayType)) {
+            this.currentDisplayType = displayType;
+            this.updateTableForDisplayType();
+        }
+    }
+
+    updateTableForDisplayType() {
+        // Update table headers and columns based on display type
+        const config = this.displayTypeManager.getDisplayTypeConfig(this.currentDisplayType);
+        
+        if (!config) return;
+        
+        // Update column configuration
+        this.updateColumnConfiguration(config.columns);
+        
+        // Update table headers
+        this.updateTableHeaders(config.columns);
+        
+        // Update data rendering
+        this.updateDataRendering(config);
+    }
+
+    updateColumnConfiguration(columns) {
+        // Update column widths and visibility based on display type
+        const newColumnWidths = {};
+        
+        columns.forEach(column => {
+            if (column.width) {
+                newColumnWidths[column.key] = column.width;
+            }
+        });
+        
+        // Merge with existing column widths
+        this.columnWidths = { ...this.columnWidths, ...newColumnWidths };
+        
+        // Apply the new widths
+        this.applyColumnWidths();
+    }
+
+    updateTableHeaders(columns) {
+        // Update table headers to match display type columns
+        const $headerRow = $('.pm-table-header .pm-header-row');
+        
+        if ($headerRow.length === 0) return;
+        
+        // Clear existing headers (except multi-select checkbox)
+        $headerRow.find('.pm-header-cell:not(.pm-select-all-cell)').remove();
+        
+        // Add new headers based on display type
+        columns.forEach(column => {
+            const headerHtml = `
+                <div class="pm-header-cell" data-column="${column.key}">
+                    <div class="pm-header-content">
+                        <span class="pm-header-label">${column.label}</span>
+                        ${column.sortable ? '<i class="pm-sort-icon fa fa-sort"></i>' : ''}
+                    </div>
+                    <div class="pm-column-resizer"></div>
+                </div>
+            `;
+            $headerRow.append(headerHtml);
+        });
+        
+        // Re-apply column widths
+        this.applyColumnWidths();
+    }
+
+    updateDataRendering(config) {
+        // This method will be called to update how data is rendered in table rows
+        // The actual data rendering happens in other parts of the system
+        // We just need to ensure the table structure is ready
+        
+        // Add a class to the table container to indicate display type
+        $('.pm-table-container')
+            .removeClass('display-type-task-centric display-type-contact-centric display-type-client-centric')
+            .addClass(`display-type-${config.name.toLowerCase().replace('-', '-')}`);
+        
+        // Store display type info for other components
+        window.PM_CURRENT_DISPLAY_TYPE = this.currentDisplayType;
+        
+        // Trigger event for other components to update
+        $(document).trigger('displayTypeChanged', {
+            displayType: this.currentDisplayType,
+            config: config
+        });
+    }
+
+    // Helper method to get column configuration for current display type
+    getCurrentColumns() {
+        if (!this.displayTypeManager) return [];
+        
+        const config = this.displayTypeManager.getDisplayTypeConfig(this.currentDisplayType);
+        return config ? config.columns : [];
+    }
+
+    // Helper method to check if current display type supports a specific feature
+    supportsFeature(feature) {
+        const config = this.displayTypeManager.getDisplayTypeConfig(this.currentDisplayType);
+        
+        switch (feature) {
+            case 'inline_editing':
+                return this.currentDisplayType === 'Task-Centric';
+            case 'multi_select':
+                return true; // All display types support multi-select
+            case 'column_resizing':
+                return true; // All display types support column resizing
+            case 'sorting':
+                return config && config.columns.some(col => col.sortable);
+            case 'filtering':
+                return config && config.filters && config.filters.length > 0;
+            default:
+                return false;
+        }
+    }
+
+    // Initialize display type detection and setup
+    initializeDisplayType() {
+        this.detectDisplayType();
+        
+        // Listen for display type changes
+        $(document).on('displayTypeChanged', (event, data) => {
+            console.log('Display type changed to:', data.displayType);
+        });
+        
+        // Update table for current display type
+        setTimeout(() => {
+            this.updateTableForDisplayType();
+        }, 100);
     }
 }
 

@@ -659,3 +659,130 @@ body.main-dashboard-view .pm-card-stats i {
         transform: translateY(0) scale(1);
     }
 }
+
+/* Display Type Selector Styles */
+.pm-display-type-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.pm-display-type-option {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    border: 2px solid var(--monday-border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: white;
+    position: relative;
+}
+
+.pm-display-type-option:hover {
+    border-color: var(--monday-blue);
+    background: var(--monday-light-blue);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.15);
+}
+
+.pm-display-type-option.selected {
+    border-color: var(--monday-blue);
+    background: var(--monday-light-blue);
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2);
+}
+
+.pm-display-type-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    background: var(--monday-light-gray);
+    margin-right: 12px;
+    transition: all 0.2s ease;
+}
+
+.pm-display-type-option:hover .pm-display-type-icon,
+.pm-display-type-option.selected .pm-display-type-icon {
+    background: var(--monday-blue);
+    color: white;
+}
+
+.pm-display-type-icon i {
+    font-size: 16px;
+    color: var(--monday-gray);
+    transition: color 0.2s ease;
+}
+
+.pm-display-type-option:hover .pm-display-type-icon i,
+.pm-display-type-option.selected .pm-display-type-icon i {
+    color: white;
+}
+
+.pm-display-type-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pm-display-type-content h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--monday-dark);
+    transition: color 0.2s ease;
+}
+
+.pm-display-type-content p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--monday-gray);
+    line-height: 1.3;
+}
+
+.pm-display-type-option:hover .pm-display-type-content h4,
+.pm-display-type-option.selected .pm-display-type-content h4 {
+    color: var(--monday-blue);
+}
+
+.pm-display-type-radio {
+    display: flex;
+    align-items: center;
+    margin-left: 12px;
+}
+
+.pm-display-type-radio input[type="radio"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--monday-blue);
+    cursor: pointer;
+}
+
+/* Responsive adjustments for display type selector */
+@media (max-width: 768px) {
+    .pm-display-type-option {
+        padding: 12px;
+    }
+    
+    .pm-display-type-icon {
+        width: 40px;
+        height: 40px;
+        margin-right: 12px;
+    }
+    
+    .pm-display-type-icon i {
+        font-size: 18px;
+    }
+    
+    .pm-display-type-content h4 {
+        font-size: 15px;
+    }
+    
+    .pm-display-type-content p {
+        font-size: 13px;
+    }
+}

@@ -250,11 +250,11 @@ before_request = ["smart_accounting.access_control.before_request"]  # Enabled f
 fixtures = [
 	{
 		"doctype": "Custom Field",
-		"filters": [["dt", "in", ["Task", "Project", "Customer", "User", "Contact"]]]
+		"filters": [["dt", "in", ["Task", "Project", "Customer", "User", "Contact", "Partition"]]]
 	},
 	{
 		"doctype": "Property Setter", 
-		"filters": [["doc_type", "in", ["Task", "Project", "Customer", "Contact"]]]
+		"filters": [["doc_type", "in", ["Task", "Project", "Customer", "Contact", "Partition"]]]
 	},
 	{
 		"doctype": "Workspace",
@@ -270,7 +270,7 @@ fixtures = [
 	},
 	{
 		"doctype": "DocType",
-		"filters": [["name", "in", ["User Preferences", "Partition", "Task Role Assignment", "Task Software", "Task Company Tag", "Board Column", "Board Cell", "Service Line", "Review Note", "Engagement", "Client Group", "Combination View", "Combination View Board", "Task Communication Method", "Contact Social", "Client Referral", "Client Project Info"]]]
+		"filters": [["name", "in", ["User Preferences", "Partition", "Task Role Assignment", "Task Software", "Task Company Tag", "Board Column", "Board Cell", "Service Line", "Review Note", "Engagement", "Client Group", "Combination View", "Combination View Board", "Task Communication Method", "Contact Social", "Client Referral", "Client Project Info", "Client Classification", "Client Classification Item", "Partition Client Classification"]]]
 	}
 	# 不导出 Dashboard Chart, Number Card 等可能包含标准内容的 DocType
 ]

@@ -366,6 +366,47 @@ class WorkspaceManager {
                         </div>
                         ` : ''}
                         <div class="pm-form-group">
+                            <label>Board Display Type</label>
+                            <div class="pm-display-type-selector">
+                                <div class="pm-display-type-option" data-type="Task-Centric">
+                                    <div class="pm-display-type-icon">
+                                        <i class="fa fa-tasks"></i>
+                                    </div>
+                                    <div class="pm-display-type-content">
+                                        <h4>Task-Centric</h4>
+                                        <p>Traditional project management focused on tasks and deliverables</p>
+                                    </div>
+                                    <div class="pm-display-type-radio">
+                                        <input type="radio" name="display_type" value="Task-Centric" checked>
+                                    </div>
+                                </div>
+                                <div class="pm-display-type-option" data-type="Contact-Centric">
+                                    <div class="pm-display-type-icon">
+                                        <i class="fa fa-users"></i>
+                                    </div>
+                                    <div class="pm-display-type-content">
+                                        <h4>Contact-Centric</h4>
+                                        <p>Manage relationships and communications with contacts</p>
+                                    </div>
+                                    <div class="pm-display-type-radio">
+                                        <input type="radio" name="display_type" value="Contact-Centric">
+                                    </div>
+                                </div>
+                                <div class="pm-display-type-option" data-type="Client-Centric">
+                                    <div class="pm-display-type-icon">
+                                        <i class="fa fa-building"></i>
+                                    </div>
+                                    <div class="pm-display-type-content">
+                                        <h4>Client-Centric</h4>
+                                        <p>Focus on client projects, referrals, and business development</p>
+                                    </div>
+                                    <div class="pm-display-type-radio">
+                                        <input type="radio" name="display_type" value="Client-Centric">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="pm-form-group">
                             <label>Description (Optional)</label>
                             <textarea class="pm-workspace-description-input" placeholder="Brief description..." rows="2" maxlength="140"></textarea>
                             <small class="pm-field-hint">Maximum 140 characters</small>
@@ -446,11 +487,33 @@ class WorkspaceManager {
             }
         });
         
+        // Handle display type selection (only for boards)
+        if (!isWorkspace) {
+            $('.pm-display-type-option').on('click', function() {
+                // Remove selected class from all options
+                $('.pm-display-type-option').removeClass('selected');
+                // Add selected class to clicked option
+                $(this).addClass('selected');
+                // Check the radio button
+                $(this).find('input[type="radio"]').prop('checked', true);
+            });
+            
+            // Handle radio button clicks
+            $('.pm-display-type-radio input[type="radio"]').on('click', function(e) {
+                e.stopPropagation();
+                // Remove selected class from all options
+                $('.pm-display-type-option').removeClass('selected');
+                // Add selected class to parent option
+                $(this).closest('.pm-display-type-option').addClass('selected');
+            });
+        }
+        
         // Create button
         $('.pm-confirm-create').on('click', async () => {
             const name = $('.pm-workspace-name-input').val().trim();
             const description = $('.pm-workspace-description-input').val().trim();
             const parent = $('.pm-parent-partition').val() || $('.pm-parent-workspace-select').val() || parentPartition;
+            const displayType = !isWorkspace ? $('input[name="display_type"]:checked').val() : null;
             
             
             if (!name) {
@@ -471,7 +534,8 @@ class WorkspaceManager {
                         partition_name: name,
                         is_workspace: isWorkspace ? 1 : 0,  // Ensure proper boolean conversion
                         parent_partition: parent,
-                        description: description
+                        description: description,
+                        board_display_type: displayType  // Add display type for boards
                     }
                 });
                 
