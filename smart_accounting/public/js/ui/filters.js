@@ -1225,31 +1225,67 @@ class FilterManager {
     }
 
     showCSVExportDialog() {
-        // Show CSV export dialog using CSVManager
-        if (!window.CSVManager) {
-            console.error('CSVManager not loaded');
+        // Show CSV export dialog using CSVManager with enhanced error handling
+        try {
+            if (!window.CSVManager) {
+                console.error('CSVManager not loaded');
+                frappe.show_alert({
+                    message: 'CSV export feature is loading, please try again in a moment',
+                    indicator: 'orange'
+                });
+                return;
+            }
+
+            if (typeof window.CSVManager.showExportDialog !== 'function') {
+                console.error('CSVManager.showExportDialog is not a function');
+                frappe.show_alert({
+                    message: 'CSV export feature is not properly initialized, please refresh the page',
+                    indicator: 'red'
+                });
+                return;
+            }
+
+            window.CSVManager.showExportDialog();
+            
+        } catch (error) {
+            console.error('Error showing CSV export dialog:', error);
             frappe.show_alert({
-                message: 'CSV export feature not available, please refresh the page',
+                message: 'Error opening CSV export dialog. Please refresh the page and try again.',
                 indicator: 'red'
             });
-            return;
         }
-
-        window.CSVManager.showExportDialog();
     }
 
     showCSVImportDialog() {
-        // Show CSV import dialog using CSVManager
-        if (!window.CSVManager) {
-            console.error('CSVManager not loaded');
+        // Show CSV import dialog using CSVManager with enhanced error handling
+        try {
+            if (!window.CSVManager) {
+                console.error('CSVManager not loaded');
+                frappe.show_alert({
+                    message: 'CSV import feature is loading, please try again in a moment',
+                    indicator: 'orange'
+                });
+                return;
+            }
+
+            if (typeof window.CSVManager.showImportDialog !== 'function') {
+                console.error('CSVManager.showImportDialog is not a function');
+                frappe.show_alert({
+                    message: 'CSV import feature is not properly initialized, please refresh the page',
+                    indicator: 'red'
+                });
+                return;
+            }
+
+            window.CSVManager.showImportDialog();
+            
+        } catch (error) {
+            console.error('Error showing CSV import dialog:', error);
             frappe.show_alert({
-                message: 'CSV import feature not available, please refresh the page',
+                message: 'Error opening CSV import dialog. Please refresh the page and try again.',
                 indicator: 'red'
             });
-            return;
         }
-
-        window.CSVManager.showImportDialog();
     }
 
     showClientsManagementDialog() {

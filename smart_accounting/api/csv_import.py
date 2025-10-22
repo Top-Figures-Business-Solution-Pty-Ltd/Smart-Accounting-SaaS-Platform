@@ -10,9 +10,88 @@ import csv
 from io import StringIO
 
 @frappe.whitelist()
+def import_board_data_from_content(csv_content, filename, board_view='main', import_mode='insert', skip_errors=True, selected_projects=None):
+    """
+    从CSV内容导入board数据，避免文件上传的HTTP 417错误
+    
+    Args:
+        csv_content (str): CSV文件内容
+        filename (str): 文件名
+        board_view (str): board视图
+        import_mode (str): 导入模式
+        skip_errors (bool): 是否跳过错误
+        selected_projects (list): 选中的项目
+    
+    Returns:
+        dict: 包含导入结果的字典
+    """
+    try:
+        # 验证用户权限
+        if not frappe.has_permission("Task", "create"):
+            frappe.throw(_("You don't have permission to import data"), frappe.PermissionError)
+        
+        # 验证参数
+        if not csv_content or not filename:
+            return {
+                'success': False,
+                'error': 'CSV content and filename are required'
+            }
+        
+        # 验证文件类型
+        if not filename.lower().endswith('.csv'):
+            frappe.log_error(f"CSV Import: Invalid file type: {filename}")
+            return {
+                'success': False,
+                'error': 'Please upload a CSV file'
+            }
+        
+        # 处理参数
+        if isinstance(selected_projects, str):
+            try:
+                selected_projects = json.loads(selected_projects) if selected_projects else []
+            except:
+                selected_projects = []
+        elif not selected_projects:
+            selected_projects = []
+        
+        # 记录导入开始
+        frappe.logger().info(f"CSV Import from content started: {filename}, board_view: {board_view}, mode: {import_mode}")
+        
+        # 处理CSV内容导入
+        import_result = process_csv_content_import(
+            csv_content, 
+            filename,
+            board_view, 
+            import_mode, 
+            skip_errors,
+            selected_projects
+        )
+        
+        # 记录导入日志 (简化版本，避免字符长度问题)
+        try:
+            log_import_activity(board_view, import_result)
+        except:
+            pass  # 忽略日志记录错误，不影响主要功能
+        
+        return {
+            'success': True,
+            'success_count': import_result['success_count'],
+            'error_count': import_result['error_count'],
+            'updated_count': import_result.get('updated_count', 0),
+            'errors': import_result.get('errors', [])
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"CSV Import from content Error: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
 def import_board_data():
     """
-    从CSV文件导入board数据
+    从CSV文件导入board数据，使用ERPNext内置的Data Import功能
     
     Returns:
         dict: 包含导入结果的字典
@@ -25,6 +104,7 @@ def import_board_data():
         # 获取上传的文件
         files = frappe.request.files
         if 'file' not in files:
+            frappe.log_error("CSV Import: No file uploaded in request")
             return {
                 'success': False,
                 'error': 'No file uploaded'
@@ -46,42 +126,29 @@ def import_board_data():
         
         # 验证文件类型
         if not uploaded_file.filename.lower().endswith('.csv'):
+            frappe.log_error(f"CSV Import: Invalid file type uploaded: {uploaded_file.filename}")
             return {
                 'success': False,
                 'error': 'Please upload a CSV file'
             }
         
-        # 读取文件内容
-        file_content = uploaded_file.read().decode('utf-8')
+        # 记录导入开始
+        frappe.logger().info(f"CSV Import started: {uploaded_file.filename}, board_view: {board_view}, mode: {import_mode}")
         
-        # 解析CSV数据
-        csv_data = parse_csv_content(file_content)
-        
-        if not csv_data:
-            return {
-                'success': False,
-                'error': 'No valid data found in CSV file'
-            }
-        
-        # 验证数据格式
-        validation_result = validate_csv_data(csv_data, board_view)
-        if not validation_result['valid']:
-            return {
-                'success': False,
-                'error': validation_result['error']
-            }
-        
-        # Execute import
-        import_result = process_csv_import(
-            csv_data, 
+        # 使用ERPNext内置的Data Import功能
+        import_result = process_csv_import_with_builtin_api(
+            uploaded_file, 
             board_view, 
             import_mode, 
             skip_errors,
             selected_projects
         )
         
-        # 记录导入日志
-        log_import_activity(board_view, import_result)
+        # 记录导入日志 (简化版本，避免字符长度问题)
+        try:
+            log_import_activity(board_view, import_result)
+        except:
+            pass  # 忽略日志记录错误，不影响主要功能
         
         return {
             'success': True,
@@ -96,6 +163,345 @@ def import_board_data():
         return {
             'success': False,
             'error': str(e)
+        }
+
+def process_csv_import_with_builtin_api(uploaded_file, board_view, import_mode, skip_errors, selected_projects):
+    """
+    使用ERPNext内置的Data Import API处理CSV导入
+    
+    Args:
+        uploaded_file: 上传的文件对象
+        board_view (str): board视图
+        import_mode (str): 导入模式
+        skip_errors (bool): 是否跳过错误
+        selected_projects (list): 选中的项目
+    
+    Returns:
+        dict: 导入结果
+    """
+    try:
+        # 保存上传的文件到Frappe文件系统
+        file_doc = save_uploaded_file_to_frappe(uploaded_file)
+        
+        # 创建Data Import文档
+        data_import = frappe.get_doc({
+            'doctype': 'Data Import',
+            'reference_doctype': 'Task',
+            'import_type': 'Insert New Records' if import_mode == 'insert' else 'Update Existing Records',
+            'import_file': file_doc.file_url,
+            'mute_emails': True,
+            'submit_after_import': False
+        })
+        
+        # 保存Data Import文档
+        data_import.insert(ignore_permissions=True)
+        
+        # 获取导入预览和验证
+        from frappe.core.doctype.data_import.importer import Importer
+        importer = Importer('Task', data_import=data_import)
+        
+        # 执行导入
+        import_log = importer.import_data()
+        
+        # 处理导入结果
+        success_count = len([log for log in import_log if log.success])
+        error_count = len([log for log in import_log if not log.success])
+        errors = [log.exception for log in import_log if not log.success and log.exception]
+        
+        # 如果有选中的项目，更新导入的任务
+        if selected_projects and success_count > 0:
+            update_imported_tasks_with_projects(import_log, selected_projects, board_view)
+        
+        return {
+            'success_count': success_count,
+            'error_count': error_count,
+            'updated_count': 0,  # ERPNext的导入API不区分更新和插入的计数
+            'errors': errors[:10]  # 限制错误数量
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error in builtin API import: {str(e)}")
+        # 如果内置API失败，回退到自定义处理
+        return fallback_to_custom_import(uploaded_file, board_view, import_mode, skip_errors, selected_projects)
+
+def process_csv_content_import(csv_content, filename, board_view, import_mode, skip_errors, selected_projects):
+    """
+    处理CSV内容导入，不涉及文件上传
+    
+    Args:
+        csv_content (str): CSV文件内容
+        filename (str): 文件名
+        board_view (str): board视图
+        import_mode (str): 导入模式
+        skip_errors (bool): 是否跳过错误
+        selected_projects (list): 选中的项目
+    
+    Returns:
+        dict: 导入结果
+    """
+    try:
+        # 创建临时文件文档
+        file_doc = frappe.get_doc({
+            'doctype': 'File',
+            'file_name': filename,
+            'content': csv_content.encode('utf-8'),
+            'is_private': 1,
+            'folder': 'Home/Attachments'
+        })
+        file_doc.insert(ignore_permissions=True)
+        
+        frappe.logger().info(f"Temporary file created: {file_doc.name}, URL: {file_doc.file_url}")
+        
+        # 创建Data Import文档
+        data_import = frappe.get_doc({
+            'doctype': 'Data Import',
+            'reference_doctype': 'Task',
+            'import_type': 'Insert New Records' if import_mode == 'insert' else 'Update Existing Records',
+            'import_file': file_doc.file_url,
+            'mute_emails': True,
+            'submit_after_import': False
+        })
+        
+        # 保存Data Import文档
+        data_import.insert(ignore_permissions=True)
+        
+        # 获取导入预览和验证
+        from frappe.core.doctype.data_import.importer import Importer
+        importer = Importer('Task', data_import=data_import)
+        
+        # 执行导入
+        import_log = importer.import_data()
+        
+        # 处理导入结果
+        success_count = len([log for log in import_log if log.success])
+        error_count = len([log for log in import_log if not log.success])
+        errors = [log.exception for log in import_log if not log.success and log.exception]
+        
+        # 如果有选中的项目，更新导入的任务
+        if selected_projects and success_count > 0:
+            update_imported_tasks_with_projects(import_log, selected_projects, board_view)
+        
+        # 清理临时文件
+        try:
+            file_doc.delete()
+        except:
+            pass  # 忽略删除错误
+        
+        return {
+            'success_count': success_count,
+            'error_count': error_count,
+            'errors': errors[:10]  # 只返回前10个错误
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error in CSV content import: {str(e)}")
+        # 如果失败，尝试直接处理CSV内容
+        return fallback_to_direct_csv_processing(csv_content, filename, board_view, import_mode, skip_errors, selected_projects)
+
+def fallback_to_direct_csv_processing(csv_content, filename, board_view, import_mode, skip_errors, selected_projects):
+    """
+    直接处理CSV内容的备用方案
+    
+    Args:
+        csv_content (str): CSV文件内容
+        filename (str): 文件名
+        board_view (str): board视图
+        import_mode (str): 导入模式
+        skip_errors (bool): 是否跳过错误
+        selected_projects (list): 选中的项目
+    
+    Returns:
+        dict: 导入结果
+    """
+    try:
+        # 解析CSV内容
+        csv_reader = csv.DictReader(StringIO(csv_content))
+        rows = list(csv_reader)
+        
+        success_count = 0
+        error_count = 0
+        errors = []
+        
+        for row in rows:
+            try:
+                # 清理和验证数据
+                subject = (row.get('subject') or row.get('Task Name') or 'Imported Task').strip()
+                description = (row.get('description') or row.get('Description') or '').strip()
+                status = (row.get('status') or row.get('Status') or 'Open').strip()
+                priority = (row.get('priority') or row.get('Priority') or 'Medium').strip()
+                
+                # 确保subject不为空且长度合理
+                if not subject:
+                    subject = 'Imported Task'
+                if len(subject) > 140:
+                    subject = subject[:140]
+                
+                # 验证status值
+                valid_statuses = ['Open', 'Working', 'Pending Review', 'Overdue', 'Template', 'Completed', 'Cancelled']
+                if status not in valid_statuses:
+                    status = 'Open'
+                
+                # 验证priority值
+                valid_priorities = ['Low', 'Medium', 'High', 'Urgent']
+                if priority not in valid_priorities:
+                    priority = 'Medium'
+                
+                # 创建Task文档
+                task_doc = frappe.get_doc({
+                    'doctype': 'Task',
+                    'subject': subject,
+                    'description': description,
+                    'status': status,
+                    'priority': priority,
+                })
+                
+                # 如果有选中的项目，设置项目
+                if selected_projects:
+                    # 验证项目是否存在
+                    if frappe.db.exists('Project', selected_projects[0]):
+                        task_doc.project = selected_projects[0]
+                
+                # 保存任务
+                task_doc.insert(ignore_permissions=True)
+                success_count += 1
+                
+            except Exception as e:
+                error_count += 1
+                error_msg = str(e)
+                errors.append(error_msg)
+                
+                if not skip_errors:
+                    break
+        
+        return {
+            'success_count': success_count,
+            'error_count': error_count,
+            'errors': errors[:10]  # 只返回前10个错误
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error in direct CSV processing: {str(e)}")
+        return {
+            'success_count': 0,
+            'error_count': 1,
+            'errors': [str(e)]
+        }
+
+def save_uploaded_file_to_frappe(uploaded_file):
+    """
+    将上传的文件保存到Frappe文件系统
+    
+    Args:
+        uploaded_file: 上传的文件对象
+    
+    Returns:
+        File: Frappe文件文档
+    """
+    try:
+        # 读取文件内容
+        file_content = uploaded_file.read()
+        frappe.logger().info(f"Reading uploaded file: {uploaded_file.filename}, size: {len(file_content)} bytes")
+        
+        # 重置文件指针，以防后续需要再次读取
+        uploaded_file.seek(0)
+        
+        # 创建文件文档
+        file_doc = frappe.get_doc({
+            'doctype': 'File',
+            'file_name': uploaded_file.filename,
+            'content': file_content,
+            'is_private': 1,
+            'folder': 'Home/Attachments'
+        })
+        
+        file_doc.insert(ignore_permissions=True)
+        frappe.logger().info(f"File saved successfully: {file_doc.name}, URL: {file_doc.file_url}")
+        return file_doc
+        
+    except Exception as e:
+        frappe.log_error(f"Error saving uploaded file: {str(e)}")
+        raise
+
+def update_imported_tasks_with_projects(import_log, selected_projects, board_view):
+    """
+    更新导入的任务，设置项目和board信息
+    
+    Args:
+        import_log (list): 导入日志
+        selected_projects (list): 选中的项目
+        board_view (str): board视图
+    """
+    try:
+        successful_imports = [log for log in import_log if log.success and log.doc_name]
+        
+        for log_entry in successful_imports:
+            try:
+                task_doc = frappe.get_doc('Task', log_entry.doc_name)
+                
+                # 如果任务没有项目且有选中的项目，分配第一个项目
+                if not task_doc.project and selected_projects:
+                    task_doc.project = selected_projects[0]
+                
+                # 设置board信息
+                if board_view != 'main':
+                    task_doc.custom_partition = board_view
+                
+                task_doc.save(ignore_permissions=True)
+                
+            except Exception as e:
+                frappe.log_error(f"Error updating imported task {log_entry.doc_name}: {str(e)}")
+                continue
+                
+    except Exception as e:
+        frappe.log_error(f"Error updating imported tasks: {str(e)}")
+
+def fallback_to_custom_import(uploaded_file, board_view, import_mode, skip_errors, selected_projects):
+    """
+    回退到自定义导入处理
+    
+    Args:
+        uploaded_file: 上传的文件对象
+        board_view (str): board视图
+        import_mode (str): 导入模式
+        skip_errors (bool): 是否跳过错误
+        selected_projects (list): 选中的项目
+    
+    Returns:
+        dict: 导入结果
+    """
+    try:
+        # 重置文件指针
+        uploaded_file.seek(0)
+        file_content = uploaded_file.read().decode('utf-8')
+        
+        # 解析CSV数据
+        csv_data = parse_csv_content(file_content)
+        
+        if not csv_data:
+            return {
+                'success_count': 0,
+                'error_count': 1,
+                'errors': ['No valid data found in CSV file']
+            }
+        
+        # 验证数据格式
+        validation_result = validate_csv_data(csv_data, board_view)
+        if not validation_result['valid']:
+            return {
+                'success_count': 0,
+                'error_count': 1,
+                'errors': [validation_result['error']]
+            }
+        
+        # 执行自定义导入
+        return process_csv_import(csv_data, board_view, import_mode, skip_errors, selected_projects)
+        
+    except Exception as e:
+        frappe.log_error(f"Error in fallback import: {str(e)}")
+        return {
+            'success_count': 0,
+            'error_count': 1,
+            'errors': [str(e)]
         }
 
 def parse_csv_content(file_content):
@@ -579,10 +985,13 @@ def log_import_activity(board_view, import_result):
             'timestamp': now()
         }
         
-        frappe.log_error(f"CSV Import Activity: {json.dumps(activity_log)}", "CSV Import Log")
+        # 使用简短的标题，详细信息放在消息体中
+        title = f"CSV Import: {import_result['success_count']} success, {import_result['error_count']} errors"
+        message = json.dumps(activity_log, indent=2)
+        frappe.log_error(message, title)
         
     except Exception as e:
-        frappe.log_error(f"Error logging import activity: {str(e)}")
+        frappe.log_error(f"Error logging import activity: {str(e)}", "CSV Import Log Error")
 
 @frappe.whitelist()
 def get_import_template(board_view, selected_fields=None, include_examples=True, include_descriptions=False):

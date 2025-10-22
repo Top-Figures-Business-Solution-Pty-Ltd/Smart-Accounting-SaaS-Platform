@@ -10,7 +10,7 @@ import os
 from datetime import datetime
 
 @frappe.whitelist()
-def export_board_data(board_view, selected_fields, include_headers=True, export_all_data=True, selected_projects=None):
+def export_board_data(board_view, selected_fields, include_headers=True, export_all_data=True, selected_projects=None, return_data=False):
     """
     Export board data to CSV file using ERPNext built-in functionality
     
@@ -114,12 +114,31 @@ def export_board_data(board_view, selected_fields, include_headers=True, export_
         })
         file_doc.save(ignore_permissions=True)
         
-        return {
-            'success': True,
-            'file_url': file_doc.file_url,
-            'filename': filename,
-            'record_count': len(tasks)
-        }
+        # If return_data is True, return raw data instead of file
+        if return_data:
+            # Convert CSV data back to dictionary format for processing
+            data_rows = []
+            if len(csv_data) > 1:  # Skip header row if present
+                start_idx = 1 if include_headers else 0
+                for row in csv_data[start_idx:]:
+                    row_dict = {}
+                    for i, field in enumerate(selected_fields):
+                        if i < len(row):
+                            row_dict[field] = row[i]
+                    data_rows.append(row_dict)
+            
+            return {
+                'success': True,
+                'data': data_rows,
+                'record_count': len(tasks)
+            }
+        else:
+            return {
+                'success': True,
+                'file_url': file_doc.file_url,
+                'filename': filename,
+                'record_count': len(tasks)
+            }
         
     except Exception as e:
         frappe.log_error(f"CSV Export Error: {str(e)}")
