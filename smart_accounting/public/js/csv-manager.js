@@ -321,8 +321,7 @@ class CSVManager {
         this.currentBoardData = null;
         this.availableFields = {};
         this.selectedFields = [];
-        this.displayTypeManager = window.displayTypeManager;
-        this.currentDisplayType = 'Task-Centric';
+        // Display type manager removed - simplified to task-centric only
         this.selectedFile = null;
         this.csvContent = null; // Store parsed CSV content for import
         
@@ -333,8 +332,7 @@ class CSVManager {
         // Initialize current view information
         this.initializeCurrentView();
         
-        // 完全禁用display type监听，避免循环
-        // this.displayTypeUpdateTimeout = null;
+        // Simplified architecture - no display type switching needed
     }
 
     /**
@@ -573,80 +571,21 @@ class CSVManager {
      * Show CSV export dialog
      */
     showExportDialog() {
-        // Check board type and route accordingly
-        const boardType = this.getBoardType();
-        
-        if (boardType === 'task-centric') {
-            // Current flow: show project selection dialog
+        // Simplified: directly show project selection dialog
         this.showProjectSelectionDialog('export');
-        } else {
-            // Future: other centric views (placeholder for now)
-            this.showOtherCentricExportDialog(boardType);
-        }
     }
 
     /**
      * Show CSV import dialog
      */
     showImportDialog() {
-        // Check board type and route accordingly
-        const boardType = this.getBoardType();
-        
-        if (boardType === 'task-centric') {
-            // Current flow: show project selection dialog
+        // Simplified: directly show project selection dialog
         this.showProjectSelectionDialog('import');
-        } else {
-            // Future: other centric views (placeholder for now)
-            this.showOtherCentricImportDialog(boardType);
-        }
     }
 
-    /**
-     * Get current board type (task-centric, client-centric, contact-centric)
-     */
-    getBoardType() {
-        // TODO: Implement logic to detect board type from current board data
-        // For now, default to task-centric to maintain current functionality
-        // In the future, this should check the board's centric type from the database
-        
-        // Placeholder logic - you can replace this with actual board type detection
-        if (this.currentBoardData && this.currentBoardData.board_type) {
-            return this.currentBoardData.board_type;
-        }
-        
-        // Default to task-centric for backward compatibility
-        return 'task-centric';
-    }
+    // Board type detection removed - simplified to task-centric only
 
-    /**
-     * Show export dialog for non-task-centric boards (placeholder)
-     */
-    showOtherCentricExportDialog(boardType) {
-        frappe.show_alert({
-            message: `Export functionality for ${boardType} boards is coming soon!`,
-            indicator: 'blue'
-        });
-        
-        // TODO: Implement specific export flows for:
-        // - client-centric boards
-        // - contact-centric boards
-        // - other future centric types
-    }
-
-    /**
-     * Show import dialog for non-task-centric boards (placeholder)
-     */
-    showOtherCentricImportDialog(boardType) {
-        frappe.show_alert({
-            message: `Import functionality for ${boardType} boards is coming soon!`,
-            indicator: 'blue'
-        });
-        
-        // TODO: Implement specific import flows for:
-        // - client-centric boards
-        // - contact-centric boards
-        // - other future centric types
-    }
+    // Non-task-centric dialog methods removed - simplified architecture
 
     /**
      * Show project selection dialog
@@ -2385,170 +2324,13 @@ class CSVManager {
         });
     }
 
-    // 移除所有display type相关方法，避免循环
-
-    /**
-     * Get export data based on current display type
-     */
-    getExportDataForDisplayType() {
-        // This method should be called by the export functionality
-        // to get data in the format appropriate for the current display type
-        
-        switch (this.currentDisplayType) {
-            case 'Contact-Centric':
-                return this.getContactCentricExportData();
-            case 'Client-Centric':
-                return this.getClientCentricExportData();
-            default: // Task-Centric
-                return this.getTaskCentricExportData();
-        }
-    }
-
-    getContactCentricExportData() {
-        // Extract contact data from current page
-        const contacts = [];
-        try {
-            const $projectGroups = $('.pm-project-group');
-            if ($projectGroups.length === 0) {
-                console.warn('No project groups found for contact export');
-                return contacts;
-            }
-
-            $projectGroups.each(function(groupIndex) {
-                if (groupIndex > 100) { // Safety limit
-                    console.warn('Too many project groups, limiting to 100');
-                    return false;
-                }
-                
-                const $group = $(this);
-                const companyName = $group.find('.pm-group-header h3').first().text().trim() || 'Unknown Company';
-                
-                const $taskRows = $group.find('.pm-task-row');
-                $taskRows.each(function(rowIndex) {
-                    if (rowIndex > 500) { // Safety limit
-                        console.warn('Too many task rows, limiting to 500 per group');
-                        return false;
-                    }
-                    
-                    const $row = $(this);
-                    const contactData = {
-                        company_name: companyName,
-                        contact_name: $row.find('[data-column="contact-name"]').first().text().trim() || '',
-                        email_id: $row.find('[data-column="email"]').first().text().trim() || '',
-                        phone: $row.find('[data-column="phone"]').first().text().trim() || '',
-                        status: $row.find('[data-column="status"]').first().text().trim() || '',
-                        custom_last_contact_date: $row.find('[data-column="last-contact"]').first().text().trim() || '',
-                        custom_contact_notes: $row.find('[data-column="notes"]').first().text().trim() || ''
-                    };
-                    contacts.push(contactData);
-                });
-            });
-        } catch (error) {
-            console.error('Error extracting contact data:', error);
-        }
-        return contacts;
-    }
-
-    getClientCentricExportData() {
-        // Extract client data from current page
-        const clients = [];
-        try {
-            const $projectGroups = $('.pm-project-group');
-            if ($projectGroups.length === 0) {
-                console.warn('No project groups found for client export');
-                return clients;
-            }
-
-            $projectGroups.each(function(groupIndex) {
-                if (groupIndex > 100) { // Safety limit
-                    console.warn('Too many project groups, limiting to 100');
-                    return false;
-                }
-                
-                const $group = $(this);
-                const groupName = $group.find('.pm-group-header h3').first().text().trim() || 'Unknown Group';
-                
-                const $taskRows = $group.find('.pm-task-row');
-                $taskRows.each(function(rowIndex) {
-                    if (rowIndex > 500) { // Safety limit
-                        console.warn('Too many task rows, limiting to 500 per group');
-                        return false;
-                    }
-                    
-                    const $row = $(this);
-                    const clientData = {
-                        customer_group: groupName,
-                        customer_name: $row.find('[data-column="client-name"]').first().text().trim() || '',
-                        priority_level: $row.find('[data-column="priority-level"]').first().text().trim() || '',
-                        accountant: $row.find('[data-column="accountant"]').first().text().trim() || '',
-                        darren_progress: $row.find('[data-column="progress"]').first().text().trim() || '',
-                        referral_person: $row.find('[data-column="referral"]').first().text().trim() || '',
-                        industry: $row.find('[data-column="industry"]').first().text().trim() || '',
-                        darren_risks: $row.find('[data-column="risk-profile"]').first().text().trim() || ''
-                    };
-                    clients.push(clientData);
-                });
-            });
-        } catch (error) {
-            console.error('Error extracting client data:', error);
-        }
-        return clients;
-    }
-
-    getTaskCentricExportData() {
-        // Extract task data from current page (existing functionality)
-        const tasks = [];
-        try {
-            const $projectGroups = $('.pm-project-group');
-            if ($projectGroups.length === 0) {
-                console.warn('No project groups found for task export');
-                return tasks;
-            }
-
-            $projectGroups.each(function(groupIndex) {
-                if (groupIndex > 100) { // Safety limit
-                    console.warn('Too many project groups, limiting to 100');
-                    return false;
-                }
-                
-                const $group = $(this);
-                const clientName = $group.find('.pm-group-header h3').first().text().trim() || 'Unknown Client';
-                
-                const $taskRows = $group.find('.pm-task-row');
-                $taskRows.each(function(rowIndex) {
-                    if (rowIndex > 500) { // Safety limit
-                        console.warn('Too many task rows, limiting to 500 per group');
-                        return false;
-                    }
-                    
-                    const $row = $(this);
-                    const taskData = {
-                        client: clientName,
-                        subject: $row.find('[data-column="task-name"]').first().text().trim() || '',
-                        status: $row.find('[data-column="status"]').first().text().trim() || '',
-                        priority: $row.find('[data-column="priority"]').first().text().trim() || '',
-                        assigned_to: $row.find('[data-column="action-person"]').first().text().trim() || '',
-                        exp_end_date: $row.find('[data-column="target-month"]').first().text().trim() || ''
-                    };
-                    tasks.push(taskData);
-                });
-            });
-        } catch (error) {
-            console.error('Error extracting task data:', error);
-        }
-        return tasks;
-    }
+    // Display type related methods removed - simplified to task-centric only
 
     /**
      * Cleanup method to prevent memory leaks
      */
     destroy() {
-        // Clear any pending timeouts
-        if (this.displayTypeUpdateTimeout) {
-            clearTimeout(this.displayTypeUpdateTimeout);
-        }
-        
-        // 不需要移除事件监听器，因为没有添加
+        // Simplified cleanup - no display type timeouts needed
         
         // Clear references
         this.availableFields = {};

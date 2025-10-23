@@ -178,7 +178,7 @@ def get_child_partitions(parent_partition):
         return []
 
 @frappe.whitelist()
-def create_partition(partition_name, is_workspace=False, parent_partition=None, description="", icon="", board_display_type=None):
+def create_partition(partition_name, is_workspace=False, parent_partition=None, description="", icon=""):
     """
     Create a new partition (workspace or board)
     """
@@ -215,7 +215,7 @@ def create_partition(partition_name, is_workspace=False, parent_partition=None, 
         new_partition.description = description
         new_partition.icon = icon
         
-        # Set board display type for boards (not workspaces)
+        # Board display type removed - simplified to task-centric only
         if not is_workspace and board_display_type:
             # Validate display type
             valid_types = ["Task-Centric", "Contact-Centric", "Client-Centric"]

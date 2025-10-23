@@ -18,9 +18,7 @@ class TableManager {
         this.isLargeDataset = false;
         this.chunkLoadingEnabled = false;
         
-        // Display Type Support
-        this.currentDisplayType = 'Task-Centric';
-        this.displayTypeManager = window.displayTypeManager;
+        // Simplified: task-centric only, no display type switching
     }
 
     // Column Resizing Functionality
@@ -972,28 +970,7 @@ class TableManager {
         return this.currentDisplayType;
     }
 
-    setDisplayType(displayType) {
-        if (this.displayTypeManager && this.displayTypeManager.isValidDisplayType(displayType)) {
-            this.currentDisplayType = displayType;
-            this.updateTableForDisplayType();
-        }
-    }
-
-    updateTableForDisplayType() {
-        // Update table headers and columns based on display type
-        const config = this.displayTypeManager.getDisplayTypeConfig(this.currentDisplayType);
-        
-        if (!config) return;
-        
-        // Update column configuration
-        this.updateColumnConfiguration(config.columns);
-        
-        // Update table headers
-        this.updateTableHeaders(config.columns);
-        
-        // Update data rendering
-        this.updateDataRendering(config);
-    }
+    // Display type methods removed - simplified architecture
 
     updateColumnConfiguration(columns) {
         // Update column widths and visibility based on display type
@@ -1044,13 +1021,13 @@ class TableManager {
         // The actual data rendering happens in other parts of the system
         // We just need to ensure the table structure is ready
         
-        // Add a class to the table container to indicate display type
+        // Simplified: only task-centric display type
         $('.pm-table-container')
             .removeClass('display-type-task-centric display-type-contact-centric display-type-client-centric')
-            .addClass(`display-type-${config.name.toLowerCase().replace('-', '-')}`);
+            .addClass('display-type-task-centric');
         
-        // Store display type info for other components
-        window.PM_CURRENT_DISPLAY_TYPE = this.currentDisplayType;
+        // Store simplified display type info
+        window.PM_CURRENT_DISPLAY_TYPE = 'Task-Centric';
         
         // Trigger event for other components to update
         $(document).trigger('displayTypeChanged', {
@@ -1059,17 +1036,15 @@ class TableManager {
         });
     }
 
-    // Helper method to get column configuration for current display type
+    // Helper methods simplified - task-centric only
     getCurrentColumns() {
-        if (!this.displayTypeManager) return [];
-        
-        const config = this.displayTypeManager.getDisplayTypeConfig(this.currentDisplayType);
-        return config ? config.columns : [];
+        // Simplified: return empty array, let column manager handle this
+        return [];
     }
 
-    // Helper method to check if current display type supports a specific feature
     supportsFeature(feature) {
-        const config = this.displayTypeManager.getDisplayTypeConfig(this.currentDisplayType);
+        // Simplified: support all features for task-centric view
+        return true;
         
         switch (feature) {
             case 'inline_editing':

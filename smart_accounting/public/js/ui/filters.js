@@ -5,8 +5,7 @@ class FilterManager {
     constructor() {
         this.utils = window.PMUtils;
         this.filterChangeTimeout = null;
-        this.displayTypeManager = window.displayTypeManager;
-        this.currentDisplayType = 'Task-Centric';
+        // Display type manager removed - simplified to task-centric only
         
         // Listen for display type changes
         $(document).on('displayTypeChanged', (event, data) => {
@@ -1592,12 +1591,10 @@ class FilterManager {
         }
     }
 
-    // Check if current display type supports a specific filter
+    // Check if current display type supports a specific filter - simplified
     supportsFilter(filterType) {
-        if (!this.displayTypeManager) return true;
-        
-        const config = this.displayTypeManager.getDisplayTypeConfig(this.currentDisplayType);
-        if (!config || !config.filters) return false;
+        // Simplified: always support all filters for task-centric view
+        return true;
         
         return config.filters.some(filter => filter.key === filterType);
     }

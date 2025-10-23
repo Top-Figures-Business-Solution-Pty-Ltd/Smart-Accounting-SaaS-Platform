@@ -244,9 +244,11 @@ def process_field_value(field, task, task_doc):
                 else:
                     value = task.get(db_field, '')
             
-            # Format special fields
-            if field in ['target-month', 'process-date', 'lodgment-due', 'year-end']:
+            # Format special fields - 修复：区分Select字段和Date字段
+            if field in ['process-date', 'lodgment-due']:  # 只有真正的日期字段才格式化
                 value = format_date_field(value)
+            elif field in ['target-month', 'year-end']:  # Select字段不需要日期格式化
+                value = format_select_field(value)
             elif field in ['budget', 'actual']:
                 value = format_currency_field(value)
             elif field in ['status']:
@@ -309,8 +311,8 @@ def handle_table_field(task_doc, field, db_field):
         # Dynamic table field processing based on available fields
         values = []
         
-        # Try common field patterns
-        common_patterns = ['name', 'title', 'software', 'communication_method', 'company', 'note', 'user', 'role']
+        # Try common field patterns - 优先处理note字段
+        common_patterns = ['note', 'name', 'title', 'software', 'communication_method', 'company', 'user', 'role']
         
         for row in table_data:
             row_values = []
@@ -323,7 +325,19 @@ def handle_table_field(task_doc, field, db_field):
             if row_values:
                 values.append(' | '.join(row_values))
         
-        return '; '.join(values) if values else f'{len(table_data)} items'
+        # 使用更安全的分隔符和转义机制
+        if values:
+            # 对包含分号的值进行转义
+            escaped_values = []
+            for value in values:
+                # 如果值包含分号，用双引号包裹
+                if '; ' in value or ';' in value:
+                    escaped_values.append(f'"{value}"')
+                else:
+                    escaped_values.append(value)
+            return '; '.join(escaped_values)
+        else:
+            return f'{len(table_data)} items'
         
     except Exception as e:
         frappe.log_error(f"Error handling table field {field}: {str(e)}")
@@ -457,17 +471,16 @@ def format_status_field(value):
     if not value:
         return ''
     
-    # Status mapping (if needed)
-    status_mapping = {
-        'Open': 'Open',
-        'Working': 'In Progress',
-        'Pending Review': 'Pending Review',
-        'Overdue': 'Overdue',
-        'Completed': 'Completed',
-        'Cancelled': 'Cancelled'
-    }
+    # Smart Accounting status直接返回，不需要映射
+    return str(value)
+
+def format_select_field(value):
+    """Format select field - 为Select字段保持原始值"""
+    if not value:
+        return ''
     
-    return status_mapping.get(value, value)
+    # Select字段直接返回原始值，不进行任何转换
+    return str(value)
 
 @frappe.whitelist()
 def get_board_projects(board_view):
@@ -608,9 +621,10 @@ def get_custom_field_patterns():
         'software': ['custom_softwares', 'custom_software'],
         'communication-methods': ['custom_communication_methods'],
         'client-contact': ['custom_companies', 'custom_client_contacts', 'custom_contacts'],
-        'status': ['custom_task_status', 'custom_status'],
+        'status': ['custom_task_status'],  # 修复：只使用Smart Accounting的自定义status字段
         'note': ['custom_note', 'custom_notes'],
         'target-month': ['custom_target_month'],
+        'year-end': ['custom_year_end'],  # 添加year-end字段映射
         'budget': ['custom_budget_planning', 'custom_budget'],
         'actual': ['custom_actual_billing', 'custom_actual'],
         'review-note': ['custom_review_notes'],
@@ -644,6 +658,7 @@ def get_default_field_labels():
         'communication-methods': 'Communication Methods',
         'client-contact': 'Client Contact',
         'status': 'Status',
+        'custom_task_status': 'Status',  # 添加直接映射
         'note': 'Note',
         'target-month': 'Target Month',
         'budget': 'Budget',

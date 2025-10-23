@@ -380,30 +380,7 @@ class WorkspaceManager {
                                         <input type="radio" name="display_type" value="Task-Centric" checked>
                                     </div>
                                 </div>
-                                <div class="pm-display-type-option" data-type="Contact-Centric">
-                                    <div class="pm-display-type-icon">
-                                        <i class="fa fa-users"></i>
-                                    </div>
-                                    <div class="pm-display-type-content">
-                                        <h4>Contact-Centric</h4>
-                                        <p>Manage relationships and communications with contacts</p>
-                                    </div>
-                                    <div class="pm-display-type-radio">
-                                        <input type="radio" name="display_type" value="Contact-Centric">
-                                    </div>
-                                </div>
-                                <div class="pm-display-type-option" data-type="Client-Centric">
-                                    <div class="pm-display-type-icon">
-                                        <i class="fa fa-building"></i>
-                                    </div>
-                                    <div class="pm-display-type-content">
-                                        <h4>Client-Centric</h4>
-                                        <p>Focus on client projects, referrals, and business development</p>
-                                    </div>
-                                    <div class="pm-display-type-radio">
-                                        <input type="radio" name="display_type" value="Client-Centric">
-                                    </div>
-                                </div>
+                                <!-- Client-Centric and Contact-Centric options removed -->
                             </div>
                         </div>
                         <div class="pm-form-group">

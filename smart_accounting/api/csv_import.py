@@ -864,9 +864,9 @@ def convert_row_to_task_data(row, field_mapping, reverse_label_mapping):
                 task_data['subject'] = 'Imported Task'
                 frappe.logger().warning("Using default subject: Imported Task")
     
-    # 设置默认状态
-    if not task_data.get('status'):
-        task_data['status'] = 'Open'
+    # 设置默认状态 - 修复：使用Smart Accounting的status字段和值
+    if not task_data.get('custom_task_status'):
+        task_data['custom_task_status'] = 'Not Started'  # Smart Accounting的默认状态
     
     # 存储Table字段数据供后续处理
     task_data['_table_fields_data'] = table_fields_data
@@ -880,7 +880,7 @@ def convert_row_to_task_data(row, field_mapping, reverse_label_mapping):
 
 def format_import_value(field_name, value):
     """
-    格式化导入值
+    格式化导入值 - 修复版本
     
     Args:
         field_name (str): 字段名
@@ -892,12 +892,20 @@ def format_import_value(field_name, value):
     if not value:
         return None
     
-    # 日期字段
-    if field_name in ['custom_target_month', 'custom_process_date', 'custom_lodgement_due', 'custom_year_end']:
+    # Select字段 - Target Month和Year End是Select类型，不是日期
+    if field_name in ['custom_target_month', 'custom_year_end']:
+        return parse_select_value(value)
+    
+    # 真正的日期字段
+    elif field_name in ['custom_process_date', 'custom_lodgement_due_date', 'custom_reset_date']:
         return parse_date_value(value)
     
+    # Status字段 - 使用Smart Accounting的状态值
+    elif field_name == 'custom_task_status':
+        return parse_status_value(value)
+    
     # 数值字段
-    elif field_name in ['custom_budget', 'custom_actual']:
+    elif field_name in ['custom_budget_planning', 'custom_actual_billing']:
         return parse_numeric_value(value)
     
     # 布尔字段
@@ -957,6 +965,111 @@ def parse_boolean_value(value):
     true_values = ['true', '1', 'yes', 'y', 'on', '是', '真']
     return 1 if str(value).lower().strip() in true_values else 0
 
+def parse_select_value(value):
+    """
+    解析Select字段值（如Target Month, Year End）
+    
+    Args:
+        value (str): 原始值
+    
+    Returns:
+        str: 解析后的值
+    """
+    if not value:
+        return None
+    
+    value_str = str(value).strip()
+    
+    # 如果是日期格式，提取月份
+    if '-' in value_str and len(value_str) >= 8:  # 可能是日期格式
+        try:
+            from datetime import datetime
+            # 尝试解析日期并提取月份
+            if value_str.count('-') == 2:  # DD-MM-YYYY 或 YYYY-MM-DD
+                parts = value_str.split('-')
+                if len(parts) == 3:
+                    # 判断是 DD-MM-YYYY 还是 YYYY-MM-DD
+                    if len(parts[2]) == 4:  # DD-MM-YYYY
+                        month_num = int(parts[1])
+                    elif len(parts[0]) == 4:  # YYYY-MM-DD
+                        month_num = int(parts[1])
+                    else:
+                        return value_str
+                    
+                    # 转换为月份名称
+                    month_names = [
+                        '', 'January', 'February', 'March', 'April', 'May', 'June',
+                        'July', 'August', 'September', 'October', 'November', 'December'
+                    ]
+                    if 1 <= month_num <= 12:
+                        return month_names[month_num]
+        except:
+            pass
+    
+    # 如果已经是月份名称，直接返回
+    valid_months = ['January', 'February', 'March', 'April', 'May', 'June',
+                   'July', 'August', 'September', 'October', 'November', 'December', '-']
+    
+    if value_str in valid_months:
+        return value_str
+    
+    # 尝试模糊匹配月份名称
+    value_lower = value_str.lower()
+    for month in valid_months:
+        if month != '-' and month.lower().startswith(value_lower[:3]):
+            return month
+    
+    # 默认返回原值
+    return value_str
+
+def parse_status_value(value):
+    """
+    解析Smart Accounting的Status值
+    
+    Args:
+        value (str): 原始状态值
+    
+    Returns:
+        str: 有效的状态值
+    """
+    if not value:
+        return 'Not Started'
+    
+    value_str = str(value).strip()
+    
+    # Smart Accounting的有效状态值
+    valid_statuses = [
+        'Not Started', 'Done', 'Working on it', 'Stuck', 
+        'Ready for Manager Review', 'Ready for Partner Review',
+        'Review Points to be Actioned', 'Ready to Send to Client',
+        'Sent to Client for Signature', 'Ready to Lodge', 'Lodged',
+        'Question Book Sent', 'Annual GST', 'Wait for Payment',
+        'Waiting on Payroll', 'Waiting on Client', 'Hold',
+        'Not Trading', 'R&D', 'For Invoicing'
+    ]
+    
+    # 直接匹配
+    if value_str in valid_statuses:
+        return value_str
+    
+    # 尝试模糊匹配常见状态
+    status_mapping = {
+        'open': 'Not Started',
+        'working': 'Working on it',
+        'in progress': 'Working on it',
+        'pending review': 'Ready for Manager Review',
+        'completed': 'Done',
+        'cancelled': 'Hold'
+    }
+    
+    value_lower = value_str.lower()
+    if value_lower in status_mapping:
+        return status_mapping[value_lower]
+    
+    # 默认返回 'Not Started'
+    frappe.logger().warning(f"Unknown status value: {value_str}, using 'Not Started'")
+    return 'Not Started'
+
 def fuzzy_match_field(csv_field, field_mapping):
     """
     模糊匹配字段名 - 增强版本
@@ -1001,6 +1114,7 @@ def fuzzy_match_field(csv_field, field_mapping):
         'targetmonth': 'custom_target_month',
         'target': 'custom_target_month',
         'month': 'custom_target_month',
+        'yearend': 'custom_year_end',
         'budget': 'custom_budget_planning',
         'actual': 'custom_actual_billing',
         
@@ -1011,7 +1125,7 @@ def fuzzy_match_field(csv_field, field_mapping):
         'notes': 'custom_note',
         
         # 基础字段
-        'status': 'status',
+        'status': 'custom_task_status',  # 修复：使用自定义status字段
         'priority': 'priority',
         'entity': 'custom_service_line',
         'tftg': 'custom_tftg',
@@ -1201,15 +1315,18 @@ def get_import_field_mapping():
         'partner': 'custom_roles',
         '_combined_roles': 'custom_roles',  # 合并后的角色字段
         
-        # 状态和其他字段
-        'Status': 'status',
-        'status': 'status',
+        # 状态和其他字段 - 修复：使用Smart Accounting自定义字段
+        'Status': 'custom_task_status',
+        'status': 'custom_task_status', 
+        'STATUS': 'custom_task_status',
         'Priority': 'priority',
         'priority': 'priority',
         
         # 日期和数值字段
         'Target Month': 'custom_target_month',
         'target-month': 'custom_target_month',
+        'Target Month': 'custom_target_month',
+        'TARGET MONTH': 'custom_target_month',
         'Budget': 'custom_budget_planning',
         'budget': 'custom_budget_planning',
         'Actual': 'custom_actual_billing',
@@ -1220,6 +1337,8 @@ def get_import_field_mapping():
         'note': 'custom_note',
         'Review Note': 'custom_review_notes',
         'review-note': 'custom_review_notes',
+        'review_note': 'custom_review_notes',
+        'reviewnote': 'custom_review_notes',
         
         # 其他字段
         'Lodgement Due': 'custom_lodgement_due_date',
@@ -1230,6 +1349,8 @@ def get_import_field_mapping():
         'group': 'custom_companies',
         'Year End': 'custom_year_end',
         'year-end': 'custom_year_end',
+        'Year End': 'custom_year_end',
+        'YEAR END': 'custom_year_end',
         'Frequency': 'custom_frequency',
         'frequency': 'custom_frequency',
         'Reset Date': 'custom_reset_date',
@@ -1485,29 +1606,230 @@ def process_roles_field(task_doc, roles_value):
 
 def process_review_notes_field(task_doc, notes_value):
     """
-    处理Review Notes字段
+    处理Review Notes字段 - 增强版本，支持智能分割
     
     Args:
         task_doc: Task文档
-        notes_value (str): 备注值
+        notes_value (str): 备注值，可能包含多个备注（用分号分隔）
     """
     try:
         # 清理现有记录
         task_doc.custom_review_notes = []
         
-        # 如果有备注内容，添加记录
-        if notes_value and notes_value.strip():
-            task_doc.append('custom_review_notes', {
-                'note': notes_value.strip(),
-                'created_by': frappe.session.user,
-                'created_date': frappe.utils.now()
-            })
-            
-        frappe.logger().info(f"Added review note: {notes_value}")
+        if not notes_value or not notes_value.strip():
+            frappe.logger().info("No review notes to process")
+            return
+        
+        frappe.logger().info(f"Processing review notes: {notes_value}")
+        
+        # 智能分割Review Notes
+        individual_notes = smart_split_review_notes(notes_value)
+        
+        # 为每个备注创建记录
+        for i, note_content in enumerate(individual_notes):
+            if note_content and note_content.strip():
+                task_doc.append('custom_review_notes', {
+                    'note': note_content.strip(),
+                    'created_by': frappe.session.user,
+                    'created_date': frappe.utils.now()
+                })
+                frappe.logger().info(f"Added review note {i+1}: {note_content.strip()}")
+        
+        frappe.logger().info(f"Total review notes added: {len(individual_notes)}")
         
     except Exception as e:
         frappe.logger().error(f"Error processing review notes: {str(e)}")
         raise
+
+def smart_split_review_notes(notes_value):
+    """
+    智能分割Review Notes，处理各种边界情况
+    
+    Args:
+        notes_value (str): 原始备注字符串
+    
+    Returns:
+        list: 分割后的备注列表
+    """
+    if not notes_value or not notes_value.strip():
+        return []
+    
+    notes_value = notes_value.strip()
+    
+    # 策略1: 检查是否为导出格式（包含数字和分号）
+    if is_likely_exported_format(notes_value):
+        frappe.logger().info(f"Detected exported format, splitting by '; '")
+        # 使用导出时的分隔符进行分割
+        notes = [note.strip() for note in notes_value.split('; ') if note.strip()]
+        return notes
+    
+    # 策略2: 检查是否包含其他分隔符
+    elif ';' in notes_value and not is_single_note_with_semicolon(notes_value):
+        frappe.logger().info(f"Detected multiple notes with semicolon separator")
+        # 使用分号分割，但要更加小心
+        notes = [note.strip() for note in notes_value.split(';') if note.strip()]
+        return notes
+    
+    # 策略3: 单个备注（可能包含分号）
+    else:
+        frappe.logger().info(f"Treating as single note")
+        return [notes_value]
+
+def is_likely_exported_format(notes_value):
+    """
+    判断是否为导出格式的备注
+    导出格式特征：
+    1. 包含 '; ' (分号+空格)
+    2. 分割后的每部分都是简短的数字或简单文本
+    3. 没有复杂的句子结构
+    
+    Args:
+        notes_value (str): 备注字符串
+    
+    Returns:
+        bool: 是否为导出格式
+    """
+    if '; ' not in notes_value:
+        return False
+    
+    # 分割并检查每个部分
+    parts = notes_value.split('; ')
+    
+    # 如果只有2个部分且都是简短的，很可能是导出格式
+    if len(parts) == 2:
+        for part in parts:
+            part = part.strip()
+            # 检查是否为简单的数字或短文本
+            if len(part) <= 20 and (part.replace('.', '').replace(',', '').replace(' ', '').isdigit() or len(part.split()) <= 3):
+                continue
+            else:
+                return False
+        return True
+    
+    # 如果有3个或更多部分，也可能是导出格式
+    elif len(parts) >= 3:
+        short_parts = 0
+        for part in parts:
+            part = part.strip()
+            if len(part) <= 15:  # 短文本
+                short_parts += 1
+        
+        # 如果大部分都是短文本，很可能是导出格式
+        return short_parts >= len(parts) * 0.7
+    
+    return False
+
+def has_escaped_quotes(notes_value):
+    """
+    检查是否包含转义的引号格式
+    例如：'"Note with; semicolon"; "Another note"'
+    
+    Args:
+        notes_value (str): 备注字符串
+    
+    Returns:
+        bool: 是否包含转义格式
+    """
+    import re
+    # 检查是否包含被引号包裹的内容
+    pattern = r'"[^"]*"; "[^"]*"'
+    return bool(re.search(pattern, notes_value))
+
+def parse_escaped_notes(notes_value):
+    """
+    解析转义格式的备注
+    例如：'"Note with; semicolon"; "Another note"' -> ['Note with; semicolon', 'Another note']
+    
+    Args:
+        notes_value (str): 包含转义字符的备注字符串
+    
+    Returns:
+        list: 解析后的备注列表
+    """
+    import re
+    
+    # 使用正则表达式提取被引号包裹的内容
+    pattern = r'"([^"]*)"; "([^"]*)"|"([^"]*)";|;"([^"]*)"|"([^"]*)"|([^;"]+)'
+    matches = re.findall(pattern, notes_value)
+    
+    notes = []
+    for match in matches:
+        # match是一个tuple，找到非空的匹配
+        for group in match:
+            if group and group.strip():
+                notes.append(group.strip())
+                break
+    
+    # 如果正则解析失败，回退到简单分割
+    if not notes:
+        frappe.logger().warning(f"Failed to parse escaped format, falling back to simple split")
+        return [note.strip().strip('"') for note in notes_value.split('; ') if note.strip()]
+    
+    return notes
+
+def clean_note_content(note_content):
+    """
+    清理备注内容，移除导出时添加的引号和其他格式字符
+    
+    Args:
+        note_content (str): 原始备注内容
+    
+    Returns:
+        str: 清理后的备注内容
+    """
+    if not note_content:
+        return ''
+    
+    cleaned = str(note_content).strip()
+    
+    # 移除首尾的引号（导出时可能添加的）
+    if cleaned.startswith('"') and cleaned.endswith('"'):
+        cleaned = cleaned[1:-1]
+    elif cleaned.startswith("'") and cleaned.endswith("'"):
+        cleaned = cleaned[1:-1]
+    
+    # 移除其他可能的格式字符
+    cleaned = cleaned.strip()
+    
+    # 处理转义的引号
+    cleaned = cleaned.replace('""', '"')  # CSV转义的双引号
+    
+    return cleaned
+
+def is_single_note_with_semicolon(notes_value):
+    """
+    判断是否为包含分号的单个备注
+    例如："Please review the Q1 results; pay attention to the cash flow section"
+    
+    Args:
+        notes_value (str): 备注字符串
+    
+    Returns:
+        bool: 是否为单个备注
+    """
+    # 如果包含常见的句子连接词，很可能是单个备注
+    sentence_indicators = [
+        'please', 'note that', 'make sure', 'remember to', 'don\'t forget',
+        'also', 'additionally', 'furthermore', 'however', 'therefore',
+        'pay attention', 'be careful', 'ensure that'
+    ]
+    
+    notes_lower = notes_value.lower()
+    for indicator in sentence_indicators:
+        if indicator in notes_lower:
+            return True
+    
+    # 如果包含完整的英文句子结构（主谓宾）
+    if ' the ' in notes_lower and (' and ' in notes_lower or ' or ' in notes_lower):
+        return True
+    
+    # 如果包含日期或时间格式
+    import re
+    date_pattern = r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}'
+    if re.search(date_pattern, notes_value):
+        return True
+    
+    return False
 
 def log_import_activity(board_view, import_result):
     """
