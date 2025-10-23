@@ -226,7 +226,7 @@ def process_csv_import_with_builtin_api(uploaded_file, board_view, import_mode, 
 
 def process_csv_content_import(csv_content, filename, board_view, import_mode, skip_errors, selected_projects):
     """
-    处理CSV内容导入，不涉及文件上传
+    处理CSV内容导入，不涉及文件上传 - 直接使用我们的自定义逻辑
     
     Args:
         csv_content (str): CSV文件内容
@@ -240,63 +240,40 @@ def process_csv_content_import(csv_content, filename, board_view, import_mode, s
         dict: 导入结果
     """
     try:
-        # 创建临时文件文档
-        file_doc = frappe.get_doc({
-            'doctype': 'File',
-            'file_name': filename,
-            'content': csv_content.encode('utf-8'),
-            'is_private': 1,
-            'folder': 'Home/Attachments'
-        })
-        file_doc.insert(ignore_permissions=True)
+        frappe.logger().info(f"Starting CSV content import: {filename}")
+        frappe.logger().info(f"CSV content preview: {csv_content[:500]}...")
         
-        frappe.logger().info(f"Temporary file created: {file_doc.name}, URL: {file_doc.file_url}")
+        # 直接解析CSV内容，不使用ERPNext的Data Import
+        csv_data = parse_csv_content(csv_content)
         
-        # 创建Data Import文档
-        data_import = frappe.get_doc({
-            'doctype': 'Data Import',
-            'reference_doctype': 'Task',
-            'import_type': 'Insert New Records' if import_mode == 'insert' else 'Update Existing Records',
-            'import_file': file_doc.file_url,
-            'mute_emails': True,
-            'submit_after_import': False
-        })
+        if not csv_data:
+            return {
+                'success_count': 0,
+                'error_count': 1,
+                'errors': ['No valid data found in CSV file']
+            }
         
-        # 保存Data Import文档
-        data_import.insert(ignore_permissions=True)
+        frappe.logger().info(f"Parsed {len(csv_data)} rows from CSV")
         
-        # 获取导入预览和验证
-        from frappe.core.doctype.data_import.importer import Importer
-        importer = Importer('Task', data_import=data_import)
+        # 验证数据格式
+        validation_result = validate_csv_data(csv_data, board_view)
+        if not validation_result['valid']:
+            return {
+                'success_count': 0,
+                'error_count': 1,
+                'errors': [validation_result['error']]
+            }
         
-        # 执行导入
-        import_log = importer.import_data()
-        
-        # 处理导入结果
-        success_count = len([log for log in import_log if log.success])
-        error_count = len([log for log in import_log if not log.success])
-        errors = [log.exception for log in import_log if not log.success and log.exception]
-        
-        # 如果有选中的项目，更新导入的任务
-        if selected_projects and success_count > 0:
-            update_imported_tasks_with_projects(import_log, selected_projects, board_view)
-        
-        # 清理临时文件
-        try:
-            file_doc.delete()
-        except:
-            pass  # 忽略删除错误
-        
-        return {
-            'success_count': success_count,
-            'error_count': error_count,
-            'errors': errors[:10]  # 只返回前10个错误
-        }
+        # 执行我们的自定义导入逻辑
+        return process_csv_import(csv_data, board_view, import_mode, skip_errors, selected_projects)
         
     except Exception as e:
         frappe.log_error(f"Error in CSV content import: {str(e)}")
-        # 如果失败，尝试直接处理CSV内容
-        return fallback_to_direct_csv_processing(csv_content, filename, board_view, import_mode, skip_errors, selected_projects)
+        return {
+            'success_count': 0,
+            'error_count': 1,
+            'errors': [str(e)]
+        }
 
 def fallback_to_direct_csv_processing(csv_content, filename, board_view, import_mode, skip_errors, selected_projects):
     """
@@ -605,13 +582,14 @@ def validate_csv_data(csv_data, board_view):
 
 def process_csv_import(csv_data, board_view, import_mode, skip_errors, selected_projects=None):
     """
-    处理CSV数据导入
+    处理CSV数据导入 - 增强版本
     
     Args:
         csv_data (list): CSV数据
         board_view (str): board视图
         import_mode (str): 导入模式 ('insert' 或 'update')
         skip_errors (bool): 是否跳过错误行
+        selected_projects (list): 选中的项目
     
     Returns:
         dict: 导入结果
@@ -621,19 +599,36 @@ def process_csv_import(csv_data, board_view, import_mode, skip_errors, selected_
     updated_count = 0
     errors = []
     
+    frappe.logger().info(f"Starting CSV import: {len(csv_data)} rows")
+    
     # 获取字段映射
     field_mapping = get_import_field_mapping()
     field_labels = get_field_labels()
     reverse_label_mapping = {v: k for k, v in field_labels.items()}
     
+    frappe.logger().info(f"Available field mappings: {list(field_mapping.keys())}")
+    frappe.logger().info(f"Available reverse mappings: {list(reverse_label_mapping.keys())}")
+    
     for i, row in enumerate(csv_data):
         try:
+            frappe.logger().info(f"\n=== Processing row {i+2} ===")
+            frappe.logger().info(f"Raw row data: {row}")
+            frappe.logger().info(f"Row keys: {list(row.keys())}")
+            
+            # 预处理行数据，合并角色字段
+            processed_row = preprocess_csv_row(row)
+            frappe.logger().info(f"Preprocessed row: {processed_row}")
+            
             # 转换字段名
-            task_data = convert_row_to_task_data(row, field_mapping, reverse_label_mapping)
+            frappe.logger().info(f"Starting field conversion...")
+            task_data = convert_row_to_task_data(processed_row, field_mapping, reverse_label_mapping)
+            frappe.logger().info(f"Converted task data: {task_data}")
             
             if not task_data:
+                error_msg = f"Row {i+2}: No valid data found"
+                frappe.logger().warning(error_msg)
                 if not skip_errors:
-                    errors.append(f"Row {i+2}: No valid data found")
+                    errors.append(error_msg)
                     error_count += 1
                 continue
             
@@ -646,10 +641,13 @@ def process_csv_import(csv_data, board_view, import_mode, skip_errors, selected_
             if result['success']:
                 if result.get('updated'):
                     updated_count += 1
+                    frappe.logger().info(f"Row {i+2}: Task updated successfully")
                 else:
                     success_count += 1
+                    frappe.logger().info(f"Row {i+2}: Task created successfully")
             else:
                 error_count += 1
+                frappe.logger().error(f"Row {i+2}: {result['error']}")
                 if not skip_errors:
                     errors.append(result['error'])
                 elif len(errors) < 10:  # 限制错误信息数量
@@ -658,6 +656,7 @@ def process_csv_import(csv_data, board_view, import_mode, skip_errors, selected_
         except Exception as e:
             error_count += 1
             error_msg = f"Row {i+2}: {str(e)}"
+            frappe.logger().error(f"Exception in row {i+2}: {str(e)}")
             if not skip_errors:
                 errors.append(error_msg)
             elif len(errors) < 10:
@@ -666,6 +665,8 @@ def process_csv_import(csv_data, board_view, import_mode, skip_errors, selected_
             if not skip_errors:
                 break
     
+    frappe.logger().info(f"Import completed: {success_count} success, {error_count} errors, {updated_count} updated")
+    
     return {
         'success_count': success_count,
         'error_count': error_count,
@@ -673,9 +674,98 @@ def process_csv_import(csv_data, board_view, import_mode, skip_errors, selected_
         'errors': errors
     }
 
+def preprocess_csv_row(row):
+    """
+    预处理CSV行数据，合并角色字段
+    
+    Args:
+        row (dict): 原始CSV行数据
+    
+    Returns:
+        dict: 处理后的行数据
+    """
+    processed_row = row.copy()
+    
+    # 收集所有角色字段
+    role_fields = {
+        'Action Person': [],
+        'Preparer': [],
+        'Reviewer': [],
+        'Partner': []
+    }
+    
+    # 检查每个角色字段
+    for field_name, field_value in row.items():
+        if not field_value or str(field_value).strip() == '':
+            continue
+            
+        field_name_clean = field_name.strip()
+        field_value_clean = str(field_value).strip()
+        
+        # 检查是否为角色字段
+        if field_name_clean in ['Action Person', 'ACTION PERSON', 'action-person']:
+            # 解析邮箱列表
+            emails = parse_email_list(field_value_clean)
+            for email in emails:
+                role_fields['Action Person'].append(f"{email} | Action Person")
+        elif field_name_clean in ['Preparer', 'PREPARER', 'preparer']:
+            emails = parse_email_list(field_value_clean)
+            for email in emails:
+                role_fields['Preparer'].append(f"{email} | Preparer")
+        elif field_name_clean in ['Reviewer', 'REVIEWER', 'reviewer']:
+            emails = parse_email_list(field_value_clean)
+            for email in emails:
+                role_fields['Reviewer'].append(f"{email} | Reviewer")
+        elif field_name_clean in ['Partner', 'PARTNER', 'partner']:
+            emails = parse_email_list(field_value_clean)
+            for email in emails:
+                role_fields['Partner'].append(f"{email} | Partner")
+    
+    # 合并所有角色信息为一个字段
+    all_roles = []
+    for role_type, role_entries in role_fields.items():
+        all_roles.extend(role_entries)
+    
+    if all_roles:
+        processed_row['_combined_roles'] = '; '.join(all_roles)
+        frappe.logger().info(f"Combined roles: {processed_row['_combined_roles']}")
+    
+    return processed_row
+
+def parse_email_list(email_string):
+    """
+    解析邮箱列表字符串
+    
+    Args:
+        email_string (str): 邮箱字符串
+    
+    Returns:
+        list: 邮箱列表
+    """
+    if not email_string:
+        return []
+    
+    # 尝试不同的分隔符
+    separators = [';', ',', '\n', '|']
+    
+    emails = [email_string]
+    for sep in separators:
+        if sep in email_string:
+            emails = [e.strip() for e in email_string.split(sep) if e.strip()]
+            break
+    
+    # 过滤有效邮箱
+    valid_emails = []
+    for email in emails:
+        email = email.strip()
+        if email and '@' in email:
+            valid_emails.append(email)
+    
+    return valid_emails
+
 def convert_row_to_task_data(row, field_mapping, reverse_label_mapping):
     """
-    将CSV行数据转换为Task数据格式
+    将CSV行数据转换为Task数据格式 - 完全重构版本
     
     Args:
         row (dict): CSV行数据
@@ -689,38 +779,103 @@ def convert_row_to_task_data(row, field_mapping, reverse_label_mapping):
         'doctype': 'Task'
     }
     
+    # 存储Table字段数据，稍后处理
+    table_fields_data = {}
+    
+    # 打印调试信息
+    frappe.logger().info(f"\n--- Converting CSV row ---")
+    frappe.logger().info(f"Row keys: {list(row.keys())}")
+    frappe.logger().info(f"Row values preview: {dict(list(row.items())[:5])}")
+    
     for csv_field, value in row.items():
-        if not value:
+        if not value or str(value).strip() == '':
             continue
         
-        # 尝试匹配字段
+        # 清理字段名和值
+        clean_field = csv_field.strip()
+        clean_value = str(value).strip()
+        
+        frappe.logger().info(f"\nProcessing field: '{clean_field}' = '{clean_value}'")
+        
+        # 尝试匹配字段 - 增强版本
         target_field = None
         
-        # 直接匹配
-        if csv_field in field_mapping:
-            target_field = field_mapping[csv_field]
-        # 通过标签匹配
-        elif csv_field in reverse_label_mapping:
-            smart_field = reverse_label_mapping[csv_field]
+        # 1. 直接匹配字段映射
+        if clean_field in field_mapping:
+            target_field = field_mapping[clean_field]
+            frappe.logger().info(f"Direct mapping: {clean_field} -> {target_field}")
+        # 2. 通过标签映射匹配
+        elif clean_field in reverse_label_mapping:
+            smart_field = reverse_label_mapping[clean_field]
             if smart_field in field_mapping:
                 target_field = field_mapping[smart_field]
+                frappe.logger().info(f"Label mapping: {clean_field} -> {smart_field} -> {target_field}")
+        # 3. 尝试模糊匹配常见字段
+        else:
+            target_field = fuzzy_match_field(clean_field, field_mapping)
+            if target_field:
+                frappe.logger().info(f"Fuzzy mapping: {clean_field} -> {target_field}")
         
         if target_field:
-            # 格式化值
-            formatted_value = format_import_value(target_field, value)
-            task_data[target_field] = formatted_value
+            frappe.logger().info(f"Mapped {clean_field} -> {target_field}")
+            
+            # 检查是否是Table字段
+            if is_table_field_for_import(target_field):
+                table_fields_data[target_field] = clean_value
+                frappe.logger().info(f"📋 Stored table field data: {target_field} = {clean_value}")
+            else:
+                # 格式化普通字段值
+                formatted_value = format_import_value(target_field, clean_value)
+                task_data[target_field] = formatted_value
+                frappe.logger().info(f"✅ Set field: {target_field} = {formatted_value}")
+        else:
+            frappe.logger().warning(f"❌ No mapping found for field: '{clean_field}'")
+            # 显示所有可用的映射供参考
+            available_mappings = [k for k in field_mapping.keys() if clean_field.lower() in k.lower() or k.lower() in clean_field.lower()]
+            if available_mappings:
+                frappe.logger().info(f"Similar mappings available: {available_mappings}")
     
-    # 确保有基本的任务信息
-    if not task_data.get('subject') and not task_data.get('custom_client_name'):
-        return None
-    
-    # 设置默认值
+    # 确保有基本的任务信息 - 增强版本
     if not task_data.get('subject'):
-        task_data['subject'] = task_data.get('custom_client_name', 'Imported Task')
+        # 尝试从不同来源获取任务名称
+        subject_sources = ['Task Name', 'TASK NAME', 'task-name', 'subject', 'Task', 'Name', 'task_name']
+        for source in subject_sources:
+            if source in row and row[source] and str(row[source]).strip():
+                task_data['subject'] = str(row[source]).strip()
+                frappe.logger().info(f"Found subject from {source}: {task_data['subject']}")
+                break
+        
+        # 如果还是没有，尝试从其他可能的字段获取
+        if not task_data.get('subject'):
+            # 检查所有包含"task"或"name"的字段
+            for field_name, field_value in row.items():
+                if field_value and str(field_value).strip():
+                    field_lower = field_name.lower()
+                    if ('task' in field_lower and 'name' in field_lower) or field_lower == 'task':
+                        task_data['subject'] = str(field_value).strip()
+                        frappe.logger().info(f"Found subject from fallback {field_name}: {task_data['subject']}")
+                        break
+        
+        # 最后的默认值
+        if not task_data.get('subject'):
+            if task_data.get('custom_client'):
+                task_data['subject'] = f"Task for {task_data['custom_client']}"
+            else:
+                task_data['subject'] = 'Imported Task'
+                frappe.logger().warning("Using default subject: Imported Task")
     
+    # 设置默认状态
     if not task_data.get('status'):
         task_data['status'] = 'Open'
     
+    # 存储Table字段数据供后续处理
+    task_data['_table_fields_data'] = table_fields_data
+    
+    frappe.logger().info(f"\n--- Final Results ---")
+    frappe.logger().info(f"Task data fields: {list(task_data.keys())}")
+    frappe.logger().info(f"Subject: {task_data.get('subject', 'NOT SET!')}")
+    frappe.logger().info(f"Table fields count: {len(table_fields_data)}")
+    frappe.logger().info(f"Full task_data: {task_data}")
     return task_data
 
 def format_import_value(field_name, value):
@@ -802,19 +957,115 @@ def parse_boolean_value(value):
     true_values = ['true', '1', 'yes', 'y', 'on', '是', '真']
     return 1 if str(value).lower().strip() in true_values else 0
 
+def fuzzy_match_field(csv_field, field_mapping):
+    """
+    模糊匹配字段名 - 增强版本
+    
+    Args:
+        csv_field (str): CSV字段名
+        field_mapping (dict): 字段映射
+    
+    Returns:
+        str: 匹配的目标字段名
+    """
+    csv_lower = csv_field.lower().replace(' ', '').replace('-', '').replace('_', '')
+    
+    # 扩展的模糊匹配规则，包括导出的实际字段名
+    fuzzy_rules = {
+        # Task Name 相关
+        'taskname': 'subject',
+        'task': 'subject',
+        'name': 'subject',
+        
+        # Client 相关
+        'client': 'custom_client',
+        'clientname': 'custom_client',
+        'customer': 'custom_client',
+        
+        # Software 相关
+        'software': 'custom_softwares',
+        'softwares': 'custom_softwares',
+        
+        # Communication 相关
+        'communicationmethod': 'custom_communication_methods',
+        'communicationmethods': 'custom_communication_methods',
+        'communication': 'custom_communication_methods',
+        
+        # 角色相关
+        'actionperson': 'custom_roles',
+        'preparer': 'custom_roles',
+        'reviewer': 'custom_roles',
+        'partner': 'custom_roles',
+        
+        # 日期和数值
+        'targetmonth': 'custom_target_month',
+        'target': 'custom_target_month',
+        'month': 'custom_target_month',
+        'budget': 'custom_budget_planning',
+        'actual': 'custom_actual_billing',
+        
+        # 备注相关
+        'reviewnote': 'custom_review_notes',
+        'review': 'custom_review_notes',
+        'note': 'custom_note',
+        'notes': 'custom_note',
+        
+        # 基础字段
+        'status': 'status',
+        'priority': 'priority',
+        'entity': 'custom_service_line',
+        'tftg': 'custom_tftg',
+        'tf': 'custom_tftg',
+        'tg': 'custom_tftg'
+    }
+    
+    matched_field = fuzzy_rules.get(csv_lower)
+    if matched_field:
+        frappe.logger().info(f"Fuzzy match found: {csv_field} ({csv_lower}) -> {matched_field}")
+    else:
+        frappe.logger().warning(f"No fuzzy match for: {csv_field} ({csv_lower})")
+    
+    return matched_field
+
+def is_table_field_for_import(field_name):
+    """
+    检查字段是否为Table类型字段
+    
+    Args:
+        field_name (str): 字段名
+    
+    Returns:
+        bool: 是否为Table字段
+    """
+    table_fields = [
+        'custom_roles',
+        'custom_softwares', 
+        'custom_companies',
+        'custom_communication_methods',
+        'custom_review_notes'
+    ]
+    return field_name in table_fields
+
 def create_new_task(task_data, board_view, row_number, selected_projects=None):
     """
-    创建新任务
+    创建新任务 - 增强版本，支持Table字段处理
     
     Args:
         task_data (dict): 任务数据
         board_view (str): board视图
         row_number (int): 行号
+        selected_projects (list): 选中的项目
     
     Returns:
         dict: 创建结果
     """
     try:
+        # 提取Table字段数据
+        table_fields_data = task_data.pop('_table_fields_data', {})
+        
+        frappe.logger().info(f"Creating task with data: {task_data}")
+        frappe.logger().info(f"Table fields data: {table_fields_data}")
+        
         # Add board related information
         if board_view != 'main':
             task_data['custom_partition'] = board_view
@@ -823,9 +1074,17 @@ def create_new_task(task_data, board_view, row_number, selected_projects=None):
         if not task_data.get('project') and selected_projects and len(selected_projects) > 0:
             task_data['project'] = selected_projects[0]
         
-        # Create task
+        # Create task document
         task_doc = frappe.get_doc(task_data)
         task_doc.insert(ignore_permissions=True)
+        
+        frappe.logger().info(f"Task created: {task_doc.name}")
+        
+        # 处理Table字段数据
+        if table_fields_data:
+            process_table_fields_for_task(task_doc, table_fields_data)
+            task_doc.save(ignore_permissions=True)
+            frappe.logger().info(f"Table fields processed for task: {task_doc.name}")
         
         return {
             'success': True,
@@ -834,6 +1093,7 @@ def create_new_task(task_data, board_view, row_number, selected_projects=None):
         }
         
     except Exception as e:
+        frappe.logger().error(f"Error creating task: {str(e)}")
         return {
             'success': False,
             'error': f"Row {row_number}: Failed to create task - {str(e)}"
@@ -897,42 +1157,88 @@ def update_existing_task(task_data, row_number):
 
 def get_import_field_mapping():
     """
-    获取导入字段映射（Smart Accounting字段到ERPNext Task字段）
+    获取导入字段映射（Smart Accounting字段到ERPNext Task字段）- 更新版本
     
     Returns:
         dict: 字段映射
     """
     return {
-        'client': 'custom_client_name',
+        # 基础字段 - 扩展映射
+        'Client Name': 'custom_client',
+        'CLIENT NAME': 'custom_client',
+        'client': 'custom_client',
+        'Client': 'custom_client',
+        'Task Name': 'subject',
+        'TASK NAME': 'subject',
         'task-name': 'subject',
-        'entity': 'custom_entity',
-        'tf-tg': 'custom_tf_tg',
-        'software': 'custom_software',
+        'task_name': 'subject',
+        'subject': 'subject',
+        'Subject': 'subject',
+        
+        # 业务字段
+        'Entity': 'custom_service_line',
+        'entity': 'custom_service_line',
+        'TF/TG': 'custom_tftg',
+        'tf-tg': 'custom_tftg',
+        'tftg': 'custom_tftg',
+        
+        # Table字段 - 这些会被特殊处理
+        'Software': 'custom_softwares',
+        'software': 'custom_softwares',
+        'Communication Methods': 'custom_communication_methods',
         'communication-methods': 'custom_communication_methods',
-        'client-contact': 'custom_client_contact',
+        'Client Contact': 'custom_companies',
+        'client-contact': 'custom_companies',
+        
+        # 角色字段 - 这些会被转换为custom_roles表
+        'Action Person': 'custom_roles',
+        'action-person': 'custom_roles', 
+        'Preparer': 'custom_roles',
+        'preparer': 'custom_roles',
+        'Reviewer': 'custom_roles',
+        'reviewer': 'custom_roles',
+        'Partner': 'custom_roles',
+        'partner': 'custom_roles',
+        '_combined_roles': 'custom_roles',  # 合并后的角色字段
+        
+        # 状态和其他字段
+        'Status': 'status',
         'status': 'status',
-        'note': 'description',
-        'target-month': 'custom_target_month',
-        'budget': 'custom_budget',
-        'actual': 'custom_actual',
-        'review-note': 'custom_review_note',
-        'action-person': 'custom_action_person',
-        'preparer': 'custom_preparer',
-        'reviewer': 'custom_reviewer',
-        'partner': 'custom_partner',
-        'process-date': 'custom_process_date',
-        'lodgment-due': 'custom_lodgement_due',
-        'engagement': 'custom_engagement',
-        'group': 'custom_group',
-        'year-end': 'custom_year_end',
+        'Priority': 'priority',
         'priority': 'priority',
+        
+        # 日期和数值字段
+        'Target Month': 'custom_target_month',
+        'target-month': 'custom_target_month',
+        'Budget': 'custom_budget_planning',
+        'budget': 'custom_budget_planning',
+        'Actual': 'custom_actual_billing',
+        'actual': 'custom_actual_billing',
+        
+        # 备注字段
+        'Note': 'custom_note',
+        'note': 'custom_note',
+        'Review Note': 'custom_review_notes',
+        'review-note': 'custom_review_notes',
+        
+        # 其他字段
+        'Lodgement Due': 'custom_lodgement_due_date',
+        'lodgment-due': 'custom_lodgement_due_date',
+        'Engagement': 'custom_engagement',
+        'engagement': 'custom_engagement',
+        'Group': 'custom_companies',
+        'group': 'custom_companies',
+        'Year End': 'custom_year_end',
+        'year-end': 'custom_year_end',
+        'Frequency': 'custom_frequency',
         'frequency': 'custom_frequency',
+        'Reset Date': 'custom_reset_date',
         'reset-date': 'custom_reset_date'
     }
 
 def get_field_labels():
     """
-    获取字段标签（与导出API保持一致）
+    获取字段标签（与导出API保持一致）- 更新版本
     
     Returns:
         dict: 字段标签映射
@@ -965,6 +1271,243 @@ def get_field_labels():
         'frequency': 'Frequency',
         'reset-date': 'Reset Date'
     }
+
+def process_table_fields_for_task(task_doc, table_fields_data):
+    """
+    处理Task的Table字段数据
+    
+    Args:
+        task_doc: Task文档对象
+        table_fields_data (dict): Table字段数据
+    """
+    try:
+        frappe.logger().info(f"Processing table fields for task {task_doc.name}: {table_fields_data}")
+        
+        for field_name, field_value in table_fields_data.items():
+            if not field_value:
+                continue
+                
+            frappe.logger().info(f"Processing table field: {field_name} = {field_value}")
+            
+            if field_name == 'custom_softwares':
+                process_software_field(task_doc, field_value)
+            elif field_name == 'custom_communication_methods':
+                process_communication_methods_field(task_doc, field_value)
+            elif field_name == 'custom_companies':
+                process_companies_field(task_doc, field_value)
+            elif field_name == 'custom_roles':
+                process_roles_field(task_doc, field_value)
+            elif field_name == 'custom_review_notes':
+                process_review_notes_field(task_doc, field_value)
+                
+    except Exception as e:
+        frappe.logger().error(f"Error processing table fields: {str(e)}")
+        raise
+
+def process_software_field(task_doc, software_value):
+    """
+    处理Software字段
+    
+    Args:
+        task_doc: Task文档
+        software_value (str): 软件值，如"MYOB; QuickBooks; Excel"
+    """
+    try:
+        # 清理现有的软件记录
+        task_doc.custom_softwares = []
+        
+        # 解析软件列表
+        if ';' in software_value:
+            software_list = [s.strip() for s in software_value.split(';') if s.strip()]
+        elif ',' in software_value:
+            software_list = [s.strip() for s in software_value.split(',') if s.strip()]
+        else:
+            software_list = [software_value.strip()] if software_value.strip() else []
+        
+        frappe.logger().info(f"Parsed software list: {software_list}")
+        
+        # 添加软件记录
+        for software in software_list:
+            task_doc.append('custom_softwares', {
+                'software_name': software
+            })
+            
+        frappe.logger().info(f"Added {len(software_list)} software records")
+        
+    except Exception as e:
+        frappe.logger().error(f"Error processing software field: {str(e)}")
+        raise
+
+def process_communication_methods_field(task_doc, comm_value):
+    """
+    处理Communication Methods字段
+    
+    Args:
+        task_doc: Task文档
+        comm_value (str): 通信方式值，如"Phone Call; Teams Group"
+    """
+    try:
+        # 清理现有记录
+        task_doc.custom_communication_methods = []
+        
+        # 解析通信方式列表
+        if ';' in comm_value:
+            comm_list = [c.strip() for c in comm_value.split(';') if c.strip()]
+        elif ',' in comm_value:
+            comm_list = [c.strip() for c in comm_value.split(',') if c.strip()]
+        else:
+            comm_list = [comm_value.strip()] if comm_value.strip() else []
+        
+        frappe.logger().info(f"Parsed communication methods: {comm_list}")
+        
+        # 添加通信方式记录
+        for method in comm_list:
+            task_doc.append('custom_communication_methods', {
+                'communication_method': method
+            })
+            
+        frappe.logger().info(f"Added {len(comm_list)} communication method records")
+        
+    except Exception as e:
+        frappe.logger().error(f"Error processing communication methods: {str(e)}")
+        raise
+
+def process_companies_field(task_doc, companies_value):
+    """
+    处理Companies字段
+    
+    Args:
+        task_doc: Task文档
+        companies_value (str): 公司值
+    """
+    try:
+        # 清理现有记录
+        task_doc.custom_companies = []
+        
+        # 解析公司列表
+        if ';' in companies_value:
+            company_list = [c.strip() for c in companies_value.split(';') if c.strip()]
+        elif ',' in companies_value:
+            company_list = [c.strip() for c in companies_value.split(',') if c.strip()]
+        else:
+            company_list = [companies_value.strip()] if companies_value.strip() else []
+        
+        frappe.logger().info(f"Parsed companies: {company_list}")
+        
+        # 添加公司记录
+        for i, company in enumerate(company_list):
+            task_doc.append('custom_companies', {
+                'company': company,
+                'is_primary': 1 if i == 0 else 0  # 第一个设为主要
+            })
+            
+        frappe.logger().info(f"Added {len(company_list)} company records")
+        
+    except Exception as e:
+        frappe.logger().error(f"Error processing companies: {str(e)}")
+        raise
+
+def process_roles_field(task_doc, roles_value):
+    """
+    处理角色字段 - 增强版本，支持合并后的角色数据
+    
+    Args:
+        task_doc: Task文档
+        roles_value (str): 角色值，格式为 "email | role; email | role"
+    """
+    try:
+        # 清理现有角色记录
+        task_doc.custom_roles = []
+        
+        frappe.logger().info(f"Processing roles value: {roles_value}")
+        
+        if not roles_value or str(roles_value).strip() == '':
+            frappe.logger().info("No roles to process")
+            return
+        
+        # 解析角色分配字符串
+        # 期望格式: "jean@topfigures.com.au | Action Person; zigengwang464@gmail.com | Preparer"
+        
+        entries = [entry.strip() for entry in roles_value.split(';') if entry.strip()]
+        
+        for entry in entries:
+            frappe.logger().info(f"Processing role entry: {entry}")
+            
+            if '|' in entry:
+                # 包含角色信息的格式
+                parts = entry.split('|')
+                if len(parts) >= 2:
+                    user_email = parts[0].strip()
+                    role_name = parts[1].strip()
+                    
+                    if user_email and role_name:
+                        # 验证用户是否存在
+                        if frappe.db.exists("User", user_email):
+                            # 检查用户是否启用
+                            user_enabled = frappe.db.get_value("User", user_email, "enabled")
+                            if user_enabled:
+                                task_doc.append('custom_roles', {
+                                    'role': role_name,
+                                    'user': user_email,
+                                    'is_primary': 1
+                                })
+                                frappe.logger().info(f"Added role: {role_name} -> {user_email}")
+                            else:
+                                frappe.logger().warning(f"User {user_email} is disabled")
+                        else:
+                            frappe.logger().warning(f"User {user_email} does not exist")
+                    else:
+                        frappe.logger().warning(f"Invalid role entry format: {entry}")
+            else:
+                # 没有角色信息，可能是纯邮箱列表
+                # 这种情况下默认为Action Person
+                user_email = entry.strip()
+                if user_email and '@' in user_email:
+                    if frappe.db.exists("User", user_email):
+                        user_enabled = frappe.db.get_value("User", user_email, "enabled")
+                        if user_enabled:
+                            task_doc.append('custom_roles', {
+                                'role': 'Action Person',
+                                'user': user_email,
+                                'is_primary': 1
+                            })
+                            frappe.logger().info(f"Added default role: Action Person -> {user_email}")
+                        else:
+                            frappe.logger().warning(f"User {user_email} is disabled")
+                    else:
+                        frappe.logger().warning(f"User {user_email} does not exist")
+        
+        frappe.logger().info(f"Added {len(task_doc.custom_roles)} role records")
+        
+    except Exception as e:
+        frappe.logger().error(f"Error processing roles: {str(e)}")
+        raise
+
+def process_review_notes_field(task_doc, notes_value):
+    """
+    处理Review Notes字段
+    
+    Args:
+        task_doc: Task文档
+        notes_value (str): 备注值
+    """
+    try:
+        # 清理现有记录
+        task_doc.custom_review_notes = []
+        
+        # 如果有备注内容，添加记录
+        if notes_value and notes_value.strip():
+            task_doc.append('custom_review_notes', {
+                'note': notes_value.strip(),
+                'created_by': frappe.session.user,
+                'created_date': frappe.utils.now()
+            })
+            
+        frappe.logger().info(f"Added review note: {notes_value}")
+        
+    except Exception as e:
+        frappe.logger().error(f"Error processing review notes: {str(e)}")
+        raise
 
 def log_import_activity(board_view, import_result):
     """
