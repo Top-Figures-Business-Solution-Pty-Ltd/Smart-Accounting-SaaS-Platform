@@ -307,7 +307,7 @@ class EnhancedLoadingSystem {
     
     // 更新进度
     updateProgress() {
-        if (!this.isLoading) return;
+        if (!this.isLoading || this.manualMode) return;
         
         const stage = this.stages[this.currentStage];
         if (!stage) return;
@@ -477,14 +477,19 @@ class EnhancedLoadingSystem {
     
     // 手动设置进度（用于外部调用）
     setProgress(percentage, stageName = null) {
+        // 🚀 启用手动模式，停止自动进度更新
+        this.manualMode = true;
+        
         if (stageName) {
             this.updateStageDisplay(stageName);
         }
         this.updateProgressBar(percentage);
         this.updateCheckItems();
         
+        // 🚀 修复：当达到100%时，准备完成但不立即完成
+        // 让外部调用forceComplete()来真正完成
         if (percentage >= 100) {
-            this.completeLoading();
+            this.readyToComplete = true;
         }
     }
     

@@ -948,25 +948,9 @@ class TableManager {
         });
     }
 
-    // Display Type Management Methods
+    // Simplified: Always use Task-Centric display
     detectDisplayType() {
-        // Try to detect display type from current data or URL parameters
-        const urlParams = new URLSearchParams(window.location.search);
-        const view = urlParams.get('view') || 'main';
-        
-        if (view === 'main') {
-            this.currentDisplayType = 'Task-Centric';
-            return this.currentDisplayType;
-        }
-        
-        // Check if we have display type information in the data
-        if (window.PM_CONFIG && window.PM_CONFIG.project_data && window.PM_CONFIG.project_data.display_type) {
-            this.currentDisplayType = window.PM_CONFIG.project_data.display_type;
-        } else {
-            // Default to Task-Centric if not specified
-            this.currentDisplayType = 'Task-Centric';
-        }
-        
+        this.currentDisplayType = 'Task-Centric';
         return this.currentDisplayType;
     }
 
@@ -1029,11 +1013,7 @@ class TableManager {
         // Store simplified display type info
         window.PM_CURRENT_DISPLAY_TYPE = 'Task-Centric';
         
-        // Trigger event for other components to update
-        $(document).trigger('displayTypeChanged', {
-            displayType: this.currentDisplayType,
-            config: config
-        });
+        // Simplified: no need to trigger display type events
     }
 
     // Helper methods simplified - task-centric only
@@ -1064,17 +1044,8 @@ class TableManager {
 
     // Initialize display type detection and setup
     initializeDisplayType() {
-        this.detectDisplayType();
-        
-        // Listen for display type changes
-        $(document).on('displayTypeChanged', (event, data) => {
-            console.log('Display type changed to:', data.displayType);
-        });
-        
-        // Update table for current display type
-        setTimeout(() => {
-            this.updateTableForDisplayType();
-        }, 100);
+        // Simplified: no display type switching needed
+        console.log('Display type initialization skipped - using default task-centric view');
     }
 }
 

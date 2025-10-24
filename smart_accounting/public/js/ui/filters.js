@@ -7,11 +7,8 @@ class FilterManager {
         this.filterChangeTimeout = null;
         // Display type manager removed - simplified to task-centric only
         
-        // Listen for display type changes
-        $(document).on('displayTypeChanged', (event, data) => {
-            this.currentDisplayType = data.displayType;
-            this.updateFiltersForDisplayType(data.config);
-        });
+        // Simplified: always use Task-Centric display
+        this.currentDisplayType = 'Task-Centric';
     }
 
     // Unified Dropdown Management

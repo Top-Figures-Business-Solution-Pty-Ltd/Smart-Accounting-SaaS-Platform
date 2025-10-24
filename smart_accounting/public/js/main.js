@@ -32,37 +32,130 @@ class ProjectManagement {
         this.init();
     }
 
-    init() {
+    async init() {
         // 启动增强加载系统
         if (window.EnhancedLoadingSystem) {
             window.EnhancedLoadingSystem.startLoading();
         }
         
-        // 等待布局预加载完成
-        this.waitForLayoutPreload().then(() => {
+        try {
+            // 🚀 真实进度追踪：阶段1 - 初始化 (0-20%)
+            this.updateLoadingProgress(10, "Initializing components...");
+            
+            // 等待布局预加载完成
+            await this.waitForLayoutPreload();
+            this.updateLoadingProgress(20, "Layout ready...");
+            
+            // 🚀 真实进度追踪：阶段2 - 配置加载 (20-40%)
+            this.updateLoadingProgress(25, "Loading configuration...");
             this.bindEvents();
             this.initializeFilters();
             this.setupSearch();
+            this.updateLoadingProgress(35, "Setting up interface...");
+            
             this.initializeInlineEditing();
             this.initializeColumnResizing();
             this.initializeAdvancedFilter();
+            this.updateLoadingProgress(40, "Configuring workspace...");
+            
+            // 🚀 真实进度追踪：阶段3 - 数据加载 (40-80%)
+            this.updateLoadingProgress(45, "Loading workspace data...");
             this.loadSystemOptions();
             this.initializeWorkspaceSwitcher();
+            this.updateLoadingProgress(60, "Fetching task data...");
+            
+            // 🚀 真实进度追踪：阶段4 - 界面渲染 (60-90%)
             this.refreshReviewNoteCounts();
             this.initializeSubtasks();
             this.initializeMultiSelect();
             this.initializeCombinationView();
             this.initializePrimaryColumnManager();
+            this.updateLoadingProgress(75, "Rendering interface...");
             
             // Apply partition column configuration after DOM is ready
             this.applyPartitionColumnConfig();
             this.addColumnManagementButton();
-            
-            // Initialize display type support
             this.initializeDisplayType();
+            this.updateLoadingProgress(85, "Finalizing setup...");
             
-            // 完成加载，切换到真实内容
-            this.finishLoading();
+            // 🚀 关键修复：等待数据真正渲染完成后才显示100%
+            this.updateLoadingProgress(90, "Loading data...");
+            await this.waitForDataLoading();
+            this.updateLoadingProgress(95, "Rendering data...");
+            
+            // 再等一下确保DOM完全渲染
+            await this.waitForDOMRender();
+            
+            // 🚀 只有在一切真正完成后才显示100%并立即完成
+            this.updateLoadingProgress(100, "Complete!");
+            this.finishLoading(); // 立即完成，不再延迟
+            
+        } catch (error) {
+            console.error('Loading error:', error);
+            this.updateLoadingProgress(100, "Loading complete with errors");
+            setTimeout(() => {
+                this.finishLoading();
+            }, 500);
+        }
+    }
+    
+    // 🚀 更新加载进度
+    updateLoadingProgress(percentage, message) {
+        if (window.EnhancedLoadingSystem) {
+            window.EnhancedLoadingSystem.setProgress(percentage, message);
+        }
+    }
+    
+    // 🚀 等待数据真正加载完成
+    async waitForDataLoading() {
+        return new Promise((resolve) => {
+            let attempts = 0;
+            const maxAttempts = 30; // 最多等待3秒 (30 * 100ms)
+            
+            const checkDataLoaded = () => {
+                attempts++;
+                
+                // 多种方式检查数据是否加载完成
+                const tableRows = document.querySelectorAll('.pm-table-row, .client-group, .pm-cell, tr[data-task-id]');
+                const taskCells = document.querySelectorAll('[data-task-id], .task-name, .client-name');
+                const hasVisibleData = tableRows.length > 0 || taskCells.length > 0;
+                
+                // 检查是否还有加载中的元素
+                const loadingElements = document.querySelectorAll('.loading, .spinner, .pm-loading, .skeleton');
+                const stillLoading = loadingElements.length > 0;
+                
+                // 检查表格容器是否存在且不为空
+                const tableContainer = document.querySelector('.project-management-container, .pm-table-container');
+                const containerReady = tableContainer && tableContainer.children.length > 0;
+                
+                if ((hasVisibleData || containerReady) && !stillLoading) {
+                    // 数据已加载
+                    resolve();
+                } else if (attempts >= maxAttempts) {
+                    // 超时强制完成 - 不能让用户等太久
+                    console.log('Data loading timeout, forcing completion');
+                    resolve();
+                } else {
+                    // 继续等待
+                    setTimeout(checkDataLoaded, 100);
+                }
+            };
+            
+            // 立即开始检查
+            checkDataLoaded();
+        });
+    }
+    
+    // 🚀 等待DOM完全渲染
+    async waitForDOMRender() {
+        return new Promise((resolve) => {
+            // 使用requestAnimationFrame确保DOM渲染完成
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    // 双重requestAnimationFrame确保渲染完成
+                    setTimeout(resolve, 50); // 再等50ms确保一切就绪
+                });
+            });
         });
     }
     
@@ -158,6 +251,11 @@ class ProjectManagement {
     
     // 完成加载
     finishLoading() {
+        // 🚀 通知Enhanced Loading System完成加载
+        if (window.EnhancedLoadingSystem) {
+            window.EnhancedLoadingSystem.forceComplete();
+        }
+        
         // 通知布局预加载器完成
         if (window.LayoutPreloader) {
             window.LayoutPreloader.finishLoading();
