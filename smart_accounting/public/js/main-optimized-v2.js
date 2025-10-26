@@ -48,7 +48,7 @@ class OptimizedProjectManagement {
             // 5. 完成初始化
             this.finishInitialization();
             
-            console.log('✅ 项目管理系统初始化完成');
+            // console.log 项目管理系统初始化完成');
             this.performanceMonitor.end('app-init');
             
         } catch (error) {
@@ -182,7 +182,7 @@ class OptimizedProjectManagement {
                 loadTime: Date.now()
             });
             
-            console.log(`✅ 管理器初始化完成: ${name}`);
+            // console.log 管理器初始化完成: ${name}`);
             
         } catch (error) {
             console.error(`❌ 管理器初始化失败: ${name}`, error);

@@ -417,7 +417,7 @@ class CSVManager {
                 this.applyCustomFieldConfig(customConfig);
             }
         } catch (e) {
-            console.log('No custom field configuration found, using defaults');
+            // console.log('No custom field configuration found, using defaults');
         }
     }
 
@@ -471,7 +471,7 @@ class CSVManager {
             }
         });
 
-        console.log('Applied custom field configuration:', customConfig.length, 'fields');
+        // console.log('Applied custom field configuration:', customConfig.length, 'fields');
     }
 
     /**
@@ -488,7 +488,7 @@ class CSVManager {
             };
         });
 
-        console.log(`Registered new field type: ${typeName}`);
+        // console.log(`Registered new field type: ${typeName}`);
     }
 
     /**
@@ -497,7 +497,7 @@ class CSVManager {
     addCustomFieldProcessor(processorName, processorFunction) {
         if (this.fieldProcessor) {
             this.fieldProcessor[processorName] = processorFunction;
-            console.log(`Added custom field processor: ${processorName}`);
+            // console.log(`Added custom field processor: ${processorName}`);
         }
     }
 
@@ -1095,7 +1095,7 @@ class CSVManager {
         // File upload area click - 使用一次性事件绑定
         const self = this;
         $dialog.on('click', '#csv-upload-area', function(e) {
-            console.log('Upload area clicked - triggering file dialog');
+            // console.log('Upload area clicked - triggering file dialog');
             e.preventDefault();
             e.stopPropagation();
             
@@ -1436,7 +1436,7 @@ class CSVManager {
             
             // Step 2: If built-in API fails or returns no data, fallback to UI extraction
             if (!rawData || rawData.length === 0) {
-                console.log('Built-in API returned no data, falling back to UI extraction');
+                // console.log('Built-in API returned no data, falling back to UI extraction');
                 rawData = this.getCurrentUIData(exportAllData);
             }
             
@@ -1495,15 +1495,15 @@ class CSVManager {
             },
             callback: (response) => {
                     if (response.message && response.message.success && response.message.data) {
-                        console.log('Successfully got data from built-in API');
+                        // console.log('Successfully got data from built-in API');
                         resolve(response.message.data);
                 } else {
-                        console.log('Built-in API failed or returned no data');
+                        // console.log('Built-in API failed or returned no data');
                         resolve([]);
                 }
             },
             error: (error) => {
-                    console.log('Built-in API error, will fallback to UI extraction:', error);
+                    // console.log('Built-in API error, will fallback to UI extraction:', error);
                     resolve([]);
                 }
             });
@@ -1684,7 +1684,7 @@ class CSVManager {
                 }
                 
                 if (data && Array.isArray(data) && data.length > 0) {
-                    console.log(`Found data from: ${source}`);
+                    // console.log(`Found data from: ${source}`);
                     return data;
                 }
             } catch (e) {
@@ -1729,7 +1729,7 @@ class CSVManager {
         for (const selector of tableSelectors) {
             $table = $(selector).first();
             if ($table.length > 0) {
-                console.log(`Found table using selector: ${selector}`);
+                // console.log(`Found table using selector: ${selector}`);
                 break;
             }
         }
@@ -1740,13 +1740,13 @@ class CSVManager {
             // Debug: log all available tables and their info
             $('table').each((i, table) => {
                 const $t = $(table);
-                console.log(`Table ${i}:`, {
-                    classes: table.className,
-                    id: table.id,
-                    rows: $t.find('tr').length,
-                    headers: $t.find('th').length,
-                    bodyRows: $t.find('tbody tr').length
-                });
+                // console.log(`Table ${i}:`, {
+                //     classes: table.className,
+                //     id: table.id,
+                //     rows: $t.find('tr').length,
+                //     headers: $t.find('th').length,
+                //     bodyRows: $t.find('tbody tr').length
+                // });
             });
             
             // Fallback: try to find any table with data
@@ -2369,7 +2369,7 @@ function initializeCSVManager() {
                 
                 const csvManager = new CSVManager();
                 window.CSVManager = csvManager;
-                console.log('CSV Manager initialized successfully');
+                // console.log('CSV Manager initialized successfully');
                 
                 // Add cleanup on page unload
                 $(window).on('beforeunload.csvManager', () => {
@@ -2428,7 +2428,7 @@ function createFallbackCSVManager() {
             });
         },
         destroy: () => {
-            console.log('Fallback CSV Manager destroyed');
+            // console.log('Fallback CSV Manager destroyed');
         }
     };
 }

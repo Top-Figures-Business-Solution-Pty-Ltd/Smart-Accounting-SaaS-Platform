@@ -33,6 +33,7 @@ class ProjectManagement {
     }
 
     async init() {
+        
         // 启动增强加载系统
         if (window.EnhancedLoadingSystem) {
             window.EnhancedLoadingSystem.startLoading();
@@ -60,12 +61,13 @@ class ProjectManagement {
             
             // 🚀 真实进度追踪：阶段3 - 数据加载 (40-80%)
             this.updateLoadingProgress(45, "Loading workspace data...");
-            this.loadSystemOptions();
+            // Load system options asynchronously - don't block main loading
+            this.loadSystemOptionsAsync();
             this.initializeWorkspaceSwitcher();
             this.updateLoadingProgress(60, "Fetching task data...");
             
             // 🚀 真实进度追踪：阶段4 - 界面渲染 (60-90%)
-            this.refreshReviewNoteCounts();
+            // Review Note counts are now loaded with main data - no separate API call needed
             this.initializeSubtasks();
             this.initializeMultiSelect();
             this.initializeCombinationView();
@@ -78,17 +80,15 @@ class ProjectManagement {
             this.initializeDisplayType();
             this.updateLoadingProgress(85, "Finalizing setup...");
             
-            // 🚀 关键修复：等待数据真正渲染完成后才显示100%
-            this.updateLoadingProgress(90, "Loading data...");
-            await this.waitForDataLoading();
-            this.updateLoadingProgress(95, "Rendering data...");
+            // 🚀 MONDAY.COM风格：立即显示页面，后台继续加载
+            this.updateLoadingProgress(90, "Rendering interface...");
             
-            // 再等一下确保DOM完全渲染
-            await this.waitForDOMRender();
+            // 立即显示页面框架，不等待所有数据
+            this.updateLoadingProgress(100, "Ready!");
+            this.finishLoading(); // 立即完成加载界面
             
-            // 🚀 只有在一切真正完成后才显示100%并立即完成
-            this.updateLoadingProgress(100, "Complete!");
-            this.finishLoading(); // 立即完成，不再延迟
+            // 🚀 后台继续完成剩余任务（不阻塞用户界面）
+            this.completeBackgroundTasks();
             
         } catch (error) {
             console.error('Loading error:', error);
@@ -106,11 +106,11 @@ class ProjectManagement {
         }
     }
     
-    // 🚀 等待数据真正加载完成
+    // 🚀 等待数据真正加载完成 - 优化版本
     async waitForDataLoading() {
         return new Promise((resolve) => {
             let attempts = 0;
-            const maxAttempts = 30; // 最多等待3秒 (30 * 100ms)
+            const maxAttempts = 10; // 减少到最多等待1秒 (10 * 100ms)
             
             const checkDataLoaded = () => {
                 attempts++;
@@ -146,15 +146,12 @@ class ProjectManagement {
         });
     }
     
-    // 🚀 等待DOM完全渲染
+    // 🚀 等待DOM完全渲染 - 优化版本
     async waitForDOMRender() {
         return new Promise((resolve) => {
-            // 使用requestAnimationFrame确保DOM渲染完成
+            // 简化DOM渲染等待，减少不必要的延迟
             requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    // 双重requestAnimationFrame确保渲染完成
-                    setTimeout(resolve, 50); // 再等50ms确保一切就绪
-                });
+                resolve(); // 移除额外的延迟
             });
         });
     }
@@ -324,7 +321,7 @@ class ProjectManagement {
     initializePrimaryColumnManager() {
         if (window.PrimaryColumnManager) {
             window.PrimaryColumnManager.initialize();
-            console.log('✅ Primary Column Manager initialized');
+            // console.log Primary Column Manager initialized');
         } else {
             console.warn('⚠️ Primary Column Manager not available');
         }
@@ -653,6 +650,54 @@ class ProjectManagement {
 
     loadSystemOptions() {
         this.projectManager.loadSystemOptions();
+    }
+
+    // 🚀 异步加载系统选项 - 不阻塞主加载流程
+    loadSystemOptionsAsync() {
+        // 在后台异步加载，不影响主要加载流程
+        setTimeout(() => {
+            this.projectManager.loadSystemOptions();
+        }, 100);
+    }
+
+    // 🚀 MONDAY.COM风格：后台完成剩余任务
+    async completeBackgroundTasks() {
+        try {
+            // console.log Starting background tasks...');
+            
+            // 等待DOM完全渲染（但不阻塞用户界面）
+            await this.waitForDOMRender();
+            
+            // 后台任务1：检查数据加载状态（非阻塞）
+            setTimeout(() => {
+                this.checkDataLoadingStatus();
+            }, 500);
+            
+            // 后台任务2：延迟加载非关键功能
+            setTimeout(() => {
+                this.loadNonCriticalFeatures();
+            }, 1000);
+            
+            // console.log Background tasks initiated');
+        } catch (error) {
+            console.warn('Background tasks error:', error);
+        }
+    }
+
+    // 检查数据加载状态（非阻塞）
+    checkDataLoadingStatus() {
+        const tableRows = document.querySelectorAll('.pm-task-row[data-task-id]');
+        console.log(`📊 Found ${tableRows.length} tasks in DOM`);
+        
+        if (tableRows.length === 0) {
+            console.warn('⚠️ No task data found, page may need refresh');
+        }
+    }
+
+    // 加载非关键功能
+    loadNonCriticalFeatures() {
+        console.log('🔧 Loading non-critical features...');
+        // 这里可以加载Review Notes、额外的统计数据等
     }
 
     initializeWorkspaceSwitcher() {

@@ -302,7 +302,7 @@ class TableManager {
                 callback: (r) => {
                     if (r.message && r.message.success) {
                         this.columnWidths = r.message.column_widths;
-                        console.log('✅ Loaded user column widths for:', frappe.session.user, this.columnWidths);
+                        // console.log Loaded user column widths for:', frappe.session.user, this.columnWidths);
                     } else {
                         // If server fails, try localStorage as fallback
                         const userKey = `pm-column-widths-${frappe.session.user}`;
@@ -310,7 +310,7 @@ class TableManager {
                         if (saved) {
                             try {
                                 this.columnWidths = JSON.parse(saved);
-                                console.log('✅ Loaded from localStorage fallback:', this.columnWidths);
+                                // console.log Loaded from localStorage fallback:', this.columnWidths);
                             } catch (e) {
                                 this.columnWidths = this.getDefaultColumnWidths();
                                 console.log('❌ localStorage parse failed, using defaults');
@@ -386,7 +386,7 @@ class TableManager {
             const userKey = `pm-column-widths-${frappe.session.user}`;
             try {
                 localStorage.setItem(userKey, JSON.stringify(this.columnWidths));
-                console.log('✅ User custom column widths saved to localStorage and CSS variables');
+                // console.log User custom column widths saved to localStorage and CSS variables');
             } catch (e) {
                 console.warn('Failed to save to localStorage:', e);
             }
@@ -399,7 +399,7 @@ class TableManager {
                 },
                 callback: (r) => {
                     if (r.message && r.message.success) {
-                        console.log('✅ Column widths saved to server for user:', frappe.session.user);
+                        // console.log Column widths saved to server for user:', frappe.session.user);
                     } else {
                         console.warn('⚠️ Failed to save to server, localStorage fallback active:', r.message?.error);
                     }
@@ -503,7 +503,7 @@ class TableManager {
             'max-width': finalWidth + 'px'
         });
         
-        console.log(`✅ Table width updated: ${finalWidth}px (respecting user's column widths, no forced adjustments)`);
+        // console.log Table width updated: ${finalWidth}px (respecting user's column widths, no forced adjustments)`);
         
         // 列宽度变化后，重新渲染所有用户头像以适应新宽度
         this.refreshAllUserAvatars();
@@ -726,7 +726,7 @@ class TableManager {
     }
 
     applyColumnOrder(columnOrder, visibleColumns) {
-        console.log('🔄 Applying column order:', columnOrder);
+        // console.log Applying column order:', columnOrder);
         
         if (!columnOrder || columnOrder.length === 0) {
             console.warn('⚠️ No column order provided');
@@ -742,7 +742,7 @@ class TableManager {
         // 使用CSS方式重排序，完全避免DOM操作，确保事件绑定不受影响
         this.reorderColumnsWithCSS(columnOrder);
         
-        console.log('✅ Column order applied via CSS, DOM structure and events preserved');
+        // console.log Column order applied via CSS, DOM structure and events preserved');
     }
     
     needsReordering(newColumnOrder) {
@@ -824,7 +824,7 @@ class TableManager {
             }
         });
         
-        console.log('✅ CSS-based column reordering applied, DOM structure preserved');
+        // console.log CSS-based column reordering applied, DOM structure preserved');
     }
     
     // 旧的DOM操作方法已移除，现在完全使用CSS方式进行列重排序
@@ -865,7 +865,7 @@ class TableManager {
             });
         });
         
-        console.log(`✅ Refreshed ${refreshedCount} user avatar cells (display only, no API calls)`);
+        // console.log Refreshed ${refreshedCount} user avatar cells (display only, no API calls)`);
     }
     
     // 检查元素是否可见（大数据量优化）
@@ -906,7 +906,7 @@ class TableManager {
     applyPreloadedColumnWidths() {
         // 检查是否已经预加载了用户偏好
         if (document.documentElement.hasAttribute('data-user-widths-preloaded')) {
-            console.log('✅ User column preferences already pre-loaded');
+            // console.log User column preferences already pre-loaded');
             return;
         }
         
@@ -921,7 +921,7 @@ class TableManager {
             }
         });
         
-        console.log('✅ Applied default column widths where needed');
+        // console.log Applied default column widths where needed');
     }
 
     // Force immediate table width recalculation (public method)
@@ -1045,7 +1045,7 @@ class TableManager {
     // Initialize display type detection and setup
     initializeDisplayType() {
         // Simplified: no display type switching needed
-        console.log('Display type initialization skipped - using default task-centric view');
+        // console.log('Display type initialization skipped - using default task-centric view');
     }
 }
 

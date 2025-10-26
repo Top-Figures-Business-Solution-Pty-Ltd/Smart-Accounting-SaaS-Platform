@@ -58,7 +58,7 @@ class ModuleLoader {
             await Promise.all(corePromises);
             
             const loadTime = performance.now() - startTime;
-            console.log(`✅ Critical modules loaded in: ${loadTime.toFixed(2)}ms`);
+            // console.log Critical modules loaded in: ${loadTime.toFixed(2)}ms`);
             
             // Trigger core modules ready event
             this.dispatchEvent('core-modules-ready');
@@ -83,7 +83,7 @@ class ModuleLoader {
             const promises = modules.map(module => this.loadModule(module));
             await Promise.all(promises);
             
-            console.log(`✅ Feature module ${featureName} loaded successfully`);
+            // console.log Feature module ${featureName} loaded successfully`);
             this.dispatchEvent('feature-module-ready', { feature: featureName });
             
         } catch (error) {
@@ -114,7 +114,7 @@ class ModuleLoader {
             this.loadedModules.add(moduleName);
             this.loadingPromises.delete(moduleName);
             
-            console.log(`✅ Module loaded successfully: ${moduleName}`);
+            // console.log Module loaded successfully: ${moduleName}`);
             
         } catch (error) {
             this.loadingPromises.delete(moduleName);

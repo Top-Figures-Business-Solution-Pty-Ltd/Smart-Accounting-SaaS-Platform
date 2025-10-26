@@ -179,7 +179,7 @@ class ReportsManager {
         this.updateProjectVisibility();
         
         // 使用静默方式更新filter状态，避免过度通知
-        console.log(`✅ Person filter applied: ${personName} - ${visibleTasks} tasks shown`);
+        // console.log Person filter applied: ${personName} - ${visibleTasks} tasks shown`);
         
         // 更新filter按钮状态显示当前过滤信息
         $('.pm-person-filter-dropdown .pm-dropdown-text').text(`Person ${visibleTasks > 0 ? visibleTasks : ''}`).trim();
@@ -392,7 +392,7 @@ class ReportsManager {
         this.updateProjectVisibility();
         
         // 静默更新client filter状态
-        console.log(`✅ Client filter applied: ${clientName} - ${visibleTasks} tasks shown`);
+        // console.log Client filter applied: ${clientName} - ${visibleTasks} tasks shown`);
         $('.pm-client-filter-dropdown .pm-dropdown-text').text(`${clientName}`).trim();
     }
 
@@ -479,7 +479,7 @@ class ReportsManager {
         this.updateProjectVisibility();
         
         // 静默更新status filter状态  
-        console.log(`✅ Status filter applied: ${status} - ${visibleTasks} tasks shown`);
+        // console.log Status filter applied: ${status} - ${visibleTasks} tasks shown`);
         $('.pm-status-filter-dropdown .pm-dropdown-text').text(`${status}`).trim();
     }
 
@@ -696,7 +696,7 @@ class ReportsManager {
         const totalTasks = $('.pm-task-row:not(.pm-add-task-row)').length;
         
         if (filters.length === 0 && previousFilterCount > 0) {
-            console.log('✅ All filters cleared - showing all tasks');
+            // console.log All filters cleared - showing all tasks');
             // Force show all tasks and project groups
             $('.pm-task-row').show();
             $('.pm-project-group').show();
@@ -708,7 +708,7 @@ class ReportsManager {
                     this.showNoResultsIndicator();
                 }
             } else {
-                console.log(`✅ ${visibleTasks} task(s) match current filters`);
+                // console.log ${visibleTasks} task(s) match current filters`);
                 if (typeof this.hideNoResultsIndicator === 'function') {
                     this.hideNoResultsIndicator();
                 }

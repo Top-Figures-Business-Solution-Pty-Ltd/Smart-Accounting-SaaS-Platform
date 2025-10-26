@@ -611,12 +611,12 @@ class PersonSelectorManager {
                 // 刷新弹窗内容 - 重新加载当前人员列表
                 const $currentModal = $(`.pm-person-selector-modal`);
                 if ($currentModal.length > 0) {
-                    console.log('🔄 Refreshing modal content after person removal...');
+                    // console.log Refreshing modal content after person removal...');
                     // 获取更新后的人员列表
                     const updatedEmails = await this.getCurrentTaskRoleEmails(taskId, roleType);
                     // 更新弹窗中的当前人员显示
                     this.loadCurrentPeopleIntoSelector($currentModal, updatedEmails, taskId, fieldName);
-                    console.log('✅ Modal content refreshed');
+                    // console.log Modal content refreshed');
                 }
                 
                 frappe.show_alert({
@@ -857,7 +857,7 @@ class PersonSelectorManager {
             maxHeight: modalHeight + 'px'
         });
         
-        console.log('✅ Modal positioned at:', position);
+        // console.log Modal positioned at:', position);
     }
     
     calculateOptimalPosition(cellRect, modalWidth, modalHeight, padding, viewportWidth, viewportHeight) {
@@ -965,7 +965,7 @@ class PersonSelectorManager {
             moreHTML = `<div class="pm-avatar-more" title="Total ${roleUsers.length} people: ${allNames}">+${remainingCount}</div>`;
         }
         
-        console.log(`✅ Generated ${displayCount} avatars + ${hasMore ? '1 more indicator' : 'no more indicator'}`);
+        // console.log Generated ${displayCount} avatars + ${hasMore ? '1 more indicator' : 'no more indicator'}`);
         
         return { avatarsHTML, moreHTML };
     }
@@ -1051,7 +1051,7 @@ class PersonSelectorManager {
             let currentEmails = [];
             try {
                 currentEmails = await this.getCurrentAssignmentsWithTimeout(taskId, roleFilter);
-                console.log('✅ Current assignments loaded:', currentEmails);
+                // console.log Current assignments loaded:', currentEmails);
             } catch (error) {
                 console.warn('⚠️ Could not load current assignments, using UI fallback:', error);
                 // 降级到UI方法

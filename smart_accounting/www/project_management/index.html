@@ -100,42 +100,56 @@
 {% endblock %}
 
 {% block script %}
-<!-- 优先加载性能关键模块 -->
+<!-- 🚀 PHASE 1 OPTIMIZATION: Reduced script loading for better performance -->
+<!-- Critical performance modules - loaded first -->
 <script src="/assets/smart_accounting/js/performance/loading-performance-optimizer.js"></script>
 <script src="/assets/smart_accounting/js/config/app-config.js"></script>
-<script src="/assets/smart_accounting/js/config/bulk-update-config.js"></script>
 <script src="/assets/smart_accounting/js/performance/enhanced-loading-system.js"></script>
-<script src="/assets/smart_accounting/js/performance/progressive-enhancement.js"></script>
-<script src="/assets/smart_accounting/js/performance/performance-monitor.js"></script>
-<script src="/assets/smart_accounting/js/performance/layout-preloader.js"></script>
 
-<!-- Load system navbar functionality -->
-<script src="/assets/smart_accounting/js/system_navbar.js"></script>
-
-<!-- Load modules in dependency order -->
-<script src="/assets/smart_accounting/js/column-config.js"></script>
+<!-- Core utilities and configuration - loaded early -->
 <script src="/assets/smart_accounting/js/utils.js"></script>
-<script src="/assets/smart_accounting/js/engagement.js"></script>
-<script src="/assets/smart_accounting/js/project.js"></script>
-<script src="/assets/smart_accounting/js/reports.js"></script>
+<script src="/assets/smart_accounting/js/column-config.js"></script>
+
+<!-- UI foundation - loaded before feature modules -->
+<script src="/assets/smart_accounting/js/ui/table.js"></script>
+<script src="/assets/smart_accounting/js/ui/modal.js"></script>
+<script src="/assets/smart_accounting/js/ui/filters.js"></script>
+
+<!-- Core feature modules - loaded in dependency order -->
 <script src="/assets/smart_accounting/js/editors.js"></script>
+<script src="/assets/smart_accounting/js/client-selector.js"></script>
 <script src="/assets/smart_accounting/js/person-selector.js"></script>
 <script src="/assets/smart_accounting/js/software-selector.js"></script>
+
+<!-- Secondary feature modules - can be loaded later -->
+<script src="/assets/smart_accounting/js/workspace.js"></script>
+<script src="/assets/smart_accounting/js/project.js"></script>
+<script src="/assets/smart_accounting/js/engagement.js"></script>
+<script src="/assets/smart_accounting/js/multiselect.js"></script>
+
+<!-- Less critical modules - loaded last -->
+<script src="/assets/smart_accounting/js/system_navbar.js"></script>
+<script src="/assets/smart_accounting/js/reports.js"></script>
+<script src="/assets/smart_accounting/js/subtask.js"></script>
+<script src="/assets/smart_accounting/js/combination-view.js"></script>
+
+<!-- Remaining modules for full functionality -->
 <script src="/assets/smart_accounting/js/communication-methods-selector.js"></script>
 <script src="/assets/smart_accounting/js/client-contact-selector.js"></script>
-<script src="/assets/smart_accounting/js/client-selector.js"></script>
 <script src="/assets/smart_accounting/js/client-management.js"></script>
-<script src="/assets/smart_accounting/js/workspace.js"></script>
-<script src="/assets/smart_accounting/js/subtask.js"></script>
-<script src="/assets/smart_accounting/js/multiselect.js"></script>
 <script src="/assets/smart_accounting/js/csv-manager.js"></script>
-    <script src="/assets/smart_accounting/js/ui/table.js"></script>
-    <script src="/assets/smart_accounting/js/ui/modal.js"></script>
-    <script src="/assets/smart_accounting/js/ui/drag-manager.js"></script>
-    <script src="/assets/smart_accounting/js/ui/primary-column-manager.js"></script>
-    <script src="/assets/smart_accounting/js/ui/filters.js"></script>
-<script src="/assets/smart_accounting/js/combination-view.js"></script>
+<script src="/assets/smart_accounting/js/ui/drag-manager.js"></script>
+<script src="/assets/smart_accounting/js/ui/primary-column-manager.js"></script>
+
+<!-- Performance monitoring and progressive enhancement -->
+<script src="/assets/smart_accounting/js/performance/performance-monitor.js"></script>
+<script src="/assets/smart_accounting/js/performance/progressive-enhancement.js"></script>
+<script src="/assets/smart_accounting/js/performance/layout-preloader.js"></script>
+<script src="/assets/smart_accounting/js/config/bulk-update-config.js"></script>
+
+<!-- Main application entry point - loaded last -->
 <script src="/assets/smart_accounting/js/main.js"></script>
+
 {% endblock %}
 
 {% block style %}

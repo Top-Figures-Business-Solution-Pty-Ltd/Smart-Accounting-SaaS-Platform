@@ -31,7 +31,7 @@ class DragManager {
         const columnItems = this.container.querySelectorAll('.pm-column-item');
         const dragHandles = this.container.querySelectorAll('.pm-column-drag-handle');
         
-        console.log(`✅ Found ${columnItems.length} items and ${dragHandles.length} drag handles`);
+        // console.log Found ${columnItems.length} items and ${dragHandles.length} drag handles`);
         
         if (dragHandles.length === 0) {
             console.warn('⚠️ No drag handles found - drag functionality may not work');
@@ -107,7 +107,7 @@ class DragManager {
         // 延迟添加全局事件监听器，确保当前事件处理完毕
         setTimeout(() => {
             this.addGlobalListeners();
-            console.log('✅ Drag initialization complete, waiting for mouse move...');
+            // console.log Drag initialization complete, waiting for mouse move...');
         }, 10);
     }
 

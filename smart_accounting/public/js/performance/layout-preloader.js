@@ -417,12 +417,12 @@ class LayoutPreloader {
     recordPerformanceMetrics() {
         const loadTime = Date.now() - this.performanceMetrics.loadStart;
         
-        console.log('📊 Layout Performance Metrics:', {
-            loadTime: `${loadTime}ms`,
-            cls: this.performanceMetrics.cls.toFixed(4),
-            fcp: `${this.performanceMetrics.fcp.toFixed(2)}ms`,
-            lcp: `${this.performanceMetrics.lcp.toFixed(2)}ms`
-        });
+        // console.log('📊 Layout Performance Metrics:', {
+        //     loadTime: `${loadTime}ms`,
+        //     cls: this.performanceMetrics.cls.toFixed(4),
+        //     fcp: `${this.performanceMetrics.fcp.toFixed(2)}ms`,
+        //     lcp: `${this.performanceMetrics.lcp.toFixed(2)}ms`
+        // });
         
         // 发送到分析服务（如果需要）
         if (window.gtag) {

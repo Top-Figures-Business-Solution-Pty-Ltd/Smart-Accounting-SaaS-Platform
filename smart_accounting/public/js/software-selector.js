@@ -112,7 +112,7 @@ class SoftwareSelectorManager {
             let softwareOptions = ['Xero', 'MYOB', 'QuickBooks', 'Excel', 'Payroller', 'Oracle', 'Logdit', 'Other'];
             if (optionsResult.status === 'fulfilled' && optionsResult.value) {
                 softwareOptions = optionsResult.value;
-                console.log('✅ Software options loaded from server:', softwareOptions);
+                // console.log Software options loaded from server:', softwareOptions);
             } else {
                 console.warn('⚠️ Using default software options:', optionsResult.reason);
             }
@@ -121,7 +121,7 @@ class SoftwareSelectorManager {
             let currentSoftwares = [];
             if (currentResult.status === 'fulfilled' && currentResult.value) {
                 currentSoftwares = currentResult.value;
-                console.log('✅ Current softwares loaded:', currentSoftwares);
+                // console.log Current softwares loaded:', currentSoftwares);
             } else {
                 console.warn('⚠️ Could not load current softwares:', currentResult.reason);
             }

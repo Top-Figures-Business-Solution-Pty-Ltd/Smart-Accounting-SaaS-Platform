@@ -19,7 +19,7 @@ class PrimaryColumnManager {
         // 初始化当前主列样式
         this.initializePrimaryColumnStyles();
         
-        console.log('✅ Primary Column Manager initialized');
+        // console.log('✅ Primary Column Manager initialized');
     }
 
     /**
@@ -71,7 +71,7 @@ class PrimaryColumnManager {
             oldPrimaryColumn: oldPrimaryColumn
         });
         
-        console.log(`🔄 Primary column changed from ${oldPrimaryColumn} to ${primaryColumn}`);
+        // console.log(`🔄 Primary column changed from ${oldPrimaryColumn} to ${primaryColumn}`);
     }
 
     /**
@@ -159,7 +159,7 @@ class PrimaryColumnManager {
         // 在目标列创建新的功能按钮
         this.createFunctionalButtons(taskId, toColumn, buttonState);
 
-        console.log(`🔄 Moved functional buttons for task ${taskId} from ${fromColumn} to ${toColumn}`);
+        // console.log(`🔄 Moved functional buttons for task ${taskId} from ${fromColumn} to ${toColumn}`);
     }
 
     /**
@@ -261,7 +261,7 @@ class PrimaryColumnManager {
             $targetCell.find('.pm-subtask-toggle').addClass('has-subtasks');
         }
         
-        console.log(`✅ Created functional buttons for task ${taskId} in column ${columnKey}`);
+        // console.log(`✅ Created functional buttons for task ${taskId} in column ${columnKey}`);
     }
 
     /**
@@ -395,7 +395,7 @@ class PrimaryColumnManager {
             }
         });
         
-        console.log('🔄 Refreshed all functional buttons and primary column styles');
+        // console.log('🔄 Refreshed all functional buttons and primary column styles');
     }
 
     /**

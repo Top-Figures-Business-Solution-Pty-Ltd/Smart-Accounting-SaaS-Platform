@@ -100,7 +100,7 @@ class CommunicationMethodsSelectorManager {
         try {
             // 加载当前通信方式，使用超时机制
             const currentMethods = await this.getCurrentTaskCommunicationMethodsWithTimeout(taskId);
-            console.log('✅ Current communication methods loaded:', currentMethods);
+            // console.log Current communication methods loaded:', currentMethods);
 
             // 更新选择器内容
             this.updateCommunicationMethodsSelectorContent($selector, currentMethods);

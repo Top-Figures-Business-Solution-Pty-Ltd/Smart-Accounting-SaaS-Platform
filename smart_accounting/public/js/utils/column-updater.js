@@ -166,7 +166,7 @@ window.ColumnUpdater = ColumnUpdater;
 
 // 在控制台中提供快捷方式
 if (typeof console !== 'undefined') {
-    console.log('🔧 ColumnUpdater已加载。使用方法：');
-    console.log('   ColumnUpdater.updateAllPartitionsWithProcessDate() - 更新所有Partition');
-    console.log('   ColumnUpdater.validatePartitionConfigurations() - 验证配置状态');
+    // console.log('🔧 ColumnUpdater已加载。使用方法：');
+    // console.log('   ColumnUpdater.updateAllPartitionsWithProcessDate() - 更新所有Partition');
+    // console.log('   ColumnUpdater.validatePartitionConfigurations() - 验证配置状态');
 }

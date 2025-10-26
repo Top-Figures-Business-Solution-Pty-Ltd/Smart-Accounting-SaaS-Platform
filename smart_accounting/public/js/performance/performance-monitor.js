@@ -188,7 +188,7 @@ class PerformanceMonitor {
     fixFontLoading() {
         if ('fonts' in document) {
             document.fonts.ready.then(() => {
-                console.log('✅ Fonts loaded, layout should be stable');
+                // console.log Fonts loaded, layout should be stable');
             });
         }
     }
@@ -339,7 +339,7 @@ class PerformanceMonitor {
         // 监听自定义渲染完成事件
         document.addEventListener('pm:loaded', (event) => {
             this.metrics.renderTime = event.detail.timestamp - this.startTime;
-            console.log('🖼️ Render Time:', `${this.metrics.renderTime}ms`);
+            // console.log('🖼️ Render Time:', `${this.metrics.renderTime}ms`);
             
             // 生成性能报告
             this.generatePerformanceReport();

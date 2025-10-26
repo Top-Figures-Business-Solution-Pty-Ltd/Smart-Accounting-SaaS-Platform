@@ -378,7 +378,7 @@ class OptimizedProjectManagement {
         // 加载原始的main.js作为备用
         this.loadScript('/assets/smart_accounting/js/main.js')
             .then(() => {
-                console.log('✅ Basic mode loaded');
+                // console.log Basic mode loaded');
             })
             .catch(error => {
                 console.error('❌ Failed to load basic mode:', error);

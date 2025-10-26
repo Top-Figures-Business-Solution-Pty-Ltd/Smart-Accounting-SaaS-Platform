@@ -597,7 +597,7 @@ class CombinationViewManager {
                         $realContent.addClass('pm-transition-complete');
                         $container.css('position', 'static');
                         
-                        console.log('✅ Content transition completed without CLS');
+                        // console.log Content transition completed without CLS');
                     }, 200);
                 });
             });
@@ -697,7 +697,7 @@ class CombinationViewManager {
                     console.log(`🔍 Processing project: ${projectName}`, tasks);
                     
                     if (tasks && Array.isArray(tasks) && tasks.length > 0) {
-                        console.log(`✅ Rendering project: ${projectName} with ${tasks.length} tasks`);
+                        // console.log Rendering project: ${projectName} with ${tasks.length} tasks`);
                         console.log(`🔍 Tasks data for ${projectName}:`, tasks.map(t => ({
                             name: t.name || t.subject,
                             client: t.client_name,
@@ -761,7 +761,7 @@ class CombinationViewManager {
             </div>
         `;
         
-        console.log(`✅ Project section rendered for: ${projectName}`);
+        // console.log Project section rendered for: ${projectName}`);
         console.log(`🔍 First 500 chars of project HTML:`, projectHtml.substring(0, 500));
         return projectHtml;
     }
@@ -836,7 +836,7 @@ class CombinationViewManager {
             return rowHtml;
         }).join('\n'); // Use newlines to separate task rows for better debugging
         
-        console.log(`✅ Generated ${tasks.length} task rows, HTML length: ${taskRowsHtml.length}`);
+        // console.log Generated ${tasks.length} task rows, HTML length: ${taskRowsHtml.length}`);
         console.log(`🔍 First 200 chars of HTML:`, taskRowsHtml.substring(0, 200));
         return taskRowsHtml;
     }
@@ -1787,7 +1787,7 @@ class CombinationViewManager {
             this.applyGentleColumnWidth(boardId, column, width);
         });
         
-        console.log(`✅ Gentle column widths applied to board: ${boardId}`);
+        // console.log Gentle column widths applied to board: ${boardId}`);
     }
     
     // Apply column width gently without breaking structure
@@ -1859,7 +1859,7 @@ class CombinationViewManager {
         // Create CSS rule for perfect synchronization
         this.createBoardTableWidthCSS(boardTableClass, tableWidthPx);
         
-        console.log(`✅ Table width applied to ${$boardSection.find('.pm-project-group').length} projects in board ${boardId}`);
+        // console.log Table width applied to ${$boardSection.find('.pm-project-group').length} projects in board ${boardId}`);
     }
     
     // Create board-specific table width CSS rules
@@ -1925,7 +1925,7 @@ class CombinationViewManager {
         $(headerSelector).css(cssProps);
         $(cellSelector).css(cssProps);
         
-        console.log(`✅ Applied independent width to ${$(headerSelector).length} headers and ${$(cellSelector).length} cells with class ${boardSpecificClass}`);
+        // console.log Applied independent width to ${$(headerSelector).length} headers and ${$(cellSelector).length} cells with class ${boardSpecificClass}`);
     }
     
     // Create board-specific CSS rules dynamically
@@ -2006,7 +2006,7 @@ class CombinationViewManager {
                     const bodyWidth = $bodyCell.length ? $bodyCell.outerWidth() : 0;
                     const isAligned = Math.abs(headerWidth - bodyWidth) <= 1;
                     
-                    console.log(`  📏 ${column}: Header ${headerWidth}px | Body ${bodyWidth}px ${isAligned ? '✅' : '❌'}`);
+                    // console.log' : '❌'}`);
                     totalCalculatedWidth += headerWidth;
                 }
             });
@@ -2027,7 +2027,7 @@ class CombinationViewManager {
         const $boardSection = $(`.pm-combination-board-section[data-board-id="${boardId}"]`);
         const $headerCells = $boardSection.find('.pm-combination-table-header .pm-header-cell');
         
-        console.log(`🔄 Ensuring perfect header-body sync for board: ${boardId}`);
+        // console.log Ensuring perfect header-body sync for board: ${boardId}`);
         
         // Force immediate layout calculation
         $boardSection[0].offsetHeight; // Trigger reflow
@@ -2107,7 +2107,7 @@ class CombinationViewManager {
             });
         });
         
-        console.log(`✅ Perfect alignment achieved for board: ${boardId}`);
+        // console.log Perfect alignment achieved for board: ${boardId}`);
     }
     
     // Force column width application for all boards using their own saved widths
@@ -2142,11 +2142,11 @@ class CombinationViewManager {
                 $(headerSelector).css(cssProps);
                 $(cellSelector).css(cssProps);
                 
-                console.log(`✅ Applied board-specific ${width}px to column ${column} in board ${boardId}`);
+                // console.log Applied board-specific ${width}px to column ${column} in board ${boardId}`);
             });
         });
         
-        console.log('✅ Board-specific column width application completed');
+        // console.log Board-specific column width application completed');
     }
     
     // Debug rendered HTML structure to identify display issues

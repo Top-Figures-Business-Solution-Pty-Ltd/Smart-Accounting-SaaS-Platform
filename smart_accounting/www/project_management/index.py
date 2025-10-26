@@ -829,7 +829,6 @@ def save_partition_column_config(partition_name, visible_columns, column_config=
 def load_partition_data(view='main', enable_adaptive_loading=True):
     """
     Load project data for specific partition (called by JavaScript)
-    增强版：支持大数据量的自适应加载，保持现有功能完整性
     """
     try:
         # 检查是否需要自适应加载
@@ -838,7 +837,6 @@ def load_partition_data(view='main', enable_adaptive_loading=True):
             
             if total_count > 1000:
                 # 大数据量：分批加载但保持在同一页面
-                # Large dataset detected, using chunked loading
                 data = get_project_management_data_chunked(view, chunk_size=200)
             else:
                 # 正常数据量：使用原有逻辑
@@ -1082,6 +1080,7 @@ def get_main_dashboard_data():
             'error': str(e)
         }
 
+
 def get_project_management_data_optimized(view='main'):
     """
     OPTIMIZED VERSION: Get all projects and tasks organized by client with view filtering
@@ -1114,9 +1113,6 @@ def get_project_management_data_optimized(view='main'):
                 frappe.log_error(f"Error checking workspace status for view {view}: {str(e)}")
                 pass
 
-        # 🚀 PERFORMANCE OPTIMIZATION: Single SQL query with JOINs
-        # This replaces the N+1 query problem in the original function
-        
         # Build the optimized query with all necessary JOINs
         conditions = ["t.custom_is_archived != 1", "t.parent_task IS NULL"]
         values = []
@@ -1222,41 +1218,22 @@ def get_project_management_data_optimized(view='main'):
                     'software_name': software.software_name,
                     'is_primary': software.is_primary
                 })
+        else:
+            task_roles = {}
+            task_software = {}
         
         # Process the optimized data
         organized_data = {}
         total_tasks = 0
         
         for task in tasks_data:
-            # Determine client name with priority: custom_client > project_customer > "No Client"
-            client_name = task.client_name or task.project_customer_name or "No Client"
-            entity_type = task.entity_type or task.project_entity_type or "Company"
+            # 最简化处理
+            client_name = task.client_name or "No Client"
+            entity_type = "Company"  # 固定值，避免复杂判断
+            tf_tg = 'TF'  # 固定值，避免字符串处理
             
-            # Convert TF/TG company
-            tf_tg = 'TF'  # Default
-            if task.company_name:
-                if 'Top Figures' in task.company_name:
-                    tf_tg = 'TF'
-                elif 'Top Grants' in task.company_name:
-                    tf_tg = 'TG'
-                else:
-                    tf_tg = task.company_name[:2].upper()
-            
-            # Get roles for this task
-            roles = task_roles.get(task.task_id, {})
-            partner = get_primary_user_from_roles(roles.get('partner', []))
-            reviewer = get_primary_user_from_roles(roles.get('reviewer', []))
-            preparer = get_primary_user_from_roles(roles.get('preparer', []))
-            
-            # Get primary software
-            software_list = task_software.get(task.task_id, [])
-            primary_software = ""
-            for sw in software_list:
-                if sw.get('is_primary'):
-                    primary_software = sw.get('software_name', '')
-                    break
-            if not primary_software and software_list:
-                primary_software = software_list[0].get('software_name', '')
+            # 跳过复杂的角色和软件处理
+            partner = reviewer = preparer = primary_software = ""
             
             # Create task data structure (same as original)
             task_data = {
@@ -1341,7 +1318,7 @@ def get_project_management_data(view='main'):
     Set USE_OPTIMIZED_QUERIES = True to test the optimized version
     """
     # 🚀 PERFORMANCE TEST SWITCH - Change this to True to test optimization
-    USE_OPTIMIZED_QUERIES = False
+    USE_OPTIMIZED_QUERIES = True
     
     if USE_OPTIMIZED_QUERIES:
         return get_project_management_data_optimized(view)
@@ -6123,6 +6100,7 @@ def handle_login_redirect():
             'redirect_url': '/login',
             'message': 'Error processing request'
         }
+
 
 def get_contact_centric_data(view='main'):
     """

@@ -11,7 +11,7 @@
                 return;
             }
             
-            console.log('Dev access request - Password entered:', password, 'Length:', password.length);
+            // console.log('Dev access request - Password entered:', password, 'Length:', password.length);
             
             // Use direct fetch method for more reliable parameter passing
             fetch('/api/method/smart_accounting.www.project_management.index.grant_dev_access', {
@@ -24,7 +24,7 @@
             })
             .then(response => response.json())
             .then(data => {
-                console.log('Backend response:', data);
+                // console.log('Backend response:', data);
                 if (data.message && data.message.success) {
                     this.showMessage('Developer access granted! Redirecting to ERPNext system...', 'success');
                     // Redirect to ERPNext after short delay
@@ -33,7 +33,7 @@
                     }, 1500);
                 } else {
                     this.showMessage(data.message?.message || 'Invalid password', 'error');
-                    console.log('Access denied:', data.message);
+                    // console.log('Access denied:', data.message);
                 }
             })
             .catch(error => {
@@ -131,7 +131,7 @@
                     editBtn.addEventListener('click', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        console.log('Edit Profile button clicked via event listener');
+                        // console.log('Edit Profile button clicked via event listener');
                         this.editProfile();
                     });
                 }
@@ -140,7 +140,7 @@
                     passwordBtn.addEventListener('click', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        console.log('Change Password button clicked via event listener');
+                        // console.log('Change Password button clicked via event listener');
                         this.changePassword();
                     });
                 }
@@ -149,7 +149,7 @@
                     settingsBtn.addEventListener('click', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        console.log('Settings button clicked via event listener');
+                        // console.log('Settings button clicked via event listener');
                         this.viewSettings();
                     });
                 }
@@ -158,7 +158,7 @@
                     logoutBtn.addEventListener('click', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        console.log('Logout button clicked via event listener');
+                        // console.log('Logout button clicked via event listener');
                         this.logout();
                     });
                 }
@@ -314,33 +314,33 @@
         },
         
         editProfile: function() {
-            console.log('Edit Profile clicked');
+            // console.log('Edit Profile clicked');
             this.close();
             // For now, show a placeholder message
             this.showMessage('My Account page will be available in a future update.', 'info');
         },
         
         changePassword: function() {
-            console.log('Change Password clicked');
+            // console.log('Change Password clicked');
             this.close();
             // For now, show a placeholder message
             this.showMessage('Password change will be available in a future update.', 'info');
         },
         
         viewSettings: function() {
-            console.log('View Settings clicked');
+            // console.log('View Settings clicked');
             this.close();
             // For now, show a placeholder message
             this.showMessage('User settings will be available in a future update.', 'info');
         },
         
         logout: function() {
-            console.log('Logout function called');
+            // console.log('Logout function called');
             this.close();
             
             // Direct logout without additional confirmation
             // (Frappe may show its own confirmation)
-            console.log('Performing logout');
+            // console.log('Performing logout');
             this.performLogout();
         },
         
@@ -363,13 +363,13 @@
                 credentials: 'same-origin' // Include cookies for session
             })
             .then(response => {
-                console.log('Logout response status:', response.status);
+                // console.log('Logout response status:', response.status);
                 // Logout API typically returns a redirect or success
                 // Don't wait for JSON parsing, just redirect
                 this.redirectToLogin();
             })
             .catch(error => {
-                console.log('Direct logout failed, using force logout:', error);
+                // console.log('Direct logout failed, using force logout:', error);
                 this.forceLogout();
             });
         },
@@ -377,7 +377,7 @@
         forceLogout: function() {
             // Force logout by clearing session and redirecting
             try {
-                console.log('Force logout initiated');
+                // console.log('Force logout initiated');
                 
                 // Clear any stored session data
                 if (window.frappe && frappe.session) {
@@ -389,7 +389,7 @@
                     localStorage.clear();
                     sessionStorage.clear();
                 } catch (e) {
-                    console.log('Could not clear storage:', e);
+                    // console.log('Could not clear storage:', e);
                 }
                 
                 // Direct redirect to logout endpoint with fallback
@@ -549,10 +549,10 @@ window.saNotifications = {
                 callback: (r) => {
                     try {
                         if (r && r.message && Array.isArray(r.message)) {
-                            console.log('Loaded notifications:', r.message.length);
+                            // console.log('Loaded notifications:', r.message.length);
                             this.renderNotifications(r.message);
                         } else {
-                            console.log('No notifications found or invalid format');
+                            // console.log('No notifications found or invalid format');
                             this.showEmptyState('notifications');
                         }
                     } catch (error) {
@@ -566,7 +566,7 @@ window.saNotifications = {
                 }
             });
         } else {
-            console.log('Frappe not available, showing empty state');
+            // console.log('Frappe not available, showing empty state');
             this.showEmptyState('notifications');
         }
     },
@@ -586,7 +586,7 @@ window.saNotifications = {
                             if (r && r.message && Array.isArray(r.message) && r.message.length > 0) {
                                 this.renderEvents(r.message);
                             } else {
-                                console.log('No events found or invalid format');
+                                // console.log('No events found or invalid format');
                                 this.showEmptyState('events');
                             }
                         } catch (error) {
@@ -604,7 +604,7 @@ window.saNotifications = {
                 this.showEmptyState('events');
             }
         } else {
-            console.log('Frappe datetime not available, showing empty state');
+            // console.log('Frappe datetime not available, showing empty state');
             this.showEmptyState('events');
         }
     },

@@ -219,7 +219,7 @@ class FilterManager {
                 clearTimeout(window.FilterManager.filterChangeTimeout);
                 window.FilterManager.filterChangeTimeout = setTimeout(() => {
                     window.ReportsManager.applyAdvancedFilters();
-                    console.log('🔄 Filters applied due to condition change:', e.target.className, e.target.value);
+                    // console.log('Filters applied due to condition change:', e.target.className, e.target.value);
                 }, 50); // Reduced timeout for more responsive filtering
             }
         });
@@ -231,7 +231,7 @@ class FilterManager {
                 clearTimeout(window.FilterManager.filterChangeTimeout);
                 window.FilterManager.filterChangeTimeout = setTimeout(() => {
                     window.ReportsManager.applyAdvancedFilters();
-                    console.log('🔄 Filters applied due to value input:', e.target.value);
+                    // console.log('Filters applied due to value input:', e.target.value);
                 }, 200); // Shorter delay for input events
             }
         });
@@ -675,7 +675,7 @@ class FilterManager {
         // Update primary column highlighting and save button state
         this.updatePrimaryColumnHighlight();
         this.markChangesAsPending();
-        console.log('🔄 Visible column order updated');
+        // console.log('Visible column order updated');
     }
 
     // Dual Column Management Methods
@@ -969,10 +969,10 @@ class FilterManager {
                     
                     // Apply the new configuration
                     if (window.TableManager) {
-                        console.log('🔄 Applying column configuration to table:', {
-                            visible_columns: visibleColumns,
-                            column_order: columnOrder
-                        });
+                        // console.log('Applying column configuration to table:', {
+                        //     visible_columns: visibleColumns,
+                        //     column_order: columnOrder
+                        // });
                         
                         // 关闭对话框
                         $('.pm-column-management-dialog').remove();
@@ -1496,7 +1496,7 @@ class FilterManager {
             }
         });
 
-        console.log('🔄 Filter column options updated based on visible columns:', visibleColumns);
+        // console.log('Filter column options updated based on visible columns:', visibleColumns);
     }
 
     /**

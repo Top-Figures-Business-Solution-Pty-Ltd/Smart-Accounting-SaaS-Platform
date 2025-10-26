@@ -904,11 +904,11 @@ class SubtaskManager {
                 callback: (r) => {
                     if (r.message && r.message.success) {
                         this.columnWidths = r.message.column_widths;
-                        console.log('✅ Loaded subtask column widths:', this.columnWidths);
+                        // console.log Loaded subtask column widths:', this.columnWidths);
                     } else {
                         // Use default widths
                         this.columnWidths = this.getDefaultSubtaskColumnWidths();
-                        console.log('✅ Using default subtask column widths:', this.columnWidths);
+                        // console.log Using default subtask column widths:', this.columnWidths);
                     }
                     resolve();
                 },
@@ -965,7 +965,7 @@ class SubtaskManager {
                 },
                 callback: (r) => {
                     if (r.message && r.message.success) {
-                        console.log('✅ Subtask column widths saved to server');
+                        // console.log Subtask column widths saved to server');
                     } else {
                         console.warn('Failed to save subtask column widths to server');
                     }
