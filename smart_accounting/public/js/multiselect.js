@@ -4,7 +4,9 @@
 class MultiSelectManager {
     constructor() {
         this.selectedTasks = new Set();
+        this.selectedSubtasks = new Set(); // 新增：subtask选择管理
         this.isSelectAllActive = false;
+        this.isSubtaskSelectAllActive = false; // 新增：subtask全选状态
         this.bulkUpdateDebounceTimer = null;
         this.lastBulkUpdateKey = null;
         this.confirmationDialogOpen = false;
@@ -24,23 +26,37 @@ class MultiSelectManager {
             this.handleTaskSelection(e.currentTarget);
         });
 
+        // Individual subtask checkbox events (新增)
+        $(document).on('change', '.pm-subtask-multiselect-checkbox', (e) => {
+            e.stopPropagation();
+            this.handleSubtaskSelection(e.currentTarget);
+        });
+
         // Select all checkbox events
         $(document).on('change', '.pm-select-all-checkbox', (e) => {
             e.stopPropagation();
             this.handleSelectAll(e.currentTarget);
         });
 
+        // Subtask select all checkbox events (新增)
+        $(document).on('change', '.pm-subtask-select-all-checkbox', (e) => {
+            e.stopPropagation();
+            this.handleSubtaskSelectAll(e.currentTarget);
+        });
+
         // Multi-select action buttons
         $(document).on('click', '.pm-multiselect-action', (e) => {
             e.preventDefault();
             const action = $(e.currentTarget).data('action');
-            this.handleBatchAction(action);
+            const type = $(e.currentTarget).data('type') || 'task'; // 新增：区分task和subtask
+            this.handleBatchAction(action, type);
         });
 
         // Clear selection button
         $(document).on('click', '.pm-multiselect-close', (e) => {
             e.preventDefault();
-            this.clearSelection();
+            const type = $(e.currentTarget).data('type') || 'task';
+            this.clearSelection(type);
         });
 
         // Prevent task row click when clicking checkboxes
@@ -139,16 +155,107 @@ class MultiSelectManager {
         });
     }
 
-    updateMultiSelectMenu() {
-        const selectedCount = this.selectedTasks.size;
-        const $menu = $('#pm-multiselect-menu');
-        const $count = $menu.find('.pm-multiselect-count');
+    // 新增：处理subtask选择
+    handleSubtaskSelection(checkbox) {
+        const $checkbox = $(checkbox);
+        const subtaskId = $checkbox.data('subtask-id');
+        const $subtaskRow = $checkbox.closest('.pm-subtask-row');
 
-        if (selectedCount > 0) {
-            $count.text(selectedCount);
-            $menu.addClass('show');
+        if ($checkbox.is(':checked')) {
+            this.selectedSubtasks.add(subtaskId);
+            $subtaskRow.addClass('selected');
         } else {
-            $menu.removeClass('show');
+            this.selectedSubtasks.delete(subtaskId);
+            $subtaskRow.removeClass('selected');
+        }
+
+        this.updateSubtaskSelectAllState();
+        this.updateMultiSelectMenu();
+    }
+
+    // 新增：处理subtask全选
+    handleSubtaskSelectAll(checkbox) {
+        const $checkbox = $(checkbox);
+        const $subtaskContainer = $checkbox.closest('.pm-subtask-container');
+        const $subtaskCheckboxes = $subtaskContainer.find('.pm-subtask-multiselect-checkbox');
+
+        if ($checkbox.is(':checked')) {
+            // Select all subtasks in this container
+            $subtaskCheckboxes.each((index, subtaskCheckbox) => {
+                const $subtaskCheckbox = $(subtaskCheckbox);
+                const subtaskId = $subtaskCheckbox.data('subtask-id');
+                const $subtaskRow = $subtaskCheckbox.closest('.pm-subtask-row');
+
+                $subtaskCheckbox.prop('checked', true);
+                this.selectedSubtasks.add(subtaskId);
+                $subtaskRow.addClass('selected');
+            });
+            this.isSubtaskSelectAllActive = true;
+        } else {
+            // Deselect all subtasks in this container
+            $subtaskCheckboxes.each((index, subtaskCheckbox) => {
+                const $subtaskCheckbox = $(subtaskCheckbox);
+                const subtaskId = $subtaskCheckbox.data('subtask-id');
+                const $subtaskRow = $subtaskCheckbox.closest('.pm-subtask-row');
+
+                $subtaskCheckbox.prop('checked', false);
+                this.selectedSubtasks.delete(subtaskId);
+                $subtaskRow.removeClass('selected');
+            });
+            this.isSubtaskSelectAllActive = false;
+        }
+
+        this.updateMultiSelectMenu();
+    }
+
+    // 新增：更新subtask全选状态
+    updateSubtaskSelectAllState() {
+        $('.pm-subtask-container').each((index, container) => {
+            const $container = $(container);
+            const $selectAllCheckbox = $container.find('.pm-subtask-select-all-checkbox');
+            const $subtaskCheckboxes = $container.find('.pm-subtask-multiselect-checkbox');
+            
+            const totalSubtasks = $subtaskCheckboxes.length;
+            const selectedSubtasks = $subtaskCheckboxes.filter(':checked').length;
+
+            if (selectedSubtasks === 0) {
+                $selectAllCheckbox.prop('checked', false);
+                $selectAllCheckbox.prop('indeterminate', false);
+            } else if (selectedSubtasks === totalSubtasks) {
+                $selectAllCheckbox.prop('checked', true);
+                $selectAllCheckbox.prop('indeterminate', false);
+            } else {
+                $selectAllCheckbox.prop('checked', false);
+                $selectAllCheckbox.prop('indeterminate', true);
+            }
+        });
+    }
+
+    updateMultiSelectMenu() {
+        const selectedTaskCount = this.selectedTasks.size;
+        const selectedSubtaskCount = this.selectedSubtasks.size;
+        const $taskMenu = $('#pm-multiselect-menu');
+        const $subtaskMenu = $('#pm-subtask-multiselect-menu');
+
+        // 更新task多选菜单
+        if (selectedTaskCount > 0) {
+            const $count = $taskMenu.find('.pm-multiselect-count');
+            $count.text(selectedTaskCount);
+            $taskMenu.addClass('show');
+        } else {
+            $taskMenu.removeClass('show');
+        }
+
+        // 更新subtask多选菜单
+        if (selectedSubtaskCount > 0) {
+            if ($subtaskMenu.length === 0) {
+                this.initializeSubtaskMultiSelectMenu();
+            }
+            const $count = $subtaskMenu.find('.pm-multiselect-count');
+            $count.text(selectedSubtaskCount);
+            $subtaskMenu.addClass('show');
+        } else {
+            $subtaskMenu.removeClass('show');
         }
     }
 
@@ -185,45 +292,98 @@ class MultiSelectManager {
         }
     }
 
-    clearSelection() {
-        // Clear all selections
-        this.selectedTasks.clear();
-        $('.pm-task-checkbox, .pm-select-all-checkbox').prop('checked', false);
-        $('.pm-task-row').removeClass('selected');
-        $('.pm-select-all-checkbox').prop('indeterminate', false);
-        $('#pm-multiselect-menu').removeClass('show');
-        this.isSelectAllActive = false;
+    // 新增：初始化subtask多选菜单
+    initializeSubtaskMultiSelectMenu() {
+        // Create the subtask menu if it doesn't exist
+        if ($('#pm-subtask-multiselect-menu').length === 0) {
+            const menuHtml = `
+                <div class="pm-multiselect-menu pm-subtask-multiselect-menu" id="pm-subtask-multiselect-menu">
+                    <div class="pm-multiselect-info">
+                        <i class="fa fa-check-square"></i>
+                        <span class="pm-multiselect-count">0</span>
+                        <span>subtasks selected</span>
+                    </div>
+                    <div class="pm-bulk-update-hint">
+                        <i class="fa fa-magic"></i>
+                        <span>Edit any field to apply to all selected subtasks</span>
+                    </div>
+                    <div class="pm-multiselect-actions">
+                        <button class="pm-multiselect-action archive" data-action="archive" data-type="subtask">
+                            <i class="fa fa-archive"></i>
+                            Archive
+                        </button>
+                        <button class="pm-multiselect-action delete" data-action="delete" data-type="subtask">
+                            <i class="fa fa-trash"></i>
+                            Delete
+                        </button>
+                    </div>
+                    <button class="pm-multiselect-close" data-type="subtask" title="Clear selection">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+            `;
+            $('body').append(menuHtml);
+        }
     }
 
-    handleBatchAction(action) {
-        if (this.selectedTasks.size === 0) {
-            frappe.msgprint(__('No tasks selected'));
+    clearSelection(type = 'task') {
+        if (type === 'subtask') {
+            // Clear subtask selections
+            this.selectedSubtasks.clear();
+            $('.pm-subtask-multiselect-checkbox, .pm-subtask-select-all-checkbox').prop('checked', false);
+            $('.pm-subtask-row').removeClass('selected');
+            $('.pm-subtask-select-all-checkbox').prop('indeterminate', false);
+            $('#pm-subtask-multiselect-menu').removeClass('show');
+            this.isSubtaskSelectAllActive = false;
+        } else {
+            // Clear task selections
+            this.selectedTasks.clear();
+            $('.pm-task-checkbox, .pm-select-all-checkbox').prop('checked', false);
+            $('.pm-task-row').removeClass('selected');
+            $('.pm-select-all-checkbox').prop('indeterminate', false);
+            $('#pm-multiselect-menu').removeClass('show');
+            this.isSelectAllActive = false;
+        }
+    }
+
+    handleBatchAction(action, type = 'task') {
+        const selectedItems = type === 'subtask' ? this.selectedSubtasks : this.selectedTasks;
+        
+        if (selectedItems.size === 0) {
+            frappe.msgprint(__(type === 'subtask' ? 'No subtasks selected' : 'No tasks selected'));
             return;
         }
 
-        // Get task details for confirmation
-        const selectedTaskDetails = Array.from(this.selectedTasks).map(taskId => {
-            const $taskRow = $(`.pm-task-row[data-task-id="${taskId}"]`);
-            const taskName = $taskRow.data('task-name') || $taskRow.find('.task-name-display').text() || 'Untitled Task';
-            return { id: taskId, name: taskName };
+        // Get item details for confirmation
+        const selectedItemDetails = Array.from(selectedItems).map(itemId => {
+            if (type === 'subtask') {
+                const $subtaskRow = $(`.pm-subtask-row[data-subtask-id="${itemId}"]`);
+                const subtaskName = $subtaskRow.find('.pm-subtask-name').text() || 'Untitled Subtask';
+                return { id: itemId, name: subtaskName };
+            } else {
+                const $taskRow = $(`.pm-task-row[data-task-id="${itemId}"]`);
+                const taskName = $taskRow.data('task-name') || $taskRow.find('.task-name-display').text() || 'Untitled Task';
+                return { id: itemId, name: taskName };
+            }
         });
 
         // Show confirmation dialog
-        this.showConfirmationDialog(action, selectedTaskDetails);
+        this.showConfirmationDialog(action, selectedItemDetails, type);
     }
 
-    showConfirmationDialog(action, tasks) {
+    showConfirmationDialog(action, items, type = 'task') {
         const actionText = action === 'delete' ? 'Delete' : 'Archive';
         const actionColor = action === 'delete' ? 'danger' : 'primary';
         const actionIcon = action === 'delete' ? 'fa-trash' : 'fa-archive';
+        const itemType = type === 'subtask' ? 'subtasks' : 'tasks';
         const actionMessage = action === 'delete' 
-            ? 'This action cannot be undone. The selected tasks will be permanently deleted.'
-            : 'The selected tasks will be archived and hidden from the main view. You can restore them later if needed.';
+            ? `This action cannot be undone. The selected ${itemType} will be permanently deleted.`
+            : `The selected ${itemType} will be archived and hidden from the main view. You can restore them later if needed.`;
 
-        const taskListHtml = tasks.map(task => 
+        const itemListHtml = items.map(item => 
             `<div class="pm-confirmation-task-item">
-                <i class="fa fa-tasks"></i>
-                <span>${task.name}</span>
+                <i class="fa fa-${type === 'subtask' ? 'list' : 'tasks'}"></i>
+                <span>${item.name}</span>
             </div>`
         ).join('');
 
@@ -233,13 +393,13 @@ class MultiSelectManager {
                     <div class="pm-confirmation-header">
                         <h3 class="pm-confirmation-title">
                             <i class="fa ${actionIcon}"></i>
-                            ${actionText} ${tasks.length} Task${tasks.length > 1 ? 's' : ''}
+                            ${actionText} ${items.length} ${itemType.charAt(0).toUpperCase() + itemType.slice(1)}
                         </h3>
                     </div>
                     <div class="pm-confirmation-body">
                         <p class="pm-confirmation-message">${actionMessage}</p>
                         <div class="pm-confirmation-task-list">
-                            ${taskListHtml}
+                            ${itemListHtml}
                         </div>
                     </div>
                     <div class="pm-confirmation-footer">
@@ -262,7 +422,8 @@ class MultiSelectManager {
         });
 
         $('#pm-confirmation-dialog').on('click', '[data-action="confirm"]', () => {
-            this.executeAction(action, Array.from(this.selectedTasks));
+            const selectedItems = type === 'subtask' ? Array.from(this.selectedSubtasks) : Array.from(this.selectedTasks);
+            this.executeAction(action, selectedItems, type);
             this.closeConfirmationDialog();
         });
 
@@ -286,40 +447,47 @@ class MultiSelectManager {
         $(document).off('keydown.confirmation');
     }
 
-    async executeAction(action, taskIds) {
-        if (!taskIds || taskIds.length === 0) {
-            frappe.msgprint(__('No tasks selected'));
+    async executeAction(action, itemIds, type = 'task') {
+        if (!itemIds || itemIds.length === 0) {
+            frappe.msgprint(__(type === 'subtask' ? 'No subtasks selected' : 'No tasks selected'));
             return;
         }
 
         try {
             // Show loading indicator
-            frappe.show_progress(__('Processing'), 0, taskIds.length, __('Please wait...'));
+            frappe.show_progress(__('Processing'), 0, itemIds.length, __('Please wait...'));
 
-            const endpoint = action === 'delete' ? 'batch_delete_tasks' : 'batch_archive_tasks';
+            const endpoint = type === 'subtask' 
+                ? (action === 'delete' ? 'batch_delete_subtasks' : 'batch_archive_subtasks')
+                : (action === 'delete' ? 'batch_delete_tasks' : 'batch_archive_tasks');
+            
+            const args = type === 'subtask' ? { subtask_ids: itemIds } : { task_ids: itemIds };
             
             const response = await frappe.call({
                 method: `smart_accounting.www.project_management.index.${endpoint}`,
-                args: {
-                    task_ids: taskIds
-                },
+                args: args,
                 callback: (r) => {
                     frappe.hide_progress();
                     
                     if (r.message && r.message.success) {
-                        const successCount = r.message.success_count || taskIds.length;
+                        const successCount = r.message.success_count || itemIds.length;
                         const actionText = action === 'delete' ? 'deleted' : 'archived';
                         
+                        const itemType = type === 'subtask' ? 'subtask' : 'task';
                         frappe.show_alert({
-                            message: __(`Successfully ${actionText} ${successCount} task${successCount > 1 ? 's' : ''}`),
+                            message: __(`Successfully ${actionText} ${successCount} ${itemType}${successCount > 1 ? 's' : ''}`),
                             indicator: 'green'
                         });
 
-                        // Remove processed tasks from the UI
-                        this.removeTasksFromUI(taskIds);
+                        // Remove processed items from the UI
+                        if (type === 'subtask') {
+                            this.removeSubtasksFromUI(itemIds);
+                        } else {
+                            this.removeTasksFromUI(itemIds);
+                        }
                         
                         // Clear selection
-                        this.clearSelection();
+                        this.clearSelection(type);
                         
                         // Refresh the page data if needed
                         if (typeof window.location !== 'undefined') {
@@ -377,6 +545,33 @@ class MultiSelectManager {
                     $taskCount.text('0 Tasks');
                 } else {
                     $taskCount.text(`${visibleTasks} Task${visibleTasks > 1 ? 's' : ''}`);
+                }
+            });
+        }, 350);
+    }
+
+    // 新增：从UI中移除subtask
+    removeSubtasksFromUI(subtaskIds) {
+        // Remove subtask rows from the UI
+        subtaskIds.forEach(subtaskId => {
+            $(`.pm-subtask-row[data-subtask-id="${subtaskId}"]`).fadeOut(300, function() {
+                $(this).remove();
+            });
+        });
+
+        // Update subtask counts for parent tasks if needed
+        setTimeout(() => {
+            $('.pm-subtask-container').each((index, container) => {
+                const $container = $(container);
+                const visibleSubtasks = $container.find('.pm-subtask-row:not(.pm-add-subtask-item):visible').length;
+                const parentTaskId = $container.data('parent-task');
+                const $subtaskToggle = $(`.pm-subtask-toggle[data-parent-task="${parentTaskId}"]`);
+                
+                if (visibleSubtasks === 0) {
+                    $subtaskToggle.removeClass('has-subtasks').text('+ Sub');
+                    $container.slideUp(300);
+                } else {
+                    $subtaskToggle.addClass('has-subtasks').text(`${visibleSubtasks} Sub`);
                 }
             });
         }, 350);

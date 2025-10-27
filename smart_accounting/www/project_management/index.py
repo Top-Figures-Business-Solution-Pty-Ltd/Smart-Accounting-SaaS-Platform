@@ -239,21 +239,37 @@ def create_partition(partition_name, is_workspace=False, parent_partition=None, 
                 if parent_doc.visible_columns:
                     new_partition.visible_columns = parent_doc.visible_columns
                     new_partition.column_config = parent_doc.column_config or "{}"
+                    # 继承subtask配置
+                    default_config = get_default_subtask_column_config()
+                    new_partition.subtask_visible_columns = getattr(parent_doc, 'subtask_visible_columns', None) or json.dumps(default_config['default_visible_columns'])
+                    new_partition.subtask_column_config = getattr(parent_doc, 'subtask_column_config', None) or json.dumps({"column_order": default_config['default_column_order'], "primary_column": default_config['primary_column']})
                 else:
                     # Use comprehensive default columns including new ones
                     default_columns = ["client", "task-name", "entity", "tf-tg", "software", "communication-methods", "client-contact", "status", "note", "target-month", "budget", "actual", "review-note", "action-person", "preparer", "reviewer", "partner", "lodgment-due", "engagement", "group", "year-end", "last-updated", "priority", "frequency", "reset-date"]
                     new_partition.visible_columns = json.dumps(default_columns)
                     new_partition.column_config = json.dumps({"column_order": default_columns})
+                    # 设置默认subtask配置
+                    default_config = get_default_subtask_column_config()
+                    new_partition.subtask_visible_columns = json.dumps(default_config['default_visible_columns'])
+                    new_partition.subtask_column_config = json.dumps({"column_order": default_config['default_column_order'], "primary_column": default_config['primary_column']})
             except:
                 # Use comprehensive default columns including new ones
                 default_columns = ["client", "task-name", "entity", "tf-tg", "software", "communication-methods", "client-contact", "status", "note", "target-month", "budget", "actual", "review-note", "action-person", "preparer", "reviewer", "partner", "lodgment-due", "engagement", "group", "year-end", "last-updated", "priority", "frequency", "reset-date"]
                 new_partition.visible_columns = json.dumps(default_columns)
                 new_partition.column_config = json.dumps({"column_order": default_columns})
+                # 设置默认subtask配置
+                default_config = get_default_subtask_column_config()
+                new_partition.subtask_visible_columns = json.dumps(default_config['default_visible_columns'])
+                new_partition.subtask_column_config = json.dumps({"column_order": default_config['default_column_order'], "primary_column": default_config['primary_column']})
         else:
             # Default columns for new top-level partition - use comprehensive list including new ones
             default_columns = ["client", "task-name", "entity", "tf-tg", "software", "communication-methods", "client-contact", "status", "note", "target-month", "budget", "actual", "review-note", "action-person", "preparer", "reviewer", "partner", "lodgment-due", "engagement", "group", "year-end", "last-updated", "priority", "frequency", "reset-date"]
             new_partition.visible_columns = json.dumps(default_columns)
             new_partition.column_config = json.dumps({"column_order": default_columns})
+            # 设置默认subtask配置
+            default_config = get_default_subtask_column_config()
+            new_partition.subtask_visible_columns = json.dumps(default_config['default_visible_columns'])
+            new_partition.subtask_column_config = json.dumps({"column_order": default_config['default_column_order'], "primary_column": default_config['primary_column']})
         
         new_partition.save()
         frappe.db.commit()
@@ -6281,5 +6297,455 @@ def get_client_centric_data(view='main'):
             'total_groups': 0,
             'total_clients': 0,
             'display_type': 'Client-Centric',
+            'error': str(e)
+        }
+
+# ==================== Subtask Batch Operations ====================
+
+@frappe.whitelist()
+def batch_delete_subtasks(subtask_ids):
+    """
+    Batch delete subtasks
+    """
+    try:
+        if isinstance(subtask_ids, str):
+            import json
+            subtask_ids = json.loads(subtask_ids)
+        
+        if not subtask_ids:
+            return {
+                'success': False,
+                'error': 'No subtasks provided'
+            }
+        
+        success_count = 0
+        errors = []
+        
+        for subtask_id in subtask_ids:
+            try:
+                if frappe.db.exists("Task", subtask_id):
+                    # Check if it's actually a subtask (has parent_task)
+                    parent_task = frappe.db.get_value("Task", subtask_id, "parent_task")
+                    if parent_task:
+                        frappe.delete_doc("Task", subtask_id, ignore_permissions=True)
+                        success_count += 1
+                    else:
+                        errors.append(f"Task {subtask_id} is not a subtask")
+                else:
+                    errors.append(f"Subtask {subtask_id} not found")
+            except Exception as e:
+                errors.append(f"Error deleting subtask {subtask_id}: {str(e)}")
+        
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'success_count': success_count,
+            'errors': errors,
+            'message': f'Successfully deleted {success_count} subtask(s)'
+        }
+        
+    except Exception as e:
+        frappe.db.rollback()
+        frappe.log_error(f"Error in batch_delete_subtasks: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def batch_archive_subtasks(subtask_ids):
+    """
+    Batch archive subtasks by setting custom_is_archived = 1 (same as task archive)
+    """
+    try:
+        if isinstance(subtask_ids, str):
+            import json
+            subtask_ids = json.loads(subtask_ids)
+        
+        if not subtask_ids:
+            return {
+                'success': False,
+                'error': 'No subtasks provided'
+            }
+        
+        success_count = 0
+        errors = []
+        
+        for subtask_id in subtask_ids:
+            try:
+                if frappe.db.exists("Task", subtask_id):
+                    # Check if it's actually a subtask (has parent_task)
+                    parent_task = frappe.db.get_value("Task", subtask_id, "parent_task")
+                    if parent_task:
+                        # Archive subtask by setting custom_is_archived = 1 (same as task)
+                        frappe.db.set_value("Task", subtask_id, "custom_is_archived", 1)
+                        success_count += 1
+                    else:
+                        errors.append(f"Task {subtask_id} is not a subtask")
+                else:
+                    errors.append(f"Subtask {subtask_id} not found")
+            except Exception as e:
+                errors.append(f"Error archiving subtask {subtask_id}: {str(e)}")
+        
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'success_count': success_count,
+            'errors': errors,
+            'message': f'Successfully archived {success_count} subtask(s)'
+        }
+        
+    except Exception as e:
+        frappe.db.rollback()
+        frappe.log_error(f"Error in batch_archive_subtasks: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+# ==================== Subtask Column Configuration ====================
+
+@frappe.whitelist()
+def get_all_task_columns():
+    """
+    获取所有可用的task列定义，从前端ColumnConfigManager同步
+    """
+    # 这个列表应该与前端ColumnConfigManager.allColumns保持同步
+    # 当添加新列时，只需要在前端ColumnConfigManager中添加，这里会自动包含
+    return [
+        'client', 'task-name', 'entity', 'tf-tg', 'software', 'communication-methods', 'client-contact', 'status', 'note', 
+        'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 
+        'process-date', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'
+    ]
+
+def get_default_subtask_column_config():
+    """
+    动态获取默认的subtask列配置，避免硬编码
+    """
+    # 获取所有task列
+    all_task_columns = get_all_task_columns()
+    
+    # 不适合subtask的列（排除法）- 这是唯一需要维护的列表
+    excluded_subtask_columns = [
+        'client',           # Subtask继承父task的client
+        'entity',           # Subtask继承父task的entity  
+        'tf-tg',            # Subtask继承父task的tf-tg
+        'software',         # 通常subtask不需要单独的software配置
+        'communication-methods', # 通常subtask不需要单独的communication配置
+        'client-contact',   # Subtask继承父task的client contact
+        'group',            # Subtask不需要group分组
+        'review-note'       # Review note通常在父task级别
+    ]
+    
+    # 动态生成适合subtask的列
+    suitable_subtask_columns = [col for col in all_task_columns if col not in excluded_subtask_columns]
+    
+    # 默认可见的subtask列 - 选择最常用的几个列作为默认
+    # 用户可以在manage columns里调整
+    default_visible_columns = [
+        'task-name', 'status', 'note', 'action-person', 'priority', 
+        'target-month', 'budget', 'actual', 'preparer', 'reviewer'
+    ]
+    # 确保默认列都在适合的列中
+    default_visible_columns = [col for col in default_visible_columns if col in suitable_subtask_columns]
+    
+    return {
+        'default_visible_columns': default_visible_columns,
+        'default_column_order': suitable_subtask_columns,
+        'primary_column': 'task-name',
+        'excluded_columns': excluded_subtask_columns
+    }
+
+@frappe.whitelist()
+def get_subtask_column_config(partition_name):
+    """Get subtask column configuration for a specific partition"""
+    try:
+        frappe.logger().info(f"Getting subtask column config for partition: {partition_name}, User: {frappe.session.user}")
+        
+        if partition_name == 'main':
+            # 和普通task一样，main视图返回用户在manage columns里选择的列
+            # 但是对于subtask，我们需要从某个地方读取用户的选择
+            # 先返回默认的可见列，让用户可以在manage columns里调整
+            default_config = get_default_subtask_column_config()
+            result = {
+                'success': True,
+                'visible_columns': default_config['default_visible_columns'],  # 返回默认可见列，用户可以调整
+                'column_config': {
+                    'column_order': default_config['default_column_order'],
+                    'primary_column': default_config['primary_column']
+                }
+            }
+            frappe.logger().info(f"Returning main subtask config: {result}")
+            return result
+        
+        # Get partition configuration
+        if not frappe.db.exists("Partition", partition_name):
+            return {
+                'success': False,
+                'error': f'Partition "{partition_name}" not found'
+            }
+        
+        # Get subtask configuration from partition
+        partition_doc = frappe.get_doc("Partition", partition_name)
+        
+        # Parse subtask configuration
+        import json
+        default_config = get_default_subtask_column_config()
+        
+        try:
+            visible_columns = json.loads(partition_doc.subtask_visible_columns) if partition_doc.subtask_visible_columns else default_config['default_visible_columns']
+            column_config = json.loads(partition_doc.subtask_column_config) if partition_doc.subtask_column_config else {}
+        except (json.JSONDecodeError, AttributeError):
+            # Fallback to defaults if parsing fails
+            visible_columns = default_config['default_visible_columns']
+            column_config = {}
+        
+        # 关键修复：column_order必须包含所有可用的subtask列，不只是可见列
+        column_config['column_order'] = default_config['default_column_order']
+        
+        # Ensure primary_column exists
+        if 'primary_column' not in column_config:
+            column_config['primary_column'] = default_config['primary_column']
+        
+        result = {
+            'success': True,
+            'visible_columns': visible_columns,
+            'column_config': column_config
+        }
+        
+        frappe.logger().info(f"Returning subtask config for {partition_name}: {result}")
+        return result
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting subtask column config: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def save_subtask_column_config(partition_name, visible_columns, column_config=None):
+    """Save subtask column configuration for a specific partition"""
+    try:
+        if not partition_name:
+            return {'success': False, 'error': 'Partition name is required'}
+        
+        # Handle main view - don't save, always use default (和普通task一样)
+        if partition_name == 'main':
+            default_config = get_default_subtask_column_config()
+            return {
+                'success': True,
+                'message': 'Main view uses default subtask configuration (not saved)',
+                'visible_columns': default_config['default_visible_columns'],  # 返回默认可见列
+                'column_config': {
+                    'column_order': default_config['default_column_order'],
+                    'primary_column': default_config['primary_column']
+                }
+            }
+        
+        # For non-main partitions, save to Partition record
+        if not frappe.db.exists("Partition", partition_name):
+            return {'success': False, 'error': f'Partition "{partition_name}" not found'}
+        
+        # Parse and validate visible_columns
+        import json
+        if isinstance(visible_columns, str):
+            try:
+                visible_columns = json.loads(visible_columns)
+            except json.JSONDecodeError:
+                return {'success': False, 'error': 'Invalid visible_columns format'}
+        
+        if not isinstance(visible_columns, list):
+            return {'success': False, 'error': 'visible_columns must be a list'}
+        
+        # Parse column_config
+        if column_config and isinstance(column_config, str):
+            try:
+                column_config = json.loads(column_config)
+            except json.JSONDecodeError:
+                return {'success': False, 'error': 'Invalid column_config format'}
+        
+        if not column_config:
+            column_config = {}
+        
+        # 关键修复：确保column_order包含所有可用列，而不只是可见列
+        default_config = get_default_subtask_column_config()
+        column_config['column_order'] = default_config['default_column_order']
+        
+        if 'primary_column' not in column_config:
+            column_config['primary_column'] = default_config['primary_column']
+        
+        # Update partition document
+        partition_doc = frappe.get_doc("Partition", partition_name)
+        partition_doc.subtask_visible_columns = json.dumps(visible_columns)
+        partition_doc.subtask_column_config = json.dumps(column_config)
+        partition_doc.save(ignore_permissions=True)
+        
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'message': f'Subtask column configuration saved for partition "{partition_name}"',
+            'visible_columns': visible_columns,
+            'column_config': column_config
+        }
+        
+    except Exception as e:
+        frappe.db.rollback()
+        frappe.log_error(f"Error saving subtask column config: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def initialize_single_partition_subtask_config(partition_name):
+    """
+    为单个partition初始化subtask列配置
+    """
+    try:
+        import json
+        
+        # 如果是main view，不需要初始化
+        if partition_name == 'main':
+            return {
+                'success': True,
+                'updated': False,
+                'message': 'Main view does not require subtask configuration initialization'
+            }
+        
+        # 检查partition是否存在
+        if not frappe.db.exists("Partition", partition_name):
+            return {
+                'success': False,
+                'error': f'Partition "{partition_name}" not found'
+            }
+        
+        partition_doc = frappe.get_doc("Partition", partition_name)
+        
+        # 检查是否需要初始化subtask配置
+        needs_update = False
+        default_config = get_default_subtask_column_config()
+        default_subtask_columns = default_config['default_visible_columns']
+        default_subtask_config = {
+            "column_order": default_config['default_column_order'],
+            "primary_column": default_config['primary_column']
+        }
+        
+        if not partition_doc.subtask_visible_columns:
+            partition_doc.subtask_visible_columns = json.dumps(default_subtask_columns)
+            needs_update = True
+        
+        if not partition_doc.subtask_column_config:
+            partition_doc.subtask_column_config = json.dumps(default_subtask_config)
+            needs_update = True
+        
+        if needs_update:
+            partition_doc.save(ignore_permissions=True)
+            frappe.db.commit()
+            frappe.logger().info(f"Initialized subtask config for partition: {partition_name}")
+            
+            return {
+                'success': True,
+                'updated': True,
+                'message': f'Successfully initialized subtask configuration for partition "{partition_name}"',
+                'debug_info': {
+                    'visible_columns': default_subtask_columns,
+                    'column_order': default_subtask_config['column_order']
+                }
+            }
+        else:
+            # 即使配置存在，也检查是否需要更新column_order
+            try:
+                existing_config = json.loads(partition_doc.subtask_column_config) if partition_doc.subtask_column_config else {}
+                if existing_config.get('column_order') != default_subtask_config['column_order']:
+                    # 更新column_order但保留visible_columns
+                    existing_config['column_order'] = default_subtask_config['column_order']
+                    partition_doc.subtask_column_config = json.dumps(existing_config)
+                    partition_doc.save(ignore_permissions=True)
+                    frappe.db.commit()
+                    
+                    return {
+                        'success': True,
+                        'updated': True,
+                        'message': f'Updated subtask column order for partition "{partition_name}"',
+                        'debug_info': {
+                            'updated_column_order': existing_config['column_order']
+                        }
+                    }
+            except:
+                pass
+                
+            return {
+                'success': True,
+                'updated': False,
+                'message': f'Subtask configuration already exists for partition "{partition_name}"'
+            }
+                    
+    except Exception as e:
+        frappe.db.rollback()
+        frappe.log_error(f"Error initializing subtask config for partition {partition_name}: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@frappe.whitelist()
+def initialize_existing_partitions_subtask_config():
+    """
+    为现有的partition添加默认的subtask列配置
+    """
+    try:
+        import json
+        
+        # 获取所有现有的partition
+        partitions = frappe.get_all("Partition", fields=["name", "subtask_visible_columns", "subtask_column_config"])
+        
+        updated_count = 0
+        default_config = get_default_subtask_column_config()
+        default_subtask_columns = default_config['default_visible_columns']
+        default_subtask_config = {
+            "column_order": default_config['default_column_order'],
+            "primary_column": default_config['primary_column']
+        }
+        
+        for partition in partitions:
+            try:
+                partition_doc = frappe.get_doc("Partition", partition.name)
+                
+                # 检查是否需要初始化subtask配置
+                needs_update = False
+                
+                if not partition_doc.subtask_visible_columns:
+                    partition_doc.subtask_visible_columns = json.dumps(default_subtask_columns)
+                    needs_update = True
+                
+                if not partition_doc.subtask_column_config:
+                    partition_doc.subtask_column_config = json.dumps(default_subtask_config)
+                    needs_update = True
+                
+                if needs_update:
+                    partition_doc.save(ignore_permissions=True)
+                    updated_count += 1
+                    frappe.logger().info(f"Initialized subtask config for partition: {partition.name}")
+                    
+            except Exception as e:
+                frappe.log_error(f"Error initializing subtask config for partition {partition.name}: {str(e)}")
+        
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'updated_count': updated_count,
+            'message': f'Successfully initialized subtask configuration for {updated_count} partitions'
+        }
+        
+    except Exception as e:
+        frappe.db.rollback()
+        frappe.log_error(f"Error in initialize_existing_partitions_subtask_config: {str(e)}")
+        return {
+            'success': False,
             'error': str(e)
         }

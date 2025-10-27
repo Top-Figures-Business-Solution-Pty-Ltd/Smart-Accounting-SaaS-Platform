@@ -504,7 +504,21 @@ class FilterManager {
                             <p>Select columns from the left panel to add them to the visible columns on the right. Drag to reorder visible columns.</p>
                         </div>
                         
-                        <div class="pm-dual-column-container">
+                        <!-- Tab Navigation -->
+                        <div class="pm-column-tabs">
+                            <button class="pm-tab-btn active" data-tab="tasks">
+                                <i class="fa fa-tasks"></i>
+                                Task Columns
+                            </button>
+                            <button class="pm-tab-btn" data-tab="subtasks">
+                                <i class="fa fa-list"></i>
+                                Subtask Columns
+                            </button>
+                        </div>
+                        
+                        <!-- Task Columns Tab Content -->
+                        <div class="pm-tab-content active" data-tab="tasks">
+                            <div class="pm-dual-column-container">
                             <!-- Left Panel: Available Columns -->
                             <div class="pm-column-panel pm-available-panel">
                                 <div class="pm-panel-header">
@@ -573,6 +587,18 @@ class FilterManager {
                                     }).join('')}
                                 </div>
                             </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Subtask Columns Tab Content -->
+                        <div class="pm-tab-content" data-tab="subtasks">
+                            <div class="pm-dual-column-container" id="pm-subtask-column-container">
+                                <!-- Will be populated by loadSubtaskColumnConfig -->
+                                <div class="pm-loading-placeholder">
+                                    <i class="fa fa-spinner fa-spin"></i>
+                                    Loading subtask columns...
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="pm-dialog-footer">
@@ -609,6 +635,12 @@ class FilterManager {
 
     bindColumnDialogEvents(currentView) {
         const dialog = $('.pm-column-management-dialog');
+
+        // Tab switching
+        dialog.on('click', '.pm-tab-btn', (e) => {
+            const tabName = $(e.currentTarget).data('tab');
+            this.switchColumnTab(tabName, currentView);
+        });
 
         // Close dialog events
         dialog.on('click', '.pm-dialog-close, .pm-dialog-cancel, .pm-dialog-overlay', () => {
@@ -836,6 +868,19 @@ class FilterManager {
     }
 
     saveDualColumnConfiguration(currentView) {
+        // 检测当前活动的标签页
+        const activeTab = $('.pm-tab-btn.active').data('tab');
+        
+        if (activeTab === 'subtasks') {
+            // 保存subtask配置
+            this.saveSubtaskColumnConfiguration(currentView);
+        } else {
+            // 保存task配置（默认）
+            this.saveTaskColumnConfiguration(currentView);
+        }
+    }
+
+    saveTaskColumnConfiguration(currentView) {
         // Get visible columns in order
         const visibleColumns = [];
         const columnOrder = [];
@@ -902,6 +947,92 @@ class FilterManager {
             },
             error: (error) => {
                 console.error('Save error:', error);
+                frappe.show_alert({
+                    message: '❌ Network error or server error',
+                    indicator: 'red'
+                }, 8);
+            }
+        });
+    }
+
+    saveSubtaskColumnConfiguration(currentView) {
+        // Get visible subtask columns in order
+        const visibleColumns = [];
+        const columnOrder = [];
+        
+        $('#pm-visible-subtask-columns .pm-visible-item').each(function() {
+            const columnKey = $(this).data('column');
+            visibleColumns.push(columnKey);
+            columnOrder.push(columnKey);
+        });
+        
+        // Add hidden columns to maintain complete order
+        $('#pm-available-subtask-columns .pm-available-item').each(function() {
+            const columnKey = $(this).data('column');
+            columnOrder.push(columnKey);
+        });
+        
+        console.log('💾 Saving subtask column configuration:', {
+            visibleColumns,
+            columnOrder,
+            currentView
+        });
+        
+        // Validate configuration
+        const validation = window.ColumnConfigManager.validateSubtaskColumnConfig(visibleColumns, columnOrder);
+        if (!validation.valid) {
+            frappe.show_alert({
+                message: `❌ Configuration error: ${validation.error}`,
+                indicator: 'red'
+            }, 8);
+            return;
+        }
+        
+        // Save subtask configuration
+        frappe.call({
+            method: 'smart_accounting.www.project_management.index.save_subtask_column_config',
+            args: {
+                partition_name: currentView,
+                visible_columns: visibleColumns,
+                column_config: {
+                    column_order: columnOrder,
+                    primary_column: visibleColumns[0] || 'task-name'
+                }
+            },
+            callback: (response) => {
+                if (response && response.message && response.message.success) {
+                    frappe.show_alert({
+                        message: '✅ Subtask column configuration saved successfully',
+                        indicator: 'green'
+                    }, 3);
+                    
+                    // Close dialog
+                    this.closeColumnDialog();
+                    
+                    // 直接应用subtask列可见性配置到所有已展开的subtask
+                    if (window.SubtaskManager) {
+                        setTimeout(() => {
+                            // 获取所有已展开的subtask容器
+                            $('.pm-subtask-container').each(function() {
+                                const parentTaskId = $(this).data('parent-task');
+                                if (parentTaskId && window.SubtaskManager.applySubtaskColumnVisibility) {
+                                    console.log(`🔄 Applying new column config to subtask ${parentTaskId}`);
+                                    window.SubtaskManager.applySubtaskColumnVisibility(parentTaskId, visibleColumns);
+                                }
+                            });
+                        }, 300);
+                    }
+                    
+                } else {
+                    const errorMsg = response.message?.error || 'Save failed';
+                    frappe.show_alert({
+                        message: `❌ Save failed: ${errorMsg}`,
+                        indicator: 'red'
+                    }, 8);
+                }
+            },
+            error: (error) => {
+                console.error('Subtask save error:', error);
                 frappe.show_alert({
                     message: '❌ Network error or server error',
                     indicator: 'red'
@@ -1001,7 +1132,7 @@ class FilterManager {
     }
 
     updatePartitionWithLatestColumns(currentView) {
-        // Create custom confirmation dialog with proper z-index
+        // Create enhanced confirmation dialog with comprehensive sync options
         const confirmDialog = $(`
             <div class="pm-custom-confirm-overlay" style="
                 position: fixed;
@@ -1019,23 +1150,52 @@ class FilterManager {
                     background: white;
                     border-radius: 8px;
                     padding: 24px;
-                    max-width: 480px;
+                    max-width: 520px;
                     width: 90%;
                     box-shadow: 0 10px 30px rgba(0,0,0,0.3);
                 ">
-                    <div style="margin-bottom: 16px;">
-                        <h4 style="margin: 0 0 8px 0; color: #333;">Sync Latest Columns</h4>
-                        <p style="margin: 0; color: #666; line-height: 1.5;">
-                            This will automatically add newly available columns to the current partition configuration. 
-                            New columns will be hidden by default and can be enabled through column management.
+                    <div style="margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 12px 0; color: #333; display: flex; align-items: center; gap: 8px;">
+                            <i class="fa fa-refresh" style="color: var(--monday-blue);"></i>
+                            Sync Latest Columns
+                        </h4>
+                        <p style="margin: 0 0 16px 0; color: #666; line-height: 1.5;">
+                            This will synchronize both <strong>Task</strong> and <strong>Subtask</strong> column configurations with the latest available columns.
                         </p>
+                        
+                        <!-- Sync Options -->
+                        <div style="background: #f8f9fa; padding: 16px; border-radius: 6px; margin-bottom: 16px;">
+                            <h5 style="margin: 0 0 12px 0; color: #495057; font-size: 14px;">What will be synchronized:</h5>
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <i class="fa fa-check-circle" style="color: var(--monday-green); font-size: 12px;"></i>
+                                    <span style="font-size: 13px; color: #495057;">Add new Task columns to column pool</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <i class="fa fa-check-circle" style="color: var(--monday-green); font-size: 12px;"></i>
+                                    <span style="font-size: 13px; color: #495057;">Initialize/update Subtask column configuration</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <i class="fa fa-check-circle" style="color: var(--monday-green); font-size: 12px;"></i>
+                                    <span style="font-size: 13px; color: #495057;">Ensure all columns are available for selection</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="background: #e3f2fd; padding: 12px; border-radius: 6px; border-left: 4px solid var(--monday-blue);">
+                            <p style="margin: 0; font-size: 13px; color: #1565c0;">
+                                <i class="fa fa-info-circle" style="margin-right: 6px;"></i>
+                                New columns will be hidden by default. Use column management to make them visible.
+                            </p>
+                        </div>
                     </div>
+                    
                     <div style="text-align: right; margin-top: 20px;">
                         <button class="pm-btn pm-btn-secondary pm-confirm-cancel" style="margin-right: 8px;">
                             Cancel
                         </button>
                         <button class="pm-btn pm-btn-primary pm-confirm-sync">
-                            <i class="fa fa-refresh"></i> Sync Columns
+                            <i class="fa fa-refresh"></i> Sync All Columns
                         </button>
                     </div>
                 </div>
@@ -1053,7 +1213,7 @@ class FilterManager {
         
         confirmDialog.on('click', '.pm-confirm-sync', () => {
             confirmDialog.remove();
-            this.executePartitionUpdate(currentView);
+            this.executeComprehensivePartitionSync(currentView);
         });
         
         // Prevent dialog content clicks from closing
@@ -1068,56 +1228,232 @@ class FilterManager {
         const originalText = updateBtn.html();
         updateBtn.html('<i class="fa fa-spinner fa-spin"></i> Syncing...').prop('disabled', true);
 
-        frappe.call({
-            method: 'smart_accounting.www.project_management.index.update_single_partition_columns',
-            args: {
-                partition_name: currentView
-            },
-            callback: (response) => {
-                // Restore button state
-                updateBtn.html(originalText).prop('disabled', false);
-
-                if (response.message && response.message.success) {
-                    const result = response.message;
-                    
-                    if (result.updated) {
-                        // Show success message
-                        frappe.show_alert({
-                            message: `✅ Successfully added ${result.added_columns.length} new column(s): ${result.added_columns.join(', ')}`,
-                            indicator: 'green'
-                        }, 5);
-
-                        // Close current dialog and reopen to show updated configuration
-                        this.closeColumnDialog();
-                        setTimeout(() => {
-                            this.showColumnManagementDialog();
-                        }, 500);
-
-                    } else {
-                        frappe.show_alert({
-                            message: '✅ Configuration is already up to date',
-                            indicator: 'blue'
-                        }, 3);
+        // 同时同步task和subtask配置
+        Promise.all([
+            // 同步task列配置
+            new Promise((resolve, reject) => {
+                frappe.call({
+                    method: 'smart_accounting.www.project_management.index.update_single_partition_columns',
+                    args: {
+                        partition_name: currentView
+                    },
+                    callback: (response) => {
+                        resolve(response);
+                    },
+                    error: (error) => {
+                        reject(error);
                     }
+                });
+            }),
+            // 同步subtask列配置
+            new Promise((resolve, reject) => {
+                frappe.call({
+                    method: 'smart_accounting.www.project_management.index.initialize_single_partition_subtask_config',
+                    args: {
+                        partition_name: currentView
+                    },
+                    callback: (response) => {
+                        resolve(response);
+                    },
+                    error: (error) => {
+                        reject(error);
+                    }
+                });
+            })
+        ]).then((responses) => {
+            // Restore button state
+            updateBtn.html(originalText).prop('disabled', false);
 
+            const [taskResponse, subtaskResponse] = responses;
+            let messages = [];
+
+            // 处理task同步结果
+            if (taskResponse.message && taskResponse.message.success) {
+                const result = taskResponse.message;
+                if (result.updated) {
+                    messages.push(`Task columns: Added ${result.added_columns.length} new column(s)`);
                 } else {
-                    const errorMsg = response.message?.error || 'Update failed';
-                    frappe.show_alert({
-                        message: `❌ Sync failed: ${errorMsg}`,
-                        indicator: 'red'
-                    }, 8);
+                    messages.push('Task columns: Already up to date');
                 }
-            },
-            error: (error) => {
-                // Restore button state
-                updateBtn.html(originalText).prop('disabled', false);
-                
-                console.error('Update error:', error);
-                frappe.show_alert({
-                    message: '❌ Network error or server error',
-                    indicator: 'red'
-                }, 8);
             }
+
+            // 处理subtask同步结果
+            if (subtaskResponse.message && subtaskResponse.message.success) {
+                const result = subtaskResponse.message;
+                if (result.updated) {
+                    messages.push(`Subtask columns: Initialized successfully`);
+                } else {
+                    messages.push('Subtask columns: Already up to date');
+                }
+            }
+
+            // 显示综合结果
+            if (messages.length > 0) {
+                frappe.show_alert({
+                    message: `✅ Sync completed: ${messages.join('; ')}`,
+                    indicator: 'green'
+                }, 5);
+
+                // Close current dialog and reopen to show updated configuration
+                this.closeColumnDialog();
+                setTimeout(() => {
+                    this.showColumnManagementDialog();
+                }, 500);
+            }
+
+        }).catch((error) => {
+            // Restore button state
+            updateBtn.html(originalText).prop('disabled', false);
+            
+            console.error('Sync error:', error);
+            frappe.show_alert({
+                message: '❌ Sync failed: Network error or server error',
+                indicator: 'red'
+            }, 8);
+        });
+
+    }
+
+    executeComprehensivePartitionSync(currentView) {
+        // Show enhanced loading state
+        const updateBtn = $('.pm-update-columns-btn');
+        const originalText = updateBtn.html();
+        updateBtn.html('<i class="fa fa-spinner fa-spin"></i> Syncing All...').prop('disabled', true);
+
+        // Show progress indicator
+        const progressAlert = frappe.show_alert({
+            message: '<i class="fa fa-spinner fa-spin"></i> Synchronizing Task and Subtask columns...',
+            indicator: 'blue'
+        }, 0); // 0 means don't auto-hide
+
+        // 综合同步：task列配置 + subtask初始化 + 配置验证
+        Promise.all([
+            // 1. 同步task列配置
+            new Promise((resolve, reject) => {
+                frappe.call({
+                    method: 'smart_accounting.www.project_management.index.update_single_partition_columns',
+                    args: {
+                        partition_name: currentView
+                    },
+                    callback: (response) => {
+                        resolve({ type: 'task', response });
+                    },
+                    error: (error) => {
+                        reject({ type: 'task', error });
+                    }
+                });
+            }),
+            // 2. 初始化/更新subtask列配置
+            new Promise((resolve, reject) => {
+                frappe.call({
+                    method: 'smart_accounting.www.project_management.index.initialize_single_partition_subtask_config',
+                    args: {
+                        partition_name: currentView
+                    },
+                    callback: (response) => {
+                        resolve({ type: 'subtask', response });
+                    },
+                    error: (error) => {
+                        reject({ type: 'subtask', error });
+                    }
+                });
+            }),
+            // 3. 验证配置完整性（可选的额外检查）
+            new Promise((resolve, reject) => {
+                frappe.call({
+                    method: 'smart_accounting.www.project_management.index.get_partition_column_config',
+                    args: {
+                        partition_name: currentView
+                    },
+                    callback: (response) => {
+                        resolve({ type: 'validation', response });
+                    },
+                    error: (error) => {
+                        // 验证失败不应该阻止整个流程
+                        resolve({ type: 'validation', response: { message: { success: false } } });
+                    }
+                });
+            })
+        ]).then((results) => {
+            // Hide progress alert
+            if (progressAlert && progressAlert.hide) {
+                progressAlert.hide();
+            }
+            
+            // Restore button state
+            updateBtn.html(originalText).prop('disabled', false);
+
+            // Process results
+            let messages = [];
+            let hasErrors = false;
+            let taskUpdated = false;
+            let subtaskUpdated = false;
+
+            results.forEach(result => {
+                if (result.type === 'task' && result.response.message && result.response.message.success) {
+                    const taskResult = result.response.message;
+                    if (taskResult.updated) {
+                        const addedCount = taskResult.added_columns ? taskResult.added_columns.length : 0;
+                        messages.push(`📋 Task columns: Added ${addedCount} new column(s)`);
+                        taskUpdated = true;
+                    } else {
+                        messages.push('📋 Task columns: Already up to date');
+                    }
+                } else if (result.type === 'subtask' && result.response.message && result.response.message.success) {
+                    const subtaskResult = result.response.message;
+                    if (subtaskResult.updated) {
+                        messages.push('📝 Subtask columns: Configuration initialized/updated');
+                        subtaskUpdated = true;
+                    } else {
+                        messages.push('📝 Subtask columns: Already configured');
+                    }
+                } else if (result.type === 'validation' && result.response.message && result.response.message.success) {
+                    // Validation passed - configuration is accessible
+                    messages.push('✅ Configuration validation: Passed');
+                }
+            });
+
+            // Show comprehensive results
+            if (messages.length > 0) {
+                const updateStatus = taskUpdated || subtaskUpdated ? 'Updates applied' : 'All configurations current';
+                frappe.show_alert({
+                    message: `🔄 Sync completed - ${updateStatus}<br><small>${messages.join('<br>')}</small>`,
+                    indicator: 'green'
+                }, 6);
+
+                // Close current dialog and reopen to show updated configuration
+                this.closeColumnDialog();
+                setTimeout(() => {
+                    this.showColumnManagementDialog();
+                }, 800);
+            }
+
+        }).catch((error) => {
+            // Hide progress alert
+            if (progressAlert && progressAlert.hide) {
+                progressAlert.hide();
+            }
+            
+            // Restore button state
+            updateBtn.html(originalText).prop('disabled', false);
+            
+            console.error('Comprehensive sync error:', error);
+            
+            // Provide detailed error information
+            let errorMessage = 'Sync failed';
+            if (error.type) {
+                errorMessage = `${error.type.charAt(0).toUpperCase() + error.type.slice(1)} sync failed`;
+            }
+            if (error.error && error.error.message) {
+                errorMessage += `: ${error.error.message}`;
+            } else if (error.message) {
+                errorMessage += `: ${error.message}`;
+            }
+            
+            frappe.show_alert({
+                message: `❌ ${errorMessage}`,
+                indicator: 'red'
+            }, 8);
         });
     }
 
@@ -1594,6 +1930,368 @@ class FilterManager {
         return true;
         
         return config.filters.some(filter => filter.key === filterType);
+    }
+
+    // ==================== Subtask Column Management ====================
+
+    switchColumnTab(tabName, currentView) {
+        const dialog = $('.pm-column-management-dialog');
+        
+        // Update tab buttons
+        dialog.find('.pm-tab-btn').removeClass('active');
+        dialog.find(`.pm-tab-btn[data-tab="${tabName}"]`).addClass('active');
+        
+        // Update tab content
+        dialog.find('.pm-tab-content').removeClass('active');
+        dialog.find(`.pm-tab-content[data-tab="${tabName}"]`).addClass('active');
+        
+        // Load subtask configuration if switching to subtasks tab
+        if (tabName === 'subtasks') {
+            this.loadSubtaskColumnConfig(currentView);
+        }
+    }
+
+    async loadSubtaskColumnConfig(currentView) {
+        const container = $('#pm-subtask-column-container');
+        
+        try {
+            // Show loading
+            container.html(`
+                <div class="pm-loading-placeholder">
+                    <i class="fa fa-spinner fa-spin"></i>
+                    Loading subtask columns...
+                </div>
+            `);
+            
+            console.log('🔍 Loading subtask config for view:', currentView);
+            
+            // Get subtask column configuration
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_subtask_column_config',
+                args: {
+                    partition_name: currentView
+                }
+            });
+            
+            console.log('🔍 Subtask config response:', response);
+            
+            if (response.message && response.message.success) {
+                const config = response.message;
+                console.log('🔍 Subtask config loaded:', config);
+                this.renderSubtaskColumnConfig(config, currentView);
+            } else {
+                throw new Error(response.message?.error || 'Failed to load subtask configuration');
+            }
+            
+        } catch (error) {
+            console.error('Error loading subtask column config:', error);
+            container.html(`
+                <div class="pm-error-placeholder">
+                    <i class="fa fa-exclamation-triangle"></i>
+                    <p>Error loading subtask columns: ${error.message}</p>
+                    <button class="pm-btn pm-btn-sm pm-retry-subtask-config">Retry</button>
+                </div>
+            `);
+            
+            // Bind retry button
+            container.find('.pm-retry-subtask-config').on('click', () => {
+                this.loadSubtaskColumnConfig(currentView);
+            });
+        }
+    }
+
+    renderSubtaskColumnConfig(config, currentView) {
+        const allColumns = window.ColumnConfigManager.getAllSubtaskColumns();
+        const visibleColumns = config.visible_columns || window.ColumnConfigManager.getDefaultVisibleSubtaskColumns();
+        const currentColumnOrder = config.column_config?.column_order || window.ColumnConfigManager.getDefaultSubtaskColumnOrder();
+
+        // 调试信息
+        console.log('🔍 Subtask Column Config Debug:');
+        console.log('allColumns:', allColumns);
+        console.log('allColumns keys:', Object.keys(allColumns));
+        console.log('visibleColumns:', visibleColumns);
+        console.log('currentColumnOrder:', currentColumnOrder);
+
+        // 过滤掉select列，因为它不是数据列
+        const filteredColumnOrder = currentColumnOrder.filter(col => col !== 'select');
+        const filteredVisibleColumns = visibleColumns.filter(col => col !== 'select');
+
+        // Separate visible and hidden columns - 确保只包含在allColumns中定义的列
+        const availableColumnKeys = Object.keys(allColumns);
+        const hiddenColumns = filteredColumnOrder.filter(col => 
+            !filteredVisibleColumns.includes(col) && availableColumnKeys.includes(col)
+        );
+        const sortedVisibleColumns = filteredColumnOrder.filter(col => 
+            filteredVisibleColumns.includes(col) && availableColumnKeys.includes(col)
+        );
+
+        console.log('availableColumnKeys:', availableColumnKeys);
+        console.log('hiddenColumns:', hiddenColumns);
+        console.log('sortedVisibleColumns:', sortedVisibleColumns);
+        
+        // 如果没有隐藏列，说明所有列都在可见列中，这不对
+        if (hiddenColumns.length === 0) {
+            console.warn('⚠️ No hidden columns found, this might be a configuration issue');
+            console.log('🔍 Debug: filteredColumnOrder:', filteredColumnOrder);
+            console.log('🔍 Debug: filteredVisibleColumns:', filteredVisibleColumns);
+        }
+
+        const containerHtml = `
+            <!-- Left Panel: Available Subtask Columns -->
+            <div class="pm-column-panel pm-available-panel">
+                <div class="pm-panel-header">
+                    <h4><i class="fa fa-list"></i> Available Subtask Columns</h4>
+                    <span class="pm-panel-count">${hiddenColumns.length}</span>
+                </div>
+                <div class="pm-column-list" id="pm-available-subtask-columns">
+                    ${hiddenColumns.map(columnKey => {
+                        const displayName = window.ColumnConfigManager.getColumnDisplayName(columnKey);
+                        const isRequired = window.ColumnConfigManager.getRequiredSubtaskColumns().includes(columnKey);
+                        
+                        return `
+                            <div class="pm-column-item pm-available-item" data-column="${columnKey}" data-type="subtask">
+                                <span class="pm-column-name">${displayName}${isRequired ? ' (Required)' : ''}</span>
+                                <button class="pm-btn pm-btn-sm pm-btn-primary pm-add-subtask-column-btn" data-column="${columnKey}" title="Add to visible columns">
+                                    Add
+                                </button>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+            
+            <!-- Center Controls -->
+            <div class="pm-transfer-controls">
+                <button class="pm-btn pm-btn-outline pm-add-all-subtask-btn" title="Add all subtask columns">
+                    Add All
+                </button>
+                <button class="pm-btn pm-btn-outline pm-remove-all-subtask-btn" title="Remove all non-required subtask columns">
+                    Remove All
+                </button>
+            </div>
+            
+            <!-- Right Panel: Visible Subtask Columns -->
+            <div class="pm-column-panel pm-visible-panel">
+                <div class="pm-panel-header">
+                    <h4><i class="fa fa-eye"></i> Visible Subtask Columns</h4>
+                    <span class="pm-panel-count">${sortedVisibleColumns.length}</span>
+                    <small class="pm-primary-note">First column is primary</small>
+                </div>
+                <div class="pm-column-list" id="pm-visible-subtask-columns">
+                    ${sortedVisibleColumns.map((columnKey, index) => {
+                        const displayName = window.ColumnConfigManager.getColumnDisplayName(columnKey);
+                        const isRequired = window.ColumnConfigManager.getRequiredSubtaskColumns().includes(columnKey);
+                        const isPrimary = index === 0;
+                        
+                        return `
+                            <div class="pm-column-item pm-visible-item ${isPrimary ? 'pm-primary-column' : ''}" data-column="${columnKey}" data-type="subtask">
+                                <div class="pm-column-drag-handle" title="Drag to reorder">
+                                    <i class="fa fa-bars"></i>
+                                </div>
+                                <span class="pm-column-name">${displayName}${isRequired ? ' (Required)' : ''}${isPrimary ? ' (Primary)' : ''}</span>
+                                <div class="pm-column-actions">
+                                    <button class="pm-btn pm-btn-xs pm-btn-ghost pm-move-up-btn" data-column="${columnKey}" title="Move up" ${index === 0 ? 'disabled' : ''}>
+                                        <i class="fa fa-arrow-up"></i>
+                                    </button>
+                                    <button class="pm-btn pm-btn-xs pm-btn-ghost pm-move-down-btn" data-column="${columnKey}" title="Move down" ${index === sortedVisibleColumns.length - 1 ? 'disabled' : ''}>
+                                        <i class="fa fa-arrow-down"></i>
+                                    </button>
+                                    <button class="pm-btn pm-btn-xs pm-btn-danger pm-remove-subtask-column-btn" data-column="${columnKey}" title="Remove from visible columns" ${isRequired ? 'disabled' : ''}>
+                                        Remove
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+
+        $('#pm-subtask-column-container').html(containerHtml);
+
+        // Bind subtask-specific events
+        this.bindSubtaskColumnEvents();
+
+        // Initialize drag functionality for subtask columns
+        setTimeout(() => {
+            const visibleContainer = document.getElementById('pm-visible-subtask-columns');
+            if (window.DragManager && visibleContainer) {
+                window.DragManager.initializeDragSort('pm-visible-subtask-columns', () => {
+                    this.updateVisibleSubtaskColumnOrder();
+                });
+            }
+        }, 200);
+    }
+
+    bindSubtaskColumnEvents() {
+        const dialog = $('.pm-column-management-dialog');
+
+        // Add subtask column to visible list
+        dialog.on('click', '.pm-add-subtask-column-btn', (e) => {
+            const columnKey = $(e.currentTarget).data('column');
+            this.moveSubtaskColumnToVisible(columnKey);
+        });
+
+        // Remove subtask column from visible list
+        dialog.on('click', '.pm-remove-subtask-column-btn', (e) => {
+            const columnKey = $(e.currentTarget).data('column');
+            this.moveSubtaskColumnToAvailable(columnKey);
+        });
+
+        // Add all subtask columns
+        dialog.on('click', '.pm-add-all-subtask-btn', () => {
+            this.addAllSubtaskColumns();
+        });
+
+        // Remove all non-required subtask columns
+        dialog.on('click', '.pm-remove-all-subtask-btn', () => {
+            this.removeAllNonRequiredSubtaskColumns();
+        });
+    }
+
+    moveSubtaskColumnToVisible(columnKey) {
+        const $availableItem = $(`.pm-available-item[data-column="${columnKey}"][data-type="subtask"]`);
+        const $visibleContainer = $('#pm-visible-subtask-columns');
+        
+        if ($availableItem.length && $visibleContainer.length) {
+            // Remove from available
+            $availableItem.remove();
+            
+            // Add to visible
+            const displayName = window.ColumnConfigManager.getColumnDisplayName(columnKey);
+            const isRequired = window.ColumnConfigManager.getRequiredSubtaskColumns().includes(columnKey);
+            
+            const newItem = `
+                <div class="pm-column-item pm-visible-item" data-column="${columnKey}" data-type="subtask">
+                    <div class="pm-column-drag-handle" title="Drag to reorder">
+                        <i class="fa fa-bars"></i>
+                    </div>
+                    <span class="pm-column-name">${displayName}${isRequired ? ' (Required)' : ''}</span>
+                    <div class="pm-column-actions">
+                        <button class="pm-btn pm-btn-xs pm-btn-ghost pm-move-up-btn" data-column="${columnKey}" title="Move up">
+                            <i class="fa fa-arrow-up"></i>
+                        </button>
+                        <button class="pm-btn pm-btn-xs pm-btn-ghost pm-move-down-btn" data-column="${columnKey}" title="Move down">
+                            <i class="fa fa-arrow-down"></i>
+                        </button>
+                        <button class="pm-btn pm-btn-xs pm-btn-danger pm-remove-subtask-column-btn" data-column="${columnKey}" title="Remove from visible columns" ${isRequired ? 'disabled' : ''}>
+                            Remove
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            $visibleContainer.append(newItem);
+            
+            // Update counts and primary column indicators
+            this.updateSubtaskColumnCounts();
+            this.updateSubtaskPrimaryColumnIndicators();
+        }
+    }
+
+    moveSubtaskColumnToAvailable(columnKey) {
+        const $visibleItem = $(`.pm-visible-item[data-column="${columnKey}"][data-type="subtask"]`);
+        const $availableContainer = $('#pm-available-subtask-columns');
+        
+        if ($visibleItem.length && $availableContainer.length) {
+            // Check if it's required
+            const isRequired = window.ColumnConfigManager.getRequiredSubtaskColumns().includes(columnKey);
+            if (isRequired) {
+                frappe.show_alert({
+                    message: 'Cannot remove required subtask column',
+                    indicator: 'orange'
+                });
+                return;
+            }
+            
+            // Remove from visible
+            $visibleItem.remove();
+            
+            // Add to available
+            const displayName = window.ColumnConfigManager.getColumnDisplayName(columnKey);
+            
+            const newItem = `
+                <div class="pm-column-item pm-available-item" data-column="${columnKey}" data-type="subtask">
+                    <span class="pm-column-name">${displayName}</span>
+                    <button class="pm-btn pm-btn-sm pm-btn-primary pm-add-subtask-column-btn" data-column="${columnKey}" title="Add to visible columns">
+                        Add
+                    </button>
+                </div>
+            `;
+            
+            $availableContainer.append(newItem);
+            
+            // Update counts and primary column indicators
+            this.updateSubtaskColumnCounts();
+            this.updateSubtaskPrimaryColumnIndicators();
+        }
+    }
+
+    addAllSubtaskColumns() {
+        $('#pm-available-subtask-columns .pm-add-subtask-column-btn').each((index, btn) => {
+            const columnKey = $(btn).data('column');
+            this.moveSubtaskColumnToVisible(columnKey);
+        });
+    }
+
+    removeAllNonRequiredSubtaskColumns() {
+        const requiredColumns = window.ColumnConfigManager.getRequiredSubtaskColumns();
+        
+        $('#pm-visible-subtask-columns .pm-remove-subtask-column-btn:not([disabled])').each((index, btn) => {
+            const columnKey = $(btn).data('column');
+            if (!requiredColumns.includes(columnKey)) {
+                this.moveSubtaskColumnToAvailable(columnKey);
+            }
+        });
+    }
+
+    updateSubtaskColumnCounts() {
+        const availableCount = $('#pm-available-subtask-columns .pm-column-item').length;
+        const visibleCount = $('#pm-visible-subtask-columns .pm-column-item').length;
+        
+        $('.pm-available-panel .pm-panel-count').text(availableCount);
+        $('.pm-visible-panel .pm-panel-count').text(visibleCount);
+    }
+
+    updateSubtaskPrimaryColumnIndicators() {
+        // Remove all primary indicators
+        $('#pm-visible-subtask-columns .pm-visible-item').removeClass('pm-primary-column');
+        $('#pm-visible-subtask-columns .pm-column-name').each((index, element) => {
+            const $element = $(element);
+            const text = $element.text().replace(' (Primary)', '');
+            $element.text(text);
+        });
+        
+        // Add primary indicator to first column
+        const $visibleItems = $('#pm-visible-subtask-columns .pm-visible-item');
+        const $firstItem = $visibleItems.first();
+        
+        if ($firstItem.length) {
+            $firstItem.addClass('pm-primary-column');
+            const $nameSpan = $firstItem.find('.pm-column-name');
+            const currentText = $nameSpan.text();
+            if (!currentText.includes('(Primary)')) {
+                $nameSpan.text(currentText + ' (Primary)');
+            }
+        }
+    }
+
+    updateVisibleSubtaskColumnOrder() {
+        // Update move buttons state after drag reorder
+        const $visibleItems = $('#pm-visible-subtask-columns .pm-visible-item');
+        
+        $visibleItems.each((index, item) => {
+            const $item = $(item);
+            const $upBtn = $item.find('.pm-move-up-btn');
+            const $downBtn = $item.find('.pm-move-down-btn');
+            
+            // Update button states
+            $upBtn.prop('disabled', index === 0);
+            $downBtn.prop('disabled', index === $visibleItems.length - 1);
+        });
+        
+        // Update primary column indicators
+        this.updateSubtaskPrimaryColumnIndicators();
     }
 }
 

@@ -111,13 +111,143 @@ class SubtaskManager {
         this.updateSubtaskIndicator(taskId, count);
     }
 
-    renderSubtasks(parentTaskId, subtasks) {
+    async renderSubtasks(parentTaskId, subtasks) {
         const $parentRow = $(`.pm-task-row[data-task-id="${parentTaskId}"]`);
         
         // Remove existing subtask container
         $(`.pm-subtask-container[data-parent-task="${parentTaskId}"]`).remove();
 
-        // Create Monday.com style subtask container with table structure
+        // Get current view to load subtask column configuration
+        const currentView = window.PM_CONFIG?.currentView || 'main';
+        
+        try {
+            // Get subtask column configuration with enhanced debugging
+            console.log(`🔍 Loading subtask column config for view: ${currentView}`);
+            
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_subtask_column_config',
+                args: {
+                    partition_name: currentView
+                }
+            });
+            
+            console.log('🔍 Subtask column config response:', response);
+            
+            let visibleColumns;
+            
+            // 关键修复：优先使用服务器返回的配置，确保持久化生效
+            if (response.message && response.message.success && response.message.visible_columns) {
+                visibleColumns = response.message.visible_columns;
+                console.log(`✅ Using saved subtask columns for ${currentView}:`, visibleColumns);
+            } else {
+                // 只有在服务器没有返回配置时才使用默认配置
+                visibleColumns = window.ColumnConfigManager.getDefaultVisibleSubtaskColumns();
+                console.warn(`⚠️ No saved subtask config found for ${currentView}, using defaults:`, visibleColumns);
+                
+                // 如果配置加载失败，尝试初始化配置
+                if (currentView !== 'main') {
+                    console.log(`🔧 Attempting to initialize subtask config for ${currentView}`);
+                    try {
+                        const initResponse = await frappe.call({
+                            method: 'smart_accounting.www.project_management.index.initialize_single_partition_subtask_config',
+                            args: {
+                                partition_name: currentView
+                            }
+                        });
+                        
+                        if (initResponse.message && initResponse.message.success) {
+                            console.log(`✅ Subtask config initialized for ${currentView}`);
+                            // 重新获取初始化后的配置
+                            const retryResponse = await frappe.call({
+                                method: 'smart_accounting.www.project_management.index.get_subtask_column_config',
+                                args: {
+                                    partition_name: currentView
+                                }
+                            });
+                            
+                            if (retryResponse.message && retryResponse.message.success && retryResponse.message.visible_columns) {
+                                visibleColumns = retryResponse.message.visible_columns;
+                                console.log(`✅ Using initialized subtask columns for ${currentView}:`, visibleColumns);
+                            }
+                        }
+                    } catch (initError) {
+                        console.error(`❌ Failed to initialize subtask config for ${currentView}:`, initError);
+                    }
+                }
+            }
+            
+            // 关键修复：只渲染用户在manage columns里选择的可见列
+            const headerColumns = visibleColumns.map(columnKey => {
+                const displayName = window.ColumnConfigManager.getColumnDisplayName(columnKey);
+                return `
+                    <div class="pm-subtask-header-cell pm-subtask-cell-${columnKey}" data-column="${columnKey}">
+                        ${displayName}
+                        <div class="pm-subtask-col-resizer"></div>
+                    </div>
+                `;
+            }).join('');
+
+            // Create Monday.com style subtask container with dynamic columns
+            const subtaskHTML = `
+                <div class="pm-subtask-container" data-parent-task="${parentTaskId}">
+                    <div class="pm-subtask-header">
+                        <div class="pm-subtask-title">
+                            <i class="fa fa-tasks"></i>
+                            Subtasks (${subtasks.length})
+                        </div>
+                    </div>
+                    <div class="pm-subtask-table">
+                        <div class="pm-subtask-table-header">
+                            <div class="pm-subtask-header-cell pm-subtask-cell-select" data-column="select">
+                                <input type="checkbox" class="pm-subtask-select-all-checkbox" title="Select all subtasks">
+                                <div class="pm-subtask-col-resizer"></div>
+                            </div>
+                            ${headerColumns}
+                        </div>
+                        <div class="pm-subtask-list">
+                            ${this.renderSubtaskList(subtasks, parentTaskId, visibleColumns)}
+                            ${this.renderAddSubtaskRow(parentTaskId, visibleColumns)}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Insert after parent row
+            $parentRow.after(subtaskHTML);
+
+            // Bind events for new subtask container
+            this.bindSubtaskEvents(parentTaskId);
+
+            // Apply column widths to the new subtask table
+            this.applySubtaskColumnWidths();
+
+            // 注意：由于我们只渲染可见列，不需要额外的可见性逻辑
+
+            // Animate in
+            $(`.pm-subtask-container[data-parent-task="${parentTaskId}"]`).hide().slideDown(300);
+            
+        } catch (error) {
+            console.error('Error loading subtask column config:', error);
+            // 使用默认配置作为后备
+            this.renderSubtasksWithDefaults(parentTaskId, subtasks, $parentRow);
+        }
+    }
+
+    // 后备方法：使用默认配置渲染subtask
+    renderSubtasksWithDefaults(parentTaskId, subtasks, $parentRow) {
+        const defaultVisibleColumns = window.ColumnConfigManager.getDefaultVisibleSubtaskColumns();
+        
+        // 只渲染默认可见列
+        const headerColumns = defaultVisibleColumns.map(columnKey => {
+            const displayName = window.ColumnConfigManager.getColumnDisplayName(columnKey);
+            return `
+                <div class="pm-subtask-col pm-subtask-col-${columnKey}" data-column="${columnKey}">
+                    ${displayName}
+                    <div class="pm-subtask-col-resizer"></div>
+                </div>
+            `;
+        }).join('');
+
         const subtaskHTML = `
             <div class="pm-subtask-container" data-parent-task="${parentTaskId}">
                 <div class="pm-subtask-header">
@@ -128,49 +258,34 @@ class SubtaskManager {
                 </div>
                 <div class="pm-subtask-table">
                     <div class="pm-subtask-table-header">
-                        <div class="pm-subtask-col pm-subtask-col-name" data-column="name">
-                            Task Name
+                        <div class="pm-subtask-col pm-subtask-col-select" data-column="select">
+                            <input type="checkbox" class="pm-subtask-select-all-checkbox" title="Select all subtasks">
                             <div class="pm-subtask-col-resizer"></div>
                         </div>
-                        <div class="pm-subtask-col pm-subtask-col-owner" data-column="owner">
-                            Owner
-                            <div class="pm-subtask-col-resizer"></div>
-                        </div>
-                        <div class="pm-subtask-col pm-subtask-col-status" data-column="status">
-                            Status
-                            <div class="pm-subtask-col-resizer"></div>
-                        </div>
-                        <div class="pm-subtask-col pm-subtask-col-due" data-column="due">
-                            Due Date
-                            <div class="pm-subtask-col-resizer"></div>
-                        </div>
-                        <div class="pm-subtask-col pm-subtask-col-note" data-column="note">
-                            Note
-                            <div class="pm-subtask-col-resizer"></div>
-                        </div>
+                        ${headerColumns}
                     </div>
                     <div class="pm-subtask-list">
-                        ${this.renderSubtaskList(subtasks, parentTaskId)}
-                        ${this.renderAddSubtaskRow(parentTaskId)}
+                        ${this.renderSubtaskList(subtasks, parentTaskId, defaultVisibleColumns)}
+                        ${this.renderAddSubtaskRow(parentTaskId, defaultVisibleColumns)}
                     </div>
                 </div>
             </div>
         `;
 
-        // Insert after parent row
         $parentRow.after(subtaskHTML);
-
-        // Bind events for new subtask container
         this.bindSubtaskEvents(parentTaskId);
-
-        // Apply column widths to the new subtask table
         this.applySubtaskColumnWidths();
-
-        // Animate in
+        
+        // 注意：由于我们只渲染可见列，不需要额外的可见性逻辑
+        
         $(`.pm-subtask-container[data-parent-task="${parentTaskId}"]`).hide().slideDown(300);
     }
 
-    renderSubtaskList(subtasks, parentTaskId) {
+    renderSubtaskList(subtasks, parentTaskId, allColumns = null) {
+        // 如果没有传入列配置，使用所有可用列
+        if (!allColumns) {
+            allColumns = window.ColumnConfigManager.getAllSubtaskColumnKeys();
+        }
         if (!subtasks || subtasks.length === 0) {
             return `
                 <div class="pm-subtask-empty">
@@ -180,60 +295,318 @@ class SubtaskManager {
             `;
         }
 
-        return subtasks.map(subtask => `
-            <div class="pm-subtask-item pm-subtask-row" data-subtask-id="${subtask.name}">
-                <div class="pm-subtask-col pm-subtask-col-name">
-                    <div class="pm-subtask-name-cell">
-                        <div class="pm-subtask-checkbox">
-                            <input type="checkbox" ${subtask.status === 'Completed' ? 'checked' : ''}>
+        return subtasks.map(subtask => {
+            // 使用subtask专用的CSS类名，避免和task冲突
+            let rowHTML = `
+                <div class="pm-subtask-item pm-subtask-row" data-subtask-id="${subtask.name}">
+                    <div class="pm-subtask-cell-select">
+                        <div class="pm-subtask-select-cell">
+                            <input type="checkbox" class="pm-subtask-multiselect-checkbox" data-subtask-id="${subtask.name}">
                         </div>
-                        <span class="pm-subtask-name editable-field" 
-                              data-editable="true"
-                              data-field="subject"
-                              data-task-id="${subtask.name}"
-                              data-field-type="text">${subtask.subject || 'Untitled Subtask'}</span>
                     </div>
-                </div>
-                <div class="pm-subtask-col pm-subtask-col-owner">
-                    <div class="pm-subtask-owner-cell"
-                         data-editable="true"
-                         data-field="custom_roles"
-                         data-task-id="${subtask.name}"
-                         data-field-type="person_selector"
-                         data-role-filter="Owner">
-                        ${this.renderOwnerCell(subtask)}
+            `;
+
+            // 根据所有可用列动态生成列（使用task的CSS类名）
+            allColumns.forEach(columnKey => {
+                rowHTML += this.renderSubtaskCell(subtask, columnKey);
+            });
+
+            rowHTML += `</div>`;
+            return rowHTML;
+        }).join('');
+    }
+
+    // 渲染单个subtask单元格
+    renderSubtaskCell(subtask, columnKey) {
+        switch (columnKey) {
+            case 'task-name':
+                return `
+                    <div class="pm-subtask-cell-task-name">
+                        <div class="pm-subtask-name-content">
+                            <span class="editable-field subtask-name-display" 
+                                  data-editable="true"
+                                  data-field="subject"
+                                  data-task-id="${subtask.name}"
+                                  data-field-type="text">${subtask.subject || 'Untitled Subtask'}</span>
+                        </div>
                     </div>
-                </div>
-                <div class="pm-subtask-col pm-subtask-col-status">
-                    <div class="pm-subtask-status-cell"
-                         data-editable="true"
-                         data-field="custom_task_status"
-                         data-task-id="${subtask.name}"
-                         data-field-type="select"
-                         data-options-source="custom_task_status">
-                        <span class="pm-status-badge status-${(subtask.custom_task_status || subtask.status || 'Not Started').toLowerCase().replace(/\s+/g, '-')}">${subtask.custom_task_status || subtask.status || 'Not Started'}</span>
+                `;
+            
+            case 'status':
+                return `
+                    <div class="pm-subtask-cell-status">
+                        <div class="pm-subtask-status-cell"
+                             data-editable="true"
+                             data-field="custom_task_status"
+                             data-task-id="${subtask.name}"
+                             data-field-type="select"
+                             data-options-source="custom_task_status">
+                            <span class="pm-status-badge status-${(subtask.custom_task_status || subtask.status || 'Not Started').toLowerCase().replace(/\s+/g, '-')}">${subtask.custom_task_status || subtask.status || 'Not Started'}</span>
+                        </div>
                     </div>
-                </div>
-                <div class="pm-subtask-col pm-subtask-col-due">
-                    <div class="pm-subtask-due-cell"
-                         data-editable="true"
-                         data-field="custom_due_date"
-                         data-task-id="${subtask.name}"
-                         data-field-type="date">
-                        <span class="editable-field">${subtask.custom_due_date || '-'}</span>
+                `;
+            
+            case 'note':
+                return `
+                    <div class="pm-subtask-cell-note">
+                        <div class="pm-subtask-note-cell"
+                             data-editable="true"
+                             data-field="custom_note"
+                             data-task-id="${subtask.name}"
+                             data-field-type="text">
+                            <span class="editable-field">${subtask.custom_note || subtask.note || '-'}</span>
+                        </div>
                     </div>
-                </div>
-                <div class="pm-subtask-col pm-subtask-col-note">
-                    <div class="pm-subtask-note-cell"
-                         data-editable="true"
-                         data-field="custom_note"
-                         data-task-id="${subtask.name}"
-                         data-field-type="text">
-                        <span class="pm-subtask-note editable-field">${subtask.note || '-'}</span>
+                `;
+            
+            case 'action-person':
+                return `
+                    <div class="pm-subtask-cell-action-person">
+                        <div class="pm-subtask-action-person-cell"
+                             data-editable="true"
+                             data-field="custom_roles"
+                             data-task-id="${subtask.name}"
+                             data-field-type="person_selector"
+                             data-role-filter="Action Person">
+                            ${this.renderRoleCell(subtask, 'Action Person')}
+                        </div>
                     </div>
+                `;
+            
+            case 'priority':
+                return `
+                    <div class="pm-subtask-cell-priority">
+                        <div class="pm-subtask-priority-cell"
+                             data-editable="true"
+                             data-field="priority"
+                             data-task-id="${subtask.name}"
+                             data-field-type="select"
+                             data-options-source="priority">
+                            <span class="pm-priority-badge priority-${(subtask.priority || 'Medium').toLowerCase()}">${subtask.priority || 'Medium'}</span>
+                        </div>
+                    </div>
+                `;
+            
+            case 'target-month':
+                return `
+                    <div class="pm-subtask-cell-target-month">
+                        <div class="pm-subtask-cell-content"
+                             data-editable="true"
+                             data-field="custom_target_month"
+                             data-task-id="${subtask.name}"
+                             data-field-type="text">
+                            <span class="editable-field">${subtask.custom_target_month || '-'}</span>
+                        </div>
+                    </div>
+                `;
+            
+            case 'budget':
+                return `
+                    <div class="pm-subtask-cell-budget">
+                        <div class="pm-subtask-cell-content"
+                             data-editable="true"
+                             data-field="custom_budget_planning"
+                             data-task-id="${subtask.name}"
+                             data-field-type="number">
+                            <span class="editable-field">${subtask.custom_budget_planning || '-'}</span>
+                        </div>
+                    </div>
+                `;
+            
+            case 'actual':
+                return `
+                    <div class="pm-subtask-cell-actual">
+                        <div class="pm-subtask-cell-content"
+                             data-editable="true"
+                             data-field="custom_actual_billing"
+                             data-task-id="${subtask.name}"
+                             data-field-type="number">
+                            <span class="editable-field">${subtask.custom_actual_billing || '-'}</span>
+                        </div>
+                    </div>
+                `;
+            
+            case 'preparer':
+                return `
+                    <div class="pm-subtask-cell-preparer">
+                        <div class="pm-subtask-cell-content"
+                             data-editable="true"
+                             data-field="custom_roles"
+                             data-task-id="${subtask.name}"
+                             data-field-type="person_selector"
+                             data-role-filter="Preparer">
+                            ${this.renderRoleCell(subtask, 'Preparer')}
+                        </div>
+                    </div>
+                `;
+            
+            case 'reviewer':
+                return `
+                    <div class="pm-subtask-cell-reviewer">
+                        <div class="pm-subtask-cell-content"
+                             data-editable="true"
+                             data-field="custom_roles"
+                             data-task-id="${subtask.name}"
+                             data-field-type="person_selector"
+                             data-role-filter="Reviewer">
+                            ${this.renderRoleCell(subtask, 'Reviewer')}
+                        </div>
+                    </div>
+                `;
+            
+            case 'partner':
+                return `
+                    <div class="pm-subtask-cell-partner">
+                        <div class="pm-subtask-cell-content"
+                             data-editable="true"
+                             data-field="custom_roles"
+                             data-task-id="${subtask.name}"
+                             data-field-type="person_selector"
+                             data-role-filter="Partner">
+                            ${this.renderRoleCell(subtask, 'Partner')}
+                        </div>
+                    </div>
+                `;
+            
+            case 'process-date':
+                return `
+                    <div class="pm-subtask-cell-process-date">
+                        <div class="pm-subtask-cell-content"
+                             data-editable="true"
+                             data-field="custom_process_date"
+                             data-task-id="${subtask.name}"
+                             data-field-type="date">
+                            <span class="editable-field">${subtask.custom_process_date || '-'}</span>
+                        </div>
+                    </div>
+                `;
+            
+            case 'lodgment-due':
+                return `
+                    <div class="pm-subtask-cell-lodgment-due">
+                        <div class="pm-subtask-cell-content"
+                             data-editable="true"
+                             data-field="custom_lodgement_due_date"
+                             data-task-id="${subtask.name}"
+                             data-field-type="date">
+                            <span class="editable-field">${subtask.custom_lodgement_due_date || '-'}</span>
+                        </div>
+                    </div>
+                `;
+            
+            case 'engagement':
+                return `
+                    <div class="pm-subtask-cell-engagement">
+                        <div class="pm-subtask-cell-content"
+                             data-editable="true"
+                             data-field="custom_engagement"
+                             data-task-id="${subtask.name}"
+                             data-field-type="link">
+                            <span class="editable-field">${subtask.custom_engagement || '-'}</span>
+                        </div>
+                    </div>
+                `;
+            
+            case 'year-end':
+                return `
+                    <div class="pm-subtask-cell-year-end">
+                        <div class="pm-subtask-cell-content"
+                             data-editable="true"
+                             data-field="custom_year_end"
+                             data-task-id="${subtask.name}"
+                             data-field-type="select">
+                            <span class="editable-field">${subtask.custom_year_end || '-'}</span>
+                        </div>
+                    </div>
+                `;
+            
+            case 'last-updated':
+                return `
+                    <div class="pm-subtask-cell-last-updated">
+                        <div class="pm-subtask-cell-content">
+                            <span class="pm-date-display">${subtask.last_updated || '-'}</span>
+                        </div>
+                    </div>
+                `;
+            
+            case 'frequency':
+                return `
+                    <div class="pm-subtask-cell-frequency">
+                        <div class="pm-subtask-cell-content"
+                             data-editable="true"
+                             data-field="custom_frequency"
+                             data-task-id="${subtask.name}"
+                             data-field-type="text">
+                            <span class="editable-field">${subtask.custom_frequency || '-'}</span>
+                        </div>
+                    </div>
+                `;
+            
+            case 'reset-date':
+                return `
+                    <div class="pm-subtask-cell-reset-date">
+                        <div class="pm-subtask-cell-content"
+                             data-editable="true"
+                             data-field="custom_reset_date"
+                             data-task-id="${subtask.name}"
+                             data-field-type="date">
+                            <span class="editable-field">${subtask.custom_reset_date || '-'}</span>
+                        </div>
+                    </div>
+                `;
+            
+            // 默认处理不支持的列
+            default:
+                return `
+                    <div class="pm-subtask-cell-${columnKey}">
+                        <div class="pm-subtask-cell-content">
+                            <span class="editable-field"
+                                  data-editable="true"
+                                  data-field="custom_${columnKey.replace('-', '_')}"
+                                  data-task-id="${subtask.name}"
+                                  data-field-type="text">-</span>
+                        </div>
+                    </div>
+                `;
+        }
+    }
+
+    // 渲染角色单元格（通用方法）
+    renderRoleCell(subtask, roleName) {
+        if (subtask.role_assignments && subtask.role_assignments.length > 0) {
+            const roleUsers = subtask.role_assignments.filter(assignment => assignment.role === roleName);
+            
+            if (roleUsers.length === 1) {
+                const user = roleUsers[0];
+                return `
+                    <div class="pm-user-avatars">
+                        <div class="pm-avatar pm-primary-user" title="${user.full_name}" data-email="${user.email}">
+                            ${user.initials}
+                        </div>
+                    </div>
+                `;
+            } else if (roleUsers.length > 1) {
+                const primaryUser = roleUsers[0];
+                return `
+                    <div class="pm-user-avatars">
+                        <div class="pm-avatar pm-primary-user" title="${primaryUser.full_name}" data-email="${primaryUser.email}">
+                            ${primaryUser.initials}
+                        </div>
+                        <div class="pm-avatar-more" title="Total ${roleUsers.length} users">
+                            +${roleUsers.length - 1}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        return `
+            <div class="pm-user-avatars pm-empty-person">
+                <div class="pm-avatar pm-empty-avatar">
+                    <i class="fa fa-user"></i>
                 </div>
             </div>
-        `).join('');
+        `;
     }
 
     // Render owner cell based on Task Role Assignment with Owner role
@@ -276,36 +649,46 @@ class SubtaskManager {
     }
 
     // Render inline add subtask row (similar to main task add row)
-    renderAddSubtaskRow(parentTaskId) {
-        return `
+    renderAddSubtaskRow(parentTaskId, allColumns = null) {
+        // 如果没有传入列配置，使用所有可用列
+        if (!allColumns) {
+            allColumns = window.ColumnConfigManager.getAllSubtaskColumnKeys();
+        }
+        let rowHTML = `
             <div class="pm-subtask-item pm-add-subtask-item pm-subtask-row" data-parent-task="${parentTaskId}">
-                <div class="pm-subtask-col pm-subtask-col-name">
-                    <div class="pm-subtask-name-cell">
-                        <div class="pm-subtask-checkbox">
-                            <div class="pm-subtask-placeholder-checkbox"></div>
-                        </div>
-                        <div class="pm-add-subtask-content">
-                            <button class="pm-add-subtask-btn-inline" data-parent-task="${parentTaskId}">
-                                <i class="fa fa-plus"></i>
-                                <span>Add subtask</span>
-                            </button>
+                <div class="pm-subtask-cell-select">
+                    <!-- Empty for alignment -->
+                </div>
+        `;
+
+        // 动态生成列，第一列包含添加按钮
+        allColumns.forEach((columnKey, index) => {
+            if (index === 0) {
+                // 第一列包含添加按钮
+                rowHTML += `
+                    <div class="pm-subtask-cell-${columnKey}">
+                        <div class="pm-subtask-cell-content">
+                            <div class="pm-add-subtask-content">
+                                <button class="pm-add-subtask-btn-inline" data-parent-task="${parentTaskId}">
+                                    <i class="fa fa-plus"></i>
+                                    <span>Add subtask</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="pm-subtask-col pm-subtask-col-owner">
-                    <!-- Empty for alignment -->
-                </div>
-                <div class="pm-subtask-col pm-subtask-col-status">
-                    <!-- Empty for alignment -->
-                </div>
-                <div class="pm-subtask-col pm-subtask-col-due">
-                    <!-- Empty for alignment -->
-                </div>
-                <div class="pm-subtask-col pm-subtask-col-note">
-                    <!-- Empty for alignment -->
-                </div>
-            </div>
-        `;
+                `;
+            } else {
+                // 其他列为空，用于对齐
+                rowHTML += `
+                    <div class="pm-subtask-cell-${columnKey}">
+                        <!-- Empty for alignment -->
+                    </div>
+                `;
+            }
+        });
+
+        rowHTML += `</div>`;
+        return rowHTML;
     }
 
     bindSubtaskEvents(parentTaskId) {
@@ -317,50 +700,56 @@ class SubtaskManager {
             this.showInlineSubtaskEditor(parentTaskId);
         });
 
-        // Subtask checkbox change
-        $container.on('change', '.pm-subtask-checkbox input', async (e) => {
-            const subtaskId = $(e.target).closest('.pm-subtask-item').data('subtask-id');
-            const isCompleted = $(e.target).is(':checked');
-            
-            // Get available status options dynamically
-            let completedStatus = 'Completed';
-            let notStartedStatus = 'Not Started';
-            
-            try {
-                const response = await frappe.call({
-                    method: 'smart_accounting.www.project_management.index.get_task_status_options'
-                });
-                
-                if (response.message && response.message.success) {
-                    const statusOptions = response.message.status_options;
-                    // Try to find appropriate status values
-                    const completedOption = statusOptions.find(s => s.toLowerCase().includes('completed') || s.toLowerCase().includes('lodged'));
-                    const notStartedOption = statusOptions.find(s => s.toLowerCase().includes('not started') || s.toLowerCase() === 'open');
-                    
-                    if (completedOption) completedStatus = completedOption;
-                    if (notStartedOption) notStartedStatus = notStartedOption;
-                }
-            } catch (error) {
-                console.warn('Could not load status options, using defaults');
-            }
-            
-            this.updateSubtaskStatus(subtaskId, isCompleted ? completedStatus : notStartedStatus);
-        });
+        // 移除了状态checkbox，现在状态通过status列的编辑来管理
 
-        // Bind editable field events for subtasks - use main editing system
+        // 关键修复：使用和task完全相同的编辑事件绑定逻辑
         $container.on('click', '[data-editable="true"]', (e) => {
             e.stopPropagation();
             const $cell = $(e.currentTarget);
+            const fieldType = $cell.data('field-type');
+            const taskId = $cell.data('task-id');
+            const fieldName = $cell.data('field');
             
-            // Direct delegation to main editing system
-            if (window.EditorsManager && window.EditorsManager.startFieldEditing) {
-                window.EditorsManager.startFieldEditing($cell[0]);
+            console.log('🔧 Subtask cell edit triggered:', {fieldType, taskId, fieldName});
+            
+            // 使用和task完全相同的字段类型处理逻辑
+            if (fieldType === 'person_selector') {
+                if (window.PersonSelectorManager) {
+                    window.PersonSelectorManager.showMultiPersonSelector($cell, taskId, fieldName);
+                }
+            } else if (fieldType === 'software_selector') {
+                if (window.SoftwareSelectorManager) {
+                    window.SoftwareSelectorManager.showSoftwareSelector($cell, taskId, fieldName);
+                }
+            } else if (fieldType === 'date') {
+                // Date fields directly show date picker
+                console.log('📅 Opening date picker for subtask field:', fieldName);
+                if (window.EditorsManager) {
+                    window.EditorsManager.showDatePicker($cell, taskId, fieldName);
+                }
+            } else if (fieldType === 'select') {
+                // Status and other select fields
+                if (fieldName === 'custom_task_status' || fieldName === 'status') {
+                    this.showStatusSelector($cell, taskId, fieldName);
+                } else if (window.EditorsManager) {
+                    window.EditorsManager.makeEditable($cell[0]);
+                }
+            } else if (fieldType === 'text' || fieldType === 'number' || fieldType === 'currency') {
+                // Text, number, currency fields
+                if (window.EditorsManager) {
+                    window.EditorsManager.makeEditable($cell[0]);
+                }
             } else {
-                console.error('EditorsManager not available');
-                frappe.show_alert({
-                    message: 'Editor not available',
-                    indicator: 'red'
-                });
+                // Fallback to general editing system
+                if (window.EditorsManager && window.EditorsManager.startFieldEditing) {
+                    window.EditorsManager.startFieldEditing($cell[0]);
+                } else {
+                    console.error('EditorsManager not available');
+                    frappe.show_alert({
+                        message: 'Editor not available',
+                        indicator: 'red'
+                    });
+                }
             }
         });
 
@@ -686,7 +1075,26 @@ class SubtaskManager {
                 // Update subtask list - include both subtasks and add row
                 const $container = $(`.pm-subtask-container[data-parent-task="${parentTaskId}"]`);
                 const $list = $container.find('.pm-subtask-list');
-                $list.html(this.renderSubtaskList(subtasks, parentTaskId) + this.renderAddSubtaskRow(parentTaskId));
+                
+                // 关键修复：获取当前用户选择的可见列配置
+                const currentView = window.PM_CONFIG?.currentView || 'main';
+                let visibleColumns = window.ColumnConfigManager.getDefaultVisibleSubtaskColumns();
+                
+                try {
+                    const configResponse = await frappe.call({
+                        method: 'smart_accounting.www.project_management.index.get_subtask_column_config',
+                        args: { partition_name: currentView }
+                    });
+                    
+                    if (configResponse.message && configResponse.message.success && configResponse.message.visible_columns) {
+                        visibleColumns = configResponse.message.visible_columns;
+                        console.log(`🔄 Using saved visible columns for refresh: ${visibleColumns}`);
+                    }
+                } catch (error) {
+                    console.warn('Failed to get column config for refresh, using defaults:', error);
+                }
+                
+                $list.html(this.renderSubtaskList(subtasks, parentTaskId, visibleColumns) + this.renderAddSubtaskRow(parentTaskId, visibleColumns));
 
                 // Update header count
                 $container.find('.pm-subtask-title').html(`
@@ -702,6 +1110,9 @@ class SubtaskManager {
                 
                 // Re-apply column widths
                 this.applySubtaskColumnWidths();
+                
+                // 注意：由于我们在渲染时已经只渲染了用户选择的可见列，不需要额外的可见性逻辑
+                console.log(`✅ Subtask refresh completed for ${parentTaskId} with user-selected visible columns`);
             }
 
         } catch (error) {
@@ -895,6 +1306,96 @@ class SubtaskManager {
 
     // ===== SUBTASK COLUMN MANAGEMENT =====
 
+    // Apply column visibility to subtask table - 模仿task的列管理逻辑
+    applySubtaskColumnVisibility(parentTaskId, visibleColumns) {
+        const $container = $(`.pm-subtask-container[data-parent-task="${parentTaskId}"]`);
+        
+        // 获取所有可能的subtask列
+        const allSubtaskColumns = window.ColumnConfigManager.getAllSubtaskColumnKeys();
+        
+        console.log('🔧 Applying subtask column visibility:', {
+            parentTaskId,
+            visibleColumns,
+            allSubtaskColumns
+        });
+        
+        // 调试：检查实际的DOM结构
+        console.log('🔍 Subtask DOM structure debug:');
+        console.log('Container exists:', $container.length);
+        console.log('Header exists:', $container.find('.pm-subtask-table-header').length);
+        console.log('All header columns:', $container.find('.pm-subtask-table-header .pm-subtask-col').length);
+        console.log('All data rows:', $container.find('.pm-subtask-row').length);
+        
+        // 使用和task完全相同的列隐藏逻辑
+        allSubtaskColumns.forEach(column => {
+            const shouldShow = visibleColumns.includes(column);
+            
+            // 使用subtask专用的选择器，避免影响task
+            const $headerCells = $container.find(`.pm-subtask-header-cell[data-column="${column}"]`);
+            const $dataCells = $container.find(`.pm-subtask-cell-${column}`);
+            
+            console.log(`🔧 Column ${column}: shouldShow=${shouldShow}, headerCells=${$headerCells.length}, dataCells=${$dataCells.length}`);
+            
+            if (shouldShow) {
+                // 显示列 - 和task相同的逻辑
+                $headerCells.removeClass('column-hidden').css('display', 'flex').show();
+                $dataCells.removeClass('column-hidden').css('display', 'flex').show();
+            } else {
+                // 隐藏列 - 和task相同的逻辑
+                $headerCells.addClass('column-hidden').css('display', 'none !important').hide();
+                $dataCells.addClass('column-hidden').css('display', 'none !important').hide();
+            }
+        });
+        
+        // 重新计算subtask表格宽度
+        setTimeout(() => {
+            this.updateSubtaskTableWidth(parentTaskId);
+        }, 50);
+    }
+
+    // Update subtask table width after column visibility changes
+    updateSubtaskTableWidth(parentTaskId) {
+        const $container = $(`.pm-subtask-container[data-parent-task="${parentTaskId}"]`);
+        const $table = $container.find('.pm-subtask-table');
+        
+        // Calculate total width of visible columns
+        let totalWidth = 0;
+        $container.find('.pm-subtask-col:visible').each(function() {
+            totalWidth += $(this).outerWidth() || 100;
+        });
+        
+        // Apply minimum width to ensure proper layout
+        const minWidth = Math.max(totalWidth, 800);
+        $table.css('min-width', `${minWidth}px`);
+        
+        console.log(`📏 Updated subtask table width for ${parentTaskId}: ${minWidth}px`);
+    }
+
+    // Refresh all expanded subtasks with new column configuration
+    async refreshAllExpandedSubtasks() {
+        const expandedTaskIds = Array.from(this.expandedTasks);
+        console.log('🔄 Refreshing expanded subtasks:', expandedTaskIds);
+        
+        for (const taskId of expandedTaskIds) {
+            try {
+                // Get fresh subtask data
+                const response = await frappe.call({
+                    method: 'smart_accounting.www.project_management.index.get_subtasks',
+                    args: { parent_task_id: taskId }
+                });
+
+                if (response.message && response.message.success) {
+                    const subtasks = response.message.subtasks || [];
+                    // Re-render with new configuration
+                    await this.renderSubtasks(taskId, subtasks);
+                    console.log(`✅ Refreshed subtasks for task ${taskId}`);
+                }
+            } catch (error) {
+                console.error(`❌ Failed to refresh subtasks for task ${taskId}:`, error);
+            }
+        }
+    }
+
     // Load subtask column widths from server
     async loadSubtaskColumnWidths() {
         return new Promise((resolve) => {
@@ -938,12 +1439,18 @@ class SubtaskManager {
         });
     }
 
-    // Set width for a specific subtask column
+    // Set width for a specific subtask column - 独立于task的列宽系统
     setSubtaskColumnWidth(column, width) {
         const minWidth = Math.max(width, 50);
         
-        // Update column widths in all subtask tables
-        $(`.pm-subtask-col-${column}`).css({
+        // 只更新subtask的列宽，使用subtask专用的选择器
+        $(`.pm-subtask-header-cell.pm-subtask-cell-${column}`).css({
+            'width': `${minWidth}px`,
+            'min-width': `${minWidth}px`,
+            'max-width': `${minWidth}px`
+        });
+        
+        $(`.pm-subtask-cell-${column}`).css({
             'width': `${minWidth}px`,
             'min-width': `${minWidth}px`,
             'max-width': `${minWidth}px`

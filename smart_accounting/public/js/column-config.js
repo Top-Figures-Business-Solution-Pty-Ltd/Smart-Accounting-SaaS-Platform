@@ -49,6 +49,43 @@ class ColumnConfigManager {
         
         // 默认主列
         this.defaultPrimaryColumn = 'client';
+
+        // Subtask使用和Task相同的列定义，但有不同的默认配置
+        // Subtask可以使用所有Task列，因为它们本质上都是Task
+        
+        // 定义不适合subtask的列（排除法，避免硬编码）
+        this.excludedSubtaskColumns = [
+            'client',           // Subtask继承父task的client
+            'entity',           // Subtask继承父task的entity  
+            'tf-tg',            // Subtask继承父task的tf-tg
+            'software',         // 通常subtask不需要单独的software配置
+            'communication-methods', // 通常subtask不需要单独的communication配置
+            'client-contact',   // Subtask继承父task的client contact
+            'group',            // Subtask不需要group分组
+            'review-note'       // Review note通常在父task级别
+        ];
+        
+        // 默认可见subtask列 - 选择最常用的几个列作为默认，用户可以在manage columns里调整
+        const suitableColumns = Object.keys(this.allColumns).filter(
+            columnKey => !this.excludedSubtaskColumns.includes(columnKey)
+        );
+        const defaultVisible = [
+            'task-name', 'status', 'note', 'action-person', 'priority', 
+            'target-month', 'budget', 'actual', 'preparer', 'reviewer'
+        ];
+        // 确保默认列都在适合的列中
+        this.defaultVisibleSubtaskColumns = defaultVisible.filter(col => suitableColumns.includes(col));
+
+        // 必需subtask列（不能隐藏）
+        this.requiredSubtaskColumns = ['task-name'];
+        
+        // 动态生成subtask列顺序（排除不适合的列）
+        this.defaultSubtaskColumnOrder = Object.keys(this.allColumns).filter(
+            columnKey => !this.excludedSubtaskColumns.includes(columnKey)
+        );
+        
+        // 默认subtask主列
+        this.defaultSubtaskPrimaryColumn = 'task-name';
     }
 
     /**
@@ -200,6 +237,194 @@ class ColumnConfigManager {
     getPrimaryColumn(partitionConfig, visibleColumns = []) {
         // 简化逻辑：第一个可见列就是主列
         return visibleColumns[0] || this.defaultPrimaryColumn;
+    }
+
+    // ==================== Subtask Column Methods ====================
+
+    /**
+     * 获取所有可用subtask列的定义（只包含适合subtask的列）
+     * @returns {Object} 列键值对映射
+     */
+    getAllSubtaskColumns() {
+        const subtaskColumns = {};
+        // 使用动态生成的列顺序
+        this.getDefaultSubtaskColumnOrder().forEach(columnKey => {
+            if (this.allColumns[columnKey]) {
+                subtaskColumns[columnKey] = this.allColumns[columnKey];
+            }
+        });
+        return subtaskColumns;
+    }
+
+    /**
+     * 获取所有subtask列的键数组（只包含适合subtask的列）
+     * @returns {Array} 列键数组
+     */
+    getAllSubtaskColumnKeys() {
+        return [...this.defaultSubtaskColumnOrder];
+    }
+
+    /**
+     * 获取subtask列的显示名称（使用统一的getColumnDisplayName方法）
+     * @param {string} columnKey - 列键
+     * @returns {string} 显示名称
+     */
+    getSubtaskColumnDisplayName(columnKey) {
+        return this.getColumnDisplayName(columnKey);
+    }
+
+    /**
+     * 获取默认可见subtask列
+     * @returns {Array} 默认可见列数组
+     */
+    getDefaultVisibleSubtaskColumns() {
+        return [...this.defaultVisibleSubtaskColumns];
+    }
+
+    /**
+     * 获取必需subtask列（不能隐藏的列）
+     * @returns {Array} 必需列数组
+     */
+    getRequiredSubtaskColumns() {
+        return [...this.requiredSubtaskColumns];
+    }
+
+    /**
+     * 获取默认subtask列顺序
+     * @returns {Array} 默认列顺序数组
+     */
+    getDefaultSubtaskColumnOrder() {
+        return [...this.defaultSubtaskColumnOrder];
+    }
+
+    /**
+     * 获取排除的subtask列
+     * @returns {Array} 排除的列数组
+     */
+    getExcludedSubtaskColumns() {
+        return [...this.excludedSubtaskColumns];
+    }
+
+    /**
+     * 检查列是否适合subtask使用
+     * @param {string} columnKey - 列键
+     * @returns {boolean} 是否适合subtask
+     */
+    isColumnSuitableForSubtask(columnKey) {
+        return !this.excludedSubtaskColumns.includes(columnKey) && this.allColumns.hasOwnProperty(columnKey);
+    }
+
+    /**
+     * 从后端同步最新的列定义（可选的增强功能）
+     * @returns {Promise} 同步结果
+     */
+    async syncColumnDefinitionsFromBackend() {
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.project_management.index.get_all_task_columns'
+            });
+            
+            if (response.message && Array.isArray(response.message)) {
+                const backendColumns = response.message;
+                console.log('🔄 Synced columns from backend:', backendColumns);
+                
+                // 可以在这里验证前后端列定义是否一致
+                const frontendColumns = Object.keys(this.allColumns);
+                const missingInFrontend = backendColumns.filter(col => !frontendColumns.includes(col));
+                const extraInFrontend = frontendColumns.filter(col => !backendColumns.includes(col));
+                
+                if (missingInFrontend.length > 0) {
+                    console.warn('⚠️ Backend has columns not in frontend:', missingInFrontend);
+                }
+                if (extraInFrontend.length > 0) {
+                    console.warn('⚠️ Frontend has columns not in backend:', extraInFrontend);
+                }
+                
+                return {
+                    success: true,
+                    backend_columns: backendColumns,
+                    frontend_columns: frontendColumns,
+                    missing_in_frontend: missingInFrontend,
+                    extra_in_frontend: extraInFrontend
+                };
+            }
+        } catch (error) {
+            console.error('❌ Failed to sync column definitions:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * 验证subtask列配置的有效性
+     * @param {Array} visibleColumns - 可见列数组
+     * @param {Array} columnOrder - 列顺序数组
+     * @returns {Object} 验证结果
+     */
+    validateSubtaskColumnConfig(visibleColumns, columnOrder) {
+        const allColumns = this.getAllSubtaskColumnKeys();
+        const requiredColumns = this.getRequiredSubtaskColumns();
+        
+        // 检查必需列是否都存在
+        const missingRequired = requiredColumns.filter(col => !visibleColumns.includes(col));
+        if (missingRequired.length > 0) {
+            return {
+                valid: false,
+                error: `Missing required subtask columns: ${missingRequired.join(', ')}`
+            };
+        }
+        
+        // 检查是否有无效列
+        const invalidColumns = visibleColumns.filter(col => !allColumns.includes(col));
+        if (invalidColumns.length > 0) {
+            return {
+                valid: false,
+                error: `Invalid subtask columns: ${invalidColumns.join(', ')}`
+            };
+        }
+        
+        return { valid: true };
+    }
+
+    /**
+     * 根据列顺序排序subtask可见列
+     * @param {Array} visibleColumns - 可见列数组
+     * @param {Array} columnOrder - 列顺序数组
+     * @returns {Array} 排序后的可见列数组
+     */
+    sortSubtaskVisibleColumns(visibleColumns, columnOrder) {
+        if (!columnOrder || columnOrder.length === 0) {
+            columnOrder = this.getDefaultSubtaskColumnOrder();
+        }
+        
+        // 按照columnOrder的顺序排列visibleColumns
+        const sorted = [];
+        
+        // 首先添加在columnOrder中且在visibleColumns中的列
+        columnOrder.forEach(col => {
+            if (visibleColumns.includes(col)) {
+                sorted.push(col);
+            }
+        });
+
+        // 然后添加在visibleColumns中但不在columnOrder中的列
+        visibleColumns.forEach(col => {
+            if (!sorted.includes(col)) {
+                sorted.push(col);
+            }
+        });
+
+        return sorted;
+    }
+
+    /**
+     * 获取subtask主列
+     * @param {Object} partitionConfig - 分区配置
+     * @param {Array} visibleColumns - 可见列数组
+     * @returns {string} 主列键
+     */
+    getSubtaskPrimaryColumn(partitionConfig, visibleColumns = []) {
+        // 简化逻辑：第一个可见列就是主列
+        return visibleColumns[0] || this.defaultSubtaskPrimaryColumn;
     }
 
     /**
