@@ -118,7 +118,9 @@ class SubtaskManager {
         $(`.pm-subtask-container[data-parent-task="${parentTaskId}"]`).remove();
 
         // Get current view to load subtask column configuration
-        const currentView = window.PM_CONFIG?.currentView || 'main';
+        // 修复：从URL参数中获取当前视图，而不是依赖可能未设置的window.PM_CONFIG
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentView = urlParams.get('view') || 'main';
         
         try {
             // Get subtask column configuration with enhanced debugging
@@ -281,10 +283,10 @@ class SubtaskManager {
         $(`.pm-subtask-container[data-parent-task="${parentTaskId}"]`).hide().slideDown(300);
     }
 
-    renderSubtaskList(subtasks, parentTaskId, allColumns = null) {
-        // 如果没有传入列配置，使用所有可用列
-        if (!allColumns) {
-            allColumns = window.ColumnConfigManager.getAllSubtaskColumnKeys();
+    renderSubtaskList(subtasks, parentTaskId, visibleColumns = null) {
+        // 如果没有传入列配置，使用默认可见列
+        if (!visibleColumns) {
+            visibleColumns = window.ColumnConfigManager.getDefaultVisibleSubtaskColumns();
         }
         if (!subtasks || subtasks.length === 0) {
             return `
@@ -306,8 +308,8 @@ class SubtaskManager {
                     </div>
             `;
 
-            // 根据所有可用列动态生成列（使用task的CSS类名）
-            allColumns.forEach(columnKey => {
+            // 只根据用户选择的可见列渲染
+            visibleColumns.forEach(columnKey => {
                 rowHTML += this.renderSubtaskCell(subtask, columnKey);
             });
 
@@ -649,10 +651,10 @@ class SubtaskManager {
     }
 
     // Render inline add subtask row (similar to main task add row)
-    renderAddSubtaskRow(parentTaskId, allColumns = null) {
-        // 如果没有传入列配置，使用所有可用列
-        if (!allColumns) {
-            allColumns = window.ColumnConfigManager.getAllSubtaskColumnKeys();
+    renderAddSubtaskRow(parentTaskId, visibleColumns = null) {
+        // 如果没有传入列配置，使用默认可见列
+        if (!visibleColumns) {
+            visibleColumns = window.ColumnConfigManager.getDefaultVisibleSubtaskColumns();
         }
         let rowHTML = `
             <div class="pm-subtask-item pm-add-subtask-item pm-subtask-row" data-parent-task="${parentTaskId}">
@@ -661,8 +663,8 @@ class SubtaskManager {
                 </div>
         `;
 
-        // 动态生成列，第一列包含添加按钮
-        allColumns.forEach((columnKey, index) => {
+        // 只根据用户选择的可见列生成，第一列包含添加按钮
+        visibleColumns.forEach((columnKey, index) => {
             if (index === 0) {
                 // 第一列包含添加按钮
                 rowHTML += `
@@ -1077,7 +1079,9 @@ class SubtaskManager {
                 const $list = $container.find('.pm-subtask-list');
                 
                 // 关键修复：获取当前用户选择的可见列配置
-                const currentView = window.PM_CONFIG?.currentView || 'main';
+                // 修复：从URL参数中获取当前视图，而不是依赖可能未设置的window.PM_CONFIG
+                const urlParams = new URLSearchParams(window.location.search);
+                const currentView = urlParams.get('view') || 'main';
                 let visibleColumns = window.ColumnConfigManager.getDefaultVisibleSubtaskColumns();
                 
                 try {
