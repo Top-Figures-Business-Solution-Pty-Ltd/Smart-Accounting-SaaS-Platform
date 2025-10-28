@@ -21,24 +21,56 @@ class SoftwareSelectorManager {
 
     // 🔧 增强的DOM元素确认机制
     async ensureDOMElementAndInitialize(selector, $cell, taskId) {
-        const maxAttempts = this.isLargeDataset ? 8 : 5;
-        const baseDelay = this.isLargeDataset ? 25 : 16;
-        const maxDelay = this.isLargeDataset ? 300 : 200;
+        const maxAttempts = this.isLargeDataset ? 15 : 8; // 增加尝试次数
+        const baseDelay = this.isLargeDataset ? 50 : 25;  // 增加基础延迟
+        const maxDelay = this.isLargeDataset ? 500 : 300; // 增加最大延迟
+        
+        console.log(`🔧 Starting DOM element search for ${selector}, max attempts: ${maxAttempts}`);
         
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            // 使用requestAnimationFrame确保在下一帧检查
+            // 多重检查策略
             await new Promise(resolve => requestAnimationFrame(resolve));
             
-            const $selector = $(selector);
+            // 方法1: 标准jQuery选择器
+            let $selector = $(selector);
+            console.log(`🔧 Attempt ${attempt + 1}: jQuery selector result: ${$selector.length} elements`);
+            
+            // 方法2: 如果jQuery失败，尝试原生DOM查询
+            if ($selector.length === 0) {
+                const nativeElement = document.querySelector(selector);
+                console.log(`🔧 Attempt ${attempt + 1}: Native DOM query result: ${nativeElement ? 'found' : 'not found'}`);
+                if (nativeElement) {
+                    $selector = $(nativeElement);
+                    console.log(`🔧 Found element using native DOM query on attempt ${attempt + 1}`);
+                }
+            }
+            
+            // 方法3: 强制DOM刷新后再次尝试
+            if ($selector.length === 0 && attempt > 2) {
+                console.log(`🔧 Attempt ${attempt + 1}: Forcing DOM refresh...`);
+                // 强制浏览器重新计算DOM
+                document.body.offsetHeight;
+                $selector = $(selector);
+                console.log(`🔧 Attempt ${attempt + 1}: After DOM refresh: ${$selector.length} elements`);
+            }
+            
+            // 方法4: 检查元素是否真的在DOM中
+            if ($selector.length === 0 && attempt > 4) {
+                console.log(`🔧 Attempt ${attempt + 1}: Checking all elements with similar IDs...`);
+                const allModals = document.querySelectorAll('[id*="pm-software-selector"]');
+                console.log(`🔧 Found ${allModals.length} elements with similar IDs:`, Array.from(allModals).map(el => el.id));
+            }
+            
             if ($selector.length > 0) {
-                console.log(`✅ Software selector found on attempt ${attempt + 1}`);
+                console.log(`✅ Software selector found on attempt ${attempt + 1} (method: ${$selector.length > 0 ? 'success' : 'unknown'})`);
                 this.initializeSoftwareSelectorAfterAppend($selector, $cell, taskId);
                 return;
             }
             
             // 指数退避延迟，但有最大限制
             if (attempt < maxAttempts - 1) {
-                const delay = Math.min(baseDelay * Math.pow(1.5, attempt), maxDelay);
+                const delay = Math.min(baseDelay * Math.pow(1.2, attempt), maxDelay);
+                console.log(`🔧 Attempt ${attempt + 1} failed, waiting ${delay}ms before retry...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
@@ -144,8 +176,13 @@ class SoftwareSelectorManager {
         // 添加到页面
         $('body').append(selectorHTML);
         
+        // 🔧 立即验证DOM添加是否成功
+        const expectedId = `pm-software-selector-${taskId}`;
+        console.log(`🔧 Appended selector with ID: ${expectedId}`);
+        console.log(`🔧 Body children count after append: ${document.body.children.length}`);
+        
         // 🔧 增强DOM时序保证机制：确保在大数据量环境下也能正常工作
-        this.ensureDOMElementAndInitialize(`#pm-software-selector-${taskId}`, $cell, taskId);
+        this.ensureDOMElementAndInitialize(`#${expectedId}`, $cell, taskId);
     }
 
     // 🔧 新增方法：在DOM确认存在后初始化软件选择器
