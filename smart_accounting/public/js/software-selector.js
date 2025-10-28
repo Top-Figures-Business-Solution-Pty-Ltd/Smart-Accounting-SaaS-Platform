@@ -257,7 +257,10 @@ class SoftwareSelectorManager {
     }
 
     async loadSoftwareDataAsync($cell, taskId) {
-        const $selector = $(`#pm-software-selector-${taskId}`);
+        // 使用清理后的taskId来查找选择器
+        const cleanTaskId = taskId.replace(/[^a-zA-Z0-9-_]/g, '-');
+        const $selector = $(`#pm-software-selector-${cleanTaskId}`);
+        console.log(`🔧 Loading data for selector: #pm-software-selector-${cleanTaskId}, found: ${$selector.length}`);
         if ($selector.length === 0) return;
 
         try {
@@ -288,7 +291,9 @@ class SoftwareSelectorManager {
             }
 
             // 更新选择器内容
+            console.log('🔧 Updating software selector content...');
             this.updateSoftwareSelectorContent($selector, softwareOptions, currentSoftwares);
+            console.log('✅ Software selector content updated');
 
         } catch (error) {
             console.error('❌ Error loading software data:', error);
@@ -318,6 +323,12 @@ class SoftwareSelectorManager {
     }
 
     updateSoftwareSelectorContent($selector, softwareOptions, currentSoftwares) {
+        console.log('🔧 updateSoftwareSelectorContent called with:', {
+            selectorLength: $selector.length,
+            softwareOptions: softwareOptions.length,
+            currentSoftwares: currentSoftwares.length
+        });
+        
         const optionsHTML = softwareOptions.map(software => {
             const isSelected = currentSoftwares.some(s => s.software === software);
             const isPrimary = currentSoftwares.find(s => s.software === software && s.is_primary);
@@ -332,9 +343,19 @@ class SoftwareSelectorManager {
             `;
         }).join('');
 
+        console.log('🔧 Generated options HTML length:', optionsHTML.length);
+
         // 隐藏加载状态，显示选项
-        $selector.find('.pm-software-loading').hide();
-        $selector.find('.pm-software-options').html(optionsHTML).show();
+        const $loading = $selector.find('.pm-software-loading');
+        const $options = $selector.find('.pm-software-options');
+        
+        console.log('🔧 Loading element found:', $loading.length);
+        console.log('🔧 Options container found:', $options.length);
+        
+        $loading.hide();
+        $options.html(optionsHTML).show();
+        
+        console.log('✅ Software selector content update completed');
     }
 
     showSoftwareLoadError($selector) {

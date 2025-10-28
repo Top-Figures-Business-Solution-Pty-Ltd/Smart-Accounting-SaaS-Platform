@@ -1252,7 +1252,10 @@ class PersonSelectorManager {
         return mapping[fieldName] || fieldName.replace('custom_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
     async loadPersonDataAsync($cell, taskId, fieldName) {
-        const $selector = $(`#pm-person-selector-${taskId}-${fieldName}`);
+        // 使用清理后的taskId来查找选择器
+        const cleanTaskId = taskId.replace(/[^a-zA-Z0-9-_]/g, '-');
+        const $selector = $(`#pm-person-selector-${cleanTaskId}-${fieldName}`);
+        console.log(`🔧 Loading data for person selector: #pm-person-selector-${cleanTaskId}-${fieldName}, found: ${$selector.length}`);
         if ($selector.length === 0) return;
 
         const roleFilter = $cell.data('role-filter');
