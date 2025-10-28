@@ -730,7 +730,10 @@ class ProjectManager {
     // Status management
     showStatusMenu(statusBadge) {
         const $badge = $(statusBadge);
-        const taskId = $badge.closest('.pm-task-row').data('task-id');
+        // 修复：支持both task和subtask的status badge点击
+        const $taskRow = $badge.closest('.pm-task-row');
+        const $subtaskRow = $badge.closest('.pm-subtask-row');
+        const taskId = $taskRow.length ? $taskRow.data('task-id') : $subtaskRow.data('subtask-id');
         
         // Use dynamic status options with auto-assigned colors
         const colors = [
@@ -764,8 +767,11 @@ class ProjectManager {
 
     showPriorityMenu(priorityBadge) {
         const $badge = $(priorityBadge);
+        // 修复：支持both task和subtask的priority badge点击
         const $taskRow = $badge.closest('.pm-task-row');
-        const taskId = $taskRow.data('task-id');
+        const $subtaskRow = $badge.closest('.pm-subtask-row');
+        const $row = $taskRow.length ? $taskRow : $subtaskRow;
+        const taskId = $taskRow.length ? $taskRow.data('task-id') : $subtaskRow.data('subtask-id');
         
         console.log(`🔍 DEBUG showPriorityMenu:`);
         console.log(`🔍   - priorityBadge element:`, priorityBadge);
@@ -947,7 +953,10 @@ class ProjectManager {
     async updateTaskStatus(taskId, newStatus) {
         try {
             // CRITICAL FIX: Store original value BEFORE making API call
-            const $row = $(`.pm-task-row[data-task-id="${taskId}"]`);
+            // 修复：支持both task和subtask的status更新
+            const $taskRow = $(`.pm-task-row[data-task-id="${taskId}"]`);
+            const $subtaskRow = $(`.pm-subtask-row[data-subtask-id="${taskId}"]`);
+            const $row = $taskRow.length ? $taskRow : $subtaskRow;
             const $statusBadge = $row.find('.pm-status-badge');
             const $progressBar = $row.find('.pm-progress-fill');
             const originalValue = $statusBadge.text().trim();
@@ -1014,7 +1023,10 @@ class ProjectManager {
     async updateTaskPriority(taskId, newPriority) {
         try {
             // CRITICAL FIX: Follow same pattern as updateTaskStatus
-            const $row = $(`.pm-task-row[data-task-id="${taskId}"]`);
+            // 修复：支持both task和subtask的priority更新
+            const $taskRow = $(`.pm-task-row[data-task-id="${taskId}"]`);
+            const $subtaskRow = $(`.pm-subtask-row[data-subtask-id="${taskId}"]`);
+            const $row = $taskRow.length ? $taskRow : $subtaskRow;
             const $priorityBadge = $row.find('.pm-priority-badge');
             const originalValue = $priorityBadge.text().trim();
             

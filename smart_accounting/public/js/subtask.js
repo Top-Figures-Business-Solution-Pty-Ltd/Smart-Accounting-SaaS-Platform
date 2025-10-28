@@ -337,12 +337,7 @@ class SubtaskManager {
             case 'status':
                 return `
                     <div class="pm-subtask-cell-status">
-                        <div class="pm-subtask-status-cell"
-                             data-editable="true"
-                             data-field="custom_task_status"
-                             data-task-id="${subtask.name}"
-                             data-field-type="select"
-                             data-options-source="custom_task_status">
+                        <div class="pm-subtask-status-cell">
                             <span class="pm-status-badge status-${(subtask.custom_task_status || subtask.status || 'Not Started').toLowerCase().replace(/\s+/g, '-')}">${subtask.custom_task_status || subtask.status || 'Not Started'}</span>
                         </div>
                     </div>
@@ -378,12 +373,7 @@ class SubtaskManager {
             case 'priority':
                 return `
                     <div class="pm-subtask-cell-priority">
-                        <div class="pm-subtask-priority-cell"
-                             data-editable="true"
-                             data-field="priority"
-                             data-task-id="${subtask.name}"
-                             data-field-type="select"
-                             data-options-source="priority">
+                        <div class="pm-subtask-priority-cell">
                             <span class="pm-priority-badge priority-${(subtask.priority || 'Medium').toLowerCase()}">${subtask.priority || 'Medium'}</span>
                         </div>
                     </div>
@@ -396,7 +386,8 @@ class SubtaskManager {
                              data-editable="true"
                              data-field="custom_target_month"
                              data-task-id="${subtask.name}"
-                             data-field-type="text">
+                             data-field-type="select"
+                             data-options="-,January,February,March,April,May,June,July,August,September,October,November,December">
                             <span class="editable-field">${subtask.custom_target_month || '-'}</span>
                         </div>
                     </div>
@@ -409,7 +400,7 @@ class SubtaskManager {
                              data-editable="true"
                              data-field="custom_budget_planning"
                              data-task-id="${subtask.name}"
-                             data-field-type="number">
+                             data-field-type="currency">
                             <span class="editable-field">${subtask.custom_budget_planning || '-'}</span>
                         </div>
                     </div>
@@ -422,7 +413,7 @@ class SubtaskManager {
                              data-editable="true"
                              data-field="custom_actual_billing"
                              data-task-id="${subtask.name}"
-                             data-field-type="number">
+                             data-field-type="currency">
                             <span class="editable-field">${subtask.custom_actual_billing || '-'}</span>
                         </div>
                     </div>
@@ -516,7 +507,8 @@ class SubtaskManager {
                              data-editable="true"
                              data-field="custom_year_end"
                              data-task-id="${subtask.name}"
-                             data-field-type="select">
+                             data-field-type="select"
+                             data-options="-,January,February,March,April,May,June,July,August,September,October,November,December">
                             <span class="editable-field">${subtask.custom_year_end || '-'}</span>
                         </div>
                     </div>
@@ -538,7 +530,8 @@ class SubtaskManager {
                              data-editable="true"
                              data-field="custom_frequency"
                              data-task-id="${subtask.name}"
-                             data-field-type="text">
+                             data-field-type="select"
+                             data-options="Annually,Half Yearly,Quarterly,Monthly,Fortnightly,Weekly,Daily,Ad-Hoc,Other">
                             <span class="editable-field">${subtask.custom_frequency || '-'}</span>
                         </div>
                     </div>
@@ -730,10 +723,8 @@ class SubtaskManager {
                     window.EditorsManager.showDatePicker($cell, taskId, fieldName);
                 }
             } else if (fieldType === 'select') {
-                // Status and other select fields
-                if (fieldName === 'custom_task_status' || fieldName === 'status') {
-                    this.showStatusSelector($cell, taskId, fieldName);
-                } else if (window.EditorsManager) {
+                // 修复：使用和task完全相同的select字段处理逻辑
+                if (window.EditorsManager) {
                     window.EditorsManager.makeEditable($cell[0]);
                 }
             } else if (fieldType === 'text' || fieldType === 'number' || fieldType === 'currency') {
@@ -915,104 +906,6 @@ class SubtaskManager {
         });
     }
 
-    // Status selector for subtasks
-    async showStatusSelector($cell, taskId, field) {
-        // Prevent multiple editing
-        if ($cell.hasClass('editing')) return;
-        
-        const currentStatus = $cell.find('.pm-status-badge').text().trim();
-        
-        // Mark as editing
-        $cell.addClass('editing');
-        $cell.closest('.pm-subtask-item').addClass('editing');
-        
-        // Get status options from backend (same as main tasks)
-        let statusOptions = [];
-        try {
-            const response = await frappe.call({
-                method: 'smart_accounting.www.project_management.index.get_task_status_options'
-            });
-            
-            if (response.message && response.message.success) {
-                statusOptions = response.message.status_options.map(status => ({
-                    value: status,
-                    label: status,
-                    class: `status-${status.toLowerCase().replace(/\s+/g, '-')}`
-                }));
-            }
-        } catch (error) {
-            console.warn('Failed to load status options, using fallback');
-        }
-        
-        // Fallback options if API fails - use minimal fallback
-        if (statusOptions.length === 0) {
-            console.warn('No status options available from API, using minimal fallback');
-            statusOptions = [
-                { value: 'Open', label: 'Open', class: 'status-open' },
-                { value: 'Completed', label: 'Completed', class: 'status-completed' }
-            ];
-        }
-        
-        // Create status selector
-        const selectHTML = `
-            <select class="pm-status-select">
-                ${statusOptions.map(option => `
-                    <option value="${option.value}" ${option.value === currentStatus ? 'selected' : ''}>
-                        ${option.label}
-                    </option>
-                `).join('')}
-            </select>
-        `;
-        
-        // Replace content with selector
-        $cell.html(selectHTML);
-        
-        const $select = $cell.find('.pm-status-select');
-        $select.focus();
-        
-        // Handle selection
-        $select.on('change blur', async (e) => {
-            const newStatus = $select.val();
-            
-            try {
-                // Save the change
-                await this.saveFieldChange(taskId, field, newStatus);
-                
-                // Update display
-                const statusOption = statusOptions.find(opt => opt.value === newStatus);
-                $cell.html(`<span class="pm-status-badge ${statusOption.class}">${statusOption.label}</span>`);
-                
-                frappe.show_alert({
-                    message: 'Status updated successfully',
-                    indicator: 'green'
-                });
-                
-            } catch (error) {
-                console.error('Error updating status:', error);
-                frappe.show_alert({
-                    message: 'Failed to update status',
-                    indicator: 'red'
-                });
-                
-                // Restore original
-                $cell.html(`<span class="pm-status-badge status-${currentStatus.toLowerCase()}">${currentStatus}</span>`);
-            }
-            
-            // Remove editing state
-            $cell.removeClass('editing');
-            $cell.closest('.pm-subtask-item').removeClass('editing');
-        });
-        
-        // Handle escape key
-        $select.on('keydown', (e) => {
-            if (e.which === 27) { // Escape
-                // Restore original
-                $cell.html(`<span class="pm-status-badge status-${currentStatus.toLowerCase()}">${currentStatus}</span>`);
-                $cell.removeClass('editing');
-                $cell.closest('.pm-subtask-item').removeClass('editing');
-            }
-        });
-    }
 
     // Generic field save method for subtasks
     async saveFieldChange(taskId, field, newValue) {
