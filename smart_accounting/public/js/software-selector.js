@@ -133,9 +133,12 @@ class SoftwareSelectorManager {
             'Xero', 'MYOB', 'QuickBooks', 'Excel', 'Payroller', 'Oracle', 'Logdit', 'Other'
         ];
         
+        // 清理taskId，确保CSS选择器有效
+        const cleanTaskId = taskId.replace(/[^a-zA-Z0-9-_]/g, '-');
+        
         // 创建带加载状态的选择器
         const selectorHTML = `
-            <div class="pm-software-selector-modal" id="pm-software-selector-${taskId}">
+            <div class="pm-software-selector-modal" id="pm-software-selector-${cleanTaskId}">
                 <div class="pm-software-selector-content">
                     <div class="pm-software-selector-header">
                         <h4>Select Software</h4>
@@ -179,7 +182,10 @@ class SoftwareSelectorManager {
         $('body').append(selectorHTML);
         
         // 🔧 立即验证DOM添加是否成功
-        const expectedId = `pm-software-selector-${taskId}`;
+        // 使用之前清理的taskId
+        const expectedId = `pm-software-selector-${cleanTaskId}`;
+        console.log(`🔧 Original taskId: ${taskId}`);
+        console.log(`🔧 Clean taskId: ${cleanTaskId}`);
         console.log(`🔧 Appended selector with ID: ${expectedId}`);
         console.log(`🔧 Body children count after append: ${document.body.children.length}`);
         

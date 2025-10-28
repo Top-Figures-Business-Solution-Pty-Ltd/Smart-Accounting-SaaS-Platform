@@ -206,9 +206,12 @@ class PersonSelectorManager {
             if (email) currentEmails.push(email);
         });
         
+        // 清理taskId，确保CSS选择器有效
+        const cleanTaskId = taskId.replace(/[^a-zA-Z0-9-_]/g, '-');
+        
         // Create person selector dropdown outside the table
         const selectorHTML = `
-            <div class="pm-person-selector-modal" id="pm-person-selector-${taskId}-${fieldName}">
+            <div class="pm-person-selector-modal" id="pm-person-selector-${cleanTaskId}-${fieldName}">
                 <div class="pm-person-selector-content">
                     <div class="pm-person-selector-header">
                         <input type="text" class="pm-person-search" placeholder="Search names, roles or teams" value="">
@@ -262,7 +265,10 @@ class PersonSelectorManager {
         $('body').append(selectorHTML);
         
         // 🔧 立即验证DOM添加是否成功
-        const expectedId = `pm-person-selector-${taskId}-${fieldName}`;
+        // 使用之前清理的taskId
+        const expectedId = `pm-person-selector-${cleanTaskId}-${fieldName}`;
+        console.log(`🔧 Original taskId: ${taskId}`);
+        console.log(`🔧 Clean taskId: ${cleanTaskId}`);
         console.log(`📎 Appended selector with ID: ${expectedId}`);
         console.log(`🔧 Body children count after append: ${document.body.children.length}`);
         
