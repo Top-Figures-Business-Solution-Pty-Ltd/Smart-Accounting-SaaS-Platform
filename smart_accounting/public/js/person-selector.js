@@ -29,7 +29,7 @@ class PersonSelectorManager {
         const baseDelay = this.isLargeDataset ? 50 : 25;  // 增加基础延迟
         const maxDelay = this.isLargeDataset ? 500 : 300; // 增加最大延迟
         
-        console.log(`🔧 Starting DOM element search for ${selector}, max attempts: ${maxAttempts}`);
+        console.log(`🔧 [ENHANCED VERSION] Starting DOM element search for ${selector}, max attempts: ${maxAttempts}`);
         
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             // 多重检查策略
