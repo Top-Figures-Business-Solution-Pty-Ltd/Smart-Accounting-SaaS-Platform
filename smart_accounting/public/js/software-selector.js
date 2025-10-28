@@ -4,10 +4,77 @@
 class SoftwareSelectorManager {
     constructor() {
         this.utils = window.PMUtils;
+        // 大数据量环境检测
+        this.isLargeDataset = false;
+        this.checkDatasetSize();
+    }
+
+    // 🔧 检测数据集大小，调整策略
+    checkDatasetSize() {
+        const taskCount = document.querySelectorAll('.pm-task-row').length;
+        this.isLargeDataset = taskCount > 100;
+        
+        if (this.isLargeDataset) {
+            console.log(`🔧 Large dataset detected (${taskCount} tasks), using enhanced DOM timing`);
+        }
+    }
+
+    // 🔧 增强的DOM元素确认机制
+    async ensureDOMElementAndInitialize(selector, $cell, taskId) {
+        const maxAttempts = this.isLargeDataset ? 8 : 5;
+        const baseDelay = this.isLargeDataset ? 25 : 16;
+        const maxDelay = this.isLargeDataset ? 300 : 200;
+        
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            // 使用requestAnimationFrame确保在下一帧检查
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            
+            const $selector = $(selector);
+            if ($selector.length > 0) {
+                console.log(`✅ Software selector found on attempt ${attempt + 1}`);
+                this.initializeSoftwareSelectorAfterAppend($selector, $cell, taskId);
+                return;
+            }
+            
+            // 指数退避延迟，但有最大限制
+            if (attempt < maxAttempts - 1) {
+                const delay = Math.min(baseDelay * Math.pow(1.5, attempt), maxDelay);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+        
+        // 最终降级处理
+        console.error(`❌ Software selector ${selector} not found after ${maxAttempts} attempts`);
+        this.handleSelectorNotFound($cell, taskId);
+    }
+
+    // 🔧 选择器未找到的降级处理
+    handleSelectorNotFound($cell, taskId) {
+        $cell.removeClass('editing selector-opening');
+        frappe.show_alert({
+            message: 'Unable to open software selector. Please try again.',
+            indicator: 'orange'
+        });
+        
+        // 记录错误用于调试
+        console.warn('Software selector failed to initialize:', {
+            taskId: taskId,
+            cellHtml: $cell[0]?.outerHTML?.substring(0, 100),
+            taskCount: document.querySelectorAll('.pm-task-row').length
+        });
     }
 
     async showSoftwareSelector($cell, taskId, fieldName) {
         try {
+            // 🔧 防抖机制：防止重复点击
+            if ($cell.hasClass('editing') || $cell.hasClass('selector-opening')) {
+                console.log('Software selector already opening/open for task:', taskId);
+                return;
+            }
+            
+            // 标记为正在打开
+            $cell.addClass('editing selector-opening');
+            
             console.log('showSoftwareSelector called with:', taskId, fieldName);
             
             // 立即显示空选择器，不等待数据加载
@@ -18,6 +85,7 @@ class SoftwareSelectorManager {
             
         } catch (error) {
             console.error('Error in showSoftwareSelector:', error);
+            $cell.removeClass('editing selector-opening');
             frappe.show_alert({
                 message: 'Error opening software selector: ' + error.message,
                 indicator: 'red'
@@ -76,31 +144,15 @@ class SoftwareSelectorManager {
         // 添加到页面
         $('body').append(selectorHTML);
         
-        // 🔧 修复大数据量下的DOM时序问题：使用requestAnimationFrame确保DOM操作完成
-        requestAnimationFrame(() => {
-            const $selector = $(`#pm-software-selector-${taskId}`);
-            
-            if ($selector.length === 0) {
-                console.error('❌ Software selector not found after append!');
-                // 🔧 添加降级处理：再次尝试查找
-                setTimeout(() => {
-                    const $fallbackSelector = $(`#pm-software-selector-${taskId}`);
-                    if ($fallbackSelector.length > 0) {
-                        console.log('✅ Fallback software selector found:', $fallbackSelector.length);
-                        this.initializeSoftwareSelectorAfterAppend($fallbackSelector, $cell, taskId);
-                    } else {
-                        console.error('❌ Fallback software selector also failed');
-                    }
-                }, 50);
-                return;
-            }
-            
-            this.initializeSoftwareSelectorAfterAppend($selector, $cell, taskId);
-        });
+        // 🔧 增强DOM时序保证机制：确保在大数据量环境下也能正常工作
+        this.ensureDOMElementAndInitialize(`#pm-software-selector-${taskId}`, $cell, taskId);
     }
 
     // 🔧 新增方法：在DOM确认存在后初始化软件选择器
     initializeSoftwareSelectorAfterAppend($selector, $cell, taskId) {
+        // 清理状态标记
+        $cell.removeClass('selector-opening');
+        
         // 定位选择器
         const cellRect = $cell[0].getBoundingClientRect();
         

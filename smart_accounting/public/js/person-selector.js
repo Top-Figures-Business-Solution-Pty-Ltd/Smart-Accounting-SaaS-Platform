@@ -7,6 +7,66 @@ class PersonSelectorManager {
         // 添加缓存来避免重复的API调用
         this.roleCache = new Map();
         this.cacheTimeout = 30000; // 30秒缓存过期时间
+        
+        // 大数据量环境检测
+        this.isLargeDataset = false;
+        this.checkDatasetSize();
+    }
+
+    // 🔧 检测数据集大小，调整策略
+    checkDatasetSize() {
+        const taskCount = document.querySelectorAll('.pm-task-row').length;
+        this.isLargeDataset = taskCount > 100;
+        
+        if (this.isLargeDataset) {
+            console.log(`🔧 Large dataset detected (${taskCount} tasks), using enhanced DOM timing for person selector`);
+        }
+    }
+
+    // 🔧 增强的DOM元素确认机制
+    async ensureDOMElementAndInitialize(selector, $cell, taskId, fieldName) {
+        const maxAttempts = this.isLargeDataset ? 8 : 5;
+        const baseDelay = this.isLargeDataset ? 25 : 16;
+        const maxDelay = this.isLargeDataset ? 300 : 200;
+        
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            // 使用requestAnimationFrame确保在下一帧检查
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            
+            const $selector = $(selector);
+            if ($selector.length > 0) {
+                console.log(`✅ Person selector found on attempt ${attempt + 1}`);
+                this.initializeSelectorAfterAppend($selector, $cell, taskId, fieldName);
+                return;
+            }
+            
+            // 指数退避延迟，但有最大限制
+            if (attempt < maxAttempts - 1) {
+                const delay = Math.min(baseDelay * Math.pow(1.5, attempt), maxDelay);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+        
+        // 最终降级处理
+        console.error(`❌ Person selector ${selector} not found after ${maxAttempts} attempts`);
+        this.handleSelectorNotFound($cell, taskId, fieldName);
+    }
+
+    // 🔧 选择器未找到的降级处理
+    handleSelectorNotFound($cell, taskId, fieldName) {
+        $cell.removeClass('editing selector-opening');
+        frappe.show_alert({
+            message: 'Unable to open person selector. Please try again.',
+            indicator: 'orange'
+        });
+        
+        // 记录错误用于调试
+        console.warn('Person selector failed to initialize:', {
+            taskId: taskId,
+            fieldName: fieldName,
+            cellHtml: $cell[0]?.outerHTML?.substring(0, 100),
+            taskCount: document.querySelectorAll('.pm-task-row').length
+        });
     }
     
     // 清除特定任务的缓存
@@ -72,6 +132,15 @@ class PersonSelectorManager {
 
     // Multi-Person Selector
     async showMultiPersonSelector($cell, taskId, fieldName) {
+        // 🔧 防抖机制：防止重复点击
+        if ($cell.hasClass('editing') || $cell.hasClass('selector-opening')) {
+            console.log('Person selector already opening/open for task:', taskId, fieldName);
+            return;
+        }
+        
+        // 标记为正在打开
+        $cell.addClass('editing selector-opening');
+        
         console.log('🎭 PersonSelectorManager.showMultiPersonSelector called with:', {
             $cell: $cell.length,
             taskId: taskId,
@@ -79,11 +148,20 @@ class PersonSelectorManager {
             cellHtml: $cell[0]?.outerHTML?.substring(0, 200) + '...'
         });
         
-        // 立即显示空选择器，不等待数据加载
-        this.showEmptyPersonSelector($cell, taskId, fieldName);
-        
-        // 异步加载数据，不阻塞UI
-        this.loadPersonDataAsync($cell, taskId, fieldName);
+        try {
+            // 立即显示空选择器，不等待数据加载
+            this.showEmptyPersonSelector($cell, taskId, fieldName);
+            
+            // 异步加载数据，不阻塞UI
+            this.loadPersonDataAsync($cell, taskId, fieldName);
+        } catch (error) {
+            console.error('Error in showMultiPersonSelector:', error);
+            $cell.removeClass('editing selector-opening');
+            frappe.show_alert({
+                message: 'Error opening person selector: ' + error.message,
+                indicator: 'red'
+            });
+        }
     }
 
     showEmptyPersonSelector($cell, taskId, fieldName) {
@@ -150,32 +228,15 @@ class PersonSelectorManager {
         $('body').append(selectorHTML);
         console.log('📎 Appended selector to body');
         
-        // 🔧 修复大数据量下的DOM时序问题：使用requestAnimationFrame确保DOM操作完成
-        requestAnimationFrame(() => {
-            const $selector = $(`#pm-person-selector-${taskId}-${fieldName}`);
-            console.log('🔍 Found selector:', $selector.length, 'elements');
-            
-            if ($selector.length === 0) {
-                console.error('❌ Selector not found after append!');
-                // 🔧 添加降级处理：再次尝试查找
-                setTimeout(() => {
-                    const $fallbackSelector = $(`#pm-person-selector-${taskId}-${fieldName}`);
-                    if ($fallbackSelector.length > 0) {
-                        console.log('✅ Fallback selector found:', $fallbackSelector.length);
-                        this.initializeSelectorAfterAppend($fallbackSelector, $cell, taskId, fieldName);
-                    } else {
-                        console.error('❌ Fallback selector also failed');
-                    }
-                }, 50);
-                return;
-            }
-            
-            this.initializeSelectorAfterAppend($selector, $cell, taskId, fieldName);
-        });
+        // 🔧 增强DOM时序保证机制：确保在大数据量环境下也能正常工作
+        this.ensureDOMElementAndInitialize(`#pm-person-selector-${taskId}-${fieldName}`, $cell, taskId, fieldName);
     }
 
     // 🔧 新增方法：在DOM确认存在后初始化选择器
     initializeSelectorAfterAppend($selector, $cell, taskId, fieldName) {
+        // 清理状态标记
+        $cell.removeClass('selector-opening');
+        
         // Position the modal properly relative to cell
         this.positionModalRelativeToCell($cell, $selector);
         console.log('📍 Positioned modal relative to cell');

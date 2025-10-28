@@ -83,7 +83,24 @@ class PerformanceMonitor {
                 domElements: domElementCount,
                 taskRows: taskRowCount
             });
+            
+            // 🔧 在大数据量环境下禁用干扰性的性能修复
+            this.disableIntrusiveOptimizations();
         }
+    }
+
+    // 🔧 禁用可能干扰DOM操作的优化
+    disableIntrusiveOptimizations() {
+        // 禁用CLS自动修复
+        this.maxClsFixAttempts = 0;
+        
+        // 增加CLS修复冷却时间
+        this.clsFixCooldown = 5000; // 5秒
+        
+        // 禁用频繁的DOM查询
+        this.shouldAttemptCLSFix = () => false;
+        
+        console.log('🔧 Disabled intrusive performance optimizations for large dataset');
     }
     
     // 监控累积布局偏移 (CLS)
@@ -108,8 +125,13 @@ class PerformanceMonitor {
                     }
                     
                     // 如果总CLS超过阈值，发出警告（大数据量下降低频率）
-                    if (this.metrics.cls > this.thresholds.cls && !this.isHighDataVolume) {
-                        this.reportCLSIssue(entry);
+                    if (this.metrics.cls > this.thresholds.cls) {
+                        if (this.isHighDataVolume) {
+                            // 大数据量环境下只记录，不执行修复
+                            console.debug(`CLS detected (${this.metrics.cls.toFixed(4)}) in large dataset - monitoring only`);
+                        } else {
+                            this.reportCLSIssue(entry);
+                        }
                     }
                 }
             }
