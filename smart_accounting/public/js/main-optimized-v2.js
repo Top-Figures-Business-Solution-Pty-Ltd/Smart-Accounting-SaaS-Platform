@@ -170,7 +170,14 @@ class OptimizedProjectManagement {
             
             // 创建管理器实例
             if (typeof window[className] === 'function') {
-                this.managers[name] = new window[className]();
+                // 对于选择器管理器，使用全局实例而不是创建新实例
+                if (className === 'PersonSelectorManager' && window.PersonSelectorManager) {
+                    this.managers[name] = window.PersonSelectorManager;
+                } else if (className === 'SoftwareSelectorManager' && window.SoftwareSelectorManager) {
+                    this.managers[name] = window.SoftwareSelectorManager;
+                } else {
+                    this.managers[name] = new window[className]();
+                }
             } else {
                 this.managers[name] = window[className];
             }
