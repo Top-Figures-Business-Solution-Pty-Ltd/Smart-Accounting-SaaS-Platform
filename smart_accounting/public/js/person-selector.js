@@ -234,38 +234,110 @@ class PersonSelectorManager {
 
     // 🔧 新增方法：在DOM确认存在后初始化选择器
     initializeSelectorAfterAppend($selector, $cell, taskId, fieldName) {
-        // 清理状态标记
-        $cell.removeClass('selector-opening');
-        
-        // Position the modal properly relative to cell
-        this.positionModalRelativeToCell($cell, $selector);
-        console.log('📍 Positioned modal relative to cell');
-        
-        // 智能定位弹窗
-        this.positionModalSmart($cell, $selector);
-        
-        // 显示弹窗
-        $selector.fadeIn(200);
-        
-        // Focus search input
-        const $searchInput = $selector.find('.pm-person-search');
-        $searchInput.focus();
-        
-        // Load all people
-        this.loadPeopleForSelector($selector.find('.pm-person-list'));
-        
-        // 绑定所有事件
-        this.bindSelectorEvents($selector, $cell, taskId, fieldName);
-        
-        // Load current people into the selector
-        const currentEmails = [];
-        $cell.find('.pm-avatar[data-email]').each(function() {
-            const email = $(this).data('email');
-            if (email) currentEmails.push(email);
-        });
-        
-        if (currentEmails.length > 0) {
-            this.loadCurrentPeopleIntoSelector($selector, currentEmails, taskId, fieldName);
+        try {
+            console.log('🔧 Starting person selector initialization:', {
+                selectorId: $selector.attr('id'),
+                selectorLength: $selector.length,
+                taskId: taskId,
+                fieldName: fieldName
+            });
+            
+            // 清理状态标记
+            $cell.removeClass('selector-opening');
+            
+            // Position the modal properly relative to cell
+            console.log('📍 Step 1: Positioning modal relative to cell...');
+            try {
+                this.positionModalRelativeToCell($cell, $selector);
+                console.log('📍 Positioned modal relative to cell');
+            } catch (positionError) {
+                console.warn('⚠️ Error in positionModalRelativeToCell:', positionError);
+                // 使用简单定位作为降级
+                $selector.css({
+                    position: 'fixed',
+                    top: '100px',
+                    left: '100px',
+                    zIndex: 9999,
+                    width: '320px'
+                });
+            }
+            
+            // 智能定位弹窗
+            console.log('📍 Step 2: Smart positioning modal...');
+            try {
+                this.positionModalSmart($cell, $selector);
+                console.log('📍 Smart positioning completed');
+            } catch (smartPositionError) {
+                console.warn('⚠️ Error in positionModalSmart:', smartPositionError);
+                // 智能定位失败，使用基本定位
+                const cellOffset = $cell.offset();
+                $selector.css({
+                    position: 'fixed',
+                    top: (cellOffset.top + 30) + 'px',
+                    left: cellOffset.left + 'px',
+                    zIndex: 9999,
+                    width: '320px'
+                });
+            }
+            
+            // 显示弹窗
+            console.log('📍 Step 3: Showing modal...');
+            $selector.show();
+            console.log('🔧 Selector visibility after show():', $selector.is(':visible'));
+            
+            $selector.fadeIn(200, function() {
+                console.log('🔧 Person selector fadeIn completed, visible:', $(this).is(':visible'));
+            });
+            
+            // Focus search input
+            console.log('📍 Step 4: Focusing search input...');
+            const $searchInput = $selector.find('.pm-person-search');
+            if ($searchInput.length > 0) {
+                $searchInput.focus();
+                console.log('✅ Search input focused');
+            } else {
+                console.warn('⚠️ Search input not found');
+            }
+            
+            // Load all people
+            console.log('📍 Step 5: Loading people...');
+            const $personList = $selector.find('.pm-person-list');
+            if ($personList.length > 0) {
+                this.loadPeopleForSelector($personList);
+                console.log('✅ People loading initiated');
+            } else {
+                console.warn('⚠️ Person list container not found');
+            }
+            
+            // 绑定所有事件
+            console.log('📍 Step 6: Binding events...');
+            this.bindSelectorEvents($selector, $cell, taskId, fieldName);
+            console.log('✅ Events bound');
+            
+            // Load current people into the selector
+            console.log('📍 Step 7: Loading current people...');
+            const currentEmails = [];
+            $cell.find('.pm-avatar[data-email]').each(function() {
+                const email = $(this).data('email');
+                if (email) currentEmails.push(email);
+            });
+            
+            if (currentEmails.length > 0) {
+                this.loadCurrentPeopleIntoSelector($selector, currentEmails, taskId, fieldName);
+                console.log('✅ Current people loaded:', currentEmails);
+            } else {
+                console.log('ℹ️ No current people to load');
+            }
+            
+            console.log('✅ Person selector initialization completed successfully');
+            
+        } catch (error) {
+            console.error('❌ Error in person selector initialization:', error);
+            $cell.removeClass('editing selector-opening');
+            frappe.show_alert({
+                message: 'Error initializing person selector: ' + error.message,
+                indicator: 'red'
+            });
         }
     }
 

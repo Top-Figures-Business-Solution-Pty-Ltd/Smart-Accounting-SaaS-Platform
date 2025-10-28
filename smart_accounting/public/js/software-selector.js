@@ -153,22 +153,62 @@ class SoftwareSelectorManager {
         // 清理状态标记
         $cell.removeClass('selector-opening');
         
-        // 定位选择器
+        console.log('🔧 Initializing software selector:', {
+            selectorId: $selector.attr('id'),
+            selectorLength: $selector.length,
+            cellPosition: $cell.offset()
+        });
+        
+        // 定位选择器 - 使用更安全的定位逻辑
         const cellRect = $cell[0].getBoundingClientRect();
+        const windowHeight = $(window).height();
+        const modalHeight = 400; // 预估模态框高度
+        
+        // 计算最佳位置
+        let top = cellRect.bottom + 10; // 默认在单元格下方
+        if (top + modalHeight > windowHeight) {
+            // 如果下方空间不够，显示在上方
+            top = cellRect.top - modalHeight - 10;
+        }
+        
+        // 确保不会超出屏幕边界
+        if (top < 10) {
+            top = 10;
+        }
         
         $selector.css({
             position: 'fixed',
-            left: cellRect.left + 'px',
-            top: (cellRect.top - 350) + 'px',
+            left: Math.max(10, cellRect.left) + 'px',
+            top: top + 'px',
             zIndex: 9999,
-            width: '280px'
+            width: '280px',
+            display: 'block' // 确保显示
         });
         
+        console.log('🔧 Software selector positioned at:', {
+            left: Math.max(10, cellRect.left),
+            top: top,
+            display: $selector.css('display')
+        });
+        
+        // 确保选择器可见
+        $selector.show();
+        console.log('🔧 Selector visibility after show():', $selector.is(':visible'));
+        
         // 立即显示选择器
-        $selector.fadeIn(200);
+        $selector.fadeIn(200, function() {
+            console.log('🔧 FadeIn completed, selector visible:', $(this).is(':visible'));
+        });
         
         // 绑定事件
-        this.bindSoftwareSelectorEvents($selector, $cell, taskId);
+        try {
+            this.bindSoftwareSelectorEvents($selector, $cell, taskId);
+            console.log('✅ Events bound successfully');
+        } catch (eventError) {
+            console.error('❌ Error binding events:', eventError);
+        }
+        
+        console.log('✅ Software selector initialization completed');
     }
 
     async loadSoftwareDataAsync($cell, taskId) {

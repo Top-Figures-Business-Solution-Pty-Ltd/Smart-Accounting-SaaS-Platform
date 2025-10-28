@@ -79,10 +79,10 @@ class PerformanceMonitor {
         this.isHighDataVolume = domElementCount > 5000 || taskRowCount > 100;
         
         if (this.isHighDataVolume) {
-            console.log('🔧 High data volume detected, optimizing performance monitoring:', {
-                domElements: domElementCount,
-                taskRows: taskRowCount
-            });
+            // console.log('🔧 High data volume detected, optimizing performance monitoring:', {
+            //     domElements: domElementCount,
+            //     taskRows: taskRowCount
+            // });
             
             // 🔧 在大数据量环境下禁用干扰性的性能修复
             this.disableIntrusiveOptimizations();
@@ -100,7 +100,7 @@ class PerformanceMonitor {
         // 禁用频繁的DOM查询
         this.shouldAttemptCLSFix = () => false;
         
-        console.log('🔧 Disabled intrusive performance optimizations for large dataset');
+        // console.log('🔧 Disabled intrusive performance optimizations for large dataset');
     }
     
     // 监控累积布局偏移 (CLS)
@@ -128,7 +128,7 @@ class PerformanceMonitor {
                     if (this.metrics.cls > this.thresholds.cls) {
                         if (this.isHighDataVolume) {
                             // 大数据量环境下只记录，不执行修复
-                            console.debug(`CLS detected (${this.metrics.cls.toFixed(4)}) in large dataset - monitoring only`);
+                            // console.debug(`CLS detected (${this.metrics.cls.toFixed(4)}) in large dataset - monitoring only`);
                         } else {
                             this.reportCLSIssue(entry);
                         }
@@ -163,14 +163,14 @@ class PerformanceMonitor {
     
     // 记录布局偏移详情
     logLayoutShift(entry) {
-        console.log('📐 Layout Shift detected:', {
-            value: entry.value.toFixed(4),
-            sources: entry.sources?.map(source => ({
-                element: source.node?.tagName || 'unknown',
-                previousRect: source.previousRect,
-                currentRect: source.currentRect
-            }))
-        });
+        // console.log('📐 Layout Shift detected:', {
+        //     value: entry.value.toFixed(4),
+        //     sources: entry.sources?.map(source => ({
+        //         element: source.node?.tagName || 'unknown',
+        //         previousRect: source.previousRect,
+        //         currentRect: source.currentRect
+        //     }))
+        // });
     }
     
     // 报告CLS问题
@@ -201,7 +201,7 @@ class PerformanceMonitor {
                 this.standardCLSFix(entry);
             }
             
-            console.log(`🔧 CLS fix attempt ${this.clsFixAttempts}/${this.maxClsFixAttempts} completed`);
+            // console.log(`🔧 CLS fix attempt ${this.clsFixAttempts}/${this.maxClsFixAttempts} completed`);
         } catch (error) {
             console.debug('CLS fix attempt failed:', error);
         }
@@ -274,7 +274,7 @@ class PerformanceMonitor {
             element.style.alignItems = 'center';
         }
         
-        console.log('🔧 Applied CLS fix to element:', element);
+        // console.log('🔧 Applied CLS fix to element:', element);
     }
     
     // 修复图片尺寸问题
@@ -320,11 +320,11 @@ class PerformanceMonitor {
             const lastEntry = entries[entries.length - 1];
             this.metrics.lcp = lastEntry.startTime;
             
-            console.log('🎨 LCP:', {
-                time: `${this.metrics.lcp.toFixed(2)}ms`,
-                element: lastEntry.element?.tagName || 'unknown',
-                url: lastEntry.url || 'N/A'
-            });
+            // console.log('🎨 LCP:', {
+            //     time: `${this.metrics.lcp.toFixed(2)}ms`,
+            //     element: lastEntry.element?.tagName || 'unknown',
+            //     url: lastEntry.url || 'N/A'
+            // });
             
             if (this.metrics.lcp > this.thresholds.lcp) {
                 this.reportLCPIssue(lastEntry);
@@ -373,7 +373,7 @@ class PerformanceMonitor {
             for (const entry of list.getEntries()) {
                 this.metrics.fid = entry.processingStart - entry.startTime;
                 
-                console.log('👆 FID:', `${this.metrics.fid.toFixed(2)}ms`);
+                // console.log('👆 FID:', `${this.metrics.fid.toFixed(2)}ms`);
                 
                 if (this.metrics.fid > this.thresholds.fid) {
                     this.reportFIDIssue(entry);
@@ -410,7 +410,7 @@ class PerformanceMonitor {
             for (const entry of list.getEntries()) {
                 if (entry.name === 'first-contentful-paint') {
                     this.metrics.fcp = entry.startTime;
-                    console.log('🎨 FCP:', `${this.metrics.fcp.toFixed(2)}ms`);
+                    // console.log('🎨 FCP:', `${this.metrics.fcp.toFixed(2)}ms`);
                 }
             }
         });
@@ -425,7 +425,7 @@ class PerformanceMonitor {
             const navTiming = performance.getEntriesByType('navigation')[0];
             if (navTiming) {
                 this.metrics.ttfb = navTiming.responseStart - navTiming.requestStart;
-                console.log('⚡ TTFB:', `${this.metrics.ttfb.toFixed(2)}ms`);
+                // console.log('⚡ TTFB:', `${this.metrics.ttfb.toFixed(2)}ms`);
             }
         }
     }
@@ -434,7 +434,7 @@ class PerformanceMonitor {
     monitorLoadTime() {
         window.addEventListener('load', () => {
             this.metrics.loadTime = Date.now() - this.startTime;
-            console.log('⏱️ Load Time:', `${this.metrics.loadTime}ms`);
+            // console.log('⏱️ Load Time:', `${this.metrics.loadTime}ms`);
         });
     }
     
@@ -471,21 +471,21 @@ class PerformanceMonitor {
         
         // 检查慢资源
         if (duration > 1000) { // 超过1秒
-            console.warn('🐌 Slow resource:', {
-                name: entry.name,
-                duration: `${duration.toFixed(2)}ms`,
-                size: `${(size / 1024).toFixed(2)}KB`,
-                type: entry.initiatorType
-            });
+            // console.warn('🐌 Slow resource:', {
+            //     name: entry.name,
+            //     duration: `${duration.toFixed(2)}ms`,
+            //     size: `${(size / 1024).toFixed(2)}KB`,
+            //     type: entry.initiatorType
+            // });
         }
         
         // 检查大资源
         if (size > 500 * 1024) { // 超过500KB
-            console.warn('📦 Large resource:', {
-                name: entry.name,
-                size: `${(size / 1024 / 1024).toFixed(2)}MB`,
-                duration: `${duration.toFixed(2)}ms`
-            });
+            // console.warn('📦 Large resource:', {
+            //     name: entry.name,
+            //     size: `${(size / 1024 / 1024).toFixed(2)}MB`,
+            //     duration: `${duration.toFixed(2)}ms`
+            // });
         }
     }
     
@@ -505,7 +505,7 @@ class PerformanceMonitor {
     // 报告性能状态
     reportPerformanceStatus() {
         const status = this.getPerformanceStatus();
-        console.log('📊 Performance Status:', status);
+        // console.log('📊 Performance Status:', status);
         
         // 如果性能不佳，提供优化建议
         if (status.score < 70) {
@@ -561,7 +561,7 @@ class PerformanceMonitor {
             advice.push('Improve first contentful paint by optimizing critical rendering path');
         }
         
-        console.log('💡 Performance Advice:', advice);
+        // console.log('💡 Performance Advice:', advice);
     }
     
     // 生成性能报告
@@ -575,7 +575,7 @@ class PerformanceMonitor {
             recommendations: this.getRecommendations()
         };
         
-        console.log('📋 Performance Report:', report);
+        // console.log('📋 Performance Report:', report);
         
         // 保存到localStorage用于调试
         if (window.ProgressiveEnhancement?.isFeatureSupported('localStorage')) {
