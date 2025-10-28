@@ -3365,17 +3365,22 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(2px);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    padding: 20px;
 }
 
 .pm-confirmation-content {
     background: white;
-    border-radius: 8px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-    width: 400px;
-    max-width: 90vw;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 8px 32px rgba(0, 0, 0, 0.2);
+    width: 100%;
+    max-width: 480px;
+    min-width: 320px;
     animation: dialogSlideIn 0.3s ease-out;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 @keyframes dialogSlideIn {
@@ -3390,97 +3395,132 @@
 }
 
 .pm-confirmation-header {
-    padding: 20px 24px 16px;
-    border-bottom: 1px solid var(--monday-border);
+    padding: 24px 28px 20px;
+    border-bottom: 1px solid #e8eaed;
+    background: linear-gradient(135deg, #f8f9fb 0%, #ffffff 100%);
 }
 
 .pm-confirmation-title {
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 600;
-    color: var(--monday-dark);
+    color: #2c3e50;
     margin: 0;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
+    letter-spacing: -0.01em;
+}
+
+.pm-confirmation-title i {
+    font-size: 18px;
+    opacity: 0.8;
 }
 
 .pm-confirmation-body {
-    padding: 20px 24px;
+    padding: 24px 28px;
 }
 
 .pm-confirmation-message {
-    color: var(--monday-gray);
-    font-size: 14px;
-    line-height: 1.5;
-    margin: 0 0 16px 0;
+    color: #5a6c7d;
+    font-size: 15px;
+    line-height: 1.6;
+    margin: 0 0 20px 0;
+    font-weight: 400;
 }
 
 .pm-confirmation-task-list {
-    background: #f8f9fb;
-    border: 1px solid var(--monday-border);
-    border-radius: 6px;
-    padding: 12px;
-    max-height: 150px;
+    background: linear-gradient(135deg, #f8f9fb 0%, #f1f3f5 100%);
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    padding: 16px;
+    max-height: 200px;
     overflow-y: auto;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .pm-confirmation-task-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px 0;
-    font-size: 13px;
-    color: var(--monday-dark);
+    gap: 12px;
+    padding: 8px 12px;
+    font-size: 14px;
+    color: #2c3e50;
+    background: white;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    transition: all 0.2s ease;
+}
+
+.pm-confirmation-task-item:last-child {
+    margin-bottom: 0;
+}
+
+.pm-confirmation-task-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
 .pm-confirmation-task-item i {
-    color: var(--monday-blue);
-    width: 12px;
+    color: #667eea;
+    width: 16px;
+    font-size: 14px;
+    text-align: center;
 }
 
 .pm-confirmation-footer {
-    padding: 16px 24px 20px;
+    padding: 20px 28px 24px;
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 12px;
-    border-top: 1px solid var(--monday-border);
+    gap: 16px;
+    border-top: 1px solid #e8eaed;
+    background: #fafbfc;
 }
 
 .pm-confirmation-btn {
-    padding: 8px 16px;
-    border-radius: 6px;
+    padding: 12px 24px;
+    border-radius: 8px;
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    border: 1px solid var(--monday-border);
+    border: 2px solid transparent;
     background: white;
-    color: var(--monday-dark);
+    color: #5a6c7d;
+    min-width: 100px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
 }
 
 .pm-confirmation-btn:hover {
-    background: var(--monday-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .pm-confirmation-btn.primary {
-    background: var(--monday-blue);
-    border-color: var(--monday-blue);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-color: #667eea;
     color: white;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
 .pm-confirmation-btn.primary:hover {
-    background: var(--monday-blue-dark);
+    background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
 
 .pm-confirmation-btn.danger {
-    background: var(--monday-red);
-    border-color: var(--monday-red);
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    border-color: #ef4444;
     color: white;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
 }
 
 .pm-confirmation-btn.danger:hover {
-    background: var(--monday-red-dark);
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
 }
 
 /* Responsive Design for Project Management */
@@ -3498,9 +3538,83 @@
         min-width: auto;
     }
     
+    .pm-confirmation-dialog {
+        padding: 16px;
+    }
+    
     .pm-confirmation-content {
-        width: 90vw;
-        margin: 0 20px;
+        max-width: none;
+        min-width: 280px;
+    }
+    
+    .pm-confirmation-header {
+        padding: 20px 20px 16px;
+    }
+    
+    .pm-confirmation-title {
+        font-size: 18px;
+    }
+    
+    .pm-confirmation-body {
+        padding: 20px;
+    }
+    
+    .pm-confirmation-message {
+        font-size: 14px;
+    }
+    
+    .pm-confirmation-footer {
+        padding: 16px 20px 20px;
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .pm-confirmation-btn {
+        width: 100%;
+        min-width: auto;
+    }
+}
+
+@media (max-width: 480px) {
+    .pm-confirmation-dialog {
+        padding: 12px;
+    }
+    
+    .pm-confirmation-content {
+        min-width: 260px;
+    }
+    
+    .pm-confirmation-header {
+        padding: 16px 16px 12px;
+    }
+    
+    .pm-confirmation-title {
+        font-size: 16px;
+        gap: 8px;
+    }
+    
+    .pm-confirmation-body {
+        padding: 16px;
+    }
+    
+    .pm-confirmation-task-list {
+        padding: 12px;
+        max-height: 150px;
+    }
+    
+    .pm-confirmation-task-item {
+        padding: 6px 8px;
+        font-size: 13px;
+        gap: 8px;
+    }
+    
+    .pm-confirmation-footer {
+        padding: 12px 16px 16px;
+    }
+    
+    .pm-confirmation-btn {
+        padding: 10px 20px;
+        font-size: 13px;
     }
 }
 

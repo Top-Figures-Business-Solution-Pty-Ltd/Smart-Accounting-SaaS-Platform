@@ -1498,16 +1498,16 @@ class FilterManager {
         // Add column management button to the header actions
         if ($('.pm-column-management-btn').length > 0) return; // Already added
         
-        // Add CSV Export/Import buttons
+        // Add CSV Export/Import buttons (temporarily hidden until implementation is complete)
         const csvExportBtn = $(`
-            <button class="pm-btn pm-btn-secondary csv-export-btn" style="margin-right: 10px;">
+            <button class="pm-btn pm-btn-secondary csv-export-btn" style="margin-right: 10px; display: none;">
                 <i class="fa fa-download"></i>
                 Export CSV
             </button>
         `);
         
         const csvImportBtn = $(`
-            <button class="pm-btn pm-btn-secondary csv-import-btn" style="margin-right: 10px;">
+            <button class="pm-btn pm-btn-secondary csv-import-btn" style="margin-right: 10px; display: none;">
                 <i class="fa fa-upload"></i>
                 Import CSV
             </button>
@@ -1812,11 +1812,15 @@ class FilterManager {
             // Clear all options except the placeholder
             $select.empty().append('<option value="">Column</option>');
             
-            // Remove duplicates from visible columns
+            // Remove duplicates from visible columns and filter out non-filterable columns
             const uniqueVisibleColumns = [...new Set(visibleColumns)];
+            const filterableColumns = uniqueVisibleColumns.filter(columnKey => {
+                // 排除select列和其他不适合筛选的列
+                return columnKey !== 'select' && columnKey !== '';
+            });
             
-            // Add options for visible columns only
-            uniqueVisibleColumns.forEach(columnKey => {
+            // Add options for filterable columns only
+            filterableColumns.forEach(columnKey => {
                 const displayName = allColumns[columnKey] || columnKey;
                 const filterValue = columnKeyMapping[columnKey] || columnKey;
                 const isSelected = currentValue === filterValue ? 'selected' : '';
@@ -1825,7 +1829,7 @@ class FilterManager {
             
             // If current value is no longer visible, reset to empty
             const currentColumnKey = Object.keys(columnKeyMapping).find(key => columnKeyMapping[key] === currentValue);
-            if (currentValue && currentColumnKey && !uniqueVisibleColumns.includes(currentColumnKey)) {
+            if (currentValue && currentColumnKey && !filterableColumns.includes(currentColumnKey)) {
                 $select.val('');
                 // Also clear the value dropdown for this condition
                 $select.closest('.pm-filter-condition').find('.pm-filter-value').html('<option value="">Value</option>');

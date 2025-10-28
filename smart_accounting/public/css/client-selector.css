@@ -86,19 +86,19 @@
     margin-bottom: 24px;
 }
 
-.pm-confirmation-content {
+.pm-client-confirmation .pm-confirmation-content {
     display: flex;
     align-items: center;
     gap: 12px;
     margin-bottom: 16px;
 }
 
-.pm-confirmation-content i {
+.pm-client-confirmation .pm-confirmation-content i {
     color: #856404;
     font-size: 18px;
 }
 
-.pm-confirmation-message {
+.pm-client-confirmation .pm-confirmation-message {
     color: #856404;
     font-weight: 500;
     font-size: 14px;

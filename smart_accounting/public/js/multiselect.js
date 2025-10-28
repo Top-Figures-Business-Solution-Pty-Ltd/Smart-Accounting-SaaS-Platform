@@ -358,7 +358,8 @@ class MultiSelectManager {
         const selectedItemDetails = Array.from(selectedItems).map(itemId => {
             if (type === 'subtask') {
                 const $subtaskRow = $(`.pm-subtask-row[data-subtask-id="${itemId}"]`);
-                const subtaskName = $subtaskRow.find('.pm-subtask-name').text() || 'Untitled Subtask';
+                // 修复：使用正确的subtask名称选择器
+                const subtaskName = $subtaskRow.find('.subtask-name-display').text() || 'Untitled Subtask';
                 return { id: itemId, name: subtaskName };
             } else {
                 const $taskRow = $(`.pm-task-row[data-task-id="${itemId}"]`);
