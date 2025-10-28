@@ -1,6 +1,8 @@
 // Project Management - Software Selector
 // Software selection and management functionality
 
+console.log('🔥 LOADING SoftwareSelector - NEW VERSION');
+
 class SoftwareSelectorManager {
     constructor() {
         this.utils = window.PMUtils;

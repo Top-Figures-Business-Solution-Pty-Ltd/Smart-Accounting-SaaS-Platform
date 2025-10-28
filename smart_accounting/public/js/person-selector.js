@@ -1,6 +1,8 @@
 // Project Management - Person Selector
 // Person selection and role assignment functionality
 
+console.log('🔥 LOADING PersonSelector - NEW VERSION');
+
 class PersonSelectorManager {
     constructor() {
         this.utils = window.PMUtils;
