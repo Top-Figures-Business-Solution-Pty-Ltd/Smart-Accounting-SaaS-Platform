@@ -150,14 +150,32 @@ class PersonSelectorManager {
         $('body').append(selectorHTML);
         console.log('📎 Appended selector to body');
         
-        const $selector = $(`#pm-person-selector-${taskId}-${fieldName}`);
-        console.log('🔍 Found selector:', $selector.length, 'elements');
-        
-        if ($selector.length === 0) {
-            console.error('❌ Selector not found after append!');
-            return;
-        }
-        
+        // 🔧 修复大数据量下的DOM时序问题：使用requestAnimationFrame确保DOM操作完成
+        requestAnimationFrame(() => {
+            const $selector = $(`#pm-person-selector-${taskId}-${fieldName}`);
+            console.log('🔍 Found selector:', $selector.length, 'elements');
+            
+            if ($selector.length === 0) {
+                console.error('❌ Selector not found after append!');
+                // 🔧 添加降级处理：再次尝试查找
+                setTimeout(() => {
+                    const $fallbackSelector = $(`#pm-person-selector-${taskId}-${fieldName}`);
+                    if ($fallbackSelector.length > 0) {
+                        console.log('✅ Fallback selector found:', $fallbackSelector.length);
+                        this.initializeSelectorAfterAppend($fallbackSelector, $cell, taskId, fieldName);
+                    } else {
+                        console.error('❌ Fallback selector also failed');
+                    }
+                }, 50);
+                return;
+            }
+            
+            this.initializeSelectorAfterAppend($selector, $cell, taskId, fieldName);
+        });
+    }
+
+    // 🔧 新增方法：在DOM确认存在后初始化选择器
+    initializeSelectorAfterAppend($selector, $cell, taskId, fieldName) {
         // Position the modal properly relative to cell
         this.positionModalRelativeToCell($cell, $selector);
         console.log('📍 Positioned modal relative to cell');
@@ -175,11 +193,31 @@ class PersonSelectorManager {
         // Load all people
         this.loadPeopleForSelector($selector.find('.pm-person-list'));
         
-        // Bind events
+        // 绑定所有事件
+        this.bindSelectorEvents($selector, $cell, taskId, fieldName);
+        
+        // Load current people into the selector
+        const currentEmails = [];
+        $cell.find('.pm-avatar[data-email]').each(function() {
+            const email = $(this).data('email');
+            if (email) currentEmails.push(email);
+        });
+        
+        if (currentEmails.length > 0) {
+            this.loadCurrentPeopleIntoSelector($selector, currentEmails, taskId, fieldName);
+        }
+    }
+
+    // 🔧 新增方法：绑定选择器事件
+    bindSelectorEvents($selector, $cell, taskId, fieldName) {
+        const $searchInput = $selector.find('.pm-person-search');
+        
+        // 搜索事件
         $searchInput.on('input', (e) => {
             this.searchPeopleForSelector(e.target.value, $selector.find('.pm-person-list'));
         });
         
+        // 选择人员事件
         $selector.on('click', '.pm-person-option', (e) => {
             e.stopPropagation();
             const email = $(e.currentTarget).data('email');
@@ -198,13 +236,14 @@ class PersonSelectorManager {
             }
         });
         
+        // 关闭按钮事件
         $selector.find('.pm-person-selector-close').on('click', () => {
             // Just close without clearing data
             $selector.remove();
             $cell.removeClass('editing');
         });
         
-        // Done button to close selector
+        // 完成按钮事件
         $selector.find('.pm-done-selecting').on('click', () => {
             // Get current role assignments for this field
             const currentRoles = this.getCurrentRoleAssignments($cell, fieldName);
@@ -225,7 +264,7 @@ class PersonSelectorManager {
             $cell.removeClass('editing');
         });
         
-        // Remove person button
+        // 移除人员按钮事件
         $selector.on('click', '.pm-remove-person', (e) => {
             e.stopPropagation();
             const emailToRemove = $(e.currentTarget).data('email');
@@ -234,12 +273,7 @@ class PersonSelectorManager {
             this.updateCurrentPeopleInSelector($selector, $cell);
         });
         
-        // Load current people into the selector
-        if (currentEmails.length > 0) {
-            this.loadCurrentPeopleIntoSelector($selector, currentEmails, taskId, fieldName);
-        }
-        
-        // Close on outside click (without clearing data)
+        // 外部点击关闭事件
         setTimeout(() => {
             $(document).on('click.person-selector', (e) => {
                 if (!$(e.target).closest('.pm-person-selector-modal').length) {

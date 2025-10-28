@@ -88,51 +88,71 @@ class ModalManager {
             // Add modal to body
             $('body').append(modalHTML);
             
-            // Show modal
-            $(`#pm-comment-modal-${taskId}`).fadeIn(200);
-            
-            // Load comments
-            await this.loadComments(taskId);
-            
-            // Focus on input
-            $('.pm-comment-input').focus();
-            
-            // Handle Ctrl+Enter and @ mentions
-            $('.pm-comment-input').on('keydown', (e) => {
-                if (e.ctrlKey && e.key === 'Enter') {
-                    e.preventDefault();
-                    this.submitComment();
-                } else if (e.key === 'Escape') {
-                    this.hideMentionDropdown(taskId);
-                } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                    if ($(`#pm-mention-dropdown-${taskId}`).is(':visible')) {
-                        e.preventDefault();
-                        this.navigateMentions(taskId, e.key === 'ArrowDown' ? 1 : -1);
-                    }
-                } else if (e.key === 'Enter' && $(`#pm-mention-dropdown-${taskId}`).is(':visible')) {
-                    e.preventDefault();
-                    this.selectCurrentMention(taskId);
+            // 🔧 修复大数据量下的DOM时序问题：使用requestAnimationFrame确保DOM操作完成
+            requestAnimationFrame(async () => {
+                const $modal = $(`#pm-comment-modal-${taskId}`);
+                
+                if ($modal.length === 0) {
+                    console.error('❌ Comment modal not found after append!');
+                    // 🔧 添加降级处理：再次尝试查找
+                    setTimeout(async () => {
+                        const $fallbackModal = $(`#pm-comment-modal-${taskId}`);
+                        if ($fallbackModal.length > 0) {
+                            console.log('✅ Fallback comment modal found:', $fallbackModal.length);
+                            await this.initializeCommentModalAfterAppend($fallbackModal, taskId);
+                        } else {
+                            console.error('❌ Fallback comment modal also failed');
+                        }
+                    }, 50);
+                    return;
                 }
+                
+                await this.initializeCommentModalAfterAppend($modal, taskId);
             });
-            
-            // Handle @ mention typing
-            $('.pm-comment-input').on('input', (e) => {
-                this.handleMentionInput(e.target, taskId);
-            });
-            
-            // Handle tab switching
-            $('.pm-comment-tab').on('click', (e) => {
-                const tab = $(e.currentTarget).data('tab');
-                this.switchCommentTab(taskId, tab);
-            });
-            
         } catch (error) {
             console.error('Error showing comment modal:', error);
-            frappe.show_alert({
-                message: 'Failed to open comments',
-                indicator: 'red'
-            });
         }
+    }
+
+    // 🔧 新增方法：在DOM确认存在后初始化评论模态框
+    async initializeCommentModalAfterAppend($modal, taskId) {
+        // Show modal
+        $modal.fadeIn(200);
+        
+        // Load comments
+        await this.loadComments(taskId);
+        
+        // Focus on input
+        $('.pm-comment-input').focus();
+        
+        // Handle Ctrl+Enter and @ mentions
+        $('.pm-comment-input').on('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                this.submitComment();
+            } else if (e.key === 'Escape') {
+                this.hideMentionDropdown(taskId);
+            } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                if ($(`#pm-mention-dropdown-${taskId}`).is(':visible')) {
+                    e.preventDefault();
+                    this.navigateMentions(taskId, e.key === 'ArrowDown' ? 1 : -1);
+                }
+            } else if (e.key === 'Enter' && $(`#pm-mention-dropdown-${taskId}`).is(':visible')) {
+                e.preventDefault();
+                this.selectCurrentMention(taskId);
+            }
+        });
+        
+        // Handle @ mention typing
+        $('.pm-comment-input').on('input', (e) => {
+            this.handleMentionInput(e.target, taskId);
+        });
+        
+        // Handle tab switching
+        $('.pm-comment-tab').on('click', (e) => {
+            const tab = $(e.currentTarget).data('tab');
+            this.switchCommentTab(taskId, tab);
+        });
     }
     
     async loadComments(taskId) {
@@ -401,8 +421,36 @@ class ModalManager {
         // Add modal to body
         $('body').append(modalHTML);
 
+        // 🔧 修复大数据量下的DOM时序问题：使用requestAnimationFrame确保DOM操作完成
+        requestAnimationFrame(() => {
+            const $modal = $(`#pm-review-modal-${taskId}`);
+            
+            if ($modal.length === 0) {
+                console.error('❌ Review modal not found after append!');
+                // 🔧 添加降级处理：再次尝试查找
+                setTimeout(() => {
+                    const $fallbackModal = $(`#pm-review-modal-${taskId}`);
+                    if ($fallbackModal.length > 0) {
+                        console.log('✅ Fallback review modal found:', $fallbackModal.length);
+                        this.initializeReviewModalAfterAppend($fallbackModal, taskId);
+                    } else {
+                        console.error('❌ Fallback review modal also failed');
+                    }
+                }, 50);
+                return;
+            }
+            
+            this.initializeReviewModalAfterAppend($modal, taskId);
+        });
+        
+        // Bind events
+        this.bindReviewModalEvents(taskId);
+    }
+
+    // 🔧 新增方法：在DOM确认存在后初始化审核模态框
+    initializeReviewModalAfterAppend($modal, taskId) {
         // Show modal
-        $(`#pm-review-modal-${taskId}`).fadeIn(200);
+        $modal.fadeIn(200);
         
         // Load review notes and check permissions
         this.loadReviewNotes(taskId);
@@ -410,9 +458,6 @@ class ModalManager {
         
         // Focus on input
         $('.pm-review-input').focus();
-        
-        // Bind events
-        this.bindReviewModalEvents(taskId);
     }
 
     async loadReviewNotes(taskId) {

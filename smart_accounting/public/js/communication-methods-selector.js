@@ -73,8 +73,32 @@ class CommunicationMethodsSelectorManager {
         
         // 添加到页面
         $('body').append(selectorHTML);
-        const $selector = $(`#pm-communication-methods-selector-${taskId}`);
         
+        // 🔧 修复大数据量下的DOM时序问题：使用requestAnimationFrame确保DOM操作完成
+        requestAnimationFrame(() => {
+            const $selector = $(`#pm-communication-methods-selector-${taskId}`);
+            
+            if ($selector.length === 0) {
+                console.error('❌ Communication methods selector not found after append!');
+                // 🔧 添加降级处理：再次尝试查找
+                setTimeout(() => {
+                    const $fallbackSelector = $(`#pm-communication-methods-selector-${taskId}`);
+                    if ($fallbackSelector.length > 0) {
+                        console.log('✅ Fallback communication methods selector found:', $fallbackSelector.length);
+                        this.initializeCommunicationMethodsSelectorAfterAppend($fallbackSelector, $cell, taskId);
+                    } else {
+                        console.error('❌ Fallback communication methods selector also failed');
+                    }
+                }, 50);
+                return;
+            }
+            
+            this.initializeCommunicationMethodsSelectorAfterAppend($selector, $cell, taskId);
+        });
+    }
+
+    // 🔧 新增方法：在DOM确认存在后初始化通信方式选择器
+    initializeCommunicationMethodsSelectorAfterAppend($selector, $cell, taskId) {
         // 定位选择器
         const cellRect = $cell[0].getBoundingClientRect();
         

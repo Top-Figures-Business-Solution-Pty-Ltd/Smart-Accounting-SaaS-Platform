@@ -24,6 +24,13 @@ class PerformanceMonitor {
         this.observers = new Map();
         this.startTime = Date.now();
         
+        // 🔧 大数据量优化：添加性能监控控制
+        this.isHighDataVolume = false;
+        this.clsFixAttempts = 0;
+        this.maxClsFixAttempts = 5; // 限制CLS修复尝试次数
+        this.lastClsFixTime = 0;
+        this.clsFixCooldown = 1000; // 1秒冷却时间
+        
         this.init();
     }
     
@@ -39,6 +46,9 @@ class PerformanceMonitor {
     }
     
     setupMonitoring() {
+        // 🔧 检测是否为大数据量环境
+        this.detectHighDataVolume();
+        
         // 监控Core Web Vitals
         this.monitorCLS();
         this.monitorLCP();
@@ -57,6 +67,25 @@ class PerformanceMonitor {
         this.setupReporting();
     }
     
+    // 🔧 检测大数据量环境
+    detectHighDataVolume() {
+        // 检测DOM元素数量
+        const domElementCount = document.querySelectorAll('*').length;
+        
+        // 检测任务行数量
+        const taskRowCount = document.querySelectorAll('.pm-task-row').length;
+        
+        // 检测是否为大数据量环境
+        this.isHighDataVolume = domElementCount > 5000 || taskRowCount > 100;
+        
+        if (this.isHighDataVolume) {
+            console.log('🔧 High data volume detected, optimizing performance monitoring:', {
+                domElements: domElementCount,
+                taskRows: taskRowCount
+            });
+        }
+    }
+    
     // 监控累积布局偏移 (CLS)
     monitorCLS() {
         if (!('LayoutShift' in window)) {
@@ -73,13 +102,13 @@ class PerformanceMonitor {
                     // 记录具体的布局偏移信息
                     this.logLayoutShift(entry);
                     
-                    // 如果CLS超过阈值，尝试自动修复
-                    if (entry.value > 0.05) {
+                    // 🔧 大数据量优化：限制CLS修复频率
+                    if (entry.value > 0.05 && this.shouldAttemptCLSFix()) {
                         this.attemptCLSFix(entry);
                     }
                     
-                    // 如果总CLS超过阈值，发出警告
-                    if (this.metrics.cls > this.thresholds.cls) {
+                    // 如果总CLS超过阈值，发出警告（大数据量下降低频率）
+                    if (this.metrics.cls > this.thresholds.cls && !this.isHighDataVolume) {
                         this.reportCLSIssue(entry);
                     }
                 }
@@ -88,6 +117,26 @@ class PerformanceMonitor {
         
         observer.observe({ entryTypes: ['layout-shift'] });
         this.observers.set('cls', observer);
+    }
+    
+    // 🔧 判断是否应该尝试CLS修复
+    shouldAttemptCLSFix() {
+        const now = Date.now();
+        
+        // 大数据量环境下更严格的控制
+        if (this.isHighDataVolume) {
+            // 达到最大尝试次数
+            if (this.clsFixAttempts >= this.maxClsFixAttempts) {
+                return false;
+            }
+            
+            // 冷却时间未到
+            if (now - this.lastClsFixTime < this.clsFixCooldown) {
+                return false;
+            }
+        }
+        
+        return true;
     }
     
     // 记录布局偏移详情
@@ -118,25 +167,58 @@ class PerformanceMonitor {
     // 尝试修复CLS问题
     attemptCLSFix(entry) {
         try {
-            // 确保图片有尺寸属性
-            this.fixImageDimensions();
+            // 🔧 更新修复计数器
+            this.clsFixAttempts++;
+            this.lastClsFixTime = Date.now();
             
-            // 确保字体加载不影响布局
-            this.fixFontLoading();
-            
-            // 确保动态内容有预留空间
-            this.fixDynamicContent();
-            
-            // 针对具体元素进行修复
-            if (entry && entry.sources && Array.isArray(entry.sources)) {
-                entry.sources.forEach(source => {
-                    if (source && source.node) {
-                        this.fixSpecificElement(source.node);
-                    }
-                });
+            // 大数据量环境下使用更轻量的修复策略
+            if (this.isHighDataVolume) {
+                this.lightweightCLSFix(entry);
+            } else {
+                // 标准修复流程
+                this.standardCLSFix(entry);
             }
+            
+            console.log(`🔧 CLS fix attempt ${this.clsFixAttempts}/${this.maxClsFixAttempts} completed`);
         } catch (error) {
             console.debug('CLS fix attempt failed:', error);
+        }
+    }
+    
+    // 🔧 轻量级CLS修复（大数据量环境）
+    lightweightCLSFix(entry) {
+        // 只修复最关键的问题，避免大量DOM操作
+        if (entry && entry.sources && Array.isArray(entry.sources)) {
+            entry.sources.forEach(source => {
+                if (source && source.node && source.node.className) {
+                    const className = source.node.className;
+                    // 只修复已知的关键元素
+                    if (className.includes('pm-person-selector') || className.includes('pm-software-selector')) {
+                        this.fixSpecificElement(source.node);
+                    }
+                }
+            });
+        }
+    }
+    
+    // 🔧 标准CLS修复（小数据量环境）
+    standardCLSFix(entry) {
+        // 确保图片有尺寸属性
+        this.fixImageDimensions();
+        
+        // 确保字体加载不影响布局
+        this.fixFontLoading();
+        
+        // 确保动态内容有预留空间
+        this.fixDynamicContent();
+        
+        // 针对具体元素进行修复
+        if (entry && entry.sources && Array.isArray(entry.sources)) {
+            entry.sources.forEach(source => {
+                if (source && source.node) {
+                    this.fixSpecificElement(source.node);
+                }
+            });
         }
     }
     

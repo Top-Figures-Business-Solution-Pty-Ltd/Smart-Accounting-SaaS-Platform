@@ -75,8 +75,32 @@ class SoftwareSelectorManager {
         
         // 添加到页面
         $('body').append(selectorHTML);
-        const $selector = $(`#pm-software-selector-${taskId}`);
         
+        // 🔧 修复大数据量下的DOM时序问题：使用requestAnimationFrame确保DOM操作完成
+        requestAnimationFrame(() => {
+            const $selector = $(`#pm-software-selector-${taskId}`);
+            
+            if ($selector.length === 0) {
+                console.error('❌ Software selector not found after append!');
+                // 🔧 添加降级处理：再次尝试查找
+                setTimeout(() => {
+                    const $fallbackSelector = $(`#pm-software-selector-${taskId}`);
+                    if ($fallbackSelector.length > 0) {
+                        console.log('✅ Fallback software selector found:', $fallbackSelector.length);
+                        this.initializeSoftwareSelectorAfterAppend($fallbackSelector, $cell, taskId);
+                    } else {
+                        console.error('❌ Fallback software selector also failed');
+                    }
+                }, 50);
+                return;
+            }
+            
+            this.initializeSoftwareSelectorAfterAppend($selector, $cell, taskId);
+        });
+    }
+
+    // 🔧 新增方法：在DOM确认存在后初始化软件选择器
+    initializeSoftwareSelectorAfterAppend($selector, $cell, taskId) {
         // 定位选择器
         const cellRect = $cell[0].getBoundingClientRect();
         

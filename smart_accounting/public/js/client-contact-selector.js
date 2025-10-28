@@ -96,8 +96,40 @@ class ClientContactSelectorManager {
         
         // Add to body
         $('body').append(selectorHTML);
-        const $selector = $(`#pm-client-contact-selector-${taskId}`);
         
+        // 🔧 修复大数据量下的DOM时序问题：使用requestAnimationFrame确保DOM操作完成
+        requestAnimationFrame(() => {
+            const $selector = $(`#pm-client-contact-selector-${taskId}`);
+            
+            if ($selector.length === 0) {
+                console.error('❌ Client contact selector not found after append!');
+                // 🔧 添加降级处理：再次尝试查找
+                setTimeout(() => {
+                    const $fallbackSelector = $(`#pm-client-contact-selector-${taskId}`);
+                    if ($fallbackSelector.length > 0) {
+                        console.log('✅ Fallback client contact selector found:', $fallbackSelector.length);
+                        this.initializeClientContactSelectorAfterAppend($fallbackSelector, $cell, taskId, clientId);
+                    } else {
+                        console.error('❌ Fallback client contact selector also failed');
+                    }
+                }, 50);
+                return;
+            }
+            
+            this.initializeClientContactSelectorAfterAppend($selector, $cell, taskId, clientId);
+        });
+            
+        } catch (error) {
+            console.error('Error in showClientContactSelector:', error);
+            frappe.show_alert({
+                message: 'Error opening contact selector: ' + error.message,
+                indicator: 'red'
+            });
+        }
+    }
+
+    // 🔧 新增方法：在DOM确认存在后初始化客户联系人选择器
+    initializeClientContactSelectorAfterAppend($selector, $cell, taskId, clientId) {
         // Position above the cell using viewport coordinates
         const cellRect = $cell[0].getBoundingClientRect();
         
@@ -113,16 +145,8 @@ class ClientContactSelectorManager {
         // Show with animation
         $selector.fadeIn(200);
         
-            // Bind events
-            this.bindClientContactSelectorEvents($selector, $cell, taskId, clientId);
-            
-        } catch (error) {
-            console.error('Error in showClientContactSelector:', error);
-            frappe.show_alert({
-                message: 'Error opening contact selector: ' + error.message,
-                indicator: 'red'
-            });
-        }
+        // Bind events
+        this.bindClientContactSelectorEvents($selector, $cell, taskId, clientId);
     }
 
     bindClientContactSelectorEvents($selector, $cell, taskId, clientId) {

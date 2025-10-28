@@ -116,11 +116,40 @@ class ClientSelectorModal {
         `;
 
         $('body').append(modalHTML);
-        $('.pm-client-selector-overlay').fadeIn(200);
+        
+        // 🔧 修复大数据量下的DOM时序问题：使用requestAnimationFrame确保DOM操作完成
+        requestAnimationFrame(() => {
+            const $overlay = $('.pm-client-selector-overlay');
+            
+            if ($overlay.length === 0) {
+                console.error('❌ Client selector overlay not found after append!');
+                // 🔧 添加降级处理：再次尝试查找
+                setTimeout(() => {
+                    const $fallbackOverlay = $('.pm-client-selector-overlay');
+                    if ($fallbackOverlay.length > 0) {
+                        console.log('✅ Fallback client selector overlay found:', $fallbackOverlay.length);
+                        this.initializeClientSelectorAfterAppend($fallbackOverlay);
+                    } else {
+                        console.error('❌ Fallback client selector overlay also failed');
+                    }
+                }, 50);
+                return;
+            }
+            
+            this.initializeClientSelectorAfterAppend($overlay);
+        });
+    }
+
+    // 🔧 新增方法：在DOM确认存在后初始化客户选择器
+    initializeClientSelectorAfterAppend($overlay) {
+        // Show overlay with animation
+        $overlay.fadeIn(200);
 
         // Focus on search input
-        $('.pm-client-search-input').focus();
+        const $searchInput = $('.pm-client-search-input');
+        $searchInput.focus();
 
+        // Bind events
         this.bindModalEvents();
     }
 
