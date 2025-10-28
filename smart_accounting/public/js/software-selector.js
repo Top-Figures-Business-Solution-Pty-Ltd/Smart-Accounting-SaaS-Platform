@@ -98,6 +98,8 @@ class SoftwareSelectorManager {
 
     async showSoftwareSelector($cell, taskId, fieldName) {
         try {
+            console.log('🚀 NEW VERSION: showSoftwareSelector called with:', taskId, fieldName);
+            
             // 🔧 防抖机制：防止重复点击
             if ($cell.hasClass('editing') || $cell.hasClass('selector-opening')) {
                 console.log('Software selector already opening/open for task:', taskId);
@@ -106,8 +108,6 @@ class SoftwareSelectorManager {
             
             // 标记为正在打开
             $cell.addClass('editing selector-opening');
-            
-            console.log('showSoftwareSelector called with:', taskId, fieldName);
             
             // 立即显示空选择器，不等待数据加载
             this.showEmptySoftwareSelector($cell, taskId);

@@ -173,7 +173,7 @@ class PersonSelectorManager {
         // 标记为正在打开
         $cell.addClass('editing selector-opening');
         
-        console.log('🎭 PersonSelectorManager.showMultiPersonSelector called with:', {
+        console.log('🚀 NEW VERSION: PersonSelectorManager.showMultiPersonSelector called with:', {
             $cell: $cell.length,
             taskId: taskId,
             fieldName: fieldName,
