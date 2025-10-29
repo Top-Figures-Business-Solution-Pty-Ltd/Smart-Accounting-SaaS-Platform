@@ -24,7 +24,7 @@ flowchart TD
     USER[User<br/>用户<br/>━━━━━━━━━━<br/>• full_name<br/>• email]
     
     %% 第三层：业务约定（核心枢纽）
-    ENG[Engagement<br/>业务约定 🎯<br/>━━━━━━━━━━<br/>• customer<br/>• company<br/>• referral_person<br/>• service_line<br/>• primary_contact<br/>• owner_partner]
+    ENG[Engagement<br/>业务约定 🎯<br/>━━━━━━━━━━<br/>• customer<br/>• company<br/>• referral_person<br/>• service_line<br/>• project ⭐<br/>• primary_contact<br/>• owner_partner]
     
     %% 第四层：服务组织
     SL[Service Line<br/>服务线<br/>━━━━━━━━━━<br/>• service_code<br/>• service_name<br/>• category]
@@ -32,7 +32,7 @@ flowchart TD
     PAR[Partition<br/>分区/Board<br/>━━━━━━━━━━<br/>• partition_name<br/>• parent_partition<br/>• is_workspace]
     
     %% 第五层：项目执行
-    PRO[Project<br/>项目/服务<br/>━━━━━━━━━━<br/>• project_name<br/>• customer<br/>• custom_service_line<br/>• custom_partition]
+    PRO[Project<br/>项目/服务<br/>━━━━━━━━━━<br/>• project_name<br/>• customer<br/>• custom_service_line ⭐<br/>• custom_partition]
     
     %% 第六层：任务执行
     TASK[Task<br/>任务/项目<br/>━━━━━━━━━━<br/>• subject<br/>• custom_client<br/>• custom_engagement<br/>• custom_service_line<br/>• custom_budget_planning<br/>• custom_task_status]
@@ -44,17 +44,18 @@ flowchart TD
     
     %% 客户管理 - 紫色
     COMP -->|公司实体| CUS
+    CUS -->|客户联系人| CON
     CUS -->|业务约定| ENG
-    CON -->|联系人| ENG
-    USER -->|负责人| ENG
+    CON -->|业务联系人| ENG
+    USER -->|负责合伙人| ENG
     
     %% 服务交付 - 橙色（核心流程）
+    ENG ===|直接指定项目| PRO
     ENG ===|核心业务| TASK
     
-    %% 服务组织 - 绿色
+    %% 服务组织 - 绿色（新的清晰层级）
     SL -->|服务定义| ENG
-    SL -->|服务分类| PRO
-    SL -->|任务分类| TASK
+    SL ===|必须归属| PRO
     
     %% 项目层级 - 粉色
     PAR -->|组织项目| PRO
@@ -64,6 +65,7 @@ flowchart TD
     CUS -.->|直接项目| PRO
     CUS -.->|直接任务| TASK
     COMP -.->|TF/TG| TASK
+    SL -.->|任务分类| TASK
     
     %% 自引用
     PAR -.->|层级关系| PAR
@@ -97,12 +99,13 @@ flowchart TD
 | Contact | Engagement | tax_contact | N:1 | 税务联系人 |
 | Contact | Engagement | grants_contact | N:1 | 补助联系人 |
 | Service Line | Engagement | service_line | 1:N | 服务线的业务约定 |
+| Project | Engagement | project | 1:N | **新增** 项目的业务约定 |
 | User | Engagement | owner_partner | 1:N | 负责合伙人 |
 | Engagement | Task | custom_engagement | 1:N | 业务约定的任务 |
 | **项目层级** | | | | |
 | Partition | Partition | parent_partition | 1:N | 分区层级关系 |
 | Partition | Project | custom_partition | 1:N | 分区下的项目 |
-| Service Line | Project | custom_service_line | 1:N | 服务线的项目 |
+| Service Line | Project | custom_service_line | 1:N | **强化** 服务线必须归属项目 |
 | Project | Task | project | 1:N | 项目下的任务 |
 | **任务关联** | | | | |
 | Service Line | Task | custom_service_line | 1:N | 任务的服务线 |
@@ -117,30 +120,43 @@ Referral Person → Customer/Contact → Engagement
 - 推荐人介绍客户和联系人
 - 基于推荐建立业务约定
 
-### 2️⃣ **项目层级**
+### 2️⃣ **项目层级（新架构）**
 ```
-Partition (Board) → Project (Service) → Task (Project)
+Partition (Board) → Project (Service Type) → Task (实际Project)
 ```
-- 分区组织项目
-- 项目包含具体任务
+- 分区组织服务类型
+- 服务类型包含具体客户项目
 - 符合Monday.com风格的层级结构
 
-### 3️⃣ **服务交付**
+### 3️⃣ **服务交付（优化后）**
 ```
-Service Line → Engagement → Task
+Service Line → Project (Service Type) → Engagement → Task (实际Project)
 ```
-- 服务线定义服务类型
-- 业务约定确定具体服务
-- 任务执行具体工作
+- 服务线定义服务分类
+- 项目作为具体服务类型
+- 业务约定直接指定服务类型
+- 任务作为实际客户项目执行
 
-### 4️⃣ **客户服务**
+### 4️⃣ **客户服务（完整链路）**
 ```
-Customer → Engagement → Task
-Contact ↗         ↓
+Customer → Contact → Engagement → Project → Task
+    ↓        ↓           ↓          ↓        ↓
+  客户    联系人      业务约定    服务类型   实际项目
 ```
-- 客户通过业务约定获得服务
-- 联系人参与业务沟通
-- 任务完成具体交付
+- 客户通过联系人建立业务约定
+- 业务约定指定具体的服务类型
+- 在服务类型下创建实际的客户项目
+
+### 5️⃣ **自动化创建流程（新增）**
+```
+创建Engagement时：
+1. 选择Service Line (服务分类)
+2. 选择Project (该Service Line下的具体服务类型)
+3. 自动创建Task (客户的实际项目)
+```
+- 用户选择明确，系统自动执行
+- 数据一致性自动保证
+- 避免Project归属混乱
 
 ## 🔗 关键连接点
 
