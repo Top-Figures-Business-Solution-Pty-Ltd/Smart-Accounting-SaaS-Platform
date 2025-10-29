@@ -441,6 +441,17 @@ class ProjectManagement {
             this.projectManager.createNewProject();
         });
 
+        // Header Management Buttons
+        $(document).on('click', '.pm-header-clients-btn', (e) => {
+            e.stopPropagation();
+            this.showHeaderClientsManagement();
+        });
+
+        $(document).on('click', '.pm-header-person-btn', (e) => {
+            e.stopPropagation();
+            this.showPersonUnderDevelopment();
+        });
+
         // Person filter dropdown toggle
         $(document).on('click', '.pm-person-filter-btn', (e) => {
             e.stopPropagation();
@@ -797,6 +808,27 @@ class ProjectManagement {
         // Bind close events
         $(document).on('click', '.pm-automate-dialog .pm-dialog-close, .pm-automate-dialog .pm-dialog-overlay', () => {
             $('.pm-automate-dialog').remove();
+        });
+    }
+
+    // Header Management Button Handlers
+    showHeaderClientsManagement() {
+        // Use the existing client management system
+        if (window.ClientManagementSystem) {
+            const clientManager = new window.ClientManagementSystem();
+            clientManager.showClientManagementDialog();
+        } else {
+            frappe.show_alert({
+                message: 'Client management system not loaded',
+                indicator: 'red'
+            });
+        }
+    }
+
+    showPersonUnderDevelopment() {
+        frappe.show_alert({
+            message: 'Person filter feature is under development',
+            indicator: 'blue'
         });
     }
 

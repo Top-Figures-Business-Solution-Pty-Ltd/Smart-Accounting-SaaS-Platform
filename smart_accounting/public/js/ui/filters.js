@@ -1513,14 +1513,6 @@ class FilterManager {
             </button>
         `);
         
-        // Add Manage Clients button
-        const clientsBtn = $(`
-            <button class="pm-btn pm-btn-secondary pm-clients-management-btn" style="margin-right: 10px;">
-                <i class="fa fa-users"></i>
-                Manage Clients
-            </button>
-        `);
-        
         const columnBtn = $(`
             <button class="pm-btn pm-btn-secondary pm-column-management-btn" style="margin-right: 10px;">
                 <i class="fa fa-columns"></i>
@@ -1530,7 +1522,6 @@ class FilterManager {
         
         // Add buttons to the actions area (in reverse order since we're prepending)
         $('.pm-actions').prepend(columnBtn);
-        $('.pm-actions').prepend(clientsBtn);
         $('.pm-actions').prepend(csvImportBtn);
         $('.pm-actions').prepend(csvExportBtn);
         
@@ -1543,11 +1534,6 @@ class FilterManager {
         csvImportBtn.on('click', (e) => {
             e.preventDefault();
             this.showCSVImportDialog();
-        });
-        
-        clientsBtn.on('click', (e) => {
-            e.preventDefault();
-            this.showClientsManagementDialog();
         });
         
         columnBtn.on('click', (e) => {
