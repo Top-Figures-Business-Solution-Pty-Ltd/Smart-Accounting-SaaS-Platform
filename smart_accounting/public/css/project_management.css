@@ -8,8 +8,7 @@
     margin-left: 20px;
 }
 
-.pm-header-clients-btn,
-.pm-header-person-btn {
+.pm-header-dashboard-btn {
     padding: 8px 16px !important;
     font-size: 13px !important;
     font-weight: 500 !important;
@@ -18,26 +17,18 @@
     white-space: nowrap;
 }
 
-.pm-header-clients-btn:hover {
+.pm-header-dashboard-btn:hover {
     background: var(--monday-hover) !important;
     transform: translateY(-1px);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-color: var(--monday-blue);
+    color: var(--monday-blue);
 }
 
-.pm-header-person-btn {
-    opacity: 0.7;
-    cursor: not-allowed !important;
-}
-
-.pm-header-person-btn:hover {
-    background: #f5f5f5 !important;
-    opacity: 0.8;
-}
-
-.pm-header-clients-btn i,
-.pm-header-person-btn i {
+.pm-header-dashboard-btn i {
     margin-right: 6px;
     font-size: 12px;
+    color: var(--monday-blue);
 }
 
 /* Toolbar */

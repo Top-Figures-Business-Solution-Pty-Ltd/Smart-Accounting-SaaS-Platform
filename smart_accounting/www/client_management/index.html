@@ -1,0 +1,255 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<!-- Include our custom system navbar -->
+{% include "smart_accounting/www/project_management/includes/system_navbar.html" %}
+
+<!-- Client Management Container - Using existing PM styles -->
+<div class="project-management-container">
+    
+    <!-- Client Management Header -->
+    <div class="pm-header">
+        <div class="pm-header-left">
+            <h1 class="pm-title">
+                <i class="fa fa-users"></i>
+                <div class="pm-title-container">
+                    <div class="pm-breadcrumb-nav">
+                        <span class="pm-breadcrumb-item" data-view="dashboard" title="返回Management Dashboard">
+                            <i class="fa fa-tachometer-alt"></i>
+                            Management Dashboard
+                        </span>
+                        <i class="fa fa-chevron-right pm-breadcrumb-separator"></i>
+                        <span class="pm-breadcrumb-current">
+                            <i class="fa fa-users"></i>
+                            Client Management
+                        </span>
+                    </div>
+                </div>
+            </h1>
+        </div>
+        <div class="pm-header-right">
+            <button class="pm-btn pm-btn-primary cm-new-client-btn" title="Create New Client">
+                <i class="fa fa-plus"></i>
+                New Client
+            </button>
+            <button class="pm-btn pm-btn-secondary cm-refresh-btn" title="Refresh Data">
+                <i class="fa fa-sync-alt"></i>
+                Refresh
+            </button>
+            <button class="pm-btn pm-btn-secondary cm-manage-groups-btn" title="Manage Client Groups">
+                <i class="fa fa-layer-group"></i>
+                Client Groups
+            </button>
+        </div>
+    </div>
+
+    <!-- Client Management Content -->
+    <div class="pm-content">
+        
+        <!-- Tab Navigation -->
+        <div class="cm-tabs">
+            <button class="cm-tab active" data-tab="clients">
+                <i class="fa fa-users"></i>
+                Clients
+                <span class="cm-tab-count" id="clients-count">0</span>
+            </button>
+            <button class="cm-tab" data-tab="contacts">
+                <i class="fa fa-address-book"></i>
+                Contacts
+                <span class="cm-tab-count" id="contacts-count">0</span>
+            </button>
+            <button class="cm-tab" data-tab="companies">
+                <i class="fa fa-building"></i>
+                Companies
+                <span class="cm-tab-count" id="companies-count">0</span>
+            </button>
+        </div>
+
+        <!-- Search and Filter Bar -->
+        <div class="cm-toolbar">
+            <div class="cm-search-container">
+                <i class="fa fa-search"></i>
+                <input type="text" class="cm-search-input" placeholder="Search..." id="cm-search-input">
+            </div>
+            <div class="cm-filters">
+                <select class="cm-filter-select" id="cm-company-filter">
+                    <option value="">All Companies</option>
+                </select>
+                <select class="cm-filter-select" id="cm-referral-filter">
+                    <option value="">All Referrals</option>
+                </select>
+                <button class="pm-btn pm-btn-secondary cm-clear-filters" title="Clear Filters">
+                    <i class="fa fa-times"></i>
+                    Clear
+                </button>
+            </div>
+        </div>
+
+        <!-- Tab Content Container -->
+        <div class="cm-tab-content-container">
+            
+            <!-- Clients Tab -->
+            <div class="cm-tab-content active" id="clients-tab">
+                <div class="cm-table-container">
+                    <table class="cm-table">
+                        <thead>
+                            <tr>
+                                <th>Client Name</th>
+                                <th>Company</th>
+                                <th>Contact Names</th>
+                                <th>Tasks</th>
+                                <th>Referral</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="clients-table-body">
+                            <!-- Clients will be loaded here -->
+                        </tbody>
+                    </table>
+                    <div class="cm-loading" id="clients-loading">
+                        <i class="fa fa-spinner fa-spin"></i>
+                        Loading clients...
+                    </div>
+                    <div class="cm-no-data" id="clients-no-data" style="display: none;">
+                        <i class="fa fa-users"></i>
+                        <p>No clients found</p>
+                        <button class="pm-btn pm-btn-primary cm-new-client-btn">
+                            <i class="fa fa-plus"></i>
+                            Create First Client
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Pagination -->
+                <div class="cm-pagination" id="clients-pagination" style="display: none;">
+                    <button class="pm-btn pm-btn-secondary cm-prev-btn" disabled>
+                        <i class="fa fa-chevron-left"></i>
+                        Previous
+                    </button>
+                    <span class="cm-page-info">Page 1 of 1</span>
+                    <button class="pm-btn pm-btn-secondary cm-next-btn" disabled>
+                        Next
+                        <i class="fa fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Contacts Tab -->
+            <div class="cm-tab-content" id="contacts-tab">
+                <div class="cm-table-container">
+                    <table class="cm-table">
+                        <thead>
+                            <tr>
+                                <th>Contact Name</th>
+                                <th>Client</th>
+                                <th>Role</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="contacts-table-body">
+                            <!-- Contacts will be loaded here -->
+                        </tbody>
+                    </table>
+                    <div class="cm-loading" id="contacts-loading">
+                        <i class="fa fa-spinner fa-spin"></i>
+                        Loading contacts...
+                    </div>
+                    <div class="cm-no-data" id="contacts-no-data" style="display: none;">
+                        <i class="fa fa-address-book"></i>
+                        <p>No business contacts found</p>
+                    </div>
+                </div>
+                
+                <!-- Pagination -->
+                <div class="cm-pagination" id="contacts-pagination" style="display: none;">
+                    <button class="pm-btn pm-btn-secondary cm-prev-btn" disabled>
+                        <i class="fa fa-chevron-left"></i>
+                        Previous
+                    </button>
+                    <span class="cm-page-info">Page 1 of 1</span>
+                    <button class="pm-btn pm-btn-secondary cm-next-btn" disabled>
+                        Next
+                        <i class="fa fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Companies Tab -->
+            <div class="cm-tab-content" id="companies-tab">
+                <div class="cm-table-container">
+                    <table class="cm-table">
+                        <thead>
+                            <tr>
+                                <th>Company Name</th>
+                                <th>Domain</th>
+                                <th>Clients</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="companies-table-body">
+                            <!-- Companies will be loaded here -->
+                        </tbody>
+                    </table>
+                    <div class="cm-loading" id="companies-loading">
+                        <i class="fa fa-spinner fa-spin"></i>
+                        Loading companies...
+                    </div>
+                    <div class="cm-no-data" id="companies-no-data" style="display: none;">
+                        <i class="fa fa-building"></i>
+                        <p>No companies found</p>
+                    </div>
+                </div>
+                
+                <!-- Pagination -->
+                <div class="cm-pagination" id="companies-pagination" style="display: none;">
+                    <button class="pm-btn pm-btn-secondary cm-prev-btn" disabled>
+                        <i class="fa fa-chevron-left"></i>
+                        Previous
+                    </button>
+                    <span class="cm-page-info">Page 1 of 1</span>
+                    <button class="pm-btn pm-btn-secondary cm-next-btn" disabled>
+                        Next
+                        <i class="fa fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- Client Details Modal -->
+<div class="cm-modal" id="client-details-modal" style="display: none;">
+    <div class="cm-modal-content">
+        <div class="cm-modal-header">
+            <h3 id="client-details-title">Client Details</h3>
+            <button class="cm-modal-close">
+                <i class="fa fa-times"></i>
+            </button>
+        </div>
+        <div class="cm-modal-body" id="client-details-body">
+            <!-- Client details will be loaded here -->
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block script %}
+<!-- Include system navbar scripts -->
+<script src="/assets/smart_accounting/js/system_navbar.js"></script>
+<!-- Client Management Scripts -->
+<script src="/assets/smart_accounting/js/client-management-system.js"></script>
+{% endblock %}
+
+{% block style %}
+<!-- Include existing PM styles first -->
+<link rel="stylesheet" href="/assets/smart_accounting/css/system_navbar.css">
+<link rel="stylesheet" href="/assets/smart_accounting/css/common.css">
+<link rel="stylesheet" href="/assets/smart_accounting/css/project_management.css">
+<!-- Client Management specific styles -->
+<link rel="stylesheet" href="/assets/smart_accounting/css/client-management-system.css">
+{% endblock %}

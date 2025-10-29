@@ -441,15 +441,10 @@ class ProjectManagement {
             this.projectManager.createNewProject();
         });
 
-        // Header Management Buttons
-        $(document).on('click', '.pm-header-clients-btn', (e) => {
+        // Header Management Dashboard Button
+        $(document).on('click', '.pm-header-dashboard-btn', (e) => {
             e.stopPropagation();
-            this.showHeaderClientsManagement();
-        });
-
-        $(document).on('click', '.pm-header-person-btn', (e) => {
-            e.stopPropagation();
-            this.showPersonUnderDevelopment();
+            this.navigateToManagementDashboard();
         });
 
         // Person filter dropdown toggle
@@ -811,25 +806,10 @@ class ProjectManagement {
         });
     }
 
-    // Header Management Button Handlers
-    showHeaderClientsManagement() {
-        // Use the existing client management system
-        if (window.ClientManagementSystem) {
-            const clientManager = new window.ClientManagementSystem();
-            clientManager.showClientManagementDialog();
-        } else {
-            frappe.show_alert({
-                message: 'Client management system not loaded',
-                indicator: 'red'
-            });
-        }
-    }
-
-    showPersonUnderDevelopment() {
-        frappe.show_alert({
-            message: 'Person filter feature is under development',
-            indicator: 'blue'
-        });
+    // Header Management Dashboard Handler
+    navigateToManagementDashboard() {
+        // Navigate to Management Dashboard
+        window.location.href = '/management_dashboard';
     }
 
     // Legacy method for comment editing (placeholder)
