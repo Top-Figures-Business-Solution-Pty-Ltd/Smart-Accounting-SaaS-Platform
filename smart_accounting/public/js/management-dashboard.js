@@ -175,26 +175,12 @@ class ManagementDashboard {
         console.log(`⚡ Executing quick action: ${action}`);
 
         switch (action) {
-            case 'new-client':
-                this.createNewClient();
-                break;
-            case 'new-contact':
-                this.showComingSoon('New Contact');
-                break;
-            case 'new-engagement':
-                this.showComingSoon('New Engagement');
-                break;
             case 'export-data':
                 this.showComingSoon('Export Data');
                 break;
             default:
                 console.warn(`Unknown action: ${action}`);
         }
-    }
-
-    createNewClient() {
-        // Navigate to new customer form
-        frappe.new_doc('Customer');
     }
 
     showComingSoon(feature) {
