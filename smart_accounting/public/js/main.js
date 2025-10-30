@@ -880,6 +880,46 @@ $(document).ready(function() {
     // Initialize project management
     window.projectManagement = new ProjectManagement();
     
+    // Fill search box with client name from localStorage if present
+    const storedClient = localStorage.getItem('pm_search_client');
+    const storedTimestamp = localStorage.getItem('pm_search_client_timestamp');
+    
+    if (storedClient && storedTimestamp) {
+        // Check if the stored data is recent (within last 10 seconds)
+        const now = Date.now();
+        const timestamp = parseInt(storedTimestamp);
+        
+        if (now - timestamp < 10000) { // 10 seconds
+            // Wait for the interface to be fully loaded before filling search box
+            setTimeout(() => {
+                const searchInput = $('#pm-search-input');
+                if (searchInput.length > 0) {
+                    searchInput.val(storedClient);
+                    
+                    // Trigger search functionality - try multiple events to ensure it works
+                    searchInput.trigger('input');
+                    searchInput.trigger('keyup');
+                    searchInput.trigger('change');
+                    
+                    // Focus and blur to ensure the search is processed
+                    searchInput.focus().blur();
+                    
+                    console.log(`Auto-filled search box with client from localStorage: ${storedClient}`);
+                    
+                    // Clear the localStorage after use to prevent it from affecting other tabs
+                    localStorage.removeItem('pm_search_client');
+                    localStorage.removeItem('pm_search_client_timestamp');
+                } else {
+                    console.log('Search input #pm-search-input not found');
+                }
+            }, 1500); // Wait 1.5 seconds for full initialization
+        } else {
+            // Clear expired data
+            localStorage.removeItem('pm_search_client');
+            localStorage.removeItem('pm_search_client_timestamp');
+        }
+    }
+    
     // Project Management interface initialized
     
     // 开发者工具：仅在开发环境中启用

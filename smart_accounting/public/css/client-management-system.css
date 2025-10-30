@@ -651,6 +651,91 @@
     cursor: default;
 }
 
+/* Task row click styles */
+.cm-task-row {
+    transition: background-color 0.2s ease;
+}
+
+.cm-task-row:hover {
+    background-color: var(--monday-hover) !important;
+}
+
+.cm-task-row:active {
+    background-color: var(--monday-blue-light) !important;
+}
+
+.cm-task-row td {
+    position: relative;
+}
+
+.cm-task-row:hover td:first-child::after {
+    content: "Click to view in board";
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    color: var(--monday-gray);
+    font-style: italic;
+}
+
+/* Client Management Breadcrumb Enhancements */
+.cm-breadcrumb-nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.cm-breadcrumb-nav .pm-breadcrumb-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    color: #6c757d;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    background: rgba(108, 117, 125, 0.05);
+}
+
+.cm-breadcrumb-nav .pm-breadcrumb-item:hover {
+    color: #0073ea;
+    background: #f0f7ff;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 115, 234, 0.1);
+}
+
+.cm-breadcrumb-nav .pm-breadcrumb-item i {
+    font-size: 16px;
+    opacity: 0.8;
+}
+
+.cm-breadcrumb-nav .pm-breadcrumb-separator {
+    color: #dee2e6;
+    font-size: 14px;
+    margin: 0 4px;
+}
+
+.cm-breadcrumb-nav .pm-breadcrumb-current {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #2c3e50;
+    font-weight: 700;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 6px;
+    border-left: 4px solid #0073ea;
+}
+
+.cm-breadcrumb-nav .pm-breadcrumb-current i {
+    font-size: 16px;
+    color: #0073ea;
+}
+
 /* Responsive edit controls */
 @media (max-width: 768px) {
     .cm-edit-controls {
@@ -661,5 +746,31 @@
     .cm-edit-controls .pm-btn {
         width: 100%;
         justify-content: center;
+    }
+    
+    .cm-task-row:hover td:first-child::after {
+        display: none;
+    }
+    
+    .cm-stats-info {
+        font-size: 11px;
+        margin-top: 2px;
+    }
+    
+    /* Responsive breadcrumb */
+    .cm-breadcrumb-nav {
+        font-size: 16px;
+        gap: 8px;
+    }
+    
+    .cm-breadcrumb-nav .pm-breadcrumb-item,
+    .cm-breadcrumb-nav .pm-breadcrumb-current {
+        padding: 6px 8px;
+        font-size: 14px;
+    }
+    
+    .cm-breadcrumb-nav .pm-breadcrumb-item i,
+    .cm-breadcrumb-nav .pm-breadcrumb-current i {
+        font-size: 14px;
     }
 }

@@ -142,9 +142,13 @@ def get_clients(search_term="", filters=None, limit=50, offset=0):
                 client['contact_count'] = 0
                 client['contact_names'] = None
             
-            # Get task count
+            # Get task count (excluding subtasks)
             try:
-                client['task_count'] = frappe.db.count('Task', {'custom_client': client['name']})
+                client['task_count'] = frappe.db.count('Task', {
+                    'custom_client': client['name'],
+                    'is_group': 0,  # Only get leaf tasks (not parent tasks)
+                    'parent_task': ['is', 'not set']  # Filter out subtasks
+                })
             except:
                 client['task_count'] = 0
             
@@ -400,11 +404,15 @@ def get_client_details(client_id):
             except:
                 continue
         
-        # Get associated tasks using ERPNext standard method (changed from projects to tasks)
+        # Get associated tasks using ERPNext standard method (filter out subtasks)
         tasks = frappe.get_list(
             'Task',
-            filters={'custom_client': client_id},
-            fields=['name', 'subject', 'status', 'creation', 'modified'],
+            filters={
+                'custom_client': client_id,
+                'is_group': 0,  # Only get leaf tasks (not parent tasks)
+                'parent_task': ['is', 'not set']  # Filter out subtasks
+            },
+            fields=['name', 'subject', 'custom_task_status', 'creation', 'modified', 'project'],
             order_by='modified desc'
         )
         
@@ -415,6 +423,22 @@ def get_client_details(client_id):
         for task in tasks:
             task['creation_formatted'] = frappe.utils.pretty_date(task['creation'])
             task['modified_formatted'] = frappe.utils.pretty_date(task['modified'])
+            
+            # Map custom_task_status to status for frontend compatibility
+            task['status'] = task.get('custom_task_status') or 'Not Started'
+            
+            # Get project name and partition if exists
+            if task.get('project'):
+                try:
+                    project_doc = frappe.get_doc('Project', task['project'])
+                    task['project_name'] = project_doc.project_name
+                    task['project_partition'] = project_doc.get('custom_partition')
+                except:
+                    task['project_name'] = task['project']
+                    task['project_partition'] = None
+            else:
+                task['project_name'] = 'No Project'
+                task['project_partition'] = None
         
         return {
             'success': True,

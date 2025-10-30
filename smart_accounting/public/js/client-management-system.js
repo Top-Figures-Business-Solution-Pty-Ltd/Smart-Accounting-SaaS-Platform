@@ -113,6 +113,15 @@ class ClientManagementSystem {
             this.nextPage();
         });
 
+        // Task row click - navigate to project board
+        $(document).on('click', '.cm-task-row', (e) => {
+            e.preventDefault();
+            const taskId = $(e.currentTarget).data('task-id');
+            const projectId = $(e.currentTarget).data('project-id');
+            const projectPartition = $(e.currentTarget).data('project-partition');
+            this.navigateToTaskInProjectBoard(taskId, projectId, projectPartition);
+        });
+
         // Escape key to close modal
         $(document).on('keydown', (e) => {
             if (e.key === 'Escape') {
@@ -544,15 +553,15 @@ class ClientManagementSystem {
                     <table class="cm-table">
                         <thead>
                             <tr>
-                                <th>Task Name</th>
+                                <th>Project</th>
                                 <th>Status</th>
                                 <th>Created</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${projects.map(task => `
-                                <tr>
-                                    <td><strong>${task.subject || task.name}</strong></td>
+                                <tr class="cm-task-row" data-task-id="${task.name}" data-project-id="${task.project || ''}" data-project-partition="${task.project_partition || ''}" style="cursor: pointer;" title="Click to view in board">
+                                    <td><strong>${task.project_name || 'No Project'}</strong></td>
                                     <td>${task.status || '-'}</td>
                                     <td>${task.creation_formatted}</td>
                                 </tr>
@@ -713,15 +722,15 @@ class ClientManagementSystem {
                     <table class="cm-table">
                         <thead>
                             <tr>
-                                <th>Task Name</th>
+                                <th>Project</th>
                                 <th>Status</th>
                                 <th>Created</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${projects.map(task => `
-                                <tr>
-                                    <td><strong>${task.subject || task.name}</strong></td>
+                                <tr class="cm-task-row" data-task-id="${task.name}" data-project-id="${task.project || ''}" data-project-partition="${task.project_partition || ''}" style="cursor: pointer;" title="Click to view in board">
+                                    <td><strong>${task.project_name || 'No Project'}</strong></td>
                                     <td>${task.status || '-'}</td>
                                     <td>${task.creation_formatted}</td>
                                 </tr>
@@ -867,6 +876,44 @@ class ClientManagementSystem {
 
     navigateToManagementDashboard() {
         window.location.href = '/management_dashboard';
+    }
+
+    navigateToTaskInProjectBoard(taskId, projectId, projectPartition) {
+        if (!taskId) {
+            this.showError('Task ID not found');
+            return;
+        }
+
+        if (!projectId) {
+            this.showError('This task is not associated with a project');
+            return;
+        }
+
+        if (!projectPartition) {
+            this.showError('Project partition not found');
+            return;
+        }
+
+        // Get current client name from modal title
+        const modalTitle = $('#client-details-title').text();
+        const clientName = modalTitle.replace(' - View/Edit', '').trim();
+
+        // Store client name in localStorage for the new tab to pick up
+        localStorage.setItem('pm_search_client', clientName);
+        localStorage.setItem('pm_search_client_timestamp', Date.now().toString());
+
+        // Construct the URL to the project management board with partition view only
+        // Format: /project_management?view=PARTITION
+        const boardUrl = `/project_management?view=${encodeURIComponent(projectPartition)}`;
+        
+        // Open in new tab/window
+        window.open(boardUrl, '_blank');
+        
+        // Show feedback to user
+        frappe.show_alert({
+            message: `Opening ${clientName} tasks in ${projectPartition} board...`,
+            indicator: 'blue'
+        });
     }
 
     closeModal() {
