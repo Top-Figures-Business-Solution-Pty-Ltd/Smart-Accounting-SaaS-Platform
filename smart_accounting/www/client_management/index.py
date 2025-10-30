@@ -521,3 +521,209 @@ def update_client(client_id, data):
             'success': False,
             'error': str(e)
         }
+
+@frappe.whitelist()
+def get_staffs(search_term="", limit=50, offset=0):
+    """
+    Get company staffs with task assignments - Scalable architecture for future enhancements
+    """
+    try:
+        # Convert string parameters to proper types
+        limit = int(limit) if limit else 50
+        offset = int(offset) if offset else 0
+        
+        # Get all active users (excluding Guest and Administrator)
+        filter_dict = {
+            'enabled': 1,
+            'name': ['not in', ['Guest', 'Administrator']]
+        }
+        or_filters = []
+        
+        # Add search functionality
+        if search_term:
+            or_filters = [
+                ['full_name', 'like', f'%{search_term}%'],
+                ['first_name', 'like', f'%{search_term}%'],
+                ['last_name', 'like', f'%{search_term}%'],
+                ['email', 'like', f'%{search_term}%']
+            ]
+        
+        # Get users with employee information
+        users = frappe.get_list(
+            'User',
+            fields=['name', 'full_name', 'first_name', 'last_name', 'email', 'creation', 'modified'],
+            filters=filter_dict,
+            or_filters=or_filters if or_filters else None,
+            order_by='full_name asc',
+            limit_start=offset,
+            limit_page_length=limit
+        )
+        
+        # Get total count
+        if or_filters:
+            all_users = frappe.get_list(
+                'User',
+                fields=['name'],
+                filters=filter_dict,
+                or_filters=or_filters
+            )
+            total_count = len(all_users)
+        else:
+            total_count = frappe.db.count('User', filters=filter_dict)
+        
+        # Enhance staff data with task assignments and future-ready fields
+        for staff in users:
+            # Get assigned task count using custom_roles sub-table (excluding subtasks)
+            try:
+                # Get tasks where this user is assigned in any role via Task Role Assignment
+                assigned_task_ids = frappe.db.sql("""
+                    SELECT DISTINCT tra.parent
+                    FROM `tabTask Role Assignment` tra
+                    JOIN `tabTask` t ON tra.parent = t.name
+                    WHERE tra.user = %s 
+                    AND t.is_group = 0 
+                    AND (t.parent_task IS NULL OR t.parent_task = '')
+                """, (staff['name'],), as_dict=True)
+                
+                staff['assigned_task_count'] = len(assigned_task_ids)
+            except Exception as e:
+                frappe.log_error(f"Error counting tasks for staff {staff['name']}: {str(e)}")
+                staff['assigned_task_count'] = 0
+            
+            # Get employee information for future scalability
+            try:
+                employee_data = frappe.get_list(
+                    'Employee',
+                    filters={'user_id': staff['name']},
+                    fields=['name', 'designation', 'department'],
+                    limit=1
+                )
+                if employee_data:
+                    emp = employee_data[0]
+                    staff['employee_id'] = emp['name']
+                    staff['designation'] = emp.get('designation')  # For future use
+                    staff['department'] = emp.get('department')    # For future use
+                else:
+                    staff['employee_id'] = None
+                    staff['designation'] = None
+                    staff['department'] = None
+            except:
+                staff['employee_id'] = None
+                staff['designation'] = None
+                staff['department'] = None
+            
+            # Format display name
+            staff['display_name'] = staff['full_name'] or f"{staff['first_name'] or ''} {staff['last_name'] or ''}".strip()
+            if not staff['display_name']:
+                staff['display_name'] = staff['email']
+            
+            # Format dates
+            staff['creation_formatted'] = frappe.utils.pretty_date(staff['creation'])
+            staff['modified_formatted'] = frappe.utils.pretty_date(staff['modified'])
+        
+        return {
+            'success': True,
+            'staffs': users,
+            'total_count': total_count,
+            'has_more': (offset + limit) < total_count
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting staffs: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'staffs': [],
+            'total_count': 0
+        }
+
+@frappe.whitelist()
+def get_staff_details(staff_id):
+    """
+    Get detailed information for a specific staff member including assigned tasks
+    """
+    try:
+        # Get staff basic info
+        staff = frappe.get_doc('User', staff_id)
+        
+        # Get employee information
+        employee_data = frappe.get_list(
+            'Employee',
+            filters={'user_id': staff_id},
+            fields=['name', 'designation', 'department', 'employee_name'],
+            limit=1
+        )
+        
+        employee_info = employee_data[0] if employee_data else {}
+        
+        # Get assigned tasks using custom_roles sub-table
+        assigned_tasks_query = frappe.db.sql("""
+            SELECT DISTINCT 
+                t.name,
+                t.subject,
+                t.custom_task_status,
+                t.project,
+                t.custom_client,
+                t.creation,
+                t.modified,
+                p.project_name,
+                c.customer_name as client_name
+            FROM `tabTask Role Assignment` tra
+            JOIN `tabTask` t ON tra.parent = t.name
+            LEFT JOIN `tabProject` p ON t.project = p.name
+            LEFT JOIN `tabCustomer` c ON t.custom_client = c.name
+            WHERE tra.user = %s 
+            AND t.is_group = 0 
+            AND (t.parent_task IS NULL OR t.parent_task = '')
+            ORDER BY p.project_name ASC, c.customer_name ASC
+        """, (staff_id,), as_dict=True)
+        
+        # Format task data
+        tasks = []
+        for task in assigned_tasks_query:
+            task_data = {
+                'name': task['name'],
+                'subject': task['subject'],
+                'status': task['custom_task_status'] or 'Not Started',
+                'project': task['project'],
+                'project_name': task['project_name'] or 'No Project',
+                'client_name': task['client_name'] or 'No Client',
+                'creation_formatted': frappe.utils.pretty_date(task['creation']),
+                'modified_formatted': frappe.utils.pretty_date(task['modified'])
+            }
+            
+            # Get project partition for navigation
+            if task['project']:
+                try:
+                    project_doc = frappe.get_doc('Project', task['project'])
+                    task_data['project_partition'] = project_doc.get('custom_partition')
+                except:
+                    task_data['project_partition'] = None
+            else:
+                task_data['project_partition'] = None
+                
+            tasks.append(task_data)
+        
+        return {
+            'success': True,
+            'staff': {
+                'name': staff.name,
+                'full_name': staff.full_name or f"{staff.first_name or ''} {staff.last_name or ''}".strip(),
+                'email': staff.email,
+                'creation': staff.creation,
+                'enabled': staff.enabled,
+                # Employee info for future use
+                'employee_id': employee_info.get('name'),
+                'designation': employee_info.get('designation'),
+                'department': employee_info.get('department'),
+                'employee_name': employee_info.get('employee_name')
+            },
+            'tasks': tasks
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting staff details: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }

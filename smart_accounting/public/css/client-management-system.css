@@ -774,3 +774,75 @@
         font-size: 14px;
     }
 }
+
+/* Staff-specific styles */
+.cm-staff-name {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.cm-staff-designation {
+    color: var(--monday-gray);
+    font-style: italic;
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+.cm-staff-name strong {
+    color: var(--monday-dark);
+    font-weight: 600;
+}
+
+/* Status badge styles for staff tasks */
+.cm-status-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.cm-status-badge.status-not-started {
+    background: #f8f9fa;
+    color: #6c757d;
+    border: 1px solid #dee2e6;
+}
+
+.cm-status-badge.status-ready-for-management {
+    background: #e3f2fd;
+    color: #1976d2;
+    border: 1px solid #bbdefb;
+}
+
+.cm-status-badge.status-ready-to-lodge {
+    background: #fff3e0;
+    color: #f57c00;
+    border: 1px solid #ffcc02;
+}
+
+.cm-status-badge.status-done {
+    background: #e8f5e8;
+    color: #2e7d32;
+    border: 1px solid #c8e6c9;
+}
+
+.cm-status-badge.status-in-progress {
+    background: #fff8e1;
+    color: #f9a825;
+    border: 1px solid #ffecb3;
+}
+
+/* No tasks message styling */
+.cm-no-tasks-message {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--monday-gray);
+    font-style: italic;
+}
+
+.cm-no-tasks-message p {
+    margin: 0;
+    font-size: 14px;
+}

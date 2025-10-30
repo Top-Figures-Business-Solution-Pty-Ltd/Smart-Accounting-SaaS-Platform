@@ -7,7 +7,8 @@ class ClientManagementSystem {
         this.currentPage = {
             clients: 1,
             contacts: 1,
-            companies: 1
+            companies: 1,
+            staffs: 1
         };
         this.itemsPerPage = 50;
         this.searchTimeout = null;
@@ -97,6 +98,12 @@ class ClientManagementSystem {
             this.showClientDetailsWithEdit(clientId);
         });
 
+        // Staff View/Edit button
+        $(document).on('click', '.cm-action-btn-view-staff', (e) => {
+            const staffId = $(e.currentTarget).data('staff-id');
+            this.showStaffTaskDetails(staffId);
+        });
+
         // Modal close
         $(document).on('click', '.cm-modal-close, .cm-modal', (e) => {
             if (e.target === e.currentTarget) {
@@ -158,6 +165,9 @@ class ClientManagementSystem {
                     break;
                 case 'companies':
                     await this.loadCompanies();
+                    break;
+                case 'staffs':
+                    await this.loadStaffs();
                     break;
             }
         } catch (error) {
@@ -257,6 +267,36 @@ class ClientManagementSystem {
             console.error('Error loading companies:', error);
             this.showNoData('companies');
             this.showError('Failed to load companies');
+        }
+    }
+
+    async loadStaffs() {
+        this.showLoading('staffs');
+
+        try {
+            const searchTerm = $('#cm-search-input').val();
+            const offset = (this.currentPage.staffs - 1) * this.itemsPerPage;
+
+            const response = await frappe.call({
+                method: 'smart_accounting.www.client_management.index.get_staffs',
+                args: {
+                    search_term: searchTerm,
+                    limit: this.itemsPerPage,
+                    offset: offset
+                }
+            });
+
+            if (response.message && response.message.success) {
+                this.renderStaffsTable(response.message.staffs);
+                this.updatePagination('staffs', response.message.total_count, response.message.has_more);
+                this.updateTabCount('staffs', response.message.total_count);
+            } else {
+                throw new Error(response.message?.error || 'Failed to load staffs');
+            }
+        } catch (error) {
+            console.error('Error loading staffs:', error);
+            this.showNoData('staffs');
+            this.showError('Failed to load staffs');
         }
     }
 
@@ -406,6 +446,45 @@ class ClientManagementSystem {
         this.hideLoading('companies');
     }
 
+    renderStaffsTable(staffs) {
+        const tbody = $('#staffs-table-body');
+        tbody.empty();
+
+        if (staffs.length === 0) {
+            this.showNoData('staffs');
+            return;
+        }
+
+        staffs.forEach(staff => {
+            const row = $(`
+                <tr>
+                    <td>
+                        <span class="cm-staff-name" data-staff-id="${staff.name}">
+                            <strong>${this.escapeHtml(staff.display_name)}</strong>
+                        </span>
+                        ${staff.designation ? `<small class="cm-staff-designation">${this.escapeHtml(staff.designation)}</small>` : ''}
+                    </td>
+                    <td>
+                        <span class="cm-count-badge ${staff.assigned_task_count === 0 ? 'zero' : ''}">
+                            ${staff.assigned_task_count}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="cm-action-buttons">
+                            <button class="cm-action-btn cm-action-btn-view-staff" data-staff-id="${staff.name}" title="View Staff Tasks">
+                                <i class="fa fa-eye"></i>
+                                View/Edit
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `);
+            tbody.append(row);
+        });
+
+        this.hideLoading('staffs');
+    }
+
     async showClientDetails(clientId) {
         try {
             const response = await frappe.call({
@@ -441,6 +520,25 @@ class ClientManagementSystem {
         } catch (error) {
             console.error('Error loading client details:', error);
             this.showError('Failed to load client details');
+        }
+    }
+
+    async showStaffTaskDetails(staffId) {
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.client_management.index.get_staff_details',
+                args: { staff_id: staffId }
+            });
+
+            if (response.message && response.message.success) {
+                this.renderStaffDetailsModal(response.message);
+                $('#client-details-modal').fadeIn(200);
+            } else {
+                throw new Error(response.message?.error || 'Failed to load staff details');
+            }
+        } catch (error) {
+            console.error('Error loading staff details:', error);
+            this.showError('Failed to load staff details');
         }
     }
 
@@ -748,6 +846,94 @@ class ClientManagementSystem {
         this.bindEditEvents();
     }
 
+    renderStaffDetailsModal(data) {
+        const { staff, tasks } = data;
+        
+        $('#client-details-title').text(`${staff.full_name} - Staff Details`);
+        
+        const modalBody = $('#client-details-body');
+        modalBody.html(`
+            <div class="cm-staff-info">
+                <div class="cm-info-card">
+                    <h4>Staff Information</h4>
+                    <div class="cm-info-item">
+                        <span class="cm-info-label">Name:</span>
+                        <span class="cm-info-value">${this.escapeHtml(staff.full_name)}</span>
+                    </div>
+                    <div class="cm-info-item">
+                        <span class="cm-info-label">Email:</span>
+                        <span class="cm-info-value">${staff.email}</span>
+                    </div>
+                    ${staff.designation ? `
+                    <div class="cm-info-item">
+                        <span class="cm-info-label">Position:</span>
+                        <span class="cm-info-value">${staff.designation}</span>
+                    </div>
+                    ` : ''}
+                    ${staff.department ? `
+                    <div class="cm-info-item">
+                        <span class="cm-info-label">Department:</span>
+                        <span class="cm-info-value">${staff.department}</span>
+                    </div>
+                    ` : ''}
+                </div>
+                
+                <div class="cm-info-card">
+                    <h4>Statistics</h4>
+                    <div class="cm-info-item">
+                        <span class="cm-info-label">Assigned Tasks:</span>
+                        <span class="cm-info-value">${tasks.length}</span>
+                    </div>
+                    <div class="cm-info-item">
+                        <span class="cm-info-label">Account Status:</span>
+                        <span class="cm-info-value">${staff.enabled ? 'Active' : 'Inactive'}</span>
+                    </div>
+                    <div class="cm-info-item">
+                        <span class="cm-info-label">Joined:</span>
+                        <span class="cm-info-value">${this.formatDate(staff.creation)}</span>
+                    </div>
+                </div>
+            </div>
+            
+            ${tasks.length > 0 ? `
+                <div class="cm-section-title">
+                    <i class="fa fa-tasks"></i>
+                    Assigned Tasks (${tasks.length})
+                </div>
+                <div class="cm-table-container">
+                    <table class="cm-table">
+                        <thead>
+                            <tr>
+                                <th>Project</th>
+                                <th>Client Name</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tasks.map(task => `
+                                <tr class="cm-task-row" data-task-id="${task.name}" data-project-id="${task.project || ''}" data-project-partition="${task.project_partition || ''}" style="cursor: pointer;" title="Click to view in board">
+                                    <td><strong>${task.project_name}</strong></td>
+                                    <td>${task.client_name}</td>
+                                    <td>
+                                        <span class="cm-status-badge status-${(task.status || 'Not Started').toLowerCase().replace(/\s+/g, '-')}">${task.status || 'Not Started'}</span>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            ` : `
+                <div class="cm-section-title">
+                    <i class="fa fa-tasks"></i>
+                    No Assigned Tasks
+                </div>
+                <div class="cm-no-tasks-message">
+                    <p>This staff member has no tasks assigned yet.</p>
+                </div>
+            `}
+        `);
+    }
+
     async loadFilterOptions() {
         try {
             const response = await frappe.call({
@@ -768,7 +954,7 @@ class ClientManagementSystem {
             console.log('📊 Loading tab counts...');
             
             // Load counts for all tabs in parallel - using minimal data requests
-            const [clientsResponse, contactsResponse, companiesResponse] = await Promise.all([
+            const [clientsResponse, contactsResponse, companiesResponse, staffsResponse] = await Promise.all([
                 frappe.call({
                     method: 'smart_accounting.www.client_management.index.get_clients',
                     args: {
@@ -794,6 +980,14 @@ class ClientManagementSystem {
                         limit: 1,
                         offset: 0
                     }
+                }),
+                frappe.call({
+                    method: 'smart_accounting.www.client_management.index.get_staffs',
+                    args: {
+                        search_term: '',
+                        limit: 1,
+                        offset: 0
+                    }
                 })
             ]);
 
@@ -806,6 +1000,9 @@ class ClientManagementSystem {
             }
             if (companiesResponse.message && companiesResponse.message.success) {
                 this.updateTabCount('companies', companiesResponse.message.total_count);
+            }
+            if (staffsResponse.message && staffsResponse.message.success) {
+                this.updateTabCount('staffs', staffsResponse.message.total_count);
             }
 
             console.log('✅ Tab counts loaded successfully');
