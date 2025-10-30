@@ -8,7 +8,8 @@ class ClientManagementSystem {
             clients: 1,
             contacts: 1,
             companies: 1,
-            staffs: 1
+            staffs: 1,
+            groups: 1
         };
         this.itemsPerPage = 50;
         this.searchTimeout = null;
@@ -73,7 +74,7 @@ class ClientManagementSystem {
 
         // New client button
         $(document).on('click', '.cm-new-client-btn', () => {
-            this.createNewClient();
+            this.showNewClientModal();
         });
 
         // Refresh button
@@ -102,6 +103,29 @@ class ClientManagementSystem {
         $(document).on('click', '.cm-action-btn-view-staff', (e) => {
             const staffId = $(e.currentTarget).data('staff-id');
             this.showStaffTaskDetails(staffId);
+        });
+
+        // New client form events
+        $(document).on('click', '.cm-cancel-new-client', () => {
+            this.closeModal();
+        });
+
+        $(document).on('submit', '#new-client-form', (e) => {
+            e.preventDefault();
+            this.saveNewClient();
+        });
+
+        // Other new buttons (placeholder for future)
+        $(document).on('click', '.cm-new-contact-btn', () => {
+            this.showComingSoon('New Contact');
+        });
+
+        $(document).on('click', '.cm-new-company-btn', () => {
+            this.showComingSoon('New Company');
+        });
+
+        $(document).on('click', '.cm-new-group-btn', () => {
+            this.showComingSoon('New Client Group');
         });
 
         // Modal close
@@ -168,6 +192,9 @@ class ClientManagementSystem {
                     break;
                 case 'staffs':
                     await this.loadStaffs();
+                    break;
+                case 'groups':
+                    await this.loadGroups();
                     break;
             }
         } catch (error) {
@@ -483,6 +510,72 @@ class ClientManagementSystem {
         });
 
         this.hideLoading('staffs');
+    }
+
+    async loadGroups() {
+        this.showLoading('groups');
+
+        try {
+            const searchTerm = $('#cm-search-input').val();
+            const offset = (this.currentPage.groups - 1) * this.itemsPerPage;
+
+            const response = await frappe.call({
+                method: 'smart_accounting.www.client_management.index.get_client_groups',
+                args: {
+                    search_term: searchTerm,
+                    limit: this.itemsPerPage,
+                    offset: offset
+                }
+            });
+
+            if (response.message && response.message.success) {
+                this.renderGroupsTable(response.message.groups);
+                this.updatePagination('groups', response.message.total_count, response.message.has_more);
+                this.updateTabCount('groups', response.message.total_count);
+            } else {
+                throw new Error(response.message?.error || 'Failed to load groups');
+            }
+        } catch (error) {
+            console.error('Error loading groups:', error);
+            this.showNoData('groups');
+            this.showError('Failed to load groups');
+        }
+    }
+
+    renderGroupsTable(groups) {
+        const tbody = $('#groups-table-body');
+        tbody.empty();
+
+        if (groups.length === 0) {
+            this.showNoData('groups');
+            return;
+        }
+
+        groups.forEach(group => {
+            const row = $(`
+                <tr>
+                    <td>
+                        <strong>${this.escapeHtml(group.group_name)}</strong>
+                    </td>
+                    <td>
+                        <span class="cm-count-badge ${group.client_count === 0 ? 'zero' : ''}">
+                            ${group.client_count}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="cm-action-buttons">
+                            <button class="cm-action-btn cm-action-btn-edit" data-group-id="${group.name}" title="Edit Group">
+                                <i class="fa fa-edit"></i>
+                                Edit
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `);
+            tbody.append(row);
+        });
+
+        this.hideLoading('groups');
     }
 
     async showClientDetails(clientId) {
@@ -954,7 +1047,7 @@ class ClientManagementSystem {
             console.log('📊 Loading tab counts...');
             
             // Load counts for all tabs in parallel - using minimal data requests
-            const [clientsResponse, contactsResponse, companiesResponse, staffsResponse] = await Promise.all([
+            const [clientsResponse, contactsResponse, companiesResponse, staffsResponse, groupsResponse] = await Promise.all([
                 frappe.call({
                     method: 'smart_accounting.www.client_management.index.get_clients',
                     args: {
@@ -988,6 +1081,14 @@ class ClientManagementSystem {
                         limit: 1,
                         offset: 0
                     }
+                }),
+                frappe.call({
+                    method: 'smart_accounting.www.client_management.index.get_client_groups',
+                    args: {
+                        search_term: '',
+                        limit: 1,
+                        offset: 0
+                    }
                 })
             ]);
 
@@ -1003,6 +1104,9 @@ class ClientManagementSystem {
             }
             if (staffsResponse.message && staffsResponse.message.success) {
                 this.updateTabCount('staffs', staffsResponse.message.total_count);
+            }
+            if (groupsResponse.message && groupsResponse.message.success) {
+                this.updateTabCount('groups', groupsResponse.message.total_count);
             }
 
             console.log('✅ Tab counts loaded successfully');
@@ -1115,6 +1219,109 @@ class ClientManagementSystem {
 
     closeModal() {
         $('.cm-modal').fadeOut(200);
+    }
+
+    // New Client Modal Methods
+    async showNewClientModal() {
+        try {
+            // Load referral persons and client groups for dropdowns
+            await this.loadNewClientOptions();
+            
+            // Reset form
+            $('#new-client-form')[0].reset();
+            
+            // Show modal
+            $('#new-client-modal').fadeIn(200);
+        } catch (error) {
+            console.error('Error showing new client modal:', error);
+            this.showError('Failed to open new client form');
+        }
+    }
+
+    async loadNewClientOptions() {
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.client_management.index.get_new_client_options'
+            });
+
+            if (response.message && response.message.success) {
+                this.populateNewClientDropdowns(response.message);
+            }
+        } catch (error) {
+            console.error('Error loading new client options:', error);
+        }
+    }
+
+    populateNewClientDropdowns(options) {
+        // Populate referral persons
+        const referralSelect = $('#client-referred-by');
+        referralSelect.empty().append('<option value="">Select Referral Person</option>');
+        options.referrals.forEach(referral => {
+            referralSelect.append(`<option value="${referral.name}">${referral.referral_person_name}</option>`);
+        });
+
+        // Populate client groups
+        const groupSelect = $('#client-group');
+        groupSelect.empty().append('<option value="">Select Client Group</option>');
+        options.client_groups.forEach(group => {
+            groupSelect.append(`<option value="${group.name}">${group.group_name}</option>`);
+        });
+    }
+
+    async saveNewClient() {
+        const formData = {
+            customer_name: $('#client-name').val().trim(),
+            custom_referred_by: $('#client-referred-by').val(),
+            custom_client_group: $('#client-group').val(),
+            custom_year_end: $('#client-year-end').val(),
+            custom_entity_type: $('#client-entity-type').val()
+        };
+
+        // Validation
+        if (!formData.customer_name) {
+            this.showError('Client name is required');
+            return;
+        }
+        if (!formData.custom_year_end) {
+            this.showError('Year end is required');
+            return;
+        }
+        if (!formData.custom_entity_type) {
+            this.showError('Entity type is required');
+            return;
+        }
+
+        // Show loading state
+        const $saveBtn = $('.cm-save-new-client');
+        const originalText = $saveBtn.html();
+        $saveBtn.html('<i class="fa fa-spinner fa-spin"></i> Creating...').prop('disabled', true);
+
+        try {
+            const response = await frappe.call({
+                method: 'smart_accounting.www.client_management.index.create_new_client',
+                args: { data: JSON.stringify(formData) }
+            });
+
+            if (response.message && response.message.success) {
+                this.showSuccess('Client created successfully');
+                this.closeModal();
+                this.refreshCurrentTab();
+            } else {
+                throw new Error(response.message?.error || 'Failed to create client');
+            }
+        } catch (error) {
+            console.error('Error creating client:', error);
+            this.showError('Failed to create client: ' + error.message);
+        } finally {
+            $saveBtn.html(originalText).prop('disabled', false);
+        }
+    }
+
+    showComingSoon(feature) {
+        frappe.show_alert({
+            message: `${feature} feature is coming soon!`,
+            indicator: 'blue'
+        });
     }
 
     // Utility methods

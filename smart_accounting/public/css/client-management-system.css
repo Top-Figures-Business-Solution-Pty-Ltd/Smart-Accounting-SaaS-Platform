@@ -846,3 +846,118 @@
     margin: 0;
     font-size: 14px;
 }
+
+/* Table header styles */
+.cm-table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding: 16px 20px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--monday-border);
+}
+
+.cm-table-title h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--monday-dark);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cm-table-title h3 i {
+    color: var(--monday-blue);
+    font-size: 16px;
+}
+
+.cm-table-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.cm-table-actions .pm-btn {
+    font-size: 13px;
+    padding: 8px 16px;
+}
+
+/* New Client Modal Form Styles */
+.cm-modal-form {
+    max-width: 600px;
+}
+
+.cm-form-row {
+    margin-bottom: 20px;
+}
+
+.cm-form-row label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600;
+    color: var(--monday-dark);
+    font-size: 14px;
+}
+
+.cm-required {
+    color: #e74c3c;
+    font-weight: 700;
+}
+
+.cm-optional {
+    color: var(--monday-gray);
+    font-weight: 400;
+    font-size: 12px;
+}
+
+.cm-form-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--monday-border);
+    border-radius: 6px;
+    font-size: 14px;
+    background: white;
+    transition: border-color 0.2s ease;
+}
+
+.cm-form-input:focus {
+    outline: none;
+    border-color: var(--monday-blue);
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.cm-form-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--monday-border);
+}
+
+.cm-form-actions .pm-btn {
+    min-width: 120px;
+}
+
+/* Responsive table headers */
+@media (max-width: 768px) {
+    .cm-table-header {
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start;
+        padding: 12px 16px;
+    }
+    
+    .cm-table-actions {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .cm-table-actions .pm-btn {
+        flex: 1;
+        justify-content: center;
+    }
+}

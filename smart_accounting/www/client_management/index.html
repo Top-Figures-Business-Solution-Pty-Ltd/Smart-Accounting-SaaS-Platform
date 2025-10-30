@@ -28,18 +28,7 @@
             </h1>
         </div>
         <div class="pm-header-right">
-            <button class="pm-btn pm-btn-primary cm-new-client-btn" title="Create New Client">
-                <i class="fa fa-plus"></i>
-                New Client
-            </button>
-            <button class="pm-btn pm-btn-secondary cm-refresh-btn" title="Refresh Data">
-                <i class="fa fa-sync-alt"></i>
-                Refresh
-            </button>
-            <button class="pm-btn pm-btn-secondary cm-manage-groups-btn" title="Manage Client Groups">
-                <i class="fa fa-layer-group"></i>
-                Client Groups
-            </button>
+            <!-- Header buttons removed - moved to table headers -->
         </div>
     </div>
 
@@ -68,6 +57,11 @@
                 Staffs
                 <span class="cm-tab-count" id="staffs-count">0</span>
             </button>
+            <button class="cm-tab" data-tab="groups">
+                <i class="fa fa-layer-group"></i>
+                Groups
+                <span class="cm-tab-count" id="groups-count">0</span>
+            </button>
         </div>
 
         <!-- Search and Filter Bar -->
@@ -95,6 +89,17 @@
             
             <!-- Clients Tab -->
             <div class="cm-tab-content active" id="clients-tab">
+                <div class="cm-table-header">
+                    <div class="cm-table-title">
+                        <h3><i class="fa fa-users"></i> Clients</h3>
+                    </div>
+                    <div class="cm-table-actions">
+                        <button class="pm-btn pm-btn-primary cm-new-client-btn" title="Create New Client">
+                            <i class="fa fa-plus"></i>
+                            New Client
+                        </button>
+                    </div>
+                </div>
                 <div class="cm-table-container">
                     <table class="cm-table">
                         <thead>
@@ -141,6 +146,17 @@
 
             <!-- Contacts Tab -->
             <div class="cm-tab-content" id="contacts-tab">
+                <div class="cm-table-header">
+                    <div class="cm-table-title">
+                        <h3><i class="fa fa-address-book"></i> Contacts</h3>
+                    </div>
+                    <div class="cm-table-actions">
+                        <button class="pm-btn pm-btn-primary cm-new-contact-btn" title="Create New Contact">
+                            <i class="fa fa-plus"></i>
+                            New Contact
+                        </button>
+                    </div>
+                </div>
                 <div class="cm-table-container">
                     <table class="cm-table">
                         <thead>
@@ -183,6 +199,17 @@
 
             <!-- Companies Tab -->
             <div class="cm-tab-content" id="companies-tab">
+                <div class="cm-table-header">
+                    <div class="cm-table-title">
+                        <h3><i class="fa fa-building"></i> Companies</h3>
+                    </div>
+                    <div class="cm-table-actions">
+                        <button class="pm-btn pm-btn-primary cm-new-company-btn" title="Create New Company">
+                            <i class="fa fa-plus"></i>
+                            New Company
+                        </button>
+                    </div>
+                </div>
                 <div class="cm-table-container">
                     <table class="cm-table">
                         <thead>
@@ -224,6 +251,17 @@
 
             <!-- Staffs Tab -->
             <div class="cm-tab-content" id="staffs-tab">
+                <div class="cm-table-header">
+                    <div class="cm-table-title">
+                        <h3><i class="fa fa-user-tie"></i> Staffs</h3>
+                    </div>
+                    <div class="cm-table-actions">
+                        <button class="pm-btn pm-btn-secondary cm-new-staff-btn" title="Manage Staff (ERPNext)" disabled>
+                            <i class="fa fa-external-link-alt"></i>
+                            Manage in ERPNext
+                        </button>
+                    </div>
+                </div>
                 <div class="cm-table-container">
                     <table class="cm-table">
                         <thead>
@@ -261,6 +299,56 @@
                 </div>
             </div>
 
+            <!-- Groups Tab -->
+            <div class="cm-tab-content" id="groups-tab">
+                <div class="cm-table-header">
+                    <div class="cm-table-title">
+                        <h3><i class="fa fa-layer-group"></i> Client Groups</h3>
+                    </div>
+                    <div class="cm-table-actions">
+                        <button class="pm-btn pm-btn-primary cm-new-group-btn" title="Create New Client Group">
+                            <i class="fa fa-plus"></i>
+                            New Group
+                        </button>
+                    </div>
+                </div>
+                <div class="cm-table-container">
+                    <table class="cm-table">
+                        <thead>
+                            <tr>
+                                <th>Group Name</th>
+                                <th>Clients Count</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="groups-table-body">
+                            <!-- Groups will be loaded here -->
+                        </tbody>
+                    </table>
+                    <div class="cm-loading" id="groups-loading">
+                        <i class="fa fa-spinner fa-spin"></i>
+                        Loading groups...
+                    </div>
+                    <div class="cm-no-data" id="groups-no-data" style="display: none;">
+                        <i class="fa fa-layer-group"></i>
+                        <p>No client groups found</p>
+                    </div>
+                </div>
+                
+                <!-- Pagination -->
+                <div class="cm-pagination" id="groups-pagination" style="display: none;">
+                    <button class="pm-btn pm-btn-secondary cm-prev-btn" disabled>
+                        <i class="fa fa-chevron-left"></i>
+                        Previous
+                    </button>
+                    <span class="cm-page-info">Page 1 of 1</span>
+                    <button class="pm-btn pm-btn-secondary cm-next-btn" disabled>
+                        Next
+                        <i class="fa fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+
         </div>
     </div>
 </div>
@@ -276,6 +364,82 @@
         </div>
         <div class="cm-modal-body" id="client-details-body">
             <!-- Client details will be loaded here -->
+        </div>
+    </div>
+</div>
+
+<!-- New Client Modal -->
+<div class="cm-modal" id="new-client-modal" style="display: none;">
+    <div class="cm-modal-content cm-modal-form">
+        <div class="cm-modal-header">
+            <h3>Create New Client</h3>
+            <button class="cm-modal-close">
+                <i class="fa fa-times"></i>
+            </button>
+        </div>
+        <div class="cm-modal-body">
+            <form id="new-client-form">
+                <div class="cm-form-row">
+                    <label for="client-referred-by">Referred By <span class="cm-optional">(Optional)</span></label>
+                    <select id="client-referred-by" class="cm-form-input">
+                        <option value="">Select Referral Person</option>
+                    </select>
+                </div>
+                
+                <div class="cm-form-row">
+                    <label for="client-name">Client Name <span class="cm-required">*</span></label>
+                    <input type="text" id="client-name" class="cm-form-input" placeholder="Enter client name" required>
+                </div>
+                
+                <div class="cm-form-row">
+                    <label for="client-group">Client Group</label>
+                    <select id="client-group" class="cm-form-input">
+                        <option value="">Select Client Group</option>
+                    </select>
+                </div>
+                
+                <div class="cm-form-row">
+                    <label for="client-year-end">Year End <span class="cm-required">*</span></label>
+                    <select id="client-year-end" class="cm-form-input" required>
+                        <option value="">Select Year End</option>
+                        <option value="January">January</option>
+                        <option value="February">February</option>
+                        <option value="March">March</option>
+                        <option value="April">April</option>
+                        <option value="May">May</option>
+                        <option value="June">June</option>
+                        <option value="July">July</option>
+                        <option value="August">August</option>
+                        <option value="September">September</option>
+                        <option value="October">October</option>
+                        <option value="November">November</option>
+                        <option value="December">December</option>
+                    </select>
+                </div>
+                
+                <div class="cm-form-row">
+                    <label for="client-entity-type">Entity Type <span class="cm-required">*</span></label>
+                    <select id="client-entity-type" class="cm-form-input" required>
+                        <option value="">Select Entity Type</option>
+                        <option value="Individual">Individual</option>
+                        <option value="Company">Company</option>
+                        <option value="Partnership">Partnership</option>
+                        <option value="Trust">Trust</option>
+                        <option value="SMSF">SMSF</option>
+                    </select>
+                </div>
+                
+                <div class="cm-form-actions">
+                    <button type="button" class="pm-btn pm-btn-secondary cm-cancel-new-client">
+                        <i class="fa fa-times"></i>
+                        Cancel
+                    </button>
+                    <button type="submit" class="pm-btn pm-btn-primary cm-save-new-client">
+                        <i class="fa fa-save"></i>
+                        Create Client
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>

@@ -727,3 +727,151 @@ def get_staff_details(staff_id):
             'success': False,
             'error': str(e)
         }
+
+@frappe.whitelist()
+def get_client_groups(search_term="", limit=50, offset=0):
+    """
+    Get client groups with client counts
+    """
+    try:
+        # Convert string parameters to proper types
+        limit = int(limit) if limit else 50
+        offset = int(offset) if offset else 0
+        
+        # Check if Client Group doctype exists
+        if not frappe.db.exists('DocType', 'Client Group'):
+            return {
+                'success': True,
+                'groups': [],
+                'total_count': 0,
+                'has_more': False
+            }
+        
+        # Build filters
+        filter_dict = {}
+        or_filters = []
+        
+        # Add search functionality
+        if search_term:
+            or_filters = [
+                ['group_name', 'like', f'%{search_term}%']
+            ]
+        
+        # Get client groups
+        groups = frappe.get_list(
+            'Client Group',
+            fields=['name', 'group_name', 'creation', 'modified'],
+            filters=filter_dict,
+            or_filters=or_filters if or_filters else None,
+            order_by='group_name asc',
+            limit_start=offset,
+            limit_page_length=limit
+        )
+        
+        # Get total count
+        if or_filters:
+            all_groups = frappe.get_list(
+                'Client Group',
+                fields=['name'],
+                filters=filter_dict,
+                or_filters=or_filters
+            )
+            total_count = len(all_groups)
+        else:
+            total_count = frappe.db.count('Client Group', filters=filter_dict)
+        
+        # Add client counts for each group
+        for group in groups:
+            try:
+                group['client_count'] = frappe.db.count('Customer', {'custom_client_group': group['name']})
+            except:
+                group['client_count'] = 0
+        
+        return {
+            'success': True,
+            'groups': groups,
+            'total_count': total_count,
+            'has_more': (offset + limit) < total_count
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting client groups: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'groups': [],
+            'total_count': 0
+        }
+
+@frappe.whitelist()
+def get_new_client_options():
+    """
+    Get options for new client form (referrals, client groups)
+    """
+    try:
+        # Get referral persons
+        referrals = frappe.db.sql("""
+            SELECT name, referral_person_name
+            FROM `tabReferral Person`
+            ORDER BY referral_person_name
+        """, as_dict=True)
+        
+        # Get client groups
+        client_groups = []
+        if frappe.db.exists('DocType', 'Client Group'):
+            client_groups = frappe.db.sql("""
+                SELECT name, group_name
+                FROM `tabClient Group`
+                ORDER BY group_name
+            """, as_dict=True)
+        
+        return {
+            'success': True,
+            'referrals': referrals,
+            'client_groups': client_groups
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting new client options: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'referrals': [],
+            'client_groups': []
+        }
+
+@frappe.whitelist()
+def create_new_client(data):
+    """
+    Create a new client (Customer) with Smart Accounting custom fields
+    """
+    try:
+        # Parse the data
+        if isinstance(data, str):
+            data = json.loads(data)
+        
+        # Create new customer document
+        customer_doc = frappe.get_doc({
+            'doctype': 'Customer',
+            'customer_name': data.get('customer_name'),
+            'custom_referred_by': data.get('custom_referred_by'),
+            'custom_client_group': data.get('custom_client_group'),
+            'custom_year_end': data.get('custom_year_end'),
+            'custom_entity_type': data.get('custom_entity_type')
+        })
+        
+        # Save the document
+        customer_doc.insert()
+        
+        return {
+            'success': True,
+            'message': 'Client created successfully',
+            'client_id': customer_doc.name
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error creating new client: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
