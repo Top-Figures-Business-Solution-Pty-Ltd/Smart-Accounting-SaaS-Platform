@@ -560,3 +560,106 @@
         transform: rotate(360deg);
     }
 }
+
+/* Edit Mode Styles */
+.cm-edit-controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding: 16px;
+    background: var(--monday-hover);
+    border-radius: 8px;
+    border-left: 4px solid var(--monday-blue);
+}
+
+.cm-edit-controls .pm-btn {
+    font-size: 13px;
+    padding: 8px 16px;
+    min-width: auto;
+}
+
+.cm-editable-mode .cm-info-item {
+    position: relative;
+    margin-bottom: 16px;
+}
+
+.cm-edit-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--monday-border);
+    border-radius: 4px;
+    font-size: 14px;
+    background: white;
+    transition: border-color 0.2s ease;
+}
+
+.cm-edit-input:focus {
+    outline: none;
+    border-color: var(--monday-blue);
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.cm-editing .cm-info-item {
+    padding: 4px 0;
+}
+
+.cm-editing .cm-info-value.cm-editable {
+    display: none !important;
+}
+
+.cm-editing .cm-edit-input {
+    display: block !important;
+}
+
+/* Edit input specific styles */
+.cm-edit-input[type="text"] {
+    height: 36px;
+}
+
+.cm-edit-input select {
+    height: 36px;
+    cursor: pointer;
+}
+
+.cm-edit-input select option {
+    padding: 4px 8px;
+}
+
+/* Save button loading state */
+.cm-save-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.cm-save-btn .fa-spinner {
+    margin-right: 8px;
+}
+
+/* Editable field hover effect */
+.cm-info-value.cm-editable:hover {
+    background: var(--monday-hover);
+    padding: 4px 8px;
+    margin: -4px -8px;
+    border-radius: 4px;
+    cursor: text;
+}
+
+.cm-editing .cm-info-value.cm-editable:hover {
+    background: none;
+    padding: 0;
+    margin: 0;
+    cursor: default;
+}
+
+/* Responsive edit controls */
+@media (max-width: 768px) {
+    .cm-edit-controls {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .cm-edit-controls .pm-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}

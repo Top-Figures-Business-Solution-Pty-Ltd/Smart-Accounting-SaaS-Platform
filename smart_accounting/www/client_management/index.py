@@ -79,7 +79,7 @@ def get_clients(search_term="", filters=None, limit=50, offset=0):
             ],
             filters=filter_dict,
             or_filters=or_filters if or_filters else None,
-            order_by='modified desc',
+            order_by='customer_name asc',
             limit_start=offset,
             limit_page_length=limit
         )
@@ -463,4 +463,37 @@ def get_filter_options():
             'error': str(e),
             'companies': [],
             'referrals': []
+        }
+
+@frappe.whitelist()
+def update_client(client_id, data):
+    """
+    Update client information using ERPNext API
+    """
+    try:
+        # Parse the data
+        if isinstance(data, str):
+            data = json.loads(data)
+        
+        # Get the client document
+        client_doc = frappe.get_doc('Customer', client_id)
+        
+        # Update fields
+        for field, value in data.items():
+            if hasattr(client_doc, field):
+                setattr(client_doc, field, value)
+        
+        # Save the document
+        client_doc.save()
+        
+        return {
+            'success': True,
+            'message': 'Client updated successfully'
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error updating client {client_id}: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
         }
