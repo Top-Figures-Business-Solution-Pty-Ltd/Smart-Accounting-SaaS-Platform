@@ -53,12 +53,14 @@ def get_clients(search_term="", filters=None, limit=50, offset=0):
         or_filters = []
         
         # Parse filters
+        company_filter = None
         if filters:
             if isinstance(filters, str):
                 filters = json.loads(filters)
             
+            # Company filter will be applied after fetching (since it's in a child table)
             if filters.get('company'):
-                filter_dict['custom_company'] = filters['company']
+                company_filter = filters['company']
             
             if filters.get('referred_by'):
                 filter_dict['custom_referred_by'] = filters['referred_by']
@@ -74,7 +76,7 @@ def get_clients(search_term="", filters=None, limit=50, offset=0):
         clients = frappe.get_list(
             'Customer',
             fields=[
-                'name', 'customer_name', 'custom_company', 'custom_referred_by', 
+                'name', 'customer_name', 'custom_referred_by', 
                 'custom_entity_type', 'creation', 'modified'
             ],
             filters=filter_dict,
@@ -156,15 +158,33 @@ def get_clients(search_term="", filters=None, limit=50, offset=0):
             client['creation_formatted'] = frappe.utils.pretty_date(client['creation'])
             client['modified_formatted'] = frappe.utils.pretty_date(client['modified'])
             
-            # Get company name if exists
-            if client['custom_company']:
-                try:
-                    company_doc = frappe.get_doc('Company', client['custom_company'])
-                    client['company_name'] = company_doc.company_name
-                except:
-                    client['company_name'] = client['custom_company']
-            else:
+            # Get associated companies from the new table structure
+            try:
+                customer_doc = frappe.get_doc('Customer', client['name'])
+                associated_companies = getattr(customer_doc, 'custom_associated_companies', []) or []
+                
+                if associated_companies:
+                    company_names = []
+                    for comp_row in associated_companies:
+                        if comp_row.company:
+                            try:
+                                company_doc = frappe.get_doc('Company', comp_row.company)
+                                company_names.append(company_doc.company_name)
+                            except:
+                                company_names.append(comp_row.company)
+                    
+                    client['company_names'] = company_names
+                    client['company_name'] = ', '.join(company_names) if company_names else None
+                    client['company_count'] = len(company_names)
+                else:
+                    client['company_names'] = []
+                    client['company_name'] = None
+                    client['company_count'] = 0
+            except Exception as e:
+                frappe.log_error(f"Error getting associated companies for {client['name']}: {str(e)}")
+                client['company_names'] = []
                 client['company_name'] = None
+                client['company_count'] = 0
             
             # Get referral person name if exists
             if client['custom_referred_by']:
@@ -175,6 +195,26 @@ def get_clients(search_term="", filters=None, limit=50, offset=0):
                     client['referral_name'] = client['custom_referred_by']
             else:
                 client['referral_name'] = None
+        
+        # Apply company filter if specified (filter by associated companies)
+        if company_filter:
+            filtered_clients = []
+            for client in clients:
+                # Check if this company is in the client's associated companies
+                client_companies = client.get('company_names', [])
+                # Also check by company ID
+                try:
+                    customer_doc = frappe.get_doc('Customer', client['name'])
+                    associated_companies = getattr(customer_doc, 'custom_associated_companies', []) or []
+                    company_ids = [comp_row.company for comp_row in associated_companies if comp_row.company]
+                    
+                    if company_filter in company_ids:
+                        filtered_clients.append(client)
+                except:
+                    pass
+            
+            clients = filtered_clients
+            total_count = len(clients)
         
         return {
             'success': True,
@@ -875,3 +915,137 @@ def create_new_client(data):
             'success': False,
             'error': str(e)
         }
+
+
+# ==================== Company Sync Utilities ====================
+
+def sync_customer_companies_from_tasks(customer_id):
+    """
+    Sync a customer's associated companies based on their tasks' TF/TG field.
+    This is called when tasks are created/updated/deleted.
+    
+    Args:
+        customer_id: The Customer document name
+    
+    Returns:
+        dict with success status and updated companies list
+    """
+    try:
+        if not customer_id:
+            return {'success': False, 'error': 'Customer ID is required'}
+        
+        # Get all unique companies from this customer's tasks
+        task_companies = frappe.db.sql("""
+            SELECT DISTINCT custom_tftg
+            FROM `tabTask`
+            WHERE custom_client = %s
+            AND custom_tftg IS NOT NULL
+            AND custom_tftg != ''
+            AND (parent_task IS NULL OR parent_task = '')
+        """, (customer_id,), as_dict=True)
+        
+        # Get the set of company IDs from tasks
+        task_company_ids = set(t['custom_tftg'] for t in task_companies if t['custom_tftg'])
+        
+        # Get current associated companies from customer
+        customer_doc = frappe.get_doc('Customer', customer_id)
+        current_companies = getattr(customer_doc, 'custom_associated_companies', []) or []
+        current_company_ids = set(c.company for c in current_companies if c.company)
+        
+        # Calculate what needs to be added
+        companies_to_add = task_company_ids - current_company_ids
+        
+        # Add new companies
+        for company_id in companies_to_add:
+            customer_doc.append('custom_associated_companies', {
+                'company': company_id
+            })
+        
+        # Save if there were changes
+        if companies_to_add:
+            customer_doc.save(ignore_permissions=True)
+            frappe.db.commit()
+        
+        return {
+            'success': True,
+            'added_companies': list(companies_to_add),
+            'total_companies': len(task_company_ids)
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error syncing companies for customer {customer_id}: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+@frappe.whitelist()
+def sync_all_customer_companies():
+    """
+    One-time initialization: Sync all customers' associated companies from their tasks.
+    This should be run once after migrating from single company to multi-company structure.
+    
+    Returns:
+        dict with success status and sync statistics
+    """
+    try:
+        # Get all customers that have tasks with TF/TG set
+        customers_with_tasks = frappe.db.sql("""
+            SELECT DISTINCT custom_client
+            FROM `tabTask`
+            WHERE custom_client IS NOT NULL
+            AND custom_client != ''
+            AND custom_tftg IS NOT NULL
+            AND custom_tftg != ''
+        """, as_dict=True)
+        
+        synced_count = 0
+        error_count = 0
+        total_companies_added = 0
+        
+        for row in customers_with_tasks:
+            customer_id = row['custom_client']
+            result = sync_customer_companies_from_tasks(customer_id)
+            
+            if result['success']:
+                synced_count += 1
+                total_companies_added += len(result.get('added_companies', []))
+            else:
+                error_count += 1
+        
+        return {
+            'success': True,
+            'message': f'Synced {synced_count} customers, added {total_companies_added} company associations',
+            'synced_count': synced_count,
+            'error_count': error_count,
+            'total_companies_added': total_companies_added
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error in sync_all_customer_companies: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+def on_task_save_sync_customer_company(doc, method):
+    """
+    Hook function to sync customer's associated companies when a task is saved.
+    This should be registered in hooks.py doc_events.
+    
+    Args:
+        doc: The Task document
+        method: The event method (after_insert, on_update, etc.)
+    """
+    try:
+        # Only sync if the task has a client and TF/TG set
+        customer_id = getattr(doc, 'custom_client', None)
+        tftg = getattr(doc, 'custom_tftg', None)
+        
+        if customer_id and tftg:
+            sync_customer_companies_from_tasks(customer_id)
+            
+    except Exception as e:
+        frappe.log_error(f"Error in on_task_save_sync_customer_company: {str(e)}")

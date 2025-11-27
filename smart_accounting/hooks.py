@@ -138,13 +138,13 @@ home_page = "/project_management"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+# Auto-sync customer associated companies when tasks are saved
+doc_events = {
+	"Task": {
+		"after_insert": "smart_accounting.www.client_management.index.on_task_save_sync_customer_company",
+		"on_update": "smart_accounting.www.client_management.index.on_task_save_sync_customer_company"
+	}
+}
 
 # Scheduled Tasks
 # ---------------
@@ -270,7 +270,7 @@ fixtures = [
 	},
 	{
 		"doctype": "DocType",
-		"filters": [["name", "in", ["User Preferences", "Partition", "Task Role Assignment", "Task Software", "Task Company Tag", "Board Column", "Board Cell", "Service Line", "Review Note", "Engagement", "Client Group", "Combination View", "Combination View Board", "Task Communication Method", "Contact Social", "Referral Person", "Task Process Value", "Process Tracker Configwo'sh"]]]
+		"filters": [["name", "in", ["User Preferences", "Partition", "Task Role Assignment", "Task Software", "Customer Company Tag", "Board Column", "Board Cell", "Service Line", "Review Note", "Engagement", "Client Group", "Combination View", "Combination View Board", "Task Communication Method", "Contact Social", "Referral Person", "Task Process Value", "Process Tracker Configwo'sh"]]]
 	}
 	# 不导出 Dashboard Chart, Number Card 等可能包含标准内容的 DocType
 ]

@@ -216,6 +216,39 @@
     font-size: 13px;
 }
 
+/* Multiple company tags display */
+.cm-company-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+}
+
+.cm-company-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    background: linear-gradient(135deg, #e8f4fd 0%, #d4ecfb 100%);
+    color: #0073ea;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    border: 1px solid rgba(0, 115, 234, 0.2);
+}
+
+.cm-company-tag:nth-child(2) {
+    background: linear-gradient(135deg, #f0e6ff 0%, #e4d4ff 100%);
+    color: #7b68ee;
+    border-color: rgba(123, 104, 238, 0.2);
+}
+
+.cm-company-tag:nth-child(3) {
+    background: linear-gradient(135deg, #e6fff0 0%, #d4ffe4 100%);
+    color: #00a86b;
+    border-color: rgba(0, 168, 107, 0.2);
+}
+
 .cm-referral-name {
     color: var(--monday-purple);
     font-size: 13px;

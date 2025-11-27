@@ -150,7 +150,8 @@ class ClientManagementSystem {
             const taskId = $(e.currentTarget).data('task-id');
             const projectId = $(e.currentTarget).data('project-id');
             const projectPartition = $(e.currentTarget).data('project-partition');
-            this.navigateToTaskInProjectBoard(taskId, projectId, projectPartition);
+            const clientName = $(e.currentTarget).data('client-name');
+            this.navigateToTaskInProjectBoard(taskId, projectId, projectPartition, clientName);
         });
 
         // Escape key to close modal
@@ -337,6 +338,22 @@ class ClientManagementSystem {
         }
 
         clients.forEach(client => {
+            // Build company display - support multiple companies
+            const companyCount = client.company_count || 0;
+            const companyNames = client.company_names || [];
+            let companyDisplay = '-';
+            
+            if (companyCount > 0) {
+                if (companyCount === 1) {
+                    companyDisplay = `<span class="cm-company-tag">${this.escapeHtml(companyNames[0])}</span>`;
+                } else {
+                    // Show all companies as tags
+                    companyDisplay = companyNames.map(name => 
+                        `<span class="cm-company-tag">${this.escapeHtml(name)}</span>`
+                    ).join('');
+                }
+            }
+            
             const row = $(`
                 <tr>
                     <td>
@@ -345,9 +362,9 @@ class ClientManagementSystem {
                         </span>
                     </td>
                     <td>
-                        <span class="cm-company-name">
-                            ${client.company_name || '-'}
-                        </span>
+                        <div class="cm-company-tags">
+                            ${companyDisplay}
+                        </div>
                     </td>
                     <td>
                         <div class="cm-contact-names">
@@ -751,7 +768,7 @@ class ClientManagementSystem {
                         </thead>
                         <tbody>
                             ${projects.map(task => `
-                                <tr class="cm-task-row" data-task-id="${task.name}" data-project-id="${task.project || ''}" data-project-partition="${task.project_partition || ''}" style="cursor: pointer;" title="Click to view in board">
+                                <tr class="cm-task-row" data-task-id="${task.name}" data-project-id="${task.project || ''}" data-project-partition="${task.project_partition || ''}" data-client-name="${this.escapeHtml(client.customer_name || '')}" style="cursor: pointer;" title="Click to view in board">
                                     <td><strong>${task.project_name || 'No Project'}</strong></td>
                                     <td>${task.status || '-'}</td>
                                     <td>${task.creation_formatted}</td>
@@ -920,7 +937,7 @@ class ClientManagementSystem {
                         </thead>
                         <tbody>
                             ${projects.map(task => `
-                                <tr class="cm-task-row" data-task-id="${task.name}" data-project-id="${task.project || ''}" data-project-partition="${task.project_partition || ''}" style="cursor: pointer;" title="Click to view in board">
+                                <tr class="cm-task-row" data-task-id="${task.name}" data-project-id="${task.project || ''}" data-project-partition="${task.project_partition || ''}" data-client-name="${this.escapeHtml(client.customer_name || '')}" style="cursor: pointer;" title="Click to view in board">
                                     <td><strong>${task.project_name || 'No Project'}</strong></td>
                                     <td>${task.status || '-'}</td>
                                     <td>${task.creation_formatted}</td>
@@ -1004,7 +1021,7 @@ class ClientManagementSystem {
                         </thead>
                         <tbody>
                             ${tasks.map(task => `
-                                <tr class="cm-task-row" data-task-id="${task.name}" data-project-id="${task.project || ''}" data-project-partition="${task.project_partition || ''}" style="cursor: pointer;" title="Click to view in board">
+                                <tr class="cm-task-row" data-task-id="${task.name}" data-project-id="${task.project || ''}" data-project-partition="${task.project_partition || ''}" data-client-name="${this.escapeHtml(task.client_name || '')}" style="cursor: pointer;" title="Click to view in board">
                                     <td><strong>${task.project_name}</strong></td>
                                     <td>${task.client_name}</td>
                                     <td>
@@ -1179,7 +1196,7 @@ class ClientManagementSystem {
         window.location.href = '/management_dashboard';
     }
 
-    navigateToTaskInProjectBoard(taskId, projectId, projectPartition) {
+    navigateToTaskInProjectBoard(taskId, projectId, projectPartition, clientName = null) {
         if (!taskId) {
             this.showError('Task ID not found');
             return;
@@ -1195,13 +1212,25 @@ class ClientManagementSystem {
             return;
         }
 
-        // Get current client name from modal title
-        const modalTitle = $('#client-details-title').text();
-        const clientName = modalTitle.replace(' - View/Edit', '').trim();
+        // Use provided clientName, or fallback to extracting from modal title
+        let searchClientName = clientName;
+        if (!searchClientName) {
+            const modalTitle = $('#client-details-title').text();
+            // Only use modal title if it's a client view (contains "View/Edit")
+            if (modalTitle.includes('View/Edit')) {
+                searchClientName = modalTitle.replace(' - View/Edit', '').trim();
+            }
+        }
 
-        // Store client name in localStorage for the new tab to pick up
-        localStorage.setItem('pm_search_client', clientName);
-        localStorage.setItem('pm_search_client_timestamp', Date.now().toString());
+        // Store client name in localStorage for the new tab to pick up (only if we have a valid client name)
+        if (searchClientName && searchClientName !== 'No Client') {
+            localStorage.setItem('pm_search_client', searchClientName);
+            localStorage.setItem('pm_search_client_timestamp', Date.now().toString());
+        } else {
+            // Clear any previous search client if no valid client name
+            localStorage.removeItem('pm_search_client');
+            localStorage.removeItem('pm_search_client_timestamp');
+        }
 
         // Construct the URL to the project management board with partition view only
         // Format: /project_management?view=PARTITION
