@@ -775,6 +775,11 @@ class ReportsManager {
 
     getCellValue($row, column) {
         switch (column) {
+            case 'task_name':
+                // Task Name 可能在多个位置
+                return $row.find('.pm-cell-task-name .task-name-display').text().trim() ||
+                       $row.find('.pm-task-name').text().trim() ||
+                       $row.find('.pm-cell-task-name').text().trim();
             case 'client_name':
                 return $row.find('.pm-cell-client .client-display').text().trim();
             case 'entity':
@@ -782,12 +787,58 @@ class ReportsManager {
             case 'tf_tg':
                 return $row.find('.pm-cell-tf-tg .pm-tf-tg-badge').text().trim();
             case 'software':
-                return $row.find('.pm-cell-software .pm-primary-software').text().trim();
+                // 获取所有软件，包括primary和其他
+                const primarySoftware = $row.find('.pm-cell-software .pm-primary-software').text().trim();
+                const allSoftware = $row.find('.pm-cell-software .pm-software-tag').map(function() {
+                    return $(this).text().trim();
+                }).get().join(', ');
+                return primarySoftware || allSoftware;
             case 'status':
                 return $row.find('.pm-cell-status .pm-status-badge').text().trim();
             case 'target_month':
-                return $row.find('.pm-cell-target-month .editable-field').text().trim();
+                return $row.find('.pm-cell-target-month .editable-field').text().trim() ||
+                       $row.find('.pm-cell-target-month').text().trim();
+            case 'budget':
+                return $row.find('.pm-cell-budget .editable-field').text().trim() ||
+                       $row.find('.pm-cell-budget').text().trim();
+            case 'actual':
+                return $row.find('.pm-cell-actual .editable-field').text().trim() ||
+                       $row.find('.pm-cell-actual').text().trim();
+            case 'review_note':
+                return $row.find('.pm-cell-review-note').text().trim();
+            case 'action_person':
+            case 'preparer':
+                return $row.find('.pm-cell-preparer .pm-person-tag').map(function() {
+                    return $(this).text().trim();
+                }).get().join(', ') || $row.find('.pm-cell-preparer').text().trim();
+            case 'reviewer':
+                return $row.find('.pm-cell-reviewer .pm-person-tag').map(function() {
+                    return $(this).text().trim();
+                }).get().join(', ') || $row.find('.pm-cell-reviewer').text().trim();
+            case 'partner':
+                return $row.find('.pm-cell-partner .pm-person-tag').map(function() {
+                    return $(this).text().trim();
+                }).get().join(', ') || $row.find('.pm-cell-partner').text().trim();
+            case 'priority':
+                return $row.find('.pm-cell-priority .pm-priority-badge').text().trim();
+            case 'engagement':
+                return $row.find('.pm-cell-engagement').text().trim();
+            case 'group':
+                return $row.find('.pm-cell-group').text().trim();
+            case 'year_end':
+                return $row.find('.pm-cell-year-end').text().trim();
+            case 'communication_methods':
+                return $row.find('.pm-cell-communication-methods .pm-method-tag').map(function() {
+                    return $(this).text().trim();
+                }).get().join(', ');
+            case 'client_contact':
+                return $row.find('.pm-cell-client-contact').text().trim();
             default:
+                // 尝试通用方式获取
+                const $cell = $row.find(`.pm-cell-${column.replace(/_/g, '-')}`);
+                if ($cell.length > 0) {
+                    return $cell.find('.editable-field').text().trim() || $cell.text().trim();
+                }
                 return '';
         }
     }
@@ -871,8 +922,9 @@ class ReportsManager {
             window.FilterManager.updateFilterColumnOptions();
         }
         
-        // Clear advanced filters and apply
+        // Clear both filter arrays and apply
         this.advancedFilters = [];
+        this.activeFilters = [];
         this.applyAdvancedFilters();
         this.updateTaskCount();
     }
@@ -883,7 +935,12 @@ class ReportsManager {
         
         $('#total-tasks').text(totalTasks);
         
-        if (this.advancedFilters.length > 0) {
+        // 检查是否有活动的高级筛选（使用activeFilters而不是advancedFilters）
+        const hasActiveFilters = this.activeFilters && 
+            (Array.isArray(this.activeFilters) ? this.activeFilters.length > 0 : 
+             (this.activeFilters.person || this.activeFilters.client || this.activeFilters.status));
+        
+        if (hasActiveFilters) {
             $('.pm-filter-count').html(`Showing ${visibleTasks} of ${totalTasks} tasks`);
         } else {
             $('.pm-filter-count').html(`Showing all of ${totalTasks} tasks`);

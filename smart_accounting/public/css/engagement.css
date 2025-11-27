@@ -432,15 +432,21 @@
     color: white;
 }
 
-.pm-tab-content {
+/* Comment Modal Tab Content */
+.pm-comment-modal .pm-tab-content {
     position: relative;
+    display: flex; /* 使用flex布局 */
+    flex-direction: column;
+    flex: 1;
+    min-height: 200px;
+    overflow: hidden;
 }
 
-.pm-tab-panel {
+.pm-comment-modal .pm-tab-panel {
     display: none;
 }
 
-.pm-tab-panel.active {
+.pm-comment-modal .pm-tab-panel.active {
     display: block;
 }
 
@@ -494,19 +500,27 @@
 
 .pm-comment-modal-body {
     flex: 1;
-    overflow-y: auto;
+    overflow: hidden; /* 改为hidden，让内部元素处理滚动 */
     padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 16px;
+    min-height: 0; /* 重要：允许flex子元素收缩 */
 }
 
 .pm-comment-list {
-    display: flex;
     flex-direction: column;
     gap: 12px;
-    max-height: 400px;
+    flex: 1;
+    min-height: 150px;
+    max-height: calc(60vh - 200px); /* 动态计算高度，减去header和input区域 */
     overflow-y: auto;
+    padding-bottom: 10px; /* 确保最后一条评论有足够空间 */
+}
+
+/* 确保active状态的comment-list显示为flex */
+.pm-comment-list.pm-tab-panel.active {
+    display: flex !important;
 }
 
 .pm-comment-item {

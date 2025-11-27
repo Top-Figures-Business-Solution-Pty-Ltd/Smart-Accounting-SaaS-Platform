@@ -101,6 +101,52 @@
 {% endblock %}
 
 {% block script %}
+<!-- CSRF Token 保护：确保在任何API调用前token已就绪 -->
+<script>
+(function() {
+    // 等待frappe对象和csrf_token都可用
+    function ensureCsrfToken() {
+        if (typeof frappe !== 'undefined') {
+            // 如果csrf_token还没设置，尝试从cookie获取
+            if (!frappe.csrf_token) {
+                var csrfToken = (document.cookie.match(/csrf_token=([^;]+)/) || [])[1];
+                if (csrfToken) {
+                    frappe.csrf_token = csrfToken;
+                }
+            }
+            
+            // 包装frappe.call以确保csrf_token存在
+            if (frappe.call && !frappe._call_wrapped) {
+                var originalCall = frappe.call;
+                frappe.call = function(opts) {
+                    // 如果csrf_token还不存在，延迟执行
+                    if (!frappe.csrf_token) {
+                        var csrfToken = (document.cookie.match(/csrf_token=([^;]+)/) || [])[1];
+                        if (csrfToken) {
+                            frappe.csrf_token = csrfToken;
+                        } else {
+                            // 延迟重试
+                            setTimeout(function() { frappe.call(opts); }, 100);
+                            return;
+                        }
+                    }
+                    return originalCall.call(frappe, opts);
+                };
+                frappe._call_wrapped = true;
+            }
+        }
+    }
+    
+    // 立即执行一次
+    ensureCsrfToken();
+    
+    // DOM加载后再执行一次
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', ensureCsrfToken);
+    }
+})();
+</script>
+
 <!-- 🚀 PHASE 1 OPTIMIZATION: Reduced script loading for better performance -->
 <!-- Critical performance modules - loaded first -->
 <script src="/assets/smart_accounting/js/performance/loading-performance-optimizer.js"></script>

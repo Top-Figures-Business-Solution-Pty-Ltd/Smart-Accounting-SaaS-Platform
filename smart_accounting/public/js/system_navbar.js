@@ -234,8 +234,8 @@
             const permissionsElement = document.getElementById('sa-user-permissions');
             if (!rolesElement) return;
             
-            // Use our custom API method
-            if (window.frappe && frappe.call) {
+            // 确保frappe完全初始化（包括csrf_token）
+            if (window.frappe && frappe.call && frappe.csrf_token) {
                 frappe.call({
                     method: 'smart_accounting.www.project_management.index.get_current_user_info',
                     callback: (r) => {
@@ -260,28 +260,9 @@
                     }
                 });
             } else {
-                // Fallback: wait for frappe to be ready, then retry with delay
+                // Frappe not ready, wait and retry
                 setTimeout(() => {
-                    if (window.frappe && frappe.call && frappe.csrf_token) {
-                        frappe.call({
-                            method: 'smart_accounting.www.project_management.index.get_current_user_info',
-                            callback: (r) => {
-                                if (r.message && r.message.success) {
-                                    const userInfo = r.message;
-                                    rolesElement.textContent = userInfo.roles.length > 0 ? userInfo.roles.join(', ') : 'No roles assigned';
-                                    if (permissionsElement) {
-                                        permissionsElement.textContent = userInfo.permissions;
-                                    }
-                                }
-                            }
-                        });
-                    } else {
-                        // Frappe still not ready, use default values
-                        rolesElement.textContent = 'Standard User';
-                        if (permissionsElement) {
-                            permissionsElement.textContent = 'Basic Access';
-                        }
-                    }
+                    this.loadUserRoles();
                 }, 500);
             }
         },
@@ -453,10 +434,26 @@
 window.saNotifications = {
     isOpen: false,
     currentTab: 'notifications',
+    initAttempts: 0,
+    maxInitAttempts: 10,
     
     init() {
         this.bindEvents();
-        this.loadNotifications();
+        // 延迟加载通知，确保frappe完全初始化
+        this.waitForFrappeAndLoad();
+    },
+    
+    waitForFrappeAndLoad() {
+        // 检查frappe是否完全准备好
+        if (window.frappe && frappe.call && frappe.csrf_token) {
+            this.loadNotifications();
+        } else if (this.initAttempts < this.maxInitAttempts) {
+            this.initAttempts++;
+            setTimeout(() => this.waitForFrappeAndLoad(), 300);
+        } else {
+            console.warn('Frappe not fully initialized after max attempts');
+            this.showEmptyState('notifications');
+        }
     },
     
     bindEvents() {
@@ -534,7 +531,7 @@ window.saNotifications = {
     
     loadNotifications() {
         // Use ERPNext's actual notification API (same as the built-in system)
-        if (window.frappe && frappe.call) {
+        if (window.frappe && frappe.call && frappe.csrf_token) {
             frappe.call({
                 method: 'frappe.desk.doctype.notification_log.notification_log.get_notification_logs',
                 args: {
@@ -543,10 +540,16 @@ window.saNotifications = {
                 callback: (r) => {
                     try {
                         if (r && r.message && Array.isArray(r.message)) {
-                            // console.log('Loaded notifications:', r.message.length);
                             this.renderNotifications(r.message);
+                        } else if (r && r.message) {
+                            // 可能是对象格式，尝试处理
+                            const notifications = r.message.notification_logs || r.message;
+                            if (Array.isArray(notifications)) {
+                                this.renderNotifications(notifications);
+                            } else {
+                                this.showEmptyState('notifications');
+                            }
                         } else {
-                            // console.log('No notifications found or invalid format');
                             this.showEmptyState('notifications');
                         }
                     } catch (error) {
@@ -556,18 +559,50 @@ window.saNotifications = {
                 },
                 error: (error) => {
                     console.error('Error loading notifications:', error);
-                    this.showEmptyState('notifications');
+                    // 尝试备用方法
+                    this.loadNotificationsFallback();
                 }
             });
         } else {
-            // console.log('Frappe not available, showing empty state');
-            this.showEmptyState('notifications');
+            // frappe还没准备好，尝试延迟加载
+            setTimeout(() => {
+                if (window.frappe && frappe.call) {
+                    this.loadNotifications();
+                } else {
+                    this.showEmptyState('notifications');
+                }
+            }, 500);
         }
+    },
+    
+    loadNotificationsFallback() {
+        // 备用方法：直接使用fetch API
+        fetch('/api/method/frappe.desk.doctype.notification_log.notification_log.get_notification_logs', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Frappe-CSRF-Token': frappe.csrf_token || ''
+            },
+            body: JSON.stringify({ limit: 20 })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message && Array.isArray(data.message)) {
+                this.renderNotifications(data.message);
+            } else {
+                this.showEmptyState('notifications');
+            }
+        })
+        .catch(error => {
+            console.error('Fallback notification load failed:', error);
+            this.showEmptyState('notifications');
+        });
     },
     
     loadEvents() {
         // Try to use ERPNext's event system if available
-        if (window.frappe && frappe.call && frappe.datetime) {
+        // 确保frappe完全初始化（包括csrf_token）
+        if (window.frappe && frappe.call && frappe.datetime && frappe.csrf_token) {
             try {
                 frappe.call({
                     method: 'frappe.desk.calendar.get_events',
@@ -580,7 +615,6 @@ window.saNotifications = {
                             if (r && r.message && Array.isArray(r.message) && r.message.length > 0) {
                                 this.renderEvents(r.message);
                             } else {
-                                // console.log('No events found or invalid format');
                                 this.showEmptyState('events');
                             }
                         } catch (error) {
@@ -598,7 +632,6 @@ window.saNotifications = {
                 this.showEmptyState('events');
             }
         } else {
-            // console.log('Frappe datetime not available, showing empty state');
             this.showEmptyState('events');
         }
     },
@@ -641,7 +674,6 @@ window.saNotifications = {
         try {
             // Use ERPNext's exact notification rendering logic
             container.innerHTML = notifications.map(notification_log => {
-                const doc_link = this.getItemLink(notification_log);
                 const read_class = notification_log.read ? '' : 'unread';
                 let message = notification_log.subject || '';
                 
@@ -655,11 +687,17 @@ window.saNotifications = {
                 const user = notification_log.from_user || '';
                 const user_avatar = this.getUserAvatar(user);
                 
+                // 存储document信息用于Smart Accounting跳转
+                const docType = notification_log.document_type || '';
+                const docName = notification_log.document_name || '';
+                
                 return `
                     <a class="sa-notification-item recent-item notification-item ${read_class}"
-                       href="${doc_link}"
+                       href="javascript:void(0)"
                        data-name="${notification_log.name || ''}"
-                       onclick="saNotifications.handleNotificationClick(event, '${notification_log.name || ''}')">
+                       data-doctype="${docType}"
+                       data-docname="${docName}"
+                       onclick="saNotifications.handleNotificationClick(event, '${notification_log.name || ''}', '${docType}', '${docName}')">
                         <div class="notification-body">
                             ${user_avatar}
                             <div class="message">
@@ -766,10 +804,12 @@ window.saNotifications = {
     },
     
     markAsRead(notificationId) {
-        if (window.frappe && frappe.call) {
+        if (!notificationId) return;
+        
+        if (window.frappe && frappe.call && frappe.csrf_token) {
             frappe.call({
                 method: 'frappe.desk.doctype.notification_log.notification_log.mark_as_read',
-                args: { notification_log: notificationId },
+                args: { docname: notificationId },
                 callback: () => {
                     // Update the UI immediately
                     const notificationElement = document.querySelector(`[data-name="${notificationId}"]`);
@@ -782,6 +822,10 @@ window.saNotifications = {
                     }
                     // Reload notifications to get updated count
                     this.loadNotifications();
+                },
+                error: (err) => {
+                    // 静默处理错误，不影响用户体验
+                    console.warn('Failed to mark notification as read:', err);
                 }
             });
         }
@@ -863,16 +907,97 @@ window.saNotifications = {
         }
     },
     
-    handleNotificationClick(event, notificationId) {
-        // Handle notification click - mark as read and navigate
+    handleNotificationClick(event, notificationId, docType, docName) {
+        // Handle notification click - mark as read and navigate to Smart Accounting
         event.preventDefault();
+        
         if (notificationId) {
             this.markAsRead(notificationId);
         }
-        // Let the link navigate normally after marking as read
-        setTimeout(() => {
-            window.location.href = event.currentTarget.href;
-        }, 100);
+        
+        // 关闭notification下拉框
+        this.close();
+        
+        // 如果是Task相关的通知，跳转到Smart Accounting的board页面
+        if (docType === 'Task' && docName) {
+            this.navigateToTask(docName);
+        } else {
+            // 其他类型的通知，显示提示
+            if (window.frappe && frappe.show_alert) {
+                frappe.show_alert({
+                    message: `Notification for ${docType || 'document'}: ${docName || 'unknown'}`,
+                    indicator: 'blue'
+                });
+            }
+        }
+    },
+    
+    async navigateToTask(taskName) {
+        // 获取Task的project和partition信息，然后跳转到对应的board
+        if (!window.frappe || !frappe.call || !frappe.csrf_token) {
+            console.warn('Frappe not ready for navigation');
+            return;
+        }
+        
+        try {
+            const response = await frappe.call({
+                method: 'frappe.client.get_value',
+                args: {
+                    doctype: 'Task',
+                    filters: { name: taskName },
+                    fieldname: ['name', 'subject', 'project']
+                }
+            });
+            
+            if (response.message && response.message.project) {
+                const projectName = response.message.project;
+                const taskSubject = response.message.subject || taskName;
+                
+                // 获取Project的partition
+                const projectResponse = await frappe.call({
+                    method: 'frappe.client.get_value',
+                    args: {
+                        doctype: 'Project',
+                        filters: { name: projectName },
+                        fieldname: ['name', 'custom_partition']
+                    }
+                });
+                
+                if (projectResponse.message && projectResponse.message.custom_partition) {
+                    const partitionName = projectResponse.message.custom_partition;
+                    
+                    // 存储搜索信息到localStorage，供board页面使用
+                    localStorage.setItem('pm_notification_task', taskName);
+                    localStorage.setItem('pm_notification_task_subject', taskSubject);
+                    localStorage.setItem('pm_notification_timestamp', Date.now().toString());
+                    
+                    // 跳转到对应的partition/board页面
+                    window.location.href = `/project_management?view=${encodeURIComponent(partitionName)}`;
+                } else {
+                    // 没有partition，跳转到主页面并设置搜索
+                    localStorage.setItem('pm_notification_task', taskName);
+                    localStorage.setItem('pm_notification_task_subject', taskSubject);
+                    localStorage.setItem('pm_notification_timestamp', Date.now().toString());
+                    window.location.href = '/project_management';
+                }
+            } else {
+                // Task没有关联project，显示提示
+                if (window.frappe && frappe.show_alert) {
+                    frappe.show_alert({
+                        message: `Task ${taskName} is not associated with a project`,
+                        indicator: 'orange'
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error navigating to task:', error);
+            if (window.frappe && frappe.show_alert) {
+                frappe.show_alert({
+                    message: 'Failed to navigate to task',
+                    indicator: 'red'
+                });
+            }
+        }
     }
 };
 

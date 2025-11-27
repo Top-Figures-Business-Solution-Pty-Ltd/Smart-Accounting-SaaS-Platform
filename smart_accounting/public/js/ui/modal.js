@@ -161,7 +161,22 @@ class ModalManager {
             return;
         }
         
+        const $commentList = $(`#pm-comment-list-${taskId}`);
+        
+        // 确保元素存在
+        if ($commentList.length === 0) {
+            console.error(`Comment list element not found for task: ${taskId}`);
+            return;
+        }
+        
         try {
+            // 确保frappe可用
+            if (!window.frappe || !frappe.call || !frappe.csrf_token) {
+                console.warn('Frappe not ready, retrying in 500ms...');
+                setTimeout(() => this.loadComments(taskId), 500);
+                return;
+            }
+            
             const response = await frappe.call({
                 method: 'smart_accounting.www.project_management.index.get_task_comments',
                 args: {
@@ -181,24 +196,27 @@ class ModalManager {
             }
         } catch (error) {
             console.error('Error loading comments:', error);
-            const $commentList = $(`#pm-comment-list-${taskId}`);
-            if ($commentList.length > 0) {
-                $commentList.html(`
-                    <div class="pm-comment-empty">
-                        <i class="fa fa-exclamation-triangle"></i>
-                        <h4>Failed to load comments</h4>
-                        <p>Please try again later</p>
-                        <button class="pm-btn pm-btn-secondary" onclick="window.ModalManager.loadComments('${taskId}')">
-                            <i class="fa fa-refresh"></i> Retry
-                        </button>
-                    </div>
-                `);
-            }
+            $commentList.html(`
+                <div class="pm-comment-empty">
+                    <i class="fa fa-exclamation-triangle"></i>
+                    <h4>Failed to load comments</h4>
+                    <p>${error.message || 'Please try again later'}</p>
+                    <button class="pm-btn pm-btn-secondary" onclick="window.ModalManager.loadComments('${taskId}')">
+                        <i class="fa fa-refresh"></i> Retry
+                    </button>
+                </div>
+            `);
         }
     }
     
     renderComments(taskId, comments) {
         const $commentList = $(`#pm-comment-list-${taskId}`);
+        
+        // 确保元素存在
+        if ($commentList.length === 0) {
+            console.error(`Comment list element not found for task: ${taskId}`);
+            return;
+        }
         
         if (!comments || comments.length === 0) {
             $commentList.html(`

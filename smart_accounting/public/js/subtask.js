@@ -1122,7 +1122,8 @@ class SubtaskManager {
             });
 
             if (response.message && response.message.success) {
-                const subtaskCounts = response.message.subtask_counts;
+                // 兼容两种字段名：subtask_counts 和 counts
+                const subtaskCounts = response.message.subtask_counts || response.message.counts || {};
                 
                 // Update each task's subtask indicator
                 Object.keys(subtaskCounts).forEach(taskId => {

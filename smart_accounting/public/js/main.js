@@ -653,6 +653,107 @@ class ProjectManagement {
         this.reportsManager.initializeAdvancedFilter();
         this.filterManager.bindAdvancedFilterEvents();
     }
+    
+    // 从Notification跳转后自动应用Task Name筛选
+    applyNotificationTaskFilter(taskSubject) {
+        try {
+            // 打开Advanced Filter面板
+            const $filterBtn = $('.pm-advanced-filter-btn');
+            const $filterPanel = $('.pm-advanced-filter-panel');
+            
+            if ($filterPanel.length === 0) {
+                console.warn('Advanced filter panel not found');
+                return;
+            }
+            
+            // 显示filter面板
+            $filterPanel.show();
+            $filterBtn.addClass('active');
+            
+            // 初始化filter column选项（如果还没有）
+            if (this.filterManager) {
+                this.filterManager.initializeFilterColumnOptions();
+            }
+            
+            // 等待选项加载完成
+            setTimeout(() => {
+                // 找到第一个filter条件
+                const $firstCondition = $('.pm-filter-condition').first();
+                if ($firstCondition.length === 0) {
+                    console.warn('No filter condition found');
+                    return;
+                }
+                
+                // 设置Column为"Task Name"
+                const $columnSelect = $firstCondition.find('.pm-filter-column');
+                
+                // 查找Task Name选项（可能是 'task-name', 'subject', 或其他变体）
+                let taskNameOption = $columnSelect.find('option[value="task-name"]');
+                if (taskNameOption.length === 0) {
+                    taskNameOption = $columnSelect.find('option[value="subject"]');
+                }
+                if (taskNameOption.length === 0) {
+                    // 尝试模糊匹配
+                    taskNameOption = $columnSelect.find('option').filter(function() {
+                        const text = $(this).text().toLowerCase();
+                        return text.includes('task') && text.includes('name');
+                    });
+                }
+                
+                if (taskNameOption.length > 0) {
+                    $columnSelect.val(taskNameOption.val()).trigger('change');
+                    
+                    // 等待value选项加载
+                    setTimeout(() => {
+                        // 设置Condition为"contains"
+                        const $conditionSelect = $firstCondition.find('.pm-filter-condition-type');
+                        $conditionSelect.val('contains').trigger('change');
+                        
+                        // 设置Value - 直接在value select中查找匹配的选项，或者手动设置
+                        const $valueSelect = $firstCondition.find('.pm-filter-value');
+                        
+                        // 先尝试精确匹配
+                        let matchedOption = $valueSelect.find(`option`).filter(function() {
+                            return $(this).text() === taskSubject || $(this).val() === taskSubject;
+                        });
+                        
+                        if (matchedOption.length > 0) {
+                            $valueSelect.val(matchedOption.val()).trigger('change');
+                        } else {
+                            // 如果没有精确匹配，添加一个临时选项
+                            $valueSelect.append(`<option value="${taskSubject}" selected>${taskSubject}</option>`);
+                        }
+                        
+                        // 触发筛选应用
+                        setTimeout(() => {
+                            if (this.reportsManager && this.reportsManager.applyAdvancedFilters) {
+                                this.reportsManager.applyAdvancedFilters();
+                            }
+                            
+                            // 显示提示
+                            if (window.frappe && frappe.show_alert) {
+                                frappe.show_alert({
+                                    message: `Filtered by Task: ${taskSubject}`,
+                                    indicator: 'green'
+                                });
+                            }
+                        }, 200);
+                    }, 300);
+                } else {
+                    console.warn('Task Name column not found in filter options');
+                    // Fallback: 使用搜索框
+                    const searchInput = $('#pm-search-input');
+                    if (searchInput.length > 0) {
+                        searchInput.val(taskSubject);
+                        searchInput.trigger('input').trigger('keyup').trigger('change');
+                    }
+                }
+            }, 500);
+            
+        } catch (error) {
+            console.error('Error applying notification task filter:', error);
+        }
+    }
 
     loadSystemOptions() {
         this.projectManager.loadSystemOptions();
@@ -917,6 +1018,36 @@ $(document).ready(function() {
             // Clear expired data
             localStorage.removeItem('pm_search_client');
             localStorage.removeItem('pm_search_client_timestamp');
+        }
+    }
+    
+    // 处理从Notification跳转过来的Task搜索 - 使用Advanced Filter
+    const notificationTask = localStorage.getItem('pm_notification_task');
+    const notificationTaskSubject = localStorage.getItem('pm_notification_task_subject');
+    const notificationTimestamp = localStorage.getItem('pm_notification_timestamp');
+    
+    if (notificationTask && notificationTimestamp) {
+        const now = Date.now();
+        const timestamp = parseInt(notificationTimestamp);
+        
+        if (now - timestamp < 30000) { // 30 seconds for notification navigation
+            setTimeout(() => {
+                // 使用Advanced Filter来筛选Task Name
+                const searchTerm = notificationTaskSubject || notificationTask;
+                
+                // 自动应用Advanced Filter
+                window.projectManagement.applyNotificationTaskFilter(searchTerm);
+                
+                // Clear the localStorage after use
+                localStorage.removeItem('pm_notification_task');
+                localStorage.removeItem('pm_notification_task_subject');
+                localStorage.removeItem('pm_notification_timestamp');
+            }, 2000); // Wait 2 seconds for full initialization
+        } else {
+            // Clear expired data
+            localStorage.removeItem('pm_notification_task');
+            localStorage.removeItem('pm_notification_task_subject');
+            localStorage.removeItem('pm_notification_timestamp');
         }
     }
     

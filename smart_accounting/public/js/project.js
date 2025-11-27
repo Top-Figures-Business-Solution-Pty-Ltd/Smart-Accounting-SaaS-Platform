@@ -1139,6 +1139,13 @@ class ProjectManager {
     // Load system options
     async loadSystemOptions() {
         try {
+            // 确保frappe完全初始化后再调用API
+            if (!window.frappe || !frappe.call || !frappe.csrf_token) {
+                // 延迟重试
+                setTimeout(() => this.loadSystemOptions(), 500);
+                return;
+            }
+            
             // Load task status options
             const response = await frappe.call({
                 method: 'smart_accounting.www.project_management.index.get_task_status_options'
