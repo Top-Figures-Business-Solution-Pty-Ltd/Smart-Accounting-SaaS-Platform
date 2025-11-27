@@ -1,265 +1,345 @@
-# Smart Accounting SaaS 核心数据流架构
+# Smart Accounting 核心数据架构
 
-## 🔄 核心数据流详细图
+## 核心 DocType 关系图
 
 ```mermaid
-flowchart TD
-    %% 定义样式
-    classDef referralClass fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#000
-    classDef customerClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000
-    classDef engagementClass fill:#fff3e0,stroke:#e65100,stroke-width:3px,color:#000
-    classDef serviceClass fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px,color:#000
-    classDef executionClass fill:#fce4ec,stroke:#880e4f,stroke-width:2px,color:#000
+flowchart TB
+    subgraph 推荐层
+        RP[Referral Person<br/>推荐人]
+    end
     
-    %% 第一层：推荐源头
-    RP[Referral Person<br/>推荐人<br/>━━━━━━━━━━<br/>• referral_person_name<br/>• contact_information]
+    subgraph 客户层
+        CUS[Customer<br/>客户]
+        CON[Contact<br/>联系人]
+    end
     
-    %% 第二层：客户和联系人
-    CUS[Customer<br/>客户<br/>━━━━━━━━━━<br/>• customer_name<br/>• custom_referred_by<br/>• custom_company<br/>• custom_entity_type]
+    subgraph 业务层
+        ENG[Engagement<br/>业务约定]
+        SL[Service Line<br/>服务线]
+    end
     
-    CON[Contact<br/>联系人<br/>━━━━━━━━━━<br/>• first_name, last_name<br/>• custom_contact_role<br/>• custom_referred_by]
+    subgraph 项目层
+        PAR[Partition<br/>分区/Board]
+        PRO[Project<br/>项目]
+    end
     
-    COMP[Company<br/>公司<br/>━━━━━━━━━━<br/>• company_name<br/>• domain]
+    subgraph 执行层
+        TASK[Task<br/>任务]
+    end
     
-    USER[User<br/>用户<br/>━━━━━━━━━━<br/>• full_name<br/>• email]
+    %% Referral Person 关系
+    RP -->|custom_referred_by| CUS
+    RP -->|custom_referred_by| CON
+    RP -->|referral_person| ENG
     
-    %% 第三层：业务约定（核心枢纽）
-    ENG[Engagement<br/>业务约定 🎯<br/>━━━━━━━━━━<br/>• customer<br/>• company<br/>• referral_person<br/>• service_line<br/>• project ⭐<br/>• primary_contact<br/>• owner_partner]
+    %% Customer 关系
+    CUS -->|Dynamic Link| CON
+    CUS -->|customer| ENG
+    CUS -->|customer| PRO
+    CUS -->|custom_client| TASK
     
-    %% 第四层：服务组织
-    SL[Service Line<br/>服务线<br/>━━━━━━━━━━<br/>• service_code<br/>• service_name<br/>• category]
+    %% Contact 关系
+    CON -->|primary_contact| ENG
     
-    PAR[Partition<br/>分区/Board<br/>━━━━━━━━━━<br/>• partition_name<br/>• parent_partition<br/>• is_workspace]
+    %% Service Line 关系
+    SL -->|service_line| ENG
+    SL -->|custom_service_line| PRO
     
-    %% 第五层：项目执行
-    PRO[Project<br/>项目/服务<br/>━━━━━━━━━━<br/>• project_name<br/>• customer<br/>• custom_service_line ⭐<br/>• custom_partition]
+    %% Partition 关系
+    PAR -->|parent_partition| PAR
+    PAR -->|custom_partition| PRO
     
-    %% 第六层：任务执行
-    TASK[Task<br/>任务/项目<br/>━━━━━━━━━━<br/>• subject<br/>• custom_client<br/>• custom_engagement<br/>• custom_service_line<br/>• custom_budget_planning<br/>• custom_task_status]
+    %% Project 关系
+    PRO -->|project| TASK
+    PRO -->|project| ENG
     
-    %% 推荐流程 - 蓝色
-    RP -->|介绍客户| CUS
-    RP -->|介绍联系人| CON
-    RP -->|业务推荐| ENG
-    
-    %% 客户管理 - 紫色
-    COMP -->|公司实体| CUS
-    CUS -->|客户联系人| CON
-    CUS -->|业务约定| ENG
-    CON -->|业务联系人| ENG
-    USER -->|负责合伙人| ENG
-    
-    %% 服务交付 - 橙色（核心流程）
-    ENG ===|直接指定项目| PRO
-    ENG ===|核心业务| TASK
-    
-    %% 服务组织 - 绿色（新的清晰层级）
-    SL -->|服务定义| ENG
-    SL ===|必须归属| PRO
-    
-    %% 项目层级 - 粉色
-    PAR -->|组织项目| PRO
-    PRO -->|包含任务| TASK
-    
-    %% 直接关联 - 虚线
-    CUS -.->|直接项目| PRO
-    CUS -.->|直接任务| TASK
-    COMP -.->|TF/TG| TASK
-    SL -.->|任务分类| TASK
-    
-    %% 自引用
-    PAR -.->|层级关系| PAR
-    
-    %% 应用样式
-    class RP referralClass
-    class CUS,CON,COMP,USER customerClass
-    class ENG engagementClass
-    class SL,PAR serviceClass
-    class PRO,TASK executionClass
+    %% Engagement 关系
+    ENG -->|custom_engagement| TASK
 ```
 
-## 📋 核心数据流关系表
+---
 
-| 源DocType | 目标DocType | 关系字段 | 关系类型 | 业务含义 |
-|-----------|-------------|----------|----------|----------|
-| **推荐流程** | | | | |
-| Referral Person | Contact | contact_information | 1:1 | 推荐人的联系方式 |
-| Referral Person | Customer | custom_referred_by | 1:N | 推荐人介绍的客户 |
-| Referral Person | Contact | custom_referred_by | 1:N | 推荐人介绍的联系人 |
-| Referral Person | Engagement | referral_person | 1:N | 推荐人负责的业务约定 |
-| **客户管理** | | | | |
-| Company | Customer | custom_company | 1:N | 公司下的客户实体 |
-| Customer | Contact | Dynamic Link | 1:N | 客户的联系人 |
-| Customer | Engagement | customer | 1:N | 客户的业务约定 |
-| Customer | Project | customer | 1:N | 客户的项目 |
-| Customer | Task | custom_client | 1:N | 客户的任务 |
-| **业务约定** | | | | |
-| Contact | Engagement | primary_contact | N:1 | 主要联系人 |
-| Contact | Engagement | accounting_contact | N:1 | 会计联系人 |
-| Contact | Engagement | tax_contact | N:1 | 税务联系人 |
-| Contact | Engagement | grants_contact | N:1 | 补助联系人 |
-| Service Line | Engagement | service_line | 1:N | 服务线的业务约定 |
-| Project | Engagement | project | 1:N | **新增** 项目的业务约定 |
-| User | Engagement | owner_partner | 1:N | 负责合伙人 |
-| Engagement | Task | custom_engagement | 1:N | 业务约定的任务 |
-| **项目层级** | | | | |
-| Partition | Partition | parent_partition | 1:N | 分区层级关系 |
-| Partition | Project | custom_partition | 1:N | 分区下的项目 |
-| Service Line | Project | custom_service_line | 1:N | **强化** 服务线必须归属项目 |
-| Project | Task | project | 1:N | 项目下的任务 |
-| **任务关联** | | | | |
-| Service Line | Task | custom_service_line | 1:N | 任务的服务线 |
-| Company | Task | custom_tftg | 1:N | 任务的TF/TG公司 |
+## 各 DocType 详细字段
 
-## 🎯 核心业务流程
+### 1. Task (任务) - ERPNext原生 + 自定义字段
 
-### 1️⃣ **推荐流程**
+```mermaid
+flowchart LR
+    subgraph Task
+        direction TB
+        T1[subject - 任务名称]
+        T2[project - Link → Project]
+        T3[parent_task - Link → Task]
+        T4[status - 原生状态]
+        T5[priority - 优先级]
+        T6[description - 描述]
+    end
+    
+    subgraph Custom Fields
+        direction TB
+        C1[custom_client - Link → Customer]
+        C2[custom_tftg - Link → Company]
+        C3[custom_service_line - Link → Service Line]
+        C4[custom_engagement - Link → Engagement]
+        C5[custom_task_status - Select 自定义状态]
+        C6[custom_target_month - Select 月份]
+        C7[custom_lodgement_due_date - Date]
+        C8[custom_year_end - Select 月份]
+        C9[custom_budget_planning - Currency]
+        C10[custom_actual_billing - Currency]
+        C11[custom_note - Long Text]
+        C12[custom_frequency - Select]
+        C13[custom_is_archived - Check]
+        C14[custom_roles - Table → Task Role Assignment]
+        C15[custom_softwares - Table → Task Software]
+        C16[custom_review_notes - Table → Review Note]
+        C17[custom_communication_methods - Table → Task Communication Method]
+    end
 ```
-Referral Person → Customer/Contact → Engagement
+
+**Task 自定义状态选项:**
+- Not Started, Done, Working on it, Stuck
+- Ready for Manager Review, Ready for Partner Review
+- Review Points to be Actioned, Ready to Send to Client
+- Sent to Client for Signature, Ready to Lodge, Lodged
+- Question Book Sent, Annual GST, Wait for Payment
+- Waiting on Payroll, Waiting on Client, Hold
+- Not Trading, R&D, For Invoicing
+
+---
+
+### 2. Project (项目) - ERPNext原生 + 自定义字段
+
+```mermaid
+flowchart LR
+    subgraph Project
+        direction TB
+        P1[project_name - 项目名称]
+        P2[customer - Link → Customer]
+        P3[status - 状态]
+        P4[percent_complete - 完成度]
+    end
+    
+    subgraph Custom Fields
+        direction TB
+        C1[custom_service_line - Link → Service Line]
+        C2[custom_partition - Link → Partition ⭐必填]
+        C3[custom_is_archived - Check]
+    end
 ```
-- 推荐人介绍客户和联系人
-- 基于推荐建立业务约定
 
-### 2️⃣ **项目层级（新架构）**
+---
+
+### 3. Engagement (业务约定) - 自定义DocType
+
+```mermaid
+flowchart LR
+    subgraph Engagement
+        direction TB
+        E1[customer - Link → Customer ⭐必填]
+        E2[company - Link → Company]
+        E3[service_line - Link → Service Line]
+        E4[project - Link → Project]
+        E5[referral_person - Link → Referral Person]
+        E6[frequency - Select]
+        E7[fiscal_year - Link → Fiscal Year ⭐必填]
+        E8[engagement_letter - Attach]
+        E9[owner_partner - Link → User]
+        E10[primary_contact - Link → Contact]
+        E11[accounting_contact - Link → Contact]
+        E12[tax_contact - Link → Contact]
+        E13[grants_contact - Link → Contact]
+    end
 ```
-Partition (Board) → Project (Service Type) → Task (实际Project)
+
+**Engagement Frequency选项:**
+- Annually, Half-yearly, Quarterly, Monthly
+- Fortnightly, Weekly, One-time
+
+---
+
+### 4. Partition (分区/Board) - 自定义DocType
+
+```mermaid
+flowchart LR
+    subgraph Partition
+        direction TB
+        P1[partition_name - Data ⭐必填唯一]
+        P2[parent_partition - Link → Partition]
+        P3[is_workspace - Check]
+        P4[display_type - Select]
+        P5[visible_columns - Long Text JSON]
+        P6[column_config - Long Text JSON]
+        P7[subtask_visible_columns - Long Text JSON]
+        P8[subtask_column_config - Long Text JSON]
+        P9[description - Small Text]
+        P10[icon - Data]
+        P11[sequence - Int]
+    end
 ```
-- 分区组织服务类型
-- 服务类型包含具体客户项目
-- 符合Monday.com风格的层级结构
 
-### 3️⃣ **服务交付（优化后）**
+**Display Type选项:**
+- table, board
+
+---
+
+### 5. Service Line (服务线) - 自定义DocType
+
+```mermaid
+flowchart LR
+    subgraph Service_Line
+        direction TB
+        S1[code - Data ⭐必填唯一]
+        S2[service_name - Data ⭐必填]
+        S3[is_active - Check 默认1]
+        S4[category - Select]
+        S5[description - Small Text]
+    end
 ```
-Service Line → Project (Service Type) → Engagement → Task (实际Project)
+
+**Category选项:**
+- Tax, BAS, Bookkeeping, Payroll, ASIC
+- Advisory, Compliance, Ad-Hoc, Others
+
+---
+
+### 6. Customer (客户) - ERPNext原生 + 自定义字段
+
+```mermaid
+flowchart LR
+    subgraph Customer
+        direction TB
+        C1[customer_name - 客户名称]
+        C2[customer_type - 类型]
+        C3[territory - 区域]
+    end
+    
+    subgraph Custom Fields
+        direction TB
+        F1[custom_referred_by - Link → Referral Person]
+        F2[custom_associated_companies - Table → Customer Company Tag]
+        F3[custom_entity_type - Select]
+        F4[custom_year_end - Select 月份]
+        F5[custom_client_group - Link → Client Group]
+    end
 ```
-- 服务线定义服务分类
-- 项目作为具体服务类型
-- 业务约定直接指定服务类型
-- 任务作为实际客户项目执行
 
-### 4️⃣ **客户服务（完整链路）**
+**Entity Type选项:**
+- Company, Individual, Partnership, Trust, Other
+
+---
+
+### 7. Contact (联系人) - ERPNext原生 + 自定义字段
+
+```mermaid
+flowchart LR
+    subgraph Contact
+        direction TB
+        C1[first_name - 名]
+        C2[last_name - 姓]
+        C3[email_id - 邮箱]
+        C4[phone - 电话]
+        C5[is_primary_contact - Check]
+    end
+    
+    subgraph Custom Fields
+        direction TB
+        F1[custom_contact_role - Select]
+        F2[custom_referred_by - Link → Referral Person]
+        F3[custom_social_app - Table → Contact Social]
+        F4[custom_contact_notes - Text]
+        F5[custom_last_contact_date - Date]
+        F6[is_billing_contact - Check]
+    end
 ```
-Customer → Contact → Engagement → Project → Task
-    ↓        ↓           ↓          ↓        ↓
-  客户    联系人      业务约定    服务类型   实际项目
+
+**Contact Role选项:**
+- Primary, Accounting, Tax, Grants, Other
+
+---
+
+### 8. Referral Person (推荐人) - 自定义DocType
+
+```mermaid
+flowchart LR
+    subgraph Referral_Person
+        direction TB
+        R1[referral_person_name - Data ⭐必填唯一]
+        R2[contact_information - Link → Contact]
+        R3[phone_number - Data]
+        R4[email - Data]
+        R5[company - Data]
+        R6[relationship_type - Select]
+        R7[notes - Text]
+    end
 ```
-- 客户通过联系人建立业务约定
-- 业务约定指定具体的服务类型
-- 在服务类型下创建实际的客户项目
 
-### 5️⃣ **自动化创建流程（新增）**
+---
+
+## 关系说明表
+
+| DocType | 字段名 | 类型 | Link 到 | 说明 |
+|---------|--------|------|---------|------|
+| **Task** |
+| | project | Link | Project | 任务所属项目 |
+| | custom_client | Link | Customer | 任务所属客户 |
+| | custom_engagement | Link | Engagement | 关联的业务约定 |
+| | custom_service_line | Link | Service Line | 服务类型(可选) |
+| | custom_tftg | Link | Company | TF/TG公司 |
+| | custom_roles | Table | Task Role Assignment | 角色分配 |
+| | custom_softwares | Table | Task Software | 使用软件 |
+| **Project** |
+| | customer | Link | Customer | 项目所属客户 |
+| | custom_partition | Link | Partition | 项目所属分区 ⭐必填 |
+| | custom_service_line | Link | Service Line | 项目的服务类型 |
+| **Engagement** |
+| | customer | Link | Customer | 约定所属客户 ⭐必填 |
+| | project | Link | Project | 关联的项目 |
+| | service_line | Link | Service Line | 服务类型 |
+| | referral_person | Link | Referral Person | 推荐人 |
+| | primary_contact | Link | Contact | 主要联系人 |
+| | owner_partner | Link | User | 负责合伙人 |
+| **Partition** |
+| | parent_partition | Link | Partition | 父分区（层级结构） |
+| **Customer** |
+| | custom_referred_by | Link | Referral Person | 推荐人 |
+| | custom_client_group | Link | Client Group | 客户组 |
+| **Contact** |
+| | custom_referred_by | Link | Referral Person | 推荐人 |
+| **Referral Person** |
+| | contact_information | Link | Contact | 联系信息 |
+
+---
+
+## 层级结构
+
 ```
-创建Engagement时：
-1. 选择Service Line (服务分类)
-2. 选择Project (该Service Line下的具体服务类型)
-3. 自动创建Task (客户的实际项目)
+Partition (Board/工作区)
+    └── Project (项目/年度服务)
+            ├── custom_service_line -> Service Line (标记服务类型)
+            └── Task (任务/实际工作项)
+                    ├── custom_client -> Customer
+                    └── custom_engagement -> Engagement
 ```
-- 用户选择明确，系统自动执行
-- 数据一致性自动保证
-- 避免Project归属混乱
 
-## 🔗 关键连接点
+---
 
-### **Engagement (业务约定)** - 核心枢纽
-- **向上连接**: Customer, Company, Referral Person, Service Line, Contact
-- **向下连接**: Task
-- **作用**: 连接客户需求与服务交付的核心节点
+## 使用场景示例
 
-### **Task (任务)** - 执行层
-- **多重连接**: Customer, Company, Service Line, Engagement, Project
-- **作用**: 实际工作执行单元，汇聚所有业务信息
+```
+Service Line: "Individual Tax Return"
 
-### **Service Line (服务线)** - 服务分类
-- **连接**: Engagement, Project, Task
-- **作用**: 统一的服务分类和管理
+Project: "Individual Tax Return - FY2024"
+    └── custom_service_line -> "Individual Tax Return"
+    └── custom_partition -> "Top Figures"
+    └── Task: Client A 的税务工作
+    └── Task: Client B 的税务工作
 
-### **Partition (分区)** - 组织结构
-- **连接**: Project, 自引用层级
-- **作用**: Monday.com风格的工作区组织
+Project: "Individual Tax Return - FY2025"
+    └── custom_service_line -> "Individual Tax Return"
+    └── custom_partition -> "Top Figures"
+    └── Task: Client A 的税务工作
+    └── Task: Client C 的税务工作
+```
 
-## 📊 数据流特点
-
-1. **多路径汇聚**: 多个数据源最终汇聚到Task执行层
-2. **双向验证**: Customer既直接连Task，也通过Engagement连接
-3. **层级清晰**: Partition → Project → Task 的明确层级
-4. **业务完整**: 从推荐到交付的完整业务闭环
-
-## 🎯 优化建议
-
-### 🚀 **性能优化**
-1. **添加数据库索引** - 提升查询性能
-   - `Customer.custom_referred_by` ⚡ (已完成)
-   - `Task.custom_engagement` ⚡ (已完成)
-   - `Contact.custom_referred_by` (待添加)
-   - `Engagement.referral_person` (待添加)
-   - `Task.custom_client` (待添加)
-   - `Task.custom_service_line` (待添加)
-   - `Project.custom_partition` (待添加)
-
-### 🔧 **数据一致性**
-1. **自动化数据同步**
-   - `Task.custom_client` 应与 `Task.custom_engagement.customer` 保持一致
-   - `Task.custom_service_line` 应与 `Project.custom_service_line` 保持一致
-   - 建议添加验证规则或自动填充逻辑
-
-2. **业务规则验证**
-   - Engagement创建时自动验证Customer与Referral Person的关系
-   - Task创建时自动从Engagement获取相关信息
-
-### 🧹 **架构清理**
-1. **移除冗余字段** (低优先级)
-   - `Task.custom_sequence` - 使用频率低
-   - `Task.custom_reset_date` - 业务价值不明确
-   - `Task.custom_comment_count` - 可通过计算获得
-   - `Partition.visible_columns` - 前端配置可替代
-   - `Partition.column_config` - 前端配置可替代
-
-2. **字段标准化**
-   - 统一日期字段命名规范
-   - 统一Select选项的格式和内容
-
-### 📈 **功能增强**
-1. **增加反向关联**
-   - 考虑在Engagement中添加related_tasks字段（如果1对多关系确实存在）
-   - 在Referral Person中添加统计字段（推荐客户数量等）
-
-2. **业务智能字段**
-   - 在Customer中添加total_engagement_value（总业务价值）
-   - 在Task中添加estimated_hours（预估工时）
-   - 在Engagement中添加status字段（进行中/已完成/暂停等）
-
-### 🔒 **数据安全**
-1. **权限控制**
-   - 确保敏感的财务字段（budget_planning, actual_billing）有适当的访问控制
-   - Referral Person信息的访问权限管理
-
-2. **数据备份**
-   - 关键业务数据的定期备份策略
-   - 重要关联关系的完整性检查
-
-### 📊 **报表和分析**
-1. **预计算字段**
-   - Customer层面的业务统计
-   - Service Line层面的绩效指标
-   - Referral Person层面的转化率
-
-2. **数据仓库考虑**
-   - 为复杂报表查询考虑数据仓库或视图
-   - 历史数据的归档策略
-
-## 🔄 **实施优先级**
-
-### **高优先级** (立即实施)
-- ✅ 添加缺失的数据库索引
-- ✅ 实现数据一致性验证
-- ✅ 完善Engagement的核心字段
-
-### **中优先级** (近期实施)
-- 🟡 清理未使用的字段
-- 🟡 标准化字段命名和格式
-- 🟡 增加业务规则验证
-
-### **低优先级** (长期规划)
-- 🟢 功能增强和智能字段
-- 🟢 报表和分析优化
-- 🟢 数据仓库规划
+这样按年份分Project，但都Link到同一个Service Line，数据清晰不混乱。
