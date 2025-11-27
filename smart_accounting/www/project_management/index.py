@@ -5,6 +5,50 @@ import re
 import json
 from datetime import datetime
 
+# 🚀 PERFORMANCE: Global Company cache (TF/TG only have 2 companies)
+_company_cache = None
+_company_cache_timestamp = None
+
+def get_company_cache():
+    """
+    Get cached company data. Only loads once per request.
+    TF/TG companies rarely change, so caching is very effective.
+    """
+    global _company_cache, _company_cache_timestamp
+    
+    # Cache for 5 minutes (300 seconds)
+    import time
+    current_time = time.time()
+    
+    if _company_cache is None or _company_cache_timestamp is None or (current_time - _company_cache_timestamp) > 300:
+        companies = frappe.get_all("Company", fields=["name", "company_name", "abbr"])
+        _company_cache = {c.name: c for c in companies}
+        _company_cache_timestamp = current_time
+    
+    return _company_cache
+
+def get_company_abbreviation(company_id):
+    """
+    Get company abbreviation from cache.
+    Returns 'TF' for Top Figures, 'TG' for Top Grants, or first 2 letters for others.
+    """
+    if not company_id:
+        return 'TF'  # Default
+    
+    cache = get_company_cache()
+    company = cache.get(company_id)
+    
+    if company:
+        company_name = company.company_name or company.name
+        if 'Top Figures' in company_name:
+            return 'TF'
+        elif 'Top Grants' in company_name:
+            return 'TG'
+        else:
+            return company.abbr or company_name[:2].upper()
+    
+    return 'TF'  # Default fallback
+
 def format_date_for_display(date_value):
     """
     Convert YYYY-MM-DD date format to DD-MM-YYYY for display
@@ -178,7 +222,7 @@ def get_child_partitions(parent_partition):
         return []
 
 @frappe.whitelist()
-def create_partition(partition_name, is_workspace=False, parent_partition=None, description="", icon=""):
+def create_partition(partition_name, is_workspace=False, parent_partition=None, description="", icon="", board_display_type="Task-Centric"):
     """
     Create a new partition (workspace or board)
     """
@@ -934,6 +978,8 @@ def get_project_management_data_chunked(view='main', chunk_size=200):
 def get_workspace_overview_data(workspace_name):
     """
     Get overview data for a workspace (shows child boards, not individual tasks)
+    
+    OPTIMIZED: Uses batch queries instead of N+1 queries
     """
     try:
         # Get child boards of this workspace
@@ -946,55 +992,69 @@ def get_workspace_overview_data(workspace_name):
             order_by="partition_name"
         )
         
-        # Get summary statistics for each child board
-        board_summaries = {}
+        if not child_boards:
+            return {
+                'organized_data': {
+                    'workspaces': [],
+                    'boards': []
+                },
+                'total_projects': 0,
+                'total_tasks': 0,
+                'is_workspace_view': True,
+                'is_main_dashboard': True,
+                'workspace_name': workspace_name
+            }
+        
+        # 🚀 BATCH QUERY 1: Get project counts for all boards in one query
+        board_names = [b.name for b in child_boards]
+        board_placeholder = ','.join(['%s'] * len(board_names))
+        
+        project_counts = frappe.db.sql(f"""
+            SELECT custom_partition, COUNT(*) as count
+            FROM `tabProject`
+            WHERE custom_partition IN ({board_placeholder})
+            AND status != 'Cancelled'
+            GROUP BY custom_partition
+        """, board_names, as_dict=True)
+        
+        # Create project count map
+        project_count_map = {pc.custom_partition: pc['count'] for pc in project_counts}
+        
+        # 🚀 BATCH QUERY 2: Get task counts for all boards in one query
+        task_counts = frappe.db.sql(f"""
+            SELECT p.custom_partition, COUNT(t.name) as count
+            FROM `tabTask` t
+            INNER JOIN `tabProject` p ON t.project = p.name
+            WHERE p.custom_partition IN ({board_placeholder})
+            AND p.status != 'Cancelled'
+            AND t.status != 'Cancelled'
+            GROUP BY p.custom_partition
+        """, board_names, as_dict=True)
+        
+        # Create task count map
+        task_count_map = {tc.custom_partition: tc['count'] for tc in task_counts}
+        
+        # Build boards list using cached counts
+        boards_list = []
         total_projects = 0
         total_tasks = 0
         
         for board in child_boards:
-            # Count projects in this board
-            project_count = frappe.db.count("Project", {
-                "custom_partition": board.name,
-                "status": ["!=", "Cancelled"]
-            })
+            project_count = project_count_map.get(board.name, 0)
+            task_count = task_count_map.get(board.name, 0)
             
-            # Count tasks in this board (simplified count)
-            task_count = 0
-            if project_count > 0:
-                projects = frappe.get_all("Project", 
-                    filters={"custom_partition": board.name, "status": ["!=", "Cancelled"]},
-                    fields=["name"]
-                )
-                if projects:
-                    task_count = frappe.db.count("Task", {
-                        "project": ["in", [p.name for p in projects]],
-                        "status": ["!=", "Cancelled"]
-                    })
-            
-            board_summaries[board.partition_name] = {
-                'board_name': board.name,
+            boards_list.append({
+                'name': board.name,
+                'partition_name': board.partition_name,
                 'description': board.description or '',
                 'project_count': project_count,
                 'task_count': task_count,
                 'icon': board.icon or 'fa-table',
-                'projects': []  # Empty for workspace view
-            }
+                'is_workspace': False
+            })
             
             total_projects += project_count
             total_tasks += task_count
-        
-        # Convert board_summaries to the format expected by main dashboard template
-        boards_list = []
-        for board_name, board_data in board_summaries.items():
-            boards_list.append({
-                'name': board_data['board_name'],
-                'partition_name': board_name,
-                'description': board_data['description'],
-                'project_count': board_data['project_count'],
-                'task_count': board_data['task_count'],
-                'icon': board_data.get('icon', 'fa-table'),  # Default board icon
-                'is_workspace': False  # These are boards under a workspace
-            })
         
         return {
             'organized_data': {
@@ -1025,6 +1085,8 @@ def get_workspace_overview_data(workspace_name):
 def get_main_dashboard_data():
     """
     Get overview data for main dashboard - show all workspaces and top-level boards
+    
+    OPTIMIZED: Uses batch queries instead of N+1 queries
     """
     try:
         # Get all top-level partitions (workspaces and boards)
@@ -1037,37 +1099,55 @@ def get_main_dashboard_data():
             order_by="is_workspace desc, partition_name"
         )
         
+        if not top_partitions:
+            return {
+                'organized_data': {'workspaces': [], 'boards': []},
+                'total_projects': 0,
+                'total_tasks': 0,
+                'is_main_dashboard': True
+            }
         
-        # Organize into workspaces and boards
+        # 🚀 BATCH QUERY 1: Get project counts for all partitions in one query
+        partition_names = [p.name for p in top_partitions]
+        partition_placeholder = ','.join(['%s'] * len(partition_names))
+        
+        project_counts = frappe.db.sql(f"""
+            SELECT custom_partition, COUNT(*) as count
+            FROM `tabProject`
+            WHERE custom_partition IN ({partition_placeholder})
+            AND status != 'Cancelled'
+            GROUP BY custom_partition
+        """, partition_names, as_dict=True)
+        
+        # Create project count map
+        project_count_map = {pc.custom_partition: pc['count'] for pc in project_counts}
+        
+        # 🚀 BATCH QUERY 2: Get task counts for all partitions in one query
+        task_counts = frappe.db.sql(f"""
+            SELECT p.custom_partition, COUNT(t.name) as count
+            FROM `tabTask` t
+            INNER JOIN `tabProject` p ON t.project = p.name
+            WHERE p.custom_partition IN ({partition_placeholder})
+            AND p.status != 'Cancelled'
+            AND t.status != 'Cancelled'
+            GROUP BY p.custom_partition
+        """, partition_names, as_dict=True)
+        
+        # Create task count map
+        task_count_map = {tc.custom_partition: tc['count'] for tc in task_counts}
+        
+        # Organize into workspaces and boards using cached counts
         workspaces = []
         boards = []
         
         for partition in top_partitions:
-            # Count projects and tasks for each partition
-            project_count = frappe.db.count("Project", {
-                "custom_partition": partition.name,
-                "status": ["!=", "Cancelled"]
-            })
-            
-            task_count = 0
-            if project_count > 0:
-                projects = frappe.get_all("Project", 
-                    filters={"custom_partition": partition.name, "status": ["!=", "Cancelled"]},
-                    fields=["name"]
-                )
-                if projects:
-                    task_count = frappe.db.count("Task", {
-                        "project": ["in", [p.name for p in projects]],
-                        "status": ["!=", "Cancelled"]
-                    })
-            
             partition_data = {
                 'name': partition.name,
                 'partition_name': partition.partition_name,
                 'description': partition.description or '',
                 'icon': partition.icon or ('fa-th-large' if partition.is_workspace else 'fa-table'),
-                'project_count': project_count,
-                'task_count': task_count,
+                'project_count': project_count_map.get(partition.name, 0),
+                'task_count': task_count_map.get(partition.name, 0),
                 'is_workspace': partition.is_workspace
             }
             
@@ -1105,7 +1185,8 @@ def get_project_management_data_optimized(view='main'):
     Performance improvements:
     - Batch queries instead of N+1 queries
     - Single SQL JOIN for related data
-    - Reduced database calls from ~800 to ~5
+    - Reduced database calls from ~800+ to ~15
+    - Full feature parity with original version
     """
     try:
         # Main view now shows workspace overview instead of all tasks
@@ -1130,7 +1211,7 @@ def get_project_management_data_optimized(view='main'):
                 pass
 
         # Build the optimized query with all necessary JOINs
-        conditions = ["t.custom_is_archived != 1", "t.parent_task IS NULL"]
+        conditions = ["t.custom_is_archived != 1", "(t.parent_task IS NULL OR t.parent_task = '')"]
         values = []
         
         # Add partition filter if not main view
@@ -1149,7 +1230,7 @@ def get_project_management_data_optimized(view='main'):
         
         where_clause = " AND ".join(conditions)
         
-        # 🔥 SINGLE OPTIMIZED QUERY - replaces 800+ individual queries
+        # 🔥 SINGLE OPTIMIZED QUERY - Get all task data with JOINs
         tasks_data = frappe.db.sql(f"""
             SELECT 
                 t.name as task_id,
@@ -1159,7 +1240,9 @@ def get_project_management_data_optimized(view='main'):
                 t.exp_end_date,
                 t.description,
                 t.modified,
-                t.custom_note as note,
+                t.creation,
+                t.owner,
+                t.custom_note,
                 t.custom_frequency,
                 t.custom_reset_date,
                 t.custom_client,
@@ -1168,24 +1251,28 @@ def get_project_management_data_optimized(view='main'):
                 t.custom_year_end,
                 t.custom_target_month,
                 t.custom_process_date,
+                t.custom_lodgement_due_date,
+                t.custom_budget_planning,
+                t.custom_actual_billing,
+                t.custom_engagement,
+                t.project,
                 
                 -- Project information
                 p.name as project_id,
                 p.project_name,
                 p.customer as project_customer,
-                p.status as project_status,
-                p.expected_end_date as project_end_date,
-                p.priority as project_priority,
                 
                 -- Client information (from custom_client field)
                 c1.customer_name as client_name,
                 c1.custom_entity_type as entity_type,
+                c1.customer_type as customer_type,
+                c1.custom_client_group as client_group_id,
                 
                 -- Project customer information (fallback)
                 c2.customer_name as project_customer_name,
                 c2.custom_entity_type as project_entity_type,
                 
-                -- Company information
+                -- Company information for TF/TG
                 comp.company_name as company_name
                 
             FROM `tabTask` t
@@ -1197,121 +1284,347 @@ def get_project_management_data_optimized(view='main'):
             ORDER BY COALESCE(c1.customer_name, c2.customer_name, 'No Client'), t.subject
         """, values, as_dict=True)
         
-        # 🚀 BATCH QUERY: Get all role assignments in one go
-        if tasks_data:
-            task_ids = [t.task_id for t in tasks_data]
-            roles_data = frappe.db.sql("""
-                SELECT parent, role, user, is_primary
-                FROM `tabTask Role Assignment`
-                WHERE parent IN ({})
-            """.format(','.join(['%s'] * len(task_ids))), task_ids, as_dict=True)
-            
-            # Group roles by task
-            task_roles = {}
-            for role in roles_data:
-                if role.parent not in task_roles:
-                    task_roles[role.parent] = {}
-                if role.role not in task_roles[role.parent]:
-                    task_roles[role.parent][role.role] = []
-                task_roles[role.parent][role.role].append({
-                    'user': role.user,
-                    'is_primary': role.is_primary
-                })
-            
-            # 🚀 BATCH QUERY: Get all software assignments in one go
-            software_data = frappe.db.sql("""
-                SELECT parent, software_name, is_primary
-                FROM `tabTask Software`
-                WHERE parent IN ({})
-            """.format(','.join(['%s'] * len(task_ids))), task_ids, as_dict=True)
-            
-            # Group software by task
-            task_software = {}
-            for software in software_data:
-                if software.parent not in task_software:
-                    task_software[software.parent] = []
-                task_software[software.parent].append({
-                    'software_name': software.software_name,
-                    'is_primary': software.is_primary
-                })
-        else:
-            task_roles = {}
-            task_software = {}
+        if not tasks_data:
+            return {
+                'organized_data': {},
+                'total_projects': 0,
+                'total_tasks': 0,
+                'debug_info': {'message': 'No tasks found'},
+                'is_workspace_view': False
+            }
         
-        # Process the optimized data
+        task_ids = [t.task_id for t in tasks_data]
+        task_ids_placeholder = ','.join(['%s'] * len(task_ids))
+        
+        # 🚀 BATCH QUERY 1: Get all role assignments
+        roles_data = frappe.db.sql(f"""
+            SELECT parent, role, user, is_primary
+            FROM `tabTask Role Assignment`
+            WHERE parent IN ({task_ids_placeholder})
+        """, task_ids, as_dict=True)
+        
+        # Group roles by task and role type
+        task_roles = {}
+        for role in roles_data:
+            if role.parent not in task_roles:
+                task_roles[role.parent] = {}
+            if role.role not in task_roles[role.parent]:
+                task_roles[role.parent][role.role] = []
+            task_roles[role.parent][role.role].append({
+                'user': role.user,
+                'is_primary': role.is_primary
+            })
+        
+        # 🚀 BATCH QUERY 2: Get all software assignments
+        software_data = frappe.db.sql(f"""
+            SELECT parent, software as software_name, is_primary
+            FROM `tabTask Software`
+            WHERE parent IN ({task_ids_placeholder})
+        """, task_ids, as_dict=True)
+        
+        # Group software by task
+        task_software = {}
+        for sw in software_data:
+            if sw.parent not in task_software:
+                task_software[sw.parent] = []
+            task_software[sw.parent].append({
+                'software': sw.software_name,
+                'is_primary': sw.is_primary
+            })
+        
+        # 🚀 BATCH QUERY 3: Get all communication methods
+        comm_methods_data = frappe.db.sql(f"""
+            SELECT parent, communication_method, is_primary
+            FROM `tabTask Communication Method`
+            WHERE parent IN ({task_ids_placeholder})
+        """, task_ids, as_dict=True)
+        
+        # Group communication methods by task
+        task_comm_methods = {}
+        for cm in comm_methods_data:
+            if cm.parent not in task_comm_methods:
+                task_comm_methods[cm.parent] = []
+            task_comm_methods[cm.parent].append({
+                'communication_method': cm.communication_method,
+                'is_primary': cm.is_primary
+            })
+        
+        # 🚀 BATCH QUERY 4: Get all client contacts
+        # Note: custom_client_contacts table may not exist yet, so we handle gracefully
+        task_client_contacts = {}
+        try:
+            # Check if the table exists before querying
+            if frappe.db.table_exists('tabTask Client Contact'):
+                client_contacts_data = frappe.db.sql(f"""
+                    SELECT parent, contact, contact_name
+                    FROM `tabTask Client Contact`
+                    WHERE parent IN ({task_ids_placeholder})
+                """, task_ids, as_dict=True)
+                
+                # Group client contacts by task
+                for cc in client_contacts_data:
+                    if cc.parent not in task_client_contacts:
+                        task_client_contacts[cc.parent] = []
+                    task_client_contacts[cc.parent].append({
+                        'contact': cc.contact,
+                        'contact_name': cc.contact_name
+                    })
+        except Exception as e:
+            # Table doesn't exist or other error, continue without client contacts
+            frappe.log_error(f"Client contacts batch query error: {str(e)}")
+        
+        # 🚀 BATCH QUERY 5: Get all review notes
+        review_notes_data = frappe.db.sql(f"""
+            SELECT parent, note, name
+            FROM `tabReview Note`
+            WHERE parent IN ({task_ids_placeholder})
+            ORDER BY parent, idx
+        """, task_ids, as_dict=True)
+        
+        # Group review notes by task
+        task_review_notes = {}
+        for rn in review_notes_data:
+            if rn.parent not in task_review_notes:
+                task_review_notes[rn.parent] = []
+            if rn.note:  # Only add non-empty notes
+                task_review_notes[rn.parent].append({
+                    'name': rn.name,
+                    'note': rn.note
+                })
+        
+        # 🚀 BATCH QUERY 6: Get all comment counts
+        comment_counts = frappe.db.sql(f"""
+            SELECT reference_name, COUNT(*) as count
+            FROM `tabComment`
+            WHERE reference_doctype = 'Task' 
+            AND reference_name IN ({task_ids_placeholder})
+            AND comment_type = 'Comment'
+            GROUP BY reference_name
+        """, task_ids, as_dict=True)
+        
+        # Create comment count map
+        task_comment_counts = {c.reference_name: c['count'] for c in comment_counts}
+        
+        # 🚀 BATCH QUERY 7: Get all engagement file counts
+        engagement_ids = list(set(t.custom_engagement for t in tasks_data if t.custom_engagement))
+        engagement_file_counts = {}
+        if engagement_ids:
+            engagement_ids_placeholder = ','.join(['%s'] * len(engagement_ids))
+            file_counts = frappe.db.sql(f"""
+                SELECT attached_to_name, COUNT(*) as count
+                FROM `tabFile`
+                WHERE attached_to_doctype = 'Engagement'
+                AND attached_to_name IN ({engagement_ids_placeholder})
+                GROUP BY attached_to_name
+            """, engagement_ids, as_dict=True)
+            engagement_file_counts = {f.attached_to_name: f['count'] for f in file_counts}
+        
+        # 🚀 BATCH QUERY 8: Get all client group names
+        client_group_ids = list(set(t.client_group_id for t in tasks_data if t.client_group_id))
+        client_group_names = {}
+        if client_group_ids:
+            client_group_ids_placeholder = ','.join(['%s'] * len(client_group_ids))
+            groups = frappe.db.sql(f"""
+                SELECT name, group_name
+                FROM `tabClient Group`
+                WHERE name IN ({client_group_ids_placeholder})
+            """, client_group_ids, as_dict=True)
+            client_group_names = {g.name: g.group_name for g in groups}
+        
+        # 🚀 BATCH QUERY 9: Get all unique users for avatar info
+        all_users = set()
+        for task_id, roles in task_roles.items():
+            for role_name, users in roles.items():
+                for u in users:
+                    if u.get('user'):
+                        all_users.add(u['user'])
+        
+        user_info_cache = {}
+        if all_users:
+            users_placeholder = ','.join(['%s'] * len(all_users))
+            users_data = frappe.db.sql(f"""
+                SELECT name, full_name, email, user_image
+                FROM `tabUser`
+                WHERE name IN ({users_placeholder})
+            """, list(all_users), as_dict=True)
+            for u in users_data:
+                initials = get_initials(u.full_name or u.name)
+                user_info_cache[u.name] = {
+                    'email': u.name,
+                    'full_name': u.full_name or u.name,
+                    'initials': initials,
+                    'image': u.user_image
+                }
+        
+        # Helper function to get user info from cache
+        def get_cached_user_info(user_list):
+            if not user_list:
+                return None
+            result = []
+            for u in user_list:
+                user_email = u.get('user')
+                if user_email and user_email in user_info_cache:
+                    info = user_info_cache[user_email].copy()
+                    info['is_primary'] = u.get('is_primary', False)
+                    result.append(info)
+                elif user_email:
+                    result.append({
+                        'email': user_email,
+                        'full_name': user_email,
+                        'initials': get_initials(user_email),
+                        'is_primary': u.get('is_primary', False)
+                    })
+            return result if result else None
+        
+        # Helper function to get primary user email
+        def get_primary_user(user_list):
+            if not user_list:
+                return ""
+            for u in user_list:
+                if u.get('is_primary'):
+                    return u.get('user', '')
+            return user_list[0].get('user', '') if user_list else ""
+        
+        # Process all tasks
         organized_data = {}
         total_tasks = 0
+        project_set = set()
         
         for task in tasks_data:
-            # 最简化处理
-            client_name = task.client_name or "No Client"
-            entity_type = "Company"  # 固定值，避免复杂判断
-            tf_tg = 'TF'  # 固定值，避免字符串处理
+            task_id = task.task_id
             
-            # 跳过复杂的角色和软件处理
-            partner = reviewer = preparer = primary_software = ""
+            # Determine client name and entity type
+            client_name = task.client_name or task.project_customer_name or "No Client"
+            entity_type = task.entity_type or task.project_entity_type or task.customer_type or "Company"
             
-            # Create task data structure (same as original)
+            # Convert TF/TG company name to abbreviation
+            tf_tg = 'TF'
+            if task.company_name:
+                if 'Top Figures' in task.company_name:
+                    tf_tg = 'TF'
+                elif 'Top Grants' in task.company_name:
+                    tf_tg = 'TG'
+                else:
+                    tf_tg = task.company_name[:2].upper() if task.company_name else 'TF'
+            
+            # Get role assignments for this task
+            task_role_data = task_roles.get(task_id, {})
+            
+            # Get software info for this task
+            software_info = task_software.get(task_id)
+            primary_software = ""
+            if software_info:
+                for sw in software_info:
+                    if sw.get('is_primary'):
+                        primary_software = sw.get('software', '')
+                        break
+                if not primary_software and software_info:
+                    primary_software = software_info[0].get('software', '')
+            
+            # Get communication methods info
+            comm_info = task_comm_methods.get(task_id)
+            
+            # Get review notes
+            review_notes = task_review_notes.get(task_id, [])
+            
+            # Get client group name
+            client_group = ''
+            if task.client_group_id:
+                client_group = client_group_names.get(task.client_group_id, '')
+            
+            # Format dates
+            process_date = format_date_for_display(task.custom_process_date) if task.custom_process_date else ''
+            lodgment_due_date = format_date_for_display(task.custom_lodgement_due_date) if task.custom_lodgement_due_date else ''
+            reset_date = format_date_for_display(task.custom_reset_date) if task.custom_reset_date else ''
+            last_updated = task.modified.strftime("%d-%m-%Y") if hasattr(task.modified, 'strftime') else str(task.modified) if task.modified else ''
+            
+            # Build task data structure (matching original exactly)
             task_data = {
-                'task_id': task.task_id,
+                'task_id': task_id,
                 'task_name': task.task_name,
+                'subject': task.task_name,
                 'status': task.status or 'Not Started',
                 'priority': task.priority,
                 'exp_end_date': task.exp_end_date,
                 'description': task.description,
                 'modified': task.modified,
-                'note': task.note or '',
-                'frequency': task.custom_frequency or '',
-                'reset_date': task.custom_reset_date,
+                'custom_note': task.custom_note or '',
+                'note': task.custom_note or '',
+                'custom_frequency': task.custom_frequency or '',
+                'custom_reset_date': reset_date,
                 'client_name': client_name,
+                'custom_client': task.custom_client,
                 'entity_type': entity_type,
                 'tf_tg': tf_tg,
                 'service_line': task.custom_service_line or '',
                 'software': primary_software,
                 'year_end': task.custom_year_end or '',
                 'target_month': task.custom_target_month or '',
-                'partner': partner,
-                'reviewer': reviewer,
-                'preparer': preparer,
-                'process_date': format_date_for_display(task.custom_process_date) if task.custom_process_date else '',
+                'process_date': process_date,
+                'lodgment_due_date': lodgment_due_date,
                 'project_name': task.project_name or 'No Project',
-                'project_id': task.project_id
+                'project_id': task.project_id,
+                'project': task.project,
+                'budget_planning': task.custom_budget_planning or 0,
+                'actual_billing': task.custom_actual_billing or 0,
+                'last_updated': last_updated,
+                'client_group': client_group,
+                'custom_engagement': task.custom_engagement,
+                'engagement_el_count': engagement_file_counts.get(task.custom_engagement, 0) if task.custom_engagement else 0,
+                'comment_count': task_comment_counts.get(task_id, 0),
+                'review_notes': review_notes,
+                'latest_review_note': review_notes[0]['note'] if review_notes else '',
+                
+                # Role user info for avatar display
+                'action_person_info': get_cached_user_info(task_role_data.get('Action Person', [])),
+                'preparer_info': get_cached_user_info(task_role_data.get('Preparer', [])),
+                'reviewer_info': get_cached_user_info(task_role_data.get('Reviewer', [])),
+                'partner_info': get_cached_user_info(task_role_data.get('Partner', [])),
+                
+                # Primary user emails
+                'action_person': get_primary_user(task_role_data.get('Action Person', [])),
+                'preparer': get_primary_user(task_role_data.get('Preparer', [])),
+                'reviewer': get_primary_user(task_role_data.get('Reviewer', [])),
+                'partner': get_primary_user(task_role_data.get('Partner', [])),
+                
+                # Software, communication, and client contacts info
+                'software_info': software_info,
+                'communication_methods_info': comm_info,
+                'client_contacts_info': task_client_contacts.get(task_id),
+                
+                'assignees': None
             }
             
-            # Organize by client (same structure as original)
-            if client_name not in organized_data:
-                organized_data[client_name] = {
-                    'client_name': client_name,
-                    'entity_type': entity_type,
-                    'projects': {},
-                    'total_tasks': 0
-                }
-            
+            # Organize by client -> project -> tasks (matching original structure exactly)
+            # Original structure: organized_data[client][project_name] = [task1, task2, ...]
             project_name = task.project_name or 'No Project'
-            if project_name not in organized_data[client_name]['projects']:
-                organized_data[client_name]['projects'][project_name] = {
-                    'project_name': project_name,
-                    'project_id': task.project_id,
-                    'tasks': []
-                }
+            project_customer = task.project_customer or "Unassigned"
             
-            organized_data[client_name]['projects'][project_name]['tasks'].append(task_data)
-            organized_data[client_name]['total_tasks'] += 1
+            if project_customer not in organized_data:
+                organized_data[project_customer] = {}
+            
+            if project_name not in organized_data[project_customer]:
+                organized_data[project_customer][project_name] = []
+            
+            organized_data[project_customer][project_name].append(task_data)
             total_tasks += 1
+            
+            if task.project_id:
+                project_set.add(task.project_id)
         
         return {
-            'organized_data': organized_data,
-            'total_projects': len(set(t.project_id for t in tasks_data if t.project_id)),
+            'organized_data': dict(organized_data),
+            'total_projects': len(project_set),
             'total_tasks': total_tasks,
             'debug_info': {
-                'message': f'Optimized query loaded {total_tasks} tasks with {len(tasks_data)} database calls instead of ~{total_tasks * 4}',
-                'performance_improvement': f'Reduced database calls by ~{((total_tasks * 4 - 5) / (total_tasks * 4) * 100):.1f}%'
+                'message': f'Optimized: {total_tasks} tasks loaded with ~15 queries instead of ~{total_tasks * 10}',
+                'performance_improvement': f'~{((total_tasks * 10 - 15) / max(total_tasks * 10, 1) * 100):.1f}% fewer DB calls'
             },
             'is_workspace_view': False
         }
         
     except Exception as e:
-        frappe.log_error(f"Error in optimized project management data: {str(e)}")
+        frappe.log_error(f"Error in optimized project management data: {str(e)}\n{frappe.get_traceback()}")
         # Fallback to original function if optimization fails
         return get_project_management_data_original(view)
 
@@ -1519,29 +1832,9 @@ def get_project_management_data_original(view='main'):
                     task.entity_type = "Company"
                 
                 # Get other custom fields - using correct field names from fixtures
+                # 🚀 OPTIMIZED: Use cached company data instead of individual queries
                 tftg_company = getattr(task_doc, 'custom_tftg', None) or getattr(task_doc, 'custom_tf_tg', None)
-                # Convert company ID/name to display abbreviation
-                if tftg_company:
-                    try:
-                        # If it's a company ID, get the company name
-                        if frappe.db.exists("Company", tftg_company):
-                            company_doc = frappe.get_doc("Company", tftg_company)
-                            company_name = company_doc.company_name
-                        else:
-                            company_name = tftg_company
-                        
-                        # Convert to display abbreviation
-                        if 'Top Figures' in company_name:
-                            task.tf_tg = 'TF'
-                        elif 'Top Grants' in company_name:
-                            task.tf_tg = 'TG'
-                        else:
-                            task.tf_tg = company_name[:2].upper() if company_name else 'TF'  # Fallback: first 2 letters
-                    except Exception as e:
-                        # TF/TG conversion error handled silently
-                        task.tf_tg = 'TF'
-                else:
-                    task.tf_tg = 'TF'
+                task.tf_tg = get_company_abbreviation(tftg_company)
                 task.service_line = getattr(task_doc, 'custom_service_line', None) or ""
                 # Get software from sub-table (new clean approach)
                 task.software = get_primary_software(task_doc) or ""
