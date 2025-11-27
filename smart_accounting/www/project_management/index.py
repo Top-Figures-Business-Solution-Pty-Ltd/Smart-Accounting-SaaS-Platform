@@ -108,9 +108,9 @@ from .api.columns import (
     save_user_column_widths,
     load_user_column_widths,
     get_all_task_columns,
-    get_subtask_column_config,
     save_subtask_column_config
 )
+# Note: get_subtask_column_config is defined locally in this file with enhanced logic
 from .api.combination import (
     get_available_boards_for_combination,
     save_combination_view,

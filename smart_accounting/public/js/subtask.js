@@ -123,9 +123,6 @@ class SubtaskManager {
         const currentView = urlParams.get('view') || 'main';
         
         try {
-            // Get subtask column configuration with enhanced debugging
-            console.log(`🔍 Loading subtask column config for view: ${currentView}`);
-            
             const response = await frappe.call({
                 method: 'smart_accounting.www.project_management.index.get_subtask_column_config',
                 args: {
@@ -133,22 +130,17 @@ class SubtaskManager {
                 }
             });
             
-            console.log('🔍 Subtask column config response:', response);
-            
             let visibleColumns;
             
-            // 关键修复：优先使用服务器返回的配置，确保持久化生效
+            // 优先使用服务器返回的配置
             if (response.message && response.message.success && response.message.visible_columns) {
                 visibleColumns = response.message.visible_columns;
-                console.log(`✅ Using saved subtask columns for ${currentView}:`, visibleColumns);
             } else {
-                // 只有在服务器没有返回配置时才使用默认配置
+                // 使用默认配置
                 visibleColumns = window.ColumnConfigManager.getDefaultVisibleSubtaskColumns();
-                console.warn(`⚠️ No saved subtask config found for ${currentView}, using defaults:`, visibleColumns);
                 
                 // 如果配置加载失败，尝试初始化配置
                 if (currentView !== 'main') {
-                    console.log(`🔧 Attempting to initialize subtask config for ${currentView}`);
                     try {
                         const initResponse = await frappe.call({
                             method: 'smart_accounting.www.project_management.index.initialize_single_partition_subtask_config',
@@ -158,7 +150,6 @@ class SubtaskManager {
                         });
                         
                         if (initResponse.message && initResponse.message.success) {
-                            console.log(`✅ Subtask config initialized for ${currentView}`);
                             // 重新获取初始化后的配置
                             const retryResponse = await frappe.call({
                                 method: 'smart_accounting.www.project_management.index.get_subtask_column_config',
@@ -169,11 +160,10 @@ class SubtaskManager {
                             
                             if (retryResponse.message && retryResponse.message.success && retryResponse.message.visible_columns) {
                                 visibleColumns = retryResponse.message.visible_columns;
-                                console.log(`✅ Using initialized subtask columns for ${currentView}:`, visibleColumns);
                             }
                         }
                     } catch (initError) {
-                        console.error(`❌ Failed to initialize subtask config for ${currentView}:`, initError);
+                        console.error(`Failed to initialize subtask config for ${currentView}:`, initError);
                     }
                 }
             }
@@ -705,8 +695,6 @@ class SubtaskManager {
             const taskId = $cell.data('task-id');
             const fieldName = $cell.data('field');
             
-            console.log('🔧 Subtask cell edit triggered:', {fieldType, taskId, fieldName});
-            
             // 使用和task完全相同的字段类型处理逻辑
             if (fieldType === 'person_selector') {
                 if (window.PersonSelectorManager) {
@@ -718,7 +706,6 @@ class SubtaskManager {
                 }
             } else if (fieldType === 'date') {
                 // Date fields directly show date picker
-                console.log('📅 Opening date picker for subtask field:', fieldName);
                 if (window.EditorsManager) {
                     window.EditorsManager.showDatePicker($cell, taskId, fieldName);
                 }
@@ -985,10 +972,9 @@ class SubtaskManager {
                     
                     if (configResponse.message && configResponse.message.success && configResponse.message.visible_columns) {
                         visibleColumns = configResponse.message.visible_columns;
-                        console.log(`🔄 Using saved visible columns for refresh: ${visibleColumns}`);
                     }
                 } catch (error) {
-                    console.warn('Failed to get column config for refresh, using defaults:', error);
+                    // Use defaults on error
                 }
                 
                 $list.html(this.renderSubtaskList(subtasks, parentTaskId, visibleColumns) + this.renderAddSubtaskRow(parentTaskId, visibleColumns));
@@ -1007,9 +993,6 @@ class SubtaskManager {
                 
                 // Re-apply column widths
                 this.applySubtaskColumnWidths();
-                
-                // 注意：由于我们在渲染时已经只渲染了用户选择的可见列，不需要额外的可见性逻辑
-                console.log(`✅ Subtask refresh completed for ${parentTaskId} with user-selected visible columns`);
             }
 
         } catch (error) {
@@ -1210,19 +1193,6 @@ class SubtaskManager {
         // 获取所有可能的subtask列
         const allSubtaskColumns = window.ColumnConfigManager.getAllSubtaskColumnKeys();
         
-        console.log('🔧 Applying subtask column visibility:', {
-            parentTaskId,
-            visibleColumns,
-            allSubtaskColumns
-        });
-        
-        // 调试：检查实际的DOM结构
-        console.log('🔍 Subtask DOM structure debug:');
-        console.log('Container exists:', $container.length);
-        console.log('Header exists:', $container.find('.pm-subtask-table-header').length);
-        console.log('All header columns:', $container.find('.pm-subtask-table-header .pm-subtask-col').length);
-        console.log('All data rows:', $container.find('.pm-subtask-row').length);
-        
         // 使用和task完全相同的列隐藏逻辑
         allSubtaskColumns.forEach(column => {
             const shouldShow = visibleColumns.includes(column);
@@ -1230,8 +1200,6 @@ class SubtaskManager {
             // 使用subtask专用的选择器，避免影响task
             const $headerCells = $container.find(`.pm-subtask-header-cell[data-column="${column}"]`);
             const $dataCells = $container.find(`.pm-subtask-cell-${column}`);
-            
-            console.log(`🔧 Column ${column}: shouldShow=${shouldShow}, headerCells=${$headerCells.length}, dataCells=${$dataCells.length}`);
             
             if (shouldShow) {
                 // 显示列 - 和task相同的逻辑
@@ -1264,14 +1232,11 @@ class SubtaskManager {
         // Apply minimum width to ensure proper layout
         const minWidth = Math.max(totalWidth, 800);
         $table.css('min-width', `${minWidth}px`);
-        
-        console.log(`📏 Updated subtask table width for ${parentTaskId}: ${minWidth}px`);
     }
 
     // Refresh all expanded subtasks with new column configuration
     async refreshAllExpandedSubtasks() {
         const expandedTaskIds = Array.from(this.expandedTasks);
-        console.log('🔄 Refreshing expanded subtasks:', expandedTaskIds);
         
         for (const taskId of expandedTaskIds) {
             try {
@@ -1285,10 +1250,9 @@ class SubtaskManager {
                     const subtasks = response.message.subtasks || [];
                     // Re-render with new configuration
                     await this.renderSubtasks(taskId, subtasks);
-                    console.log(`✅ Refreshed subtasks for task ${taskId}`);
                 }
             } catch (error) {
-                console.error(`❌ Failed to refresh subtasks for task ${taskId}:`, error);
+                console.error(`Failed to refresh subtasks for task ${taskId}:`, error);
             }
         }
     }

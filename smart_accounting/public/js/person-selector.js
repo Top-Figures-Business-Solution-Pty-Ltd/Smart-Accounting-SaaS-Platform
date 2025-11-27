@@ -1,8 +1,6 @@
 // Project Management - Person Selector
 // Person selection and role assignment functionality
 
-console.log('🔥 LOADING PersonSelector - NEW VERSION');
-
 class PersonSelectorManager {
     constructor() {
         this.utils = window.PMUtils;
@@ -19,70 +17,48 @@ class PersonSelectorManager {
     checkDatasetSize() {
         const taskCount = document.querySelectorAll('.pm-task-row').length;
         this.isLargeDataset = taskCount > 100;
-        
-        if (this.isLargeDataset) {
-            console.log(`🔧 Large dataset detected (${taskCount} tasks), using enhanced DOM timing for person selector`);
-        }
     }
 
     // 🔧 增强的DOM元素确认机制
     async ensureDOMElementAndInitialize(selector, $cell, taskId, fieldName) {
-        const maxAttempts = this.isLargeDataset ? 15 : 8; // 增加尝试次数
-        const baseDelay = this.isLargeDataset ? 50 : 25;  // 增加基础延迟
-        const maxDelay = this.isLargeDataset ? 500 : 300; // 增加最大延迟
-        
-        console.log(`🔧 [ENHANCED VERSION] Starting DOM element search for ${selector}, max attempts: ${maxAttempts}`);
+        const maxAttempts = this.isLargeDataset ? 15 : 8;
+        const baseDelay = this.isLargeDataset ? 50 : 25;
+        const maxDelay = this.isLargeDataset ? 500 : 300;
         
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            // 多重检查策略
             await new Promise(resolve => requestAnimationFrame(resolve));
             
             // 方法1: 标准jQuery选择器
             let $selector = $(selector);
-            console.log(`🔧 Attempt ${attempt + 1}: jQuery selector result: ${$selector.length} elements`);
             
             // 方法2: 如果jQuery失败，尝试原生DOM查询
             if ($selector.length === 0) {
                 const nativeElement = document.querySelector(selector);
-                console.log(`🔧 Attempt ${attempt + 1}: Native DOM query result: ${nativeElement ? 'found' : 'not found'}`);
                 if (nativeElement) {
                     $selector = $(nativeElement);
-                    console.log(`🔧 Found element using native DOM query on attempt ${attempt + 1}`);
                 }
             }
             
             // 方法3: 强制DOM刷新后再次尝试
             if ($selector.length === 0 && attempt > 2) {
-                console.log(`🔧 Attempt ${attempt + 1}: Forcing DOM refresh...`);
-                // 强制浏览器重新计算DOM
                 document.body.offsetHeight;
                 $selector = $(selector);
-                console.log(`🔧 Attempt ${attempt + 1}: After DOM refresh: ${$selector.length} elements`);
-            }
-            
-            // 方法4: 检查元素是否真的在DOM中
-            if ($selector.length === 0 && attempt > 4) {
-                console.log(`🔧 Attempt ${attempt + 1}: Checking all elements with similar IDs...`);
-                const allModals = document.querySelectorAll('[id*="pm-person-selector"]');
-                console.log(`🔧 Found ${allModals.length} elements with similar IDs:`, Array.from(allModals).map(el => el.id));
             }
             
             if ($selector.length > 0) {
-                console.log(`✅ Person selector found on attempt ${attempt + 1} (method: ${$selector.length > 0 ? 'success' : 'unknown'})`);
                 this.initializeSelectorAfterAppend($selector, $cell, taskId, fieldName);
                 return;
             }
             
-            // 指数退避延迟，但有最大限制
+            // 指数退避延迟
             if (attempt < maxAttempts - 1) {
                 const delay = Math.min(baseDelay * Math.pow(1.2, attempt), maxDelay);
-                console.log(`🔧 Attempt ${attempt + 1} failed, waiting ${delay}ms before retry...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
         
         // 最终降级处理
-        console.error(`❌ Person selector ${selector} not found after ${maxAttempts} attempts`);
+        console.error(`Person selector ${selector} not found after ${maxAttempts} attempts`);
         this.handleSelectorNotFound($cell, taskId, fieldName);
     }
 
@@ -166,21 +142,13 @@ class PersonSelectorManager {
 
     // Multi-Person Selector
     async showMultiPersonSelector($cell, taskId, fieldName) {
-        // 🔧 防抖机制：防止重复点击
+        // 防抖机制：防止重复点击
         if ($cell.hasClass('editing') || $cell.hasClass('selector-opening')) {
-            console.log('Person selector already opening/open for task:', taskId, fieldName);
             return;
         }
         
         // 标记为正在打开
         $cell.addClass('editing selector-opening');
-        
-        console.log('🚀 NEW VERSION: PersonSelectorManager.showMultiPersonSelector called with:', {
-            $cell: $cell.length,
-            taskId: taskId,
-            fieldName: fieldName,
-            cellHtml: $cell[0]?.outerHTML?.substring(0, 200) + '...'
-        });
         
         try {
             // 立即显示空选择器，不等待数据加载
@@ -259,43 +227,27 @@ class PersonSelectorManager {
         
         // Remove existing selector
         $('.pm-person-selector-modal').remove();
-        console.log('🗑️ Removed existing selectors');
         
         // Add to body
         $('body').append(selectorHTML);
         
-        // 🔧 立即验证DOM添加是否成功
         // 使用之前清理的taskId
         const expectedId = `pm-person-selector-${cleanTaskId}-${fieldName}`;
-        console.log(`🔧 Original taskId: ${taskId}`);
-        console.log(`🔧 Clean taskId: ${cleanTaskId}`);
-        console.log(`📎 Appended selector with ID: ${expectedId}`);
-        console.log(`🔧 Body children count after append: ${document.body.children.length}`);
         
-        // 🔧 增强DOM时序保证机制：确保在大数据量环境下也能正常工作
+        // 增强DOM时序保证机制：确保在大数据量环境下也能正常工作
         this.ensureDOMElementAndInitialize(`#${expectedId}`, $cell, taskId, fieldName);
     }
 
-    // 🔧 新增方法：在DOM确认存在后初始化选择器
+    // 在DOM确认存在后初始化选择器
     initializeSelectorAfterAppend($selector, $cell, taskId, fieldName) {
         try {
-            console.log('🔧 Starting person selector initialization:', {
-                selectorId: $selector.attr('id'),
-                selectorLength: $selector.length,
-                taskId: taskId,
-                fieldName: fieldName
-            });
-            
             // 清理状态标记
             $cell.removeClass('selector-opening');
             
             // Position the modal properly relative to cell
-            console.log('📍 Step 1: Positioning modal relative to cell...');
             try {
                 this.positionModalRelativeToCell($cell, $selector);
-                console.log('📍 Positioned modal relative to cell');
             } catch (positionError) {
-                console.warn('⚠️ Error in positionModalRelativeToCell:', positionError);
                 // 使用简单定位作为降级
                 $selector.css({
                     position: 'fixed',
@@ -307,12 +259,9 @@ class PersonSelectorManager {
             }
             
             // 智能定位弹窗
-            console.log('📍 Step 2: Smart positioning modal...');
             try {
                 this.positionModalSmart($cell, $selector);
-                console.log('📍 Smart positioning completed');
             } catch (smartPositionError) {
-                console.warn('⚠️ Error in positionModalSmart:', smartPositionError);
                 // 智能定位失败，使用基本定位
                 const cellOffset = $cell.offset();
                 $selector.css({
@@ -325,41 +274,25 @@ class PersonSelectorManager {
             }
             
             // 显示弹窗
-            console.log('📍 Step 3: Showing modal...');
             $selector.show();
-            console.log('🔧 Selector visibility after show():', $selector.is(':visible'));
-            
-            $selector.fadeIn(200, function() {
-                console.log('🔧 Person selector fadeIn completed, visible:', $(this).is(':visible'));
-            });
+            $selector.fadeIn(200);
             
             // Focus search input
-            console.log('📍 Step 4: Focusing search input...');
             const $searchInput = $selector.find('.pm-person-search');
             if ($searchInput.length > 0) {
                 $searchInput.focus();
-                console.log('✅ Search input focused');
-            } else {
-                console.warn('⚠️ Search input not found');
             }
             
             // Load all people
-            console.log('📍 Step 5: Loading people...');
             const $personList = $selector.find('.pm-person-list');
             if ($personList.length > 0) {
                 this.loadPeopleForSelector($personList);
-                console.log('✅ People loading initiated');
-            } else {
-                console.warn('⚠️ Person list container not found');
             }
             
             // 绑定所有事件
-            console.log('📍 Step 6: Binding events...');
             this.bindSelectorEvents($selector, $cell, taskId, fieldName);
-            console.log('✅ Events bound');
             
             // Load current people into the selector
-            console.log('📍 Step 7: Loading current people...');
             const currentEmails = [];
             $cell.find('.pm-avatar[data-email]').each(function() {
                 const email = $(this).data('email');
@@ -368,15 +301,10 @@ class PersonSelectorManager {
             
             if (currentEmails.length > 0) {
                 this.loadCurrentPeopleIntoSelector($selector, currentEmails, taskId, fieldName);
-                console.log('✅ Current people loaded:', currentEmails);
-            } else {
-                console.log('ℹ️ No current people to load');
             }
             
-            console.log('✅ Person selector initialization completed successfully');
-            
         } catch (error) {
-            console.error('❌ Error in person selector initialization:', error);
+            console.error('Error in person selector initialization:', error);
             $cell.removeClass('editing selector-opening');
             frappe.show_alert({
                 message: 'Error initializing person selector: ' + error.message,
@@ -891,7 +819,6 @@ class PersonSelectorManager {
     updateCurrentPeopleInSelector($selector, $cell) {
         // This method is now simplified - just refresh the cell display
         // The selector will be closed and reopened if needed
-        console.log('Current people updated in selector');
     }
 
     // Legacy single person assignment - DEPRECATED, use set_task_roles instead
@@ -1026,8 +953,6 @@ class PersonSelectorManager {
         }
     }
     positionModalSmart($cell, $modal) {
-        console.log('🎯 Smart positioning modal...');
-        
         // 获取单元格位置信息
         const cellRect = $cell[0].getBoundingClientRect();
         const modalHeight = 400; // 弹窗预估高度
@@ -1037,23 +962,6 @@ class PersonSelectorManager {
         // 获取视窗信息
         const viewportHeight = window.innerHeight;
         const viewportWidth = window.innerWidth;
-        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        
-        console.log('📐 Positioning data:', {
-            cellRect: {
-                top: cellRect.top,
-                bottom: cellRect.bottom,
-                left: cellRect.left,
-                right: cellRect.right,
-                width: cellRect.width,
-                height: cellRect.height
-            },
-            viewport: {
-                width: viewportWidth,
-                height: viewportHeight,
-                scrollTop: scrollTop
-            }
-        });
         
         // 计算最佳位置
         let position = this.calculateOptimalPosition(cellRect, modalWidth, modalHeight, padding, viewportWidth, viewportHeight);
@@ -1108,8 +1016,6 @@ class PersonSelectorManager {
             }
         }
         
-        console.log('📍 Calculated position:', { top, left, placement });
-        
         return { top, left, placement };
     }
     
@@ -1133,11 +1039,8 @@ class PersonSelectorManager {
     }
     
     async generateDynamicAvatars($cell, roleUsers) {
-        console.log('🎨 Generating dynamic avatars for', roleUsers.length, 'users');
-        
         // 计算列可用宽度和容量
         const capacity = this.calculateAvatarCapacity($cell);
-        console.log('📏 Avatar capacity for this cell:', capacity);
         
         let avatarsHTML = '';
         let moreHTML = '';
@@ -1184,11 +1087,7 @@ class PersonSelectorManager {
     calculateAvatarCapacity($cell) {
         // 优化显示策略：最多显示2个头像，3个及以上显示1个 + +N指示器
         // 这样既保持良好的UX，又减少DOM复杂度和内存占用
-        const fixedCapacity = 2;
-        
-        console.log('📐 Optimized capacity strategy: Show max 2 avatars, then 1 avatar + more indicator');
-        
-        return fixedCapacity;
+        return 2;
     }
     
     fieldToRoleType(fieldName) {
@@ -1255,7 +1154,6 @@ class PersonSelectorManager {
         // 使用清理后的taskId来查找选择器
         const cleanTaskId = taskId.replace(/[^a-zA-Z0-9-_]/g, '-');
         const $selector = $(`#pm-person-selector-${cleanTaskId}-${fieldName}`);
-        console.log(`🔧 Loading data for person selector: #pm-person-selector-${cleanTaskId}-${fieldName}, found: ${$selector.length}`);
         if ($selector.length === 0) return;
 
         const roleFilter = $cell.data('role-filter');

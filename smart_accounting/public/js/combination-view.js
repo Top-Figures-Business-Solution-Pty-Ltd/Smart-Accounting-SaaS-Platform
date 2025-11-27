@@ -374,10 +374,6 @@ class CombinationViewManager {
             const encodedBoardIds = boardIds.map(id => encodeURIComponent(id));
             const combinationUrl = `/project_management?view=combination&boards=${encodedBoardIds.join(',')}`;
             
-            console.log('DEBUG: Creating combination URL with boards:', boardIds);
-            console.log('DEBUG: Encoded boards:', encodedBoardIds);
-            console.log('DEBUG: Final URL:', combinationUrl);
-            
             // Navigate to combination view
             window.location.href = combinationUrl;
 
@@ -399,16 +395,7 @@ class CombinationViewManager {
 
     // Load combination view data
     async loadCombinationViewData(boardIds) {
-        console.log('DEBUG: loadCombinationViewData called with:', boardIds);
-        
-        console.log('🚀 COMBINATION VIEW: Starting data load for boards:', boardIds);
-        
         try {
-            console.log('DEBUG: Making API call to get_combination_view_data');
-            console.log('DEBUG: boardIds parameter type:', typeof boardIds);
-            console.log('DEBUG: boardIds parameter value:', boardIds);
-            console.log('DEBUG: boardIds parameter JSON:', JSON.stringify(boardIds));
-            
             const response = await frappe.call({
                 method: 'smart_accounting.www.project_management.index.get_combination_view_data',
                 args: {
@@ -416,47 +403,12 @@ class CombinationViewManager {
                 }
             });
 
-            console.log('DEBUG: API response:', response);
-            console.log('DEBUG: API response type:', typeof response);
-            console.log('DEBUG: API response.message:', response.message);
-
             if (response.message && response.message.success) {
-                console.log('DEBUG: Success, boards_data:', response.message.boards_data);
-                console.log('DEBUG: Debug info:', response.message.debug_info);
-                
-                // Show detailed debug info
-                if (response.message.debug_info) {
-                    console.log('DEBUG: Requested boards:', response.message.debug_info.requested_boards);
-                    console.log('DEBUG: Found boards count:', response.message.debug_info.found_boards);
-                    console.log('DEBUG: Board names found:', response.message.debug_info.board_names);
-                    
-                    // Show search details for each requested board
-                    if (response.message.debug_info.search_details) {
-                        console.log('🔍 SEARCH DETAILS:');
-                        response.message.debug_info.search_details.forEach((detail, index) => {
-                            console.log(`  ${index + 1}. Requested: "${detail.requested}" | Found: ${detail.found} | Method: ${detail.method || 'none'}`);
-                        });
-                    }
-                    
-                    // Show all partitions from database
-                    if (response.message.debug_info.all_partitions) {
-                        console.log('🗃️ ALL AVAILABLE BOARDS IN DATABASE:');
-                        response.message.debug_info.all_partitions.forEach((p, index) => {
-                            console.log(`  ${index + 1}. name: "${p.name}", display: "${p.partition_name}", workspace: ${p.is_workspace}, archived: ${p.is_archived}`);
-                        });
-                    }
-                }
-                
                 this.renderCombinationView(response.message.boards_data);
             } else {
-                console.error('DEBUG: API call failed:', response.message);
-                if (response.message && response.message.debug_info) {
-                    console.error('DEBUG: Error details:', response.message.debug_info);
-                }
                 throw new Error(response.message?.error || 'Failed to load combination view data');
             }
         } catch (error) {
-            console.error('Error loading combination view data:', error);
             frappe.show_alert({
                 message: 'Error loading combination view data: ' + error.message,
                 indicator: 'red'
@@ -466,9 +418,6 @@ class CombinationViewManager {
 
     // Render combination view with multiple boards
     renderCombinationView(boardsData) {
-        console.log('DEBUG: renderCombinationView called with:', boardsData);
-        console.log('DEBUG: boardsData length:', boardsData ? boardsData.length : 'undefined');
-        
         // Clean up any existing board-specific CSS
         $('#pm-board-specific-styles').remove();
         $('#pm-board-table-styles').remove();
@@ -526,7 +475,6 @@ class CombinationViewManager {
         }
         
         const $container = $('#pm-combination-boards-container');
-        console.log('DEBUG: Container found:', $container.length > 0);
         
         // 隐藏骨架屏，准备显示真实内容
         const $skeleton = $container.find('.pm-combination-skeleton');
@@ -538,11 +486,8 @@ class CombinationViewManager {
         
         // Render each board section
         boardsData.forEach((boardData, index) => {
-            console.log(`DEBUG: Rendering board ${index}:`, boardData);
             boardsHtml += this.renderBoardSection(boardData, index);
         });
-        
-        console.log('DEBUG: Generated HTML length:', boardsHtml.length);
         
         // CLS优化：零布局偏移的内容替换
         if ($skeleton.length) {
@@ -671,12 +616,7 @@ class CombinationViewManager {
 
     // Render board table with full project management structure
     renderBoardTable(boardData) {
-        console.log('🔍 DEBUG: renderBoardTable called for board:', boardData.board_id);
-        console.log('🔍 DEBUG: boardData.tasks structure:', boardData.tasks);
-        console.log('🔍 DEBUG: boardData.tasks keys:', Object.keys(boardData.tasks || {}));
-        
         if (!boardData.tasks || Object.keys(boardData.tasks).length === 0) {
-            console.log('❌ No tasks data found for board:', boardData.board_id);
             return `
                 <div class="pm-empty-board">
                     <i class="fa fa-inbox"></i>
@@ -690,36 +630,17 @@ class CombinationViewManager {
         
         // Render each client's projects and tasks
         Object.entries(boardData.tasks).forEach(([clientName, projects]) => {
-            console.log(`🔍 Processing client: ${clientName}`, projects);
-            
             if (projects && typeof projects === 'object') {
                 Object.entries(projects).forEach(([projectName, tasks]) => {
-                    console.log(`🔍 Processing project: ${projectName}`, tasks);
-                    
                     if (tasks && Array.isArray(tasks) && tasks.length > 0) {
-                        // console.log Rendering project: ${projectName} with ${tasks.length} tasks`);
-                        console.log(`🔍 Tasks data for ${projectName}:`, tasks.map(t => ({
-                            name: t.name || t.subject,
-                            client: t.client_name,
-                            status: t.status
-                        })));
                         tableHtml += this.renderProjectSection(clientName, projectName, tasks, boardData);
                         projectCount++;
-                    } else {
-                        console.log(`⚠️ Skipping project ${projectName}: no valid tasks`);
-                        console.log(`🔍 Invalid tasks data:`, tasks);
                     }
                 });
-            } else {
-                console.log(`⚠️ Skipping client ${clientName}: invalid projects structure`);
             }
         });
         
-        console.log(`🔍 Total projects rendered: ${projectCount}`);
-        console.log(`🔍 Generated HTML length: ${tableHtml.length}`);
-        
         if (!tableHtml) {
-            console.log('❌ No valid projects found to render');
             return `
                 <div class="pm-empty-board">
                     <i class="fa fa-info-circle"></i>
@@ -733,10 +654,7 @@ class CombinationViewManager {
     
     // Render project section for a board
     renderProjectSection(clientName, projectName, tasks, boardData) {
-        console.log(`🏗️ Rendering project section: ${projectName} (${tasks.length} tasks) for board ${boardData.board_id}`);
-        
         const taskRowsHtml = this.renderTaskRows(tasks, boardData);
-        console.log(`🔍 Task rows HTML length: ${taskRowsHtml.length}`);
         
         const projectHtml = `
             <div class="pm-project-group pm-combination-project" data-client="${clientName}" data-project="${projectName}" data-board-id="${boardData.board_id}">
@@ -761,8 +679,6 @@ class CombinationViewManager {
             </div>
         `;
         
-        // console.log Project section rendered for: ${projectName}`);
-        console.log(`🔍 First 500 chars of project HTML:`, projectHtml.substring(0, 500));
         return projectHtml;
     }
     
@@ -801,22 +717,15 @@ class CombinationViewManager {
     
     // Render task rows
     renderTaskRows(tasks, boardData) {
-        console.log(`🔍 renderTaskRows called with ${tasks.length} tasks for board ${boardData.board_id}`);
-        
         const columnConfig = boardData.column_config || {};
         const visibleColumns = columnConfig.visible_columns || this.getDefaultVisibleColumns();
         
-        console.log(`🔍 Visible columns for board ${boardData.board_id}:`, visibleColumns);
-        
         // Ensure tasks is always an array
         if (!Array.isArray(tasks)) {
-            console.warn(`⚠️ Tasks is not an array for board ${boardData.board_id}:`, tasks);
             return '';
         }
         
-        const taskRowsHtml = tasks.map((task, index) => {
-            console.log(`🔍 Rendering task ${index + 1}/${tasks.length}: ${task.name || task.subject}`);
-            
+        const taskRowsHtml = tasks.map((task) => {
             // Ensure each task row is properly structured with explicit styling
             let rowHtml = `
                 <div class="pm-task-row pm-combination-task-row" 
@@ -834,10 +743,8 @@ class CombinationViewManager {
             
             rowHtml += '</div>';
             return rowHtml;
-        }).join('\n'); // Use newlines to separate task rows for better debugging
+        }).join('\n');
         
-        // console.log Generated ${tasks.length} task rows, HTML length: ${taskRowsHtml.length}`);
-        console.log(`🔍 First 200 chars of HTML:`, taskRowsHtml.substring(0, 200));
         return taskRowsHtml;
     }
     
@@ -1503,12 +1410,9 @@ class CombinationViewManager {
         
         try {
             // First test DocType configuration
-            console.log('🧪 Testing DocType configuration...');
             const testResponse = await frappe.call({
                 method: 'smart_accounting.www.project_management.index.test_combination_doctype'
             });
-            
-            console.log('🧪 DocType test result:', testResponse.message);
             
             if (!testResponse.message || !testResponse.message.success) {
                 throw new Error(testResponse.message?.error || 'DocType configuration test failed');
@@ -1516,13 +1420,6 @@ class CombinationViewManager {
             
             // Show loading
             $('.pm-save-combination-confirm').prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Saving...');
-            
-            console.log('💾 Saving combination with data:', {
-                view_name: viewName,
-                description: description,
-                board_ids: this.currentCombinationView,
-                is_public: isPublic
-            });
             
             const response = await frappe.call({
                 method: 'smart_accounting.www.project_management.index.save_combination_view',
@@ -1533,8 +1430,6 @@ class CombinationViewManager {
                     is_public: isPublic
                 }
             });
-            
-            console.log('💾 Save response:', response.message);
             
             if (response.message && response.message.success) {
                 frappe.show_alert({
@@ -1708,11 +1603,6 @@ class CombinationViewManager {
                 this.ensureColumnWidthSync(boardData.board_id);
             });
             
-            // Debug output after initialization
-            console.log('🎯 Combination view initialized with perfect header-body alignment');
-            console.log('💡 Tip: Use debugCombinationColumnWidths() in console to see alignment details');
-            this.debugColumnWidths();
-            
             // Make debug function available globally
             window.debugCombinationColumnWidths = () => this.debugColumnWidths();
             
@@ -1725,8 +1615,6 @@ class CombinationViewManager {
     
     // Apply column widths specific to each board with complete independence
     applyBoardColumnWidths(boardId, columnConfig) {
-        console.log(`🔧 Applying independent column widths for board: ${boardId}`, columnConfig);
-        
         // Get visible columns for this specific board
         const visibleColumns = columnConfig?.visible_columns || this.getDefaultVisibleColumns();
         
@@ -1736,7 +1624,6 @@ class CombinationViewManager {
         // Apply column widths if available
         if (columnConfig && columnConfig.column_widths) {
             const columnWidths = columnConfig.column_widths;
-            console.log(`📏 Found saved column widths for ${boardId}:`, columnWidths);
             
             // Apply saved widths to visible columns only
             visibleColumns.forEach(column => {
@@ -1745,7 +1632,6 @@ class CombinationViewManager {
                 totalBoardWidth += width;
             });
         } else {
-            console.log(`📏 No saved widths for ${boardId}, using optimized defaults`);
             // Apply optimized default widths based on visible columns count
             visibleColumns.forEach(column => {
                 const width = this.getOptimizedColumnWidth(column, visibleColumns.length);
@@ -1777,17 +1663,11 @@ class CombinationViewManager {
     
     // Apply gentle column widths that don't break project structure
     applyGentleColumnWidths(boardId, visibleColumns, totalBoardWidth) {
-        const $boardSection = $(`.pm-combination-board-section[data-board-id="${boardId}"]`);
-        
-        console.log(`🕊️ Applying gentle column widths for board: ${boardId}`);
-        
         // Only apply column widths to cells, not to containers
         visibleColumns.forEach(column => {
             const width = this.getOptimizedColumnWidth(column, visibleColumns.length);
             this.applyGentleColumnWidth(boardId, column, width);
         });
-        
-        // console.log Gentle column widths applied to board: ${boardId}`);
     }
     
     // Apply column width gently without breaking structure
@@ -1810,8 +1690,6 @@ class CombinationViewManager {
             'min-width': widthPx,
             'flex': `0 0 ${widthPx}`
         });
-        
-        console.log(`🎯 Gentle width applied: ${column} = ${widthPx} (${headerCells.length} headers, ${bodyCells.length} cells)`);
     }
     
     // Set board-specific table width while preserving project structure
@@ -1819,7 +1697,6 @@ class CombinationViewManager {
         const $boardSection = $(`.pm-combination-board-section[data-board-id="${boardId}"]`);
         
         const tableWidthPx = totalWidth + 'px';
-        console.log(`📐 Setting table width for board ${boardId}: ${tableWidthPx} (preserving project structure)`);
         
         // Create board-specific table width CSS class
         const boardTableClass = `pm-board-${boardId.replace(/[^a-zA-Z0-9]/g, '_')}-table`;
@@ -1890,14 +1767,11 @@ class CombinationViewManager {
         
         cssContent += newRule;
         $styleElement.html(cssContent);
-        
-        console.log(`📝 Created table width CSS rule for ${className}: ${widthPx}`);
     }
     
     // Set column width for both header and content cells with complete board independence
     setColumnWidth(boardId, column, width) {
         const widthPx = width + 'px';
-        console.log(`🎯 Setting independent width for board ${boardId}, column ${column}: ${widthPx}`);
         
         // Create board-specific CSS class name to ensure complete independence
         const boardSpecificClass = `pm-board-${boardId.replace(/[^a-zA-Z0-9]/g, '_')}-col-${column.replace(/[^a-zA-Z0-9]/g, '_')}`;
@@ -1957,8 +1831,6 @@ class CombinationViewManager {
         
         cssContent += newRule;
         $styleElement.html(cssContent);
-        
-        console.log(`📝 Created CSS rule for ${className}: ${widthPx}`);
     }
     
     // Clean up board-specific CSS when boards are removed
@@ -1974,12 +1846,11 @@ class CombinationViewManager {
         cssContent = cssContent.replace(boardRegex, '');
         
         $styleElement.html(cssContent);
-        console.log(`🧹 Cleaned up CSS rules for board: ${boardId}`);
     }
     
-    // Debug method to show current column widths and table widths for all boards
+    // Debug method to show current column widths and table widths for all boards (only when called manually)
     debugColumnWidths() {
-        console.log('🔍 DEBUG: Independent column and table widths for all boards:');
+        // This is a debug function - only outputs when explicitly called
         
         $('.pm-combination-board-section').each((index, boardSection) => {
             const $boardSection = $(boardSection);
@@ -2047,8 +1918,6 @@ class CombinationViewManager {
                 actualWidth = this.getDefaultColumnWidth(column);
             }
             
-            console.log(`📐 Board ${boardId}, Column ${column}: ${actualWidth}px`);
-            
             // Apply this width with perfect synchronization
             this.setColumnWidth(boardId, column, actualWidth);
             totalSyncedWidth += actualWidth;
@@ -2078,8 +1947,6 @@ class CombinationViewManager {
         const $boardSection = $(`.pm-combination-board-section[data-board-id="${boardId}"]`);
         const $headerCells = $boardSection.find('.pm-combination-table-header .pm-header-cell');
         
-        console.log(`🎯 Forcing perfect alignment for board: ${boardId}`);
-        
         $headerCells.each((index, headerCell) => {
             const $headerCell = $(headerCell);
             const column = $headerCell.data('column');
@@ -2097,7 +1964,6 @@ class CombinationViewManager {
                 const bodyWidth = $bodyCell.outerWidth();
                 
                 if (Math.abs(headerWidth - bodyWidth) > 1) {
-                    console.log(`🔧 Adjusting body cell ${column}: ${bodyWidth}px → ${headerWidth}px`);
                     $bodyCell.css({
                         'width': headerWidth + 'px !important',
                         'min-width': headerWidth + 'px !important',
@@ -2106,22 +1972,15 @@ class CombinationViewManager {
                 }
             });
         });
-        
-        // console.log Perfect alignment achieved for board: ${boardId}`);
     }
     
     // Force column width application for all boards using their own saved widths
     forceColumnWidthApplication(boardsData) {
-        console.log('🔧 Force applying board-specific column widths for all boards');
-        
         boardsData.forEach(boardData => {
             const boardId = boardData.board_id;
             const columnConfig = boardData.column_config || {};
             const visibleColumns = columnConfig.visible_columns || this.getDefaultVisibleColumns();
             const savedColumnWidths = columnConfig.column_widths || {};
-            
-            console.log(`🔧 Applying board-specific column widths for board: ${boardId}`);
-            console.log(`🔧 Saved column widths:`, savedColumnWidths);
             
             visibleColumns.forEach(column => {
                 // Use board's saved width or fall back to default
@@ -2381,7 +2240,6 @@ class CombinationViewManager {
                 }
             } else if (fieldType === 'date') {
                 // Date fields directly show date picker, never text editor
-                console.log('📅 Opening date picker for:', fieldName);
                 if (window.EditorsManager) {
                     window.EditorsManager.showDatePicker($cell, taskId, fieldName);
                 }

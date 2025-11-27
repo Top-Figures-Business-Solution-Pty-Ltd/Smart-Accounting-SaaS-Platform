@@ -1,8 +1,6 @@
 // Project Management - Software Selector
 // Software selection and management functionality
 
-console.log('🔥 LOADING SoftwareSelector - NEW VERSION');
-
 class SoftwareSelectorManager {
     constructor() {
         this.utils = window.PMUtils;
@@ -11,74 +9,52 @@ class SoftwareSelectorManager {
         this.checkDatasetSize();
     }
 
-    // 🔧 检测数据集大小，调整策略
+    // 检测数据集大小，调整策略
     checkDatasetSize() {
         const taskCount = document.querySelectorAll('.pm-task-row').length;
         this.isLargeDataset = taskCount > 100;
-        
-        if (this.isLargeDataset) {
-            console.log(`🔧 Large dataset detected (${taskCount} tasks), using enhanced DOM timing`);
-        }
     }
 
-    // 🔧 增强的DOM元素确认机制
+    // 增强的DOM元素确认机制
     async ensureDOMElementAndInitialize(selector, $cell, taskId) {
-        const maxAttempts = this.isLargeDataset ? 15 : 8; // 增加尝试次数
-        const baseDelay = this.isLargeDataset ? 50 : 25;  // 增加基础延迟
-        const maxDelay = this.isLargeDataset ? 500 : 300; // 增加最大延迟
-        
-        console.log(`🔧 [ENHANCED VERSION] Starting DOM element search for ${selector}, max attempts: ${maxAttempts}`);
+        const maxAttempts = this.isLargeDataset ? 15 : 8;
+        const baseDelay = this.isLargeDataset ? 50 : 25;
+        const maxDelay = this.isLargeDataset ? 500 : 300;
         
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            // 多重检查策略
             await new Promise(resolve => requestAnimationFrame(resolve));
             
             // 方法1: 标准jQuery选择器
             let $selector = $(selector);
-            console.log(`🔧 Attempt ${attempt + 1}: jQuery selector result: ${$selector.length} elements`);
             
             // 方法2: 如果jQuery失败，尝试原生DOM查询
             if ($selector.length === 0) {
                 const nativeElement = document.querySelector(selector);
-                console.log(`🔧 Attempt ${attempt + 1}: Native DOM query result: ${nativeElement ? 'found' : 'not found'}`);
                 if (nativeElement) {
                     $selector = $(nativeElement);
-                    console.log(`🔧 Found element using native DOM query on attempt ${attempt + 1}`);
                 }
             }
             
             // 方法3: 强制DOM刷新后再次尝试
             if ($selector.length === 0 && attempt > 2) {
-                console.log(`🔧 Attempt ${attempt + 1}: Forcing DOM refresh...`);
-                // 强制浏览器重新计算DOM
                 document.body.offsetHeight;
                 $selector = $(selector);
-                console.log(`🔧 Attempt ${attempt + 1}: After DOM refresh: ${$selector.length} elements`);
-            }
-            
-            // 方法4: 检查元素是否真的在DOM中
-            if ($selector.length === 0 && attempt > 4) {
-                console.log(`🔧 Attempt ${attempt + 1}: Checking all elements with similar IDs...`);
-                const allModals = document.querySelectorAll('[id*="pm-software-selector"]');
-                console.log(`🔧 Found ${allModals.length} elements with similar IDs:`, Array.from(allModals).map(el => el.id));
             }
             
             if ($selector.length > 0) {
-                console.log(`✅ Software selector found on attempt ${attempt + 1} (method: ${$selector.length > 0 ? 'success' : 'unknown'})`);
                 this.initializeSoftwareSelectorAfterAppend($selector, $cell, taskId);
                 return;
             }
             
-            // 指数退避延迟，但有最大限制
+            // 指数退避延迟
             if (attempt < maxAttempts - 1) {
                 const delay = Math.min(baseDelay * Math.pow(1.2, attempt), maxDelay);
-                console.log(`🔧 Attempt ${attempt + 1} failed, waiting ${delay}ms before retry...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
         
         // 最终降级处理
-        console.error(`❌ Software selector ${selector} not found after ${maxAttempts} attempts`);
+        console.error(`Software selector ${selector} not found after ${maxAttempts} attempts`);
         this.handleSelectorNotFound($cell, taskId);
     }
 
@@ -100,11 +76,8 @@ class SoftwareSelectorManager {
 
     async showSoftwareSelector($cell, taskId, fieldName) {
         try {
-            console.log('🚀 NEW VERSION: showSoftwareSelector called with:', taskId, fieldName);
-            
-            // 🔧 防抖机制：防止重复点击
+            // 防抖机制：防止重复点击
             if ($cell.hasClass('editing') || $cell.hasClass('selector-opening')) {
-                console.log('Software selector already opening/open for task:', taskId);
                 return;
             }
             
@@ -181,38 +154,26 @@ class SoftwareSelectorManager {
         // 添加到页面
         $('body').append(selectorHTML);
         
-        // 🔧 立即验证DOM添加是否成功
         // 使用之前清理的taskId
         const expectedId = `pm-software-selector-${cleanTaskId}`;
-        console.log(`🔧 Original taskId: ${taskId}`);
-        console.log(`🔧 Clean taskId: ${cleanTaskId}`);
-        console.log(`🔧 Appended selector with ID: ${expectedId}`);
-        console.log(`🔧 Body children count after append: ${document.body.children.length}`);
         
-        // 🔧 增强DOM时序保证机制：确保在大数据量环境下也能正常工作
+        // 增强DOM时序保证机制
         this.ensureDOMElementAndInitialize(`#${expectedId}`, $cell, taskId);
     }
 
-    // 🔧 新增方法：在DOM确认存在后初始化软件选择器
+    // 在DOM确认存在后初始化软件选择器
     initializeSoftwareSelectorAfterAppend($selector, $cell, taskId) {
         // 清理状态标记
         $cell.removeClass('selector-opening');
         
-        console.log('🔧 Initializing software selector:', {
-            selectorId: $selector.attr('id'),
-            selectorLength: $selector.length,
-            cellPosition: $cell.offset()
-        });
-        
         // 定位选择器 - 使用更安全的定位逻辑
         const cellRect = $cell[0].getBoundingClientRect();
         const windowHeight = $(window).height();
-        const modalHeight = 400; // 预估模态框高度
+        const modalHeight = 400;
         
         // 计算最佳位置
-        let top = cellRect.bottom + 10; // 默认在单元格下方
+        let top = cellRect.bottom + 10;
         if (top + modalHeight > windowHeight) {
-            // 如果下方空间不够，显示在上方
             top = cellRect.top - modalHeight - 10;
         }
         
@@ -227,44 +188,29 @@ class SoftwareSelectorManager {
             top: top + 'px',
             zIndex: 9999,
             width: '280px',
-            display: 'block' // 确保显示
-        });
-        
-        console.log('🔧 Software selector positioned at:', {
-            left: Math.max(10, cellRect.left),
-            top: top,
-            display: $selector.css('display')
+            display: 'block'
         });
         
         // 确保选择器可见
         $selector.show();
-        console.log('🔧 Selector visibility after show():', $selector.is(':visible'));
-        
-        // 立即显示选择器
-        $selector.fadeIn(200, function() {
-            console.log('🔧 FadeIn completed, selector visible:', $(this).is(':visible'));
-        });
+        $selector.fadeIn(200);
         
         // 绑定事件
         try {
             this.bindSoftwareSelectorEvents($selector, $cell, taskId);
-            console.log('✅ Events bound successfully');
         } catch (eventError) {
-            console.error('❌ Error binding events:', eventError);
+            console.error('Error binding events:', eventError);
         }
-        
-        console.log('✅ Software selector initialization completed');
     }
 
     async loadSoftwareDataAsync($cell, taskId) {
         // 使用清理后的taskId来查找选择器
         const cleanTaskId = taskId.replace(/[^a-zA-Z0-9-_]/g, '-');
         const $selector = $(`#pm-software-selector-${cleanTaskId}`);
-        console.log(`🔧 Loading data for selector: #pm-software-selector-${cleanTaskId}, found: ${$selector.length}`);
         if ($selector.length === 0) return;
 
         try {
-            // 并行加载数据，使用 Promise.allSettled 确保不会因为单个失败而全部失败
+            // 并行加载数据
             const results = await Promise.allSettled([
                 this.getSoftwareOptionsWithTimeout(),
                 this.getCurrentTaskSoftwaresWithTimeout(taskId)
@@ -276,27 +222,19 @@ class SoftwareSelectorManager {
             let softwareOptions = ['Xero', 'MYOB', 'QuickBooks', 'Excel', 'Payroller', 'Oracle', 'Logdit', 'Other'];
             if (optionsResult.status === 'fulfilled' && optionsResult.value) {
                 softwareOptions = optionsResult.value;
-                // console.log Software options loaded from server:', softwareOptions);
-            } else {
-                console.warn('⚠️ Using default software options:', optionsResult.reason);
             }
 
             // 处理当前选择
             let currentSoftwares = [];
             if (currentResult.status === 'fulfilled' && currentResult.value) {
                 currentSoftwares = currentResult.value;
-                // console.log Current softwares loaded:', currentSoftwares);
-            } else {
-                console.warn('⚠️ Could not load current softwares:', currentResult.reason);
             }
 
             // 更新选择器内容
-            console.log('🔧 Updating software selector content...');
             this.updateSoftwareSelectorContent($selector, softwareOptions, currentSoftwares);
-            console.log('✅ Software selector content updated');
 
         } catch (error) {
-            console.error('❌ Error loading software data:', error);
+            console.error('Error loading software data:', error);
             // 即使加载失败，也显示默认选项
             this.showSoftwareLoadError($selector);
         }
@@ -323,12 +261,6 @@ class SoftwareSelectorManager {
     }
 
     updateSoftwareSelectorContent($selector, softwareOptions, currentSoftwares) {
-        console.log('🔧 updateSoftwareSelectorContent called with:', {
-            selectorLength: $selector.length,
-            softwareOptions: softwareOptions.length,
-            currentSoftwares: currentSoftwares.length
-        });
-        
         const optionsHTML = softwareOptions.map(software => {
             const isSelected = currentSoftwares.some(s => s.software === software);
             const isPrimary = currentSoftwares.find(s => s.software === software && s.is_primary);
@@ -343,19 +275,12 @@ class SoftwareSelectorManager {
             `;
         }).join('');
 
-        console.log('🔧 Generated options HTML length:', optionsHTML.length);
-
         // 隐藏加载状态，显示选项
         const $loading = $selector.find('.pm-software-loading');
         const $options = $selector.find('.pm-software-options');
         
-        console.log('🔧 Loading element found:', $loading.length);
-        console.log('🔧 Options container found:', $options.length);
-        
         $loading.hide();
         $options.html(optionsHTML).show();
-        
-        console.log('✅ Software selector content update completed');
     }
 
     showSoftwareLoadError($selector) {

@@ -1992,8 +1992,28 @@ class FilterManager {
 
     renderSubtaskColumnConfig(config, currentView) {
         const allColumns = window.ColumnConfigManager.getAllSubtaskColumns();
-        const visibleColumns = config.visible_columns || window.ColumnConfigManager.getDefaultVisibleSubtaskColumns();
-        const currentColumnOrder = config.column_config?.column_order || window.ColumnConfigManager.getDefaultSubtaskColumnOrder();
+        
+        // Parse visible_columns if it's a JSON string
+        let visibleColumns = config.visible_columns || window.ColumnConfigManager.getDefaultVisibleSubtaskColumns();
+        if (typeof visibleColumns === 'string') {
+            try {
+                visibleColumns = JSON.parse(visibleColumns);
+            } catch (e) {
+                visibleColumns = window.ColumnConfigManager.getDefaultVisibleSubtaskColumns();
+            }
+        }
+        
+        // Parse column_config if it's a JSON string
+        let columnConfig = config.column_config;
+        if (typeof columnConfig === 'string') {
+            try {
+                columnConfig = JSON.parse(columnConfig);
+            } catch (e) {
+                columnConfig = null;
+            }
+        }
+        
+        const currentColumnOrder = columnConfig?.column_order || window.ColumnConfigManager.getDefaultSubtaskColumnOrder();
 
         // 调试信息
         console.log('🔍 Subtask Column Config Debug:');
