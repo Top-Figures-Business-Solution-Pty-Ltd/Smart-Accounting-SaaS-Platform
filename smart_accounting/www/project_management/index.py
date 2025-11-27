@@ -5,70 +5,131 @@ import re
 import json
 from datetime import datetime
 
-# 🚀 PERFORMANCE: Global Company cache (TF/TG only have 2 companies)
-_company_cache = None
-_company_cache_timestamp = None
+# =============================================================================
+# 🏗️ MODULAR ARCHITECTURE - Import from submodules
+# =============================================================================
 
-def get_company_cache():
-    """
-    Get cached company data. Only loads once per request.
-    TF/TG companies rarely change, so caching is very effective.
-    """
-    global _company_cache, _company_cache_timestamp
-    
-    # Cache for 5 minutes (300 seconds)
-    import time
-    current_time = time.time()
-    
-    if _company_cache is None or _company_cache_timestamp is None or (current_time - _company_cache_timestamp) > 300:
-        companies = frappe.get_all("Company", fields=["name", "company_name", "abbr"])
-        _company_cache = {c.name: c for c in companies}
-        _company_cache_timestamp = current_time
-    
-    return _company_cache
+# Services (Cache, Formatters)
+from .services.cache import (
+    get_company_cache, 
+    get_company_abbreviation,
+    get_user_cache,
+    get_cached_user_info
+)
+from .services.formatters import (
+    format_date_for_display,
+    get_initials,
+    format_currency,
+    truncate_text
+)
 
-def get_company_abbreviation(company_id):
-    """
-    Get company abbreviation from cache.
-    Returns 'TF' for Top Figures, 'TG' for Top Grants, or first 2 letters for others.
-    """
-    if not company_id:
-        return 'TF'  # Default
-    
-    cache = get_company_cache()
-    company = cache.get(company_id)
-    
-    if company:
-        company_name = company.company_name or company.name
-        if 'Top Figures' in company_name:
-            return 'TF'
-        elif 'Top Grants' in company_name:
-            return 'TG'
-        else:
-            return company.abbr or company_name[:2].upper()
-    
-    return 'TF'  # Default fallback
+# API modules - All imports
+from .api.dashboard import (
+    get_main_dashboard_data,
+    get_workspace_overview_data,
+    get_workspace_title
+)
+from .api.tasks import (
+    update_task_status,
+    update_task_field,
+    update_task_client,
+    create_subtask,
+    get_subtasks,
+    get_task_status_options,
+    archive_task,
+    unarchive_task
+)
+from .api.partitions import (
+    create_partition,
+    archive_partition,
+    get_child_partitions,
+    get_available_workspaces,
+    get_all_partitions,
+    update_partition_columns,
+    get_partition_config,
+    get_default_subtask_column_config
+)
+from .api.roles import (
+    get_task_roles,
+    update_task_roles,
+    add_role_assignment,
+    remove_role_assignment,
+    set_primary_role,
+    get_user_display_info,
+    get_bulk_roles_info,
+    get_primary_role_user,
+    get_role_users_info
+)
+from .api.comments import (
+    get_task_comments,
+    add_task_comment,
+    delete_task_comment,
+    update_task_comment,
+    sync_comment_counts
+)
+from .api.software import (
+    get_software_options,
+    get_task_softwares,
+    set_task_softwares,
+    get_primary_software,
+    get_software_info
+)
+from .api.clients import (
+    get_all_clients,
+    get_client_details,
+    create_client,
+    update_client,
+    delete_client,
+    search_customers,
+    quick_create_customer,
+    get_client_groups,
+    get_client_contacts
+)
+from .api.projects import (
+    get_project_form_data,
+    create_project,
+    get_project_details,
+    update_project,
+    delete_project,
+    get_projects_by_partition
+)
+from .api.engagement import (
+    get_engagement_info,
+    upload_engagement_file,
+    delete_engagement_file,
+    get_review_notes,
+    add_review_note,
+    get_bulk_review_counts
+)
+from .api.columns import (
+    get_partition_column_config,
+    save_partition_column_config,
+    save_partition_column_width,
+    save_user_column_widths,
+    load_user_column_widths,
+    get_all_task_columns,
+    get_subtask_column_config,
+    save_subtask_column_config
+)
+from .api.combination import (
+    get_available_boards_for_combination,
+    save_combination_view,
+    get_saved_combinations,
+    load_combination_view,
+    delete_combination_view,
+    get_combination_view_data
+)
+from .api.data import (
+    load_partition_data,
+    get_data_count,
+    get_paginated_data,
+    get_companies_for_tftg,
+    get_field_options
+)
 
-def format_date_for_display(date_value):
-    """
-    Convert YYYY-MM-DD date format to DD-MM-YYYY for display
-    """
-    if not date_value:
-        return ""
-    
-    try:
-        # Handle both string and date objects
-        if isinstance(date_value, str):
-            if len(date_value) == 10 and date_value.count('-') == 2:
-                parts = date_value.split('-')
-                if len(parts[0]) == 4:  # YYYY-MM-DD format
-                    return f"{parts[2]}-{parts[1]}-{parts[0]}"
-            return date_value
-        else:
-            # Handle date objects
-            return date_value.strftime('%d-%m-%Y')
-    except:
-        return str(date_value) if date_value else ""
+# =============================================================================
+# 🔄 LEGACY CODE BELOW - Core data loading functions remain here
+# =============================================================================
 
 def get_context(context):
     """
@@ -2057,4360 +2118,6 @@ def get_project_management_data_original(view='main'):
             'is_workspace_view': False  # This is a board view, not a workspace view
         }
 
-@frappe.whitelist()
-def update_task_status(task_id, new_status):
-    """
-    Update task status from the project management interface
-    """
-    try:
-        task = frappe.get_doc("Task", task_id)
-        task.flags.ignore_version = True
-        task.custom_task_status = new_status
-        task.save()
-        
-        # Force commit and clear cache
-        frappe.db.commit()
-        frappe.clear_cache()
-        
-        return {'success': True, 'message': 'Task status updated successfully'}
-    
-    except Exception as e:
-        frappe.log_error(f"Task status update error: {str(e)}")
-        return {'success': False, 'error': str(e)}
-
-@frappe.whitelist()
-def update_task_field(task_id, field_name, new_value):
-    """
-    Update any task field from the project management interface
-    """
-    try:
-        # Get fresh document and ignore version conflicts
-        task = frappe.get_doc("Task", task_id)
-        task.flags.ignore_version = True
-        
-        # Validate field name (security check) - removed person and software fields as they're now handled by sub-tables
-        allowed_fields = [
-            'custom_tftg', 'custom_tf_tg', 'custom_target_month',
-            'custom_budget_planning', 'custom_actual_billing', 'custom_year_end', 'custom_task_status',
-            'custom_service_line', 'custom_client', 'custom_process_date', 'custom_lodgement_due_date', 'subject',
-            'custom_engagement', 'custom_roles', 'custom_due_date', 'description', 'custom_note',
-            'custom_frequency', 'custom_reset_date', 'priority', 'status'
-        ]
-        
-        if field_name not in allowed_fields:
-            return {'success': False, 'error': 'Field not allowed for editing'}
-        
-        # Convert value based on field type
-        if field_name in ['custom_budget_planning', 'custom_actual_billing']:
-            try:
-                new_value = float(new_value) if new_value else 0
-            except ValueError:
-                return {'success': False, 'error': 'Invalid number format'}
-        elif field_name == 'custom_year_end':
-            # Validate Year End is a valid month
-            valid_months = ['January', 'February', 'March', 'April', 'May', 'June',
-                           'July', 'August', 'September', 'October', 'November', 'December']
-            if new_value and new_value not in valid_months:
-                return {'success': False, 'error': f'Year End must be a valid month. Invalid value: {new_value}'}
-            # Year End validation passed
-        elif field_name in ['custom_process_date', 'custom_lodgment_due_date', 'custom_lodgement_due_date', 'custom_due_date', 'custom_reset_date']:
-            # Enhanced date validation for date fields - support multiple formats
-            if new_value and new_value.strip():
-                try:
-                    from datetime import datetime
-                    original_value = new_value
-                    
-                    # Try to parse and convert various date formats to YYYY-MM-DD
-                    if len(new_value) == 10 and new_value.count('-') == 2:
-                        parts = new_value.split('-')
-                        
-                        # Check if it's already YYYY-MM-DD format
-                        if len(parts[0]) == 4:
-                            datetime.strptime(new_value, '%Y-%m-%d')
-                            # Date validation passed
-                        # Check if it's DD-MM-YYYY format
-                        elif len(parts[2]) == 4:
-                            datetime.strptime(new_value, '%d-%m-%Y')
-                            # Convert DD-MM-YYYY to YYYY-MM-DD for storage
-                            new_value = f"{parts[2]}-{parts[1]}-{parts[0]}"
-                            # Date converted from DD-MM-YYYY to YYYY-MM-DD
-                        else:
-                            return {'success': False, 'error': f'Date must be in DD-MM-YYYY or YYYY-MM-DD format.'}
-                    else:
-                        return {'success': False, 'error': f'Date must be in DD-MM-YYYY or YYYY-MM-DD format.'}
-                except ValueError:
-                    return {'success': False, 'error': f'Invalid date format. Please use DD-MM-YYYY or YYYY-MM-DD.'}
-        elif field_name in ['custom_tftg', 'custom_tf_tg']:
-            # For TF/TG field, try to find the company
-            # Saving TF/TG value
-            
-            if new_value in ['Top Figures', 'Top Grants']:
-                try:
-                    # First try exact match
-                    if frappe.db.exists("Company", new_value):
-                        new_value = new_value  # Use as is
-                    else:
-                        # Try to find by company_name
-                        company_list = frappe.get_all("Company", 
-                            filters={"company_name": ["like", f"%{new_value}%"]}, 
-                            fields=["name", "company_name"],
-                            limit=1
-                        )
-                        if company_list:
-                            new_value = company_list[0].name
-                            # Company found
-                        else:
-                            print(f"DEBUG: Company not found, will use value as-is: {new_value}")
-                except Exception as e:
-                    print(f"DEBUG: Company lookup error: {str(e)}")
-                    # If lookup fails, just use the value as-is
-                    pass
-        
-        # Update the field using set_value to avoid full document validation
-        frappe.db.set_value("Task", task_id, field_name, new_value)
-        
-        # Force commit to database immediately
-        frappe.db.commit()
-        
-        # Clear caches to ensure fresh data
-        frappe.clear_cache()
-        
-        return {'success': True, 'message': 'Field updated successfully', 'new_value': new_value}
-    
-    except Exception as e:
-        error_msg = f"Task field update error: {str(e)}"
-        frappe.log_error(error_msg)
-        print(f"DEBUG: {error_msg}")  # Console debugging
-        print(f"DEBUG: task_id={task_id}, field_name={field_name}, new_value={new_value}")
-        return {'success': False, 'error': str(e)}
-
-@frappe.whitelist()
-def create_subtask(parent_task_id, subtask_name=None):
-    """Create a new subtask under a parent task"""
-    try:
-        # Get parent task info
-        parent_task = frappe.get_doc("Task", parent_task_id)
-        
-        # Create new subtask with inherited properties
-        new_task = frappe.new_doc("Task")
-        # Use provided name or generate default
-        if subtask_name and subtask_name.strip():
-            new_task.subject = subtask_name.strip()
-        else:
-            new_task.subject = f"Subtask of {parent_task.subject}"
-        new_task.project = parent_task.project
-        new_task.parent_task = parent_task_id
-        new_task.custom_task_status = "Not Started"
-        new_task.priority = parent_task.priority or "Medium"
-        
-        # Inherit custom fields from parent
-        custom_fields = [
-            'custom_client', 'custom_tftg', 'custom_target_month', 
-            'custom_budget_planning', 'custom_actual_billing',
-            'custom_action_person', 'custom_preparer', 'custom_reviewer', 'custom_partner',
-            'custom_engagement', 'custom_partition'
-        ]
-        
-        for field in custom_fields:
-            if hasattr(parent_task, field):
-                setattr(new_task, field, getattr(parent_task, field))
-        
-        new_task.insert()
-        
-        return {
-            'success': True,
-            'task_id': new_task.name,
-            'task_subject': new_task.subject,
-            'parent_task_id': parent_task_id
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error creating subtask: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def get_subtasks(parent_task_id):
-    """Get all subtasks for a parent task with role assignments"""
-    try:
-        subtasks = frappe.get_all("Task",
-            filters={
-                "parent_task": parent_task_id, 
-                "custom_is_archived": ["!=", 1]  # Exclude archived subtasks
-            },
-            fields=["name", "subject", "custom_task_status", "priority", "creation", "modified", 
-                   "custom_due_date", "description", "custom_note"],
-            order_by="creation asc"  # New subtasks appear at bottom
-        )
-        
-        # Enrich subtasks with role assignments
-        for subtask in subtasks:
-            # Map custom_task_status to status for frontend compatibility
-            subtask.status = subtask.custom_task_status or 'Not Started'
-            
-            # Map custom_note to note for frontend compatibility
-            subtask.note = subtask.custom_note or ''
-            
-            # Get role assignments for this subtask
-            role_assignments = frappe.get_all("Task Role Assignment",
-                filters={"parent": subtask.name},
-                fields=["role", "user", "is_primary"],
-                order_by="is_primary desc, role, user"
-            )
-            
-            # Add user details to role assignments
-            enriched_assignments = []
-            for assignment in role_assignments:
-                try:
-                    user_info = frappe.get_cached_value("User", assignment.user, 
-                                                       ["full_name", "email", "user_image"], as_dict=True)
-                    if user_info:
-                        # Generate initials
-                        full_name = user_info.get('full_name') or assignment.user
-                        name_parts = full_name.split()
-                        initials = ''.join([part[0].upper() for part in name_parts[:2]]) if name_parts else assignment.user[:2].upper()
-                        
-                        enriched_assignments.append({
-                            'role': assignment.role,
-                            'user': assignment.user,
-                            'is_primary': assignment.is_primary,
-                            'full_name': full_name,
-                            'email': user_info.get('email', assignment.user),
-                            'initials': initials,
-                            'user_image': user_info.get('user_image')
-                        })
-                except Exception as e:
-                    # If user info fails, still include basic assignment
-                    enriched_assignments.append({
-                        'role': assignment.role,
-                        'user': assignment.user,
-                        'is_primary': assignment.is_primary,
-                        'full_name': assignment.user,
-                        'email': assignment.user,
-                        'initials': assignment.user[:2].upper()
-                    })
-            
-            subtask['role_assignments'] = enriched_assignments
-        
-        return {
-            'success': True,
-            'subtasks': subtasks,
-            'count': len(subtasks)
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting subtasks: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def get_bulk_subtask_counts(task_ids):
-    """Get subtask counts for multiple tasks"""
-    try:
-        if isinstance(task_ids, str):
-            task_ids = frappe.parse_json(task_ids)
-        
-        subtask_counts = {}
-        
-        for task_id in task_ids:
-            try:
-                count = frappe.db.count("Task", {
-                    "parent_task": task_id,
-                    "custom_is_archived": ["!=", 1]  # Exclude archived subtasks from count
-                })
-                subtask_counts[task_id] = count
-            except:
-                subtask_counts[task_id] = 0
-        
-        return {
-            'success': True,
-            'subtask_counts': subtask_counts
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting bulk subtask counts: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def get_subtask_count(parent_task_id):
-    """Get subtask count for a single parent task"""
-    try:
-        count = frappe.db.count("Task", {
-            "parent_task": parent_task_id,
-            "custom_is_archived": ["!=", 1]  # Exclude archived subtasks from count
-        })
-        
-        return {
-            'success': True,
-            'count': count
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting subtask count for task {parent_task_id}: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e),
-            'count': 0
-        }
-
-@frappe.whitelist()
-def create_new_task(project_name, client_name=None):
-    """
-    Create a new task in the specified project
-    """
-    try:
-        # Find the project with all necessary fields
-        project_list = frappe.get_all("Project", 
-            filters={"project_name": project_name}, 
-            fields=["name", "customer", "custom_service_line"],
-            limit=1
-        )
-        
-        if not project_list:
-            return {'success': False, 'error': f'Project {project_name} not found'}
-        
-        project_id = project_list[0].name
-        project_customer = project_list[0].customer
-        project_service_line = project_list[0].custom_service_line
-        
-        # Generate auto task subject
-        existing_tasks = frappe.get_all("Task", 
-            filters={"project": project_id},
-            fields=["name"],
-            order_by="creation desc"
-        )
-        
-        task_sequence = len(existing_tasks) + 1
-        auto_subject = f"Task {task_sequence:03d} - {project_name}"
-        
-        # Create new task with minimal required fields
-        new_task = frappe.new_doc("Task")
-        new_task.subject = auto_subject
-        new_task.project = project_id
-        new_task.custom_task_status = "Not Started"
-        new_task.priority = "Medium"
-        
-        # Set default custom fields based on project/client
-        if project_customer:
-            new_task.custom_client = project_customer
-        
-        # Inherit Service Line from Project (safe inheritance)
-        if project_service_line:
-            new_task.custom_service_line = project_service_line
-        
-        # Set default TF/TG based on client or project
-        if client_name and 'Top Figures' in client_name:
-            # Find Top Figures company
-            tf_companies = frappe.get_all("Company", 
-                filters={"company_name": ["like", "%Top Figures%"]}, 
-                fields=["name"],
-                limit=1
-            )
-            if tf_companies:
-                new_task.custom_tftg = tf_companies[0].name
-        elif client_name and 'Top Grants' in client_name:
-            # Find Top Grants company  
-            tg_companies = frappe.get_all("Company",
-                filters={"company_name": ["like", "%Top Grants%"]},
-                fields=["name"],
-                limit=1
-            )
-            if tg_companies:
-                new_task.custom_tftg = tg_companies[0].name
-        
-        # Set other defaults (empty, let user choose)
-        new_task.custom_target_month = ""
-        new_task.custom_budget_planning = 0
-        new_task.custom_actual_billing = 0
-        
-        # Save the task
-        new_task.save()
-        
-        return {
-            'success': True, 
-            'message': 'New task created successfully',
-            'task_id': new_task.name,
-            'task_subject': new_task.subject
-        }
-    
-    except Exception as e:
-        error_msg = f"Create task error: {str(e)}"
-        frappe.log_error(error_msg)
-        print(f"DEBUG: {error_msg}")
-        return {'success': False, 'error': str(e)}
-
-def get_user_info(email_or_user):
-    """
-    Convert email address or user to user info for avatar display
-    """
-    if not email_or_user:
-        return None
-    
-    try:
-        # Handle multiple emails separated by comma
-        emails = [email.strip() for email in str(email_or_user).split(',')]
-        user_infos = []
-        
-        for email in emails:
-            if not email:
-                continue
-                
-            # Try to get user by email
-            user_info = {'email': email, 'initials': '', 'full_name': ''}
-            
-            try:
-                # Check if it's already a user ID or email
-                if '@' in email:
-                    user_doc = frappe.get_doc("User", email)
-                else:
-                    # Try to find user by email
-                    user_list = frappe.get_all("User", filters={"email": email}, fields=["name", "full_name", "user_image"])
-                    if user_list:
-                        user_doc = frappe.get_doc("User", user_list[0].name)
-                    else:
-                        # If not found, treat as name
-                        user_info['full_name'] = email
-                        user_info['initials'] = get_initials(email)
-                        user_infos.append(user_info)
-                        continue
-                
-                user_info['full_name'] = user_doc.full_name or user_doc.name
-                user_info['initials'] = get_initials(user_info['full_name'])
-                user_info['image'] = getattr(user_doc, 'user_image', None)
-                
-            except:
-                # If user not found, generate initials from email/name
-                user_info['full_name'] = email
-                user_info['initials'] = get_initials(email)
-            
-            user_infos.append(user_info)
-        
-        return user_infos
-    
-    except Exception as e:
-        # If anything fails, return basic info
-        return [{'email': str(email_or_user), 'initials': get_initials(str(email_or_user)), 'full_name': str(email_or_user)}]
-
-@frappe.whitelist()
-def get_task_status_options():
-    """
-    Get available status options for Task doctype
-    """
-    try:
-        # Get Task doctype meta to fetch custom_task_status field options
-        task_meta = frappe.get_meta("Task")
-        status_field = None
-        
-        for field in task_meta.fields:
-            if field.fieldname == "custom_task_status":
-                status_field = field
-                break
-        
-        if status_field and hasattr(status_field, 'options') and status_field.options:
-            # Split options by newline and clean them
-            options = [opt.strip() for opt in status_field.options.split('\n') if opt.strip()]
-            return {'success': True, 'status_options': options}
-        else:
-            # Fallback: Get existing values from database as options
-            try:
-                existing_statuses = frappe.db.sql("""
-                    SELECT DISTINCT custom_task_status 
-                    FROM `tabTask` 
-                    WHERE custom_task_status IS NOT NULL 
-                    AND custom_task_status != ''
-                    ORDER BY custom_task_status
-                """, as_list=True)
-                
-                if existing_statuses:
-                    options = [status[0] for status in existing_statuses]
-                    return {'success': True, 'status_options': options}
-                else:
-                    # Ultimate fallback if no data exists
-                    return {'success': True, 'status_options': ['Not Started']}
-            except Exception as fallback_error:
-                frappe.log_error(f"Error getting existing status values: {str(fallback_error)}")
-                return {'success': True, 'status_options': ['Not Started']}
-            
-    except Exception as e:
-        frappe.log_error(f"Error getting task status options: {str(e)}")
-        return {'success': False, 'error': str(e)}
-
-@frappe.whitelist()
-def get_companies_for_tftg():
-    """
-    Get all companies that contain 'Top' in name for TF/TG selection
-    """
-    try:
-        companies = frappe.get_all("Company",
-            filters={"company_name": ["like", "%Top%"]},
-            fields=["name", "company_name", "abbr"],
-            order_by="company_name"
-        )
-        
-        # Create display mapping
-        company_options = []
-        for company in companies:
-            if 'Figures' in company.company_name:
-                display_name = 'TF'
-            elif 'Grants' in company.company_name:
-                display_name = 'TG'
-            else:
-                display_name = company.abbr or company.company_name[:2]
-            
-            company_options.append({
-                'id': company.name,
-                'name': company.company_name,
-                'display': display_name
-            })
-        
-        return {'success': True, 'companies': company_options}
-    
-    except Exception as e:
-        frappe.log_error(f"Company lookup error: {str(e)}")
-        return {'success': False, 'error': str(e)}
-
-@frappe.whitelist()
-def search_customers(query):
-    """
-    Search existing customers by name
-    """
-    try:
-        if not query or len(query.strip()) < 1:
-            return {'success': True, 'customers': []}
-        
-        # Search customers by customer_name - include custom fields if they exist
-        try:
-            # Try to get custom_year_end field if it exists
-            customers = frappe.get_all("Customer",
-                filters={
-                    "customer_name": ["like", f"%{query}%"],
-                    "disabled": 0
-                },
-                fields=["name", "customer_name", "customer_type", "custom_year_end"],
-                limit=10,
-                order_by="customer_name"
-            )
-        except Exception:
-            # Fallback if custom_year_end field doesn't exist
-            customers = frappe.get_all("Customer",
-                filters={
-                    "customer_name": ["like", f"%{query}%"],
-                    "disabled": 0
-                },
-                fields=["name", "customer_name", "customer_type"],
-                limit=10,
-                order_by="customer_name"
-            )
-        
-        return {
-            'success': True, 
-            'customers': customers,
-            'query': query
-        }
-    
-    except Exception as e:
-        frappe.log_error(f"Customer search error: {str(e)}")
-        return {'success': False, 'error': str(e)}
-
-@frappe.whitelist()
-def quick_create_customer(customer_name, customer_type="Company"):
-    """
-    Quickly create a new customer
-    """
-    try:
-        # Check if customer already exists
-        existing = frappe.db.get_value("Customer", {"customer_name": customer_name})
-        if existing:
-            return {
-                'success': True, 
-                'customer_id': existing,
-                'customer_name': customer_name,
-                'message': 'Customer already exists'
-            }
-        
-        # Create new customer
-        new_customer = frappe.new_doc("Customer")
-        new_customer.customer_name = customer_name
-        new_customer.customer_type = customer_type
-        
-        # Set minimal required fields
-        new_customer.customer_group = frappe.db.get_single_value("Selling Settings", "customer_group") or "All Customer Groups"
-        new_customer.territory = frappe.db.get_single_value("Selling Settings", "territory") or "All Territories"
-        
-        new_customer.save()
-        
-        return {
-            'success': True, 
-            'customer_id': new_customer.name,
-            'customer_name': new_customer.customer_name,
-            'customer_type': new_customer.customer_type,
-            'message': 'New customer created successfully'
-        }
-    
-    except Exception as e:
-        error_msg = f"Customer creation error: {str(e)}"
-        frappe.log_error(error_msg)
-        return {'success': False, 'error': str(e)}
-
-
-@frappe.whitelist()
-def update_task_client(task_id, customer_id):
-    """
-    Update task's client association
-    """
-    try:
-        task = frappe.get_doc("Task", task_id)
-        task.flags.ignore_version = True
-        
-        # Handle removing client (customer_id is None or empty)
-        if not customer_id:
-            task.custom_client = None
-            task.save()
-            return {
-                'success': True,
-                'message': 'Client removed from task successfully',
-                'customer_name': None,
-                'customer_type': None
-            }
-        
-        # Get customer info for linking
-        customer = frappe.get_doc("Customer", customer_id)
-        
-        # Update task
-        task.custom_client = customer_id
-        task.save()
-        
-        return {
-            'success': True, 
-            'message': 'Task client updated successfully',
-            'customer_name': customer.customer_name,
-            'customer_type': customer.customer_type
-        }
-    
-    except Exception as e:
-        error_msg = f"Task client update error: {str(e)}"
-        frappe.log_error(error_msg)
-        return {'success': False, 'error': str(e)}
-
-def get_primary_role_user(task_doc, role):
-    """
-    Get primary user for a specific role from sub-table
-    """
-    try:
-        if not hasattr(task_doc, 'custom_roles') or not task_doc.custom_roles:
-            return None
-        
-        # Map role names to sub-table format
-        role_mapping = {
-            'action_person': 'Action Person',
-            'preparer': 'Preparer',
-            'reviewer': 'Reviewer',
-            'partner': 'Partner'
-        }
-        mapped_role = role_mapping.get(role, role)
-        
-        # Look for primary user in this role
-        for role_assignment in task_doc.custom_roles:
-            if role_assignment.role == mapped_role and role_assignment.is_primary:
-                return role_assignment.user
-        
-        # If no primary found, return first user in this role
-        for role_assignment in task_doc.custom_roles:
-            if role_assignment.role == mapped_role:
-                return role_assignment.user
-        
-        return None
-    except:
-        return None
-
-def get_role_users_info(task_doc, role):
-    """
-    Get all users for a specific role from sub-table and return user info
-    """
-    try:
-        if not hasattr(task_doc, 'custom_roles') or not task_doc.custom_roles:
-            return None
-        
-        # Map role names to sub-table format
-        role_mapping = {
-            'action_person': 'Action Person',
-            'preparer': 'Preparer',
-            'reviewer': 'Reviewer',
-            'partner': 'Partner'
-        }
-        mapped_role = role_mapping.get(role, role)
-        
-        # Get all users in this role
-        role_users = []
-        for role_assignment in task_doc.custom_roles:
-            if role_assignment.role == mapped_role:
-                role_users.append(role_assignment.user)
-        
-        if not role_users:
-            return None
-        
-        # Convert to user info format
-        return get_user_info(','.join(role_users))
-        
-    except:
-        return None
-
-def get_primary_software(task_doc):
-    """
-    Get primary software from sub-table
-    """
-    try:
-        if not hasattr(task_doc, 'custom_softwares') or not task_doc.custom_softwares:
-            return None
-        
-        # Look for primary software
-        for software_assignment in task_doc.custom_softwares:
-            if software_assignment.is_primary:
-                return software_assignment.software
-        
-        # If no primary found, return first software
-        if task_doc.custom_softwares:
-            return task_doc.custom_softwares[0].software
-        
-        return None
-    except:
-        return None
-
-def get_software_info(task_doc):
-    """
-    Get all software assignments for display
-    """
-    try:
-        if not hasattr(task_doc, 'custom_softwares') or not task_doc.custom_softwares:
-            return None
-        
-        # Get all software assignments
-        softwares = []
-        for software_assignment in task_doc.custom_softwares:
-            softwares.append({
-                'software': software_assignment.software,
-                'is_primary': software_assignment.is_primary
-            })
-        
-        return softwares if softwares else None
-        
-    except:
-        return None
-
-def get_communication_methods_info(task_doc):
-    """
-    Get all communication methods assignments for display
-    """
-    try:
-        if not hasattr(task_doc, 'custom_communication_methods') or not task_doc.custom_communication_methods:
-            return None
-        
-        # Get all communication methods assignments
-        methods = []
-        for method_assignment in task_doc.custom_communication_methods:
-            methods.append({
-                'communication_method': method_assignment.communication_method,
-                'is_primary': method_assignment.is_primary
-            })
-        
-        return methods if methods else None
-        
-    except:
-        return None
-
-def get_client_contacts_info(task_doc):
-    """
-    Get all client contacts assignments for display
-    """
-    try:
-        if not hasattr(task_doc, 'custom_client_contacts') or not task_doc.custom_client_contacts:
-            return None
-        
-        # Get all client contacts assignments
-        contacts = []
-        for contact_assignment in task_doc.custom_client_contacts:
-            contacts.append({
-                'contact': contact_assignment.contact,
-                'contact_name': contact_assignment.contact_name
-            })
-        
-        return contacts if contacts else None
-        
-    except:
-        return None
-
-def get_initials(name):
-    """
-    Generate initials from name or email
-    """
-    if not name:
-        return "?"
-    
-    # Remove email domain if it's an email
-    if '@' in name:
-        name = name.split('@')[0]
-    
-    # Split by common separators and take first letter of each part
-    parts = re.split(r'[.\s_-]+', name)
-    initials = ''.join([part[0].upper() for part in parts if part])
-    
-    # Limit to 2 characters
-    return initials[:2] if initials else "?"
-
-
-@frappe.whitelist()
-def get_task_comments(task_id):
-    """
-    Get all comments for a specific task using ERPNext's built-in Comment system
-    """
-    try:
-        if not task_id:
-            return {
-                'success': False,
-                'error': 'Task ID is required'
-            }
-
-        # Get comments from ERPNext's Comment doctype
-        comments = frappe.get_all(
-            'Comment',
-            filters={
-                'reference_doctype': 'Task',
-                'reference_name': task_id,
-                'comment_type': 'Comment'
-            },
-            fields=[
-                'name', 'content', 'comment_by', 'comment_email', 
-                'creation', 'modified', 'owner'
-            ],
-            order_by='creation asc'
-        )
-        
-        # Process comments to add permission info
-        processed_comments = []
-        current_user = frappe.session.user
-        
-        for comment in comments:
-            # Check if current user can edit/delete this comment
-            can_edit = (comment.owner == current_user or 
-                       frappe.has_permission('Comment', 'write', comment.name))
-            can_delete = (comment.owner == current_user or 
-                         frappe.has_permission('Comment', 'delete', comment.name))
-            
-            processed_comments.append({
-                'name': comment.name,
-                'content': comment.content,
-                'comment_by': comment.comment_by or comment.owner,
-                'comment_email': comment.comment_email,
-                'creation': comment.creation,
-                'modified': comment.modified,
-                'can_edit': can_edit,
-                'can_delete': can_delete
-            })
-        
-        return {
-            'success': True,
-            'comments': processed_comments,
-            'count': len(processed_comments)
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting task comments: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-
-@frappe.whitelist()
-def add_task_comment(task_id, comment_content):
-    """
-    Add a new comment to a task using ERPNext's Comment system
-    """
-    try:
-        if not task_id or not comment_content:
-            return {
-                'success': False,
-                'error': 'Task ID and comment content are required'
-            }
-
-        # Verify task exists
-        if not frappe.db.exists('Task', task_id):
-            return {
-                'success': False,
-                'error': 'Task not found'
-            }
-
-        # Create new comment using ERPNext's Comment doctype
-        comment_doc = frappe.get_doc({
-            'doctype': 'Comment',
-            'comment_type': 'Comment',
-            'reference_doctype': 'Task',
-            'reference_name': task_id,
-            'content': comment_content,
-            'comment_email': frappe.session.user,
-            'comment_by': frappe.get_cached_value('User', frappe.session.user, 'full_name') or frappe.session.user
-        })
-        
-        comment_doc.insert(ignore_permissions=False)
-        
-        # Handle @mentions and send notifications
-        handle_comment_mentions(comment_content, task_id, comment_doc.name)
-        
-        # 立即提交并清除缓存
-        frappe.db.commit()
-        frappe.clear_cache()
-        
-        # Get updated comment count by counting
-        comment_count = frappe.db.count('Comment', {
-            'reference_doctype': 'Task',
-            'reference_name': task_id,
-            'comment_type': 'Comment'
-        })
-        
-        return {
-            'success': True,
-            'comment_id': comment_doc.name,
-            'comment_count': comment_count,
-            'message': 'Comment added successfully'
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error adding task comment: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-
-@frappe.whitelist()
-def delete_task_comment(comment_id):
-    """
-    Delete a comment
-    """
-    try:
-        if not comment_id:
-            return {
-                'success': False,
-                'error': 'Comment ID is required'
-            }
-
-        # Get comment to verify permissions and get task info
-        comment_doc = frappe.get_doc('Comment', comment_id)
-        
-        if not comment_doc:
-            return {
-                'success': False,
-                'error': 'Comment not found'
-            }
-        
-        # Check permissions - user can delete their own comments or if they have delete permission
-        current_user = frappe.session.user
-        if (comment_doc.owner != current_user and 
-            not frappe.has_permission('Comment', 'delete', comment_id)):
-            return {
-                'success': False,
-                'error': 'You do not have permission to delete this comment'
-            }
-        
-        # Store task info before deletion
-        task_id = comment_doc.reference_name
-        
-        # Delete the comment
-        frappe.delete_doc('Comment', comment_id)
-        
-        # 立即提交并清除缓存
-        frappe.db.commit()
-        frappe.clear_cache()
-        
-        # Get updated comment count by counting
-        comment_count = frappe.db.count('Comment', {
-            'reference_doctype': 'Task',
-            'reference_name': task_id,
-            'comment_type': 'Comment'
-        })
-        
-        return {
-            'success': True,
-            'comment_count': comment_count,
-            'message': 'Comment deleted successfully'
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error deleting task comment: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-
-@frappe.whitelist()
-def get_task_communication_methods(task_id):
-    """
-    Get communication methods for a task
-    带缓存机制，减少重复查询
-    """
-    try:
-        # 缓存键
-        cache_key = f"smart_accounting:task_comm_methods:{task_id}"
-        
-        # 尝试从缓存获取
-        cached_result = frappe.cache().get_value(cache_key)
-        if cached_result:
-            return cached_result
-        
-        task_doc = frappe.get_doc('Task', task_id)
-        
-        if not hasattr(task_doc, 'custom_communication_methods') or not task_doc.custom_communication_methods:
-            result = {
-                'success': True,
-                'communication_methods': []
-            }
-        else:
-            methods = []
-            for method_assignment in task_doc.custom_communication_methods:
-                methods.append({
-                    'communication_method': method_assignment.communication_method,
-                    'is_primary': method_assignment.is_primary
-                })
-            
-            result = {
-                'success': True,
-                'communication_methods': methods
-            }
-        
-        # 缓存结果5分钟
-        frappe.cache().set_value(cache_key, result, expires_in_sec=300)
-        return result
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting task communication methods: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e),
-            'communication_methods': []
-        }
-
-@frappe.whitelist()
-def update_task_communication_methods(task_id, communication_methods):
-    """
-    Update communication methods for a task
-    """
-    try:
-        import json
-        
-        # Parse communication methods if it's a string
-        if isinstance(communication_methods, str):
-            communication_methods = json.loads(communication_methods)
-        
-        task_doc = frappe.get_doc('Task', task_id)
-        
-        # Clear existing communication methods
-        task_doc.custom_communication_methods = []
-        
-        # Add new communication methods
-        for method_data in communication_methods:
-            task_doc.append('custom_communication_methods', {
-                'communication_method': method_data.get('communication_method'),
-                'is_primary': method_data.get('is_primary', 0)
-            })
-        
-        # Save the task
-        task_doc.save()
-        frappe.db.commit()
-        
-        # 清除相关缓存
-        cache_key = f"smart_accounting:task_comm_methods:{task_id}"
-        frappe.cache().delete_value(cache_key)
-        
-        return {
-            'success': True,
-            'message': 'Communication methods updated successfully'
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error updating task communication methods: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def get_client_contacts(client_id):
-    """
-    Get all contacts for a specific client
-    """
-    try:
-        if not client_id:
-            return {
-                'success': False,
-                'error': 'Client ID is required',
-                'contacts': []
-            }
-        
-        # Get client name
-        client_doc = frappe.get_doc('Customer', client_id)
-        client_name = client_doc.customer_name or client_doc.name
-        
-        # Get contacts linked to this customer
-        contacts = frappe.get_all('Contact', 
-            filters={
-                'status': 'Open'  # Only active contacts
-            },
-            fields=['name', 'first_name', 'last_name', 'email_id', 'phone', 'mobile_no']
-        )
-        
-        # Filter contacts that are linked to this customer
-        linked_contacts = []
-        for contact in contacts:
-            # Check if this contact is linked to the customer
-            contact_links = frappe.get_all('Dynamic Link',
-                filters={
-                    'parent': contact.name,
-                    'parenttype': 'Contact',
-                    'link_doctype': 'Customer',
-                    'link_name': client_id
-                }
-            )
-            
-            if contact_links:
-                # Add phone number (prefer mobile over phone)
-                contact['phone'] = contact.get('mobile_no') or contact.get('phone')
-                linked_contacts.append(contact)
-        
-        return {
-            'success': True,
-            'client_name': client_name,
-            'contacts': linked_contacts
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting client contacts: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e),
-            'contacts': []
-        }
-
-@frappe.whitelist()
-def get_task_client(task_id):
-    """
-    Get the client ID for a task
-    """
-    try:
-        task_doc = frappe.get_doc('Task', task_id)
-        client_id = getattr(task_doc, 'custom_client', None)
-        
-        return {
-            'success': True,
-            'client_id': client_id
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting task client: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e),
-            'client_id': None
-        }
-
-@frappe.whitelist()
-def get_task_contacts(task_id):
-    """
-    Get contacts for a task
-    """
-    try:
-        task_doc = frappe.get_doc('Task', task_id)
-        
-        if not hasattr(task_doc, 'custom_client_contacts') or not task_doc.custom_client_contacts:
-            return {
-                'success': True,
-                'contacts': []
-            }
-        
-        contacts = []
-        for contact_assignment in task_doc.custom_client_contacts:
-            contacts.append({
-                'contact': contact_assignment.contact,
-                'contact_name': contact_assignment.contact_name
-            })
-        
-        return {
-            'success': True,
-            'contacts': contacts
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting task contacts: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e),
-            'contacts': []
-        }
-
-@frappe.whitelist()
-def update_task_contacts(task_id, contacts):
-    """
-    Update contacts for a task
-    """
-    try:
-        import json
-        
-        # Parse contacts if it's a string
-        if isinstance(contacts, str):
-            contacts = json.loads(contacts)
-        
-        task_doc = frappe.get_doc('Task', task_id)
-        
-        # Clear existing contacts
-        task_doc.custom_client_contacts = []
-        
-        # Add new contacts
-        for contact_data in contacts:
-            task_doc.append('custom_client_contacts', {
-                'contact': contact_data.get('contact'),
-                'contact_name': contact_data.get('contact_name')
-            })
-        
-        # Save the task
-        task_doc.save()
-        frappe.db.commit()
-        
-        return {
-            'success': True,
-            'message': 'Client contacts updated successfully'
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error updating task contacts: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def create_client_contact(client_id, contact_data):
-    """
-    Create a new contact for a client
-    """
-    try:
-        import json
-        
-        # Parse contact data if it's a string
-        if isinstance(contact_data, str):
-            contact_data = json.loads(contact_data)
-        
-        # Validate required fields
-        if not contact_data.get('first_name') or not contact_data.get('email_id'):
-            return {
-                'success': False,
-                'error': 'First name and email are required'
-            }
-        
-        # Check if contact with this email already exists
-        existing_contact = frappe.db.exists('Contact', {'email_id': contact_data.get('email_id')})
-        if existing_contact:
-            return {
-                'success': False,
-                'error': 'A contact with this email already exists'
-            }
-        
-        # Create new contact
-        contact_doc = frappe.get_doc({
-            'doctype': 'Contact',
-            'first_name': contact_data.get('first_name'),
-            'last_name': contact_data.get('last_name', ''),
-            'email_id': contact_data.get('email_id'),
-            'phone': contact_data.get('phone', ''),
-            'mobile_no': contact_data.get('mobile_no', ''),
-            'designation': contact_data.get('designation', ''),
-            'status': 'Open'
-        })
-        
-        # Insert the contact
-        contact_doc.insert()
-        
-        # Link the contact to the customer
-        contact_doc.append('links', {
-            'link_doctype': 'Customer',
-            'link_name': client_id
-        })
-        
-        # Save the contact with the link
-        contact_doc.save()
-        frappe.db.commit()
-        
-        return {
-            'success': True,
-            'message': 'Contact created successfully',
-            'contact_id': contact_doc.name,
-            'contact_name': f"{contact_data.get('first_name', '')} {contact_data.get('last_name', '')}".strip()
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error creating client contact: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def auto_update_partition_column_configs():
-    """
-    Automatically update all partition column configs to include new columns
-    """
-    try:
-        # Get the latest column definitions from ColumnConfigManager
-        latest_columns = [
-            'client', 'task-name', 'entity', 'tf-tg', 'software', 'communication-methods', 'client-contact', 'status', 
-            'note', 'target-month', 'budget', 'actual', 'review-note', 
-            'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 
-            'engagement', 'group', 'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'
-        ]
-        
-        # Get all partitions
-        partitions = frappe.get_all('Partition', fields=['name', 'visible_columns', 'column_config'])
-        
-        updated_count = 0
-        
-        for partition in partitions:
-            try:
-                import json
-                
-                # Parse current configuration
-                current_visible = json.loads(partition.visible_columns) if partition.visible_columns else []
-                current_config = json.loads(partition.column_config) if partition.column_config else {}
-                
-                # Check if we need to add new columns
-                new_columns_to_add = []
-                for col in ['communication-methods', 'client-contact']:
-                    if col not in current_visible:
-                        new_columns_to_add.append(col)
-                
-                if new_columns_to_add:
-                    # Add new columns after 'software' column
-                    updated_visible = current_visible.copy()
-                    
-                    # Find the position of 'software' column
-                    software_index = -1
-                    try:
-                        software_index = updated_visible.index('software')
-                    except ValueError:
-                        # If 'software' not found, add at the end
-                        software_index = len(updated_visible) - 1
-                    
-                    # Insert new columns after software
-                    insert_position = software_index + 1
-                    for i, col in enumerate(new_columns_to_add):
-                        updated_visible.insert(insert_position + i, col)
-                    
-                    # Update column order in config
-                    if 'column_order' not in current_config:
-                        current_config['column_order'] = updated_visible.copy()
-                    else:
-                        # Update column order to match visible columns
-                        config_order = current_config['column_order'].copy()
-                        for col in new_columns_to_add:
-                            if col not in config_order:
-                                # Insert after software in column order too
-                                try:
-                                    software_order_index = config_order.index('software')
-                                    config_order.insert(software_order_index + 1, col)
-                                except ValueError:
-                                    config_order.append(col)
-                        current_config['column_order'] = config_order
-                    
-                    # Update the partition document
-                    partition_doc = frappe.get_doc('Partition', partition.name)
-                    partition_doc.visible_columns = json.dumps(updated_visible)
-                    partition_doc.column_config = json.dumps(current_config)
-                    partition_doc.save()
-                    
-                    updated_count += 1
-                    
-                    frappe.logger().info(f"Updated partition '{partition.name}' with new columns: {new_columns_to_add}")
-                
-            except Exception as e:
-                frappe.log_error(f"Error updating partition {partition.name}: {str(e)}")
-                continue
-        
-        if updated_count > 0:
-            frappe.db.commit()
-        
-        return {
-            'success': True,
-            'message': f'Successfully updated {updated_count} partitions with new column configurations',
-            'updated_count': updated_count,
-            'total_partitions': len(partitions)
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error in auto_update_partition_column_configs: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def sync_all_partition_columns():
-    """
-    Sync all partition columns with the latest column definitions
-    This is a more comprehensive update that ensures all partitions have the latest column structure
-    """
-    try:
-        # Get the complete latest column definitions
-        latest_columns = [
-            'client', 'task-name', 'entity', 'tf-tg', 'software', 'communication-methods', 'client-contact', 'status', 
-            'note', 'target-month', 'budget', 'actual', 'review-note', 
-            'action-person', 'preparer', 'reviewer', 'partner', 'lodgment-due', 
-            'engagement', 'group', 'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'
-        ]
-        
-        # Get all partitions
-        partitions = frappe.get_all('Partition', fields=['name', 'partition_name'])
-        
-        updated_count = 0
-        
-        for partition in partitions:
-            try:
-                import json
-                
-                # Update the partition with latest column structure
-                partition_doc = frappe.get_doc('Partition', partition.name)
-                
-                # Set the latest visible columns
-                partition_doc.visible_columns = json.dumps(latest_columns)
-                
-                # Set the latest column config
-                column_config = {
-                    'column_order': latest_columns.copy()
-                }
-                partition_doc.column_config = json.dumps(column_config)
-                
-                partition_doc.save()
-                updated_count += 1
-                
-                frappe.logger().info(f"Synced partition '{partition.partition_name}' ({partition.name}) with latest columns")
-                
-            except Exception as e:
-                frappe.log_error(f"Error syncing partition {partition.name}: {str(e)}")
-                continue
-        
-        if updated_count > 0:
-            frappe.db.commit()
-        
-        return {
-            'success': True,
-            'message': f'Successfully synced {updated_count} partitions with latest column structure',
-            'updated_count': updated_count,
-            'total_partitions': len(partitions),
-            'latest_columns': latest_columns
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error in sync_all_partition_columns: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def update_task_comment(comment_id, new_content):
-    """
-    Update/edit a comment
-    """
-    try:
-        if not comment_id or not new_content:
-            return {
-                'success': False,
-                'error': 'Comment ID and new content are required'
-            }
-
-        # Get comment to verify permissions
-        comment_doc = frappe.get_doc('Comment', comment_id)
-        
-        if not comment_doc:
-            return {
-                'success': False,
-                'error': 'Comment not found'
-            }
-        
-        # Check permissions - user can edit their own comments or if they have write permission
-        current_user = frappe.session.user
-        if (comment_doc.owner != current_user and 
-            not frappe.has_permission('Comment', 'write', comment_id)):
-            return {
-                'success': False,
-                'error': 'You do not have permission to edit this comment'
-            }
-        
-        # Update the comment
-        comment_doc.content = new_content
-        comment_doc.save()
-        frappe.db.commit()
-        
-        return {
-            'success': True,
-            'message': 'Comment updated successfully'
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error updating task comment: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-
-def handle_comment_mentions(comment_content, task_id, comment_id):
-    """
-    Handle @mentions in comments and send notifications
-    """
-    import re
-    
-    # Extract @mentions from comment content
-    mentions = re.findall(r'@(\w+(?:\.\w+)*)', comment_content)
-    
-    if not mentions:
-        return
-    
-    # Get task info for context
-    task = frappe.get_doc('Task', task_id)
-    current_user = frappe.get_cached_value('User', frappe.session.user, 'full_name') or frappe.session.user
-    
-    for mention in mentions:
-        try:
-            # Find user by email or full name
-            user_email = None
-            
-            # First try to find by email
-            if frappe.db.exists('User', mention):
-                user_email = mention
-            else:
-                # Try to find by full name or username
-                users = frappe.get_all('User', 
-                    filters={'full_name': ['like', f'%{mention}%']}, 
-                    fields=['name', 'full_name']
-                )
-                if users:
-                    user_email = users[0].name
-            
-            if user_email and user_email != frappe.session.user:
-                # Create notification
-                frappe.get_doc({
-                    'doctype': 'Notification Log',
-                    'for_user': user_email,
-                    'type': 'Mention',
-                    'document_type': 'Task',
-                    'document_name': task_id,
-                    'subject': f'{current_user} mentioned you in a comment on task: {task.subject}',
-                    'email_content': f'''
-                    <p>{current_user} mentioned you in a comment:</p>
-                    <blockquote>{comment_content}</blockquote>
-                    <p>Task: <a href="/app/task/{task_id}">{task.subject}</a></p>
-                    ''',
-                    'read': 0
-                }).insert(ignore_permissions=True)
-                
-                # Also send email notification
-                frappe.sendmail(
-                    recipients=[user_email],
-                    subject=f'You were mentioned in a comment on task: {task.subject}',
-                    message=f'''
-                    <p>Hi,</p>
-                    <p>{current_user} mentioned you in a comment on task "{task.subject}":</p>
-                    <blockquote style="border-left: 3px solid #0073ea; padding-left: 15px; margin: 15px 0; font-style: italic;">
-                        {comment_content}
-                    </blockquote>
-                    <p><a href="{frappe.utils.get_url()}/app/task/{task_id}" style="background: #0073ea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Task</a></p>
-                    <p>Best regards,<br>Smart Accounting Team</p>
-                    ''',
-                    now=True
-                )
-                
-        except Exception as e:
-            frappe.log_error(f"Error sending mention notification: {str(e)}")
-            continue
-
-@frappe.whitelist()
-def sync_comment_counts():
-    """
-    Synchronize comment counts for all tasks - useful for data migration
-    This method updates the custom_comment_count field based on actual comment counts
-    """
-    try:
-        # Get all tasks
-        tasks = frappe.get_all('Task', fields=['name'])
-        updated_count = 0
-        
-        for task in tasks:
-            task_id = task.name
-            
-            # Count actual comments
-            actual_count = frappe.db.count('Comment', {
-                'reference_doctype': 'Task',
-                'reference_name': task_id,
-                'comment_type': 'Comment'
-            })
-            
-            # Update task's comment count field
-            frappe.db.set_value('Task', task_id, 'custom_comment_count', actual_count)
-            updated_count += 1
-        
-        frappe.db.commit()
-        
-        return {
-            'success': True,
-            'message': f'Successfully synchronized comment counts for {updated_count} tasks',
-            'updated_count': updated_count
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error synchronizing comment counts: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-
-@frappe.whitelist()
-def save_user_column_widths(column_widths, column_type="main_tasks"):
-    """
-    Save user's column width preferences to UserPreferences document
-    High performance: uses dedicated DocType for user preferences
-    Supports both main_tasks and subtasks column types
-    """
-    try:
-        import json
-        
-        if not column_widths:
-            return {'success': False, 'error': 'Column widths data required'}
-        
-        # Convert to JSON string if it's not already
-        if isinstance(column_widths, dict):
-            column_widths_json = json.dumps(column_widths)
-        else:
-            column_widths_json = column_widths
-        
-        # Check if UserPreferences record exists for current user
-        existing = frappe.db.get_value("User Preferences", {"user": frappe.session.user})
-        
-        # Determine which field to update based on column_type
-        field_name = 'subtask_column_widths' if column_type == 'subtasks' else 'column_widths'
-        
-        if existing:
-            # Update existing record
-            frappe.db.set_value('User Preferences', existing, field_name, column_widths_json)
-        else:
-            # Create new UserPreferences record
-            user_prefs = frappe.new_doc("User Preferences")
-            user_prefs.user = frappe.session.user
-            if column_type == 'subtasks':
-                user_prefs.subtask_column_widths = column_widths_json
-            else:
-                user_prefs.column_widths = column_widths_json
-            user_prefs.insert(ignore_permissions=True)
-        
-        frappe.db.commit()
-        
-        return {
-            'success': True,
-            'message': f'{column_type.title()} column widths saved successfully'
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error saving user {column_type} column widths: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def load_user_column_widths(column_type="main_tasks"):
-    """
-    Load user's column width preferences from UserPreferences document
-    High performance: dedicated DocType for user preferences
-    Supports both main_tasks and subtasks column types
-    """
-    try:
-        import json
-        
-        # Determine which field to load based on column_type
-        field_name = 'subtask_column_widths' if column_type == 'subtasks' else 'column_widths'
-        
-        # Get column widths from UserPreferences document
-        column_widths_json = frappe.db.get_value('User Preferences', 
-                                                {'user': frappe.session.user}, 
-                                                field_name)
-        
-        if column_widths_json:
-            try:
-                column_widths = json.loads(column_widths_json)
-                return {
-                    'success': True,
-                    'column_widths': column_widths
-                }
-            except json.JSONDecodeError:
-                # If JSON is corrupted, return default
-                pass
-        
-        # Return default widths based on column type
-        if column_type == 'subtasks':
-            default_widths = {
-                'name': 250,      # Task Name column
-                'owner': 120,     # Owner column
-                'status': 100,    # Status column  
-                'due': 120,       # Due Date column
-                'note': 180       # Note column
-            }
-        else:
-            default_widths = {
-                'client': 150,
-                'entity': 100,
-                'tf-tg': 80,
-                'software': 120,
-                'status': 100,
-                'target-month': 120,
-                'budget': 120,
-                'actual': 120,
-                'review-note': 120,
-                'action-person': 130,
-                'preparer': 120,
-                'reviewer': 120,
-                'partner': 120,
-                'lodgment-due': 130,
-                'year-end': 100,
-                'last-updated': 130,
-                'priority': 100
-            }
-        
-        return {
-            'success': True,
-            'column_widths': default_widths
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error loading user column widths: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-
-@frappe.whitelist()
-def check_task_fields(task_id):
-    """
-    Check what fields actually exist in Task
-    """
-    try:
-        # Get Task meta to see actual fields
-        task_meta = frappe.get_meta("Task")
-        custom_fields = []
-        table_fields = []
-        
-        for field in task_meta.fields:
-            if field.fieldname.startswith('custom_'):
-                if field.fieldtype == 'Table':
-                    table_fields.append({
-                        'fieldname': field.fieldname,
-                        'options': field.options,
-                        'label': field.label
-                    })
-                else:
-                    custom_fields.append({
-                        'fieldname': field.fieldname,
-                        'fieldtype': field.fieldtype,
-                        'label': field.label
-                    })
-        
-        return {
-            'success': True,
-            'custom_fields': custom_fields,
-            'table_fields': table_fields
-        }
-        
-    except Exception as e:
-        return {'success': False, 'error': str(e)}
-
-@frappe.whitelist()
-def test_task_subtables(task_id):
-    """
-    Test if Task sub-tables are properly configured
-    """
-    try:
-        if not task_id:
-            return {'success': False, 'error': 'Task ID is required'}
-        
-        # Get task document
-        task_doc = frappe.get_doc("Task", task_id)
-        
-        # Check sub-table fields
-        results = {}
-        
-        # Check custom_roles
-        if hasattr(task_doc, 'custom_roles'):
-            results['custom_roles'] = f"存在，当前有 {len(task_doc.custom_roles)} 条记录"
-        else:
-            results['custom_roles'] = "不存在"
-            
-        # Check custom_softwares  
-        if hasattr(task_doc, 'custom_softwares'):
-            results['custom_softwares'] = f"存在，当前有 {len(task_doc.custom_softwares)} 条记录"
-        else:
-            results['custom_softwares'] = "不存在"
-            
-        # Check custom_companies
-        if hasattr(task_doc, 'custom_companies'):
-            results['custom_companies'] = f"存在，当前有 {len(task_doc.custom_companies)} 条记录"
-        else:
-            results['custom_companies'] = "不存在"
-        
-        # Check if sub-table DocTypes exist
-        subtable_doctypes = {}
-        for doctype in ['Task Role Assignment', 'Task Software', 'Task Company Tag']:
-            exists = frappe.db.exists('DocType', doctype)
-            subtable_doctypes[doctype] = "存在" if exists else "不存在"
-        
-        return {
-            'success': True,
-            'task_id': task_id,
-            'subtable_fields': results,
-            'subtable_doctypes': subtable_doctypes
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error testing task subtables: {str(e)}")
-        return {'success': False, 'error': str(e)}
-
-@frappe.whitelist()
-def get_task_roles(task_id):
-    """
-    Get task role assignments from sub-table
-    """
-    try:
-        if not task_id:
-            return {'success': False, 'error': 'Task ID is required'}
-        
-        # Get roles from sub-table
-        roles = frappe.get_all("Task Role Assignment",
-            filters={"parent": task_id},
-            fields=["role", "user", "is_primary"],
-            order_by="is_primary desc, role, user"
-        )
-        
-        return {
-            'success': True,
-            'roles': roles
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting task roles: {str(e)}")
-        return {'success': False, 'error': str(e)}
-
-@frappe.whitelist()
-def get_data_count(view='main', filters=None):
-    """
-    快速获取数据总数，用于虚拟滚动和性能优化
-    """
-    try:
-        if filters and isinstance(filters, str):
-            filters = frappe.parse_json(filters)
-        
-        # 构建查询条件
-        conditions = []
-        values = []
-        
-        if view != 'main':
-            # 获取特定视图的项目
-            partition_projects = frappe.get_all("Project", 
-                filters={"custom_partition": view},
-                fields=["name"]
-            )
-            if partition_projects:
-                project_names = [p.name for p in partition_projects]
-                conditions.append("project IN ({})".format(','.join(['%s'] * len(project_names))))
-                values.extend(project_names)
-        
-        # 应用过滤器
-        if filters:
-            if filters.get('client'):
-                conditions.append("custom_client = %s")
-                values.append(filters['client'])
-            if filters.get('status'):
-                conditions.append("status = %s")
-                values.append(filters['status'])
-        
-        # 构建SQL查询
-        where_clause = " AND ".join(conditions) if conditions else "1=1"
-        
-        count = frappe.db.sql(f"""
-            SELECT COUNT(*) as total
-            FROM `tabTask`
-            WHERE {where_clause}
-        """, values)[0][0]
-        
-        return {
-            'success': True,
-            'total_count': count
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting data count: {str(e)}")
-        return {'success': False, 'error': str(e)}
-
-@frappe.whitelist()
-def get_paginated_data(view='main', offset=0, limit=50, filters=None):
-    """
-    分页获取数据，支持大数据量的高性能加载
-    """
-    try:
-        offset = int(offset)
-        limit = min(int(limit), 200)  # 限制最大每页数量
-        
-        if filters and isinstance(filters, str):
-            filters = frappe.parse_json(filters)
-        
-        # 使用优化的查询
-        data = get_project_management_data_paginated(view, offset, limit, filters)
-        
-        return {
-            'success': True,
-            'data': data.get('tasks', []),
-            'offset': offset,
-            'limit': limit,
-            'has_more': len(data.get('tasks', [])) == limit
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting paginated data: {str(e)}")
-        return {'success': False, 'error': str(e)}
-
-def get_project_management_data_paginated(view='main', offset=0, limit=50, filters=None):
-    """
-    优化的分页数据获取，支持大数据量
-    """
-    try:
-        # Build base query with table aliases
-        conditions = ["1=1"]
-        values = []
-        
-        if view != 'main':
-            # Get projects for specific view
-            partition_projects = frappe.get_all("Project", 
-                filters={"custom_partition": view},
-                fields=["name"]
-            )
-            if partition_projects:
-                project_names = [p.name for p in partition_projects]
-                conditions.append("t.project IN ({})".format(','.join(['%s'] * len(project_names))))
-                values.extend(project_names)
-        
-        # Apply filters with table aliases
-        if filters:
-            if filters.get('client'):
-                conditions.append("t.custom_client = %s")
-                values.append(filters['client'])
-            if filters.get('status'):
-                conditions.append("t.status = %s")
-                values.append(filters['status'])
-        
-        where_clause = " AND ".join(conditions)
-        
-        # Optimized SQL query with JOIN for proper client name sorting
-        tasks_data = frappe.db.sql(f"""
-            SELECT 
-                t.name as task_id,
-                t.subject as task_name,
-                t.custom_client,
-                t.status,
-                t.custom_entity_type,
-                t.custom_action_person,
-                t.custom_preparer,
-                t.custom_reviewer,
-                t.custom_partner,
-                t.modified as last_modified,
-                COALESCE(c.customer_name, 'No Client') as client_name
-            FROM `tabTask` t
-            LEFT JOIN `tabCustomer` c ON t.custom_client = c.name
-            WHERE {where_clause}
-            ORDER BY COALESCE(c.customer_name, 'No Client'), t.subject
-            LIMIT %s OFFSET %s
-        """, values + [limit, offset], as_dict=True)
-        
-        # Client info is already included in the SQL query via JOIN
-        # No need for separate client lookup
-        
-        # 批量获取角色信息（只获取必要的）
-        task_ids = [t.task_id for t in tasks_data]
-        roles_info = get_bulk_roles_info(task_ids)
-        
-        # 组装数据
-        enriched_tasks = []
-        for task in tasks_data:
-            enriched_task = {
-                'task_id': task.task_id,
-                'task_name': task.task_name,
-                'client_name': task.client_name,  # Already from SQL JOIN
-                'status': task.status,
-                'entity_type': task.custom_entity_type or 'Company',
-                'action_person_info': roles_info.get(task.task_id, {}).get('action_person', []),
-                'last_modified': task.last_modified
-            }
-            enriched_tasks.append(enriched_task)
-        
-        return {
-            'tasks': enriched_tasks,
-            'total_loaded': len(enriched_tasks)
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error in paginated data fetch: {str(e)}")
-        return {'tasks': [], 'total_loaded': 0}
-
-def get_bulk_roles_info(task_ids):
-    """
-    批量获取角色信息，优化性能
-    """
-    if not task_ids:
-        return {}
-    
-    # 批量查询所有角色
-    roles = frappe.get_all("Task Role Assignment",
-        filters={"parent": ["in", task_ids]},
-        fields=["parent", "role", "user", "is_primary"]
-    )
-    
-    # 按任务分组
-    task_roles = {}
-    for role in roles:
-        task_id = role.parent
-        if task_id not in task_roles:
-            task_roles[task_id] = {}
-        
-        role_type = role.role.lower().replace(' ', '_')
-        if role_type not in task_roles[task_id]:
-            task_roles[task_id][role_type] = []
-        
-        # 获取用户信息
-        user_info = get_user_info(role.user)
-        if user_info:
-            task_roles[task_id][role_type].append(user_info)
-    
-    return task_roles
-
-@frappe.whitelist()
-def get_bulk_task_roles(task_ids):
-    """
-    批量获取多个任务的角色信息，优化性能
-    """
-    try:
-        if isinstance(task_ids, str):
-            task_ids = frappe.parse_json(task_ids)
-        
-        if not task_ids:
-            return {'success': False, 'error': 'Task IDs are required'}
-        
-        # 批量获取所有角色信息
-        all_roles = frappe.get_all("Task Role Assignment",
-            filters={"parent": ["in", task_ids]},
-            fields=["parent", "role", "user", "is_primary"],
-            order_by="parent, is_primary desc, role, user"
-        )
-        
-        # 按任务ID分组
-        task_roles = {}
-        for role in all_roles:
-            task_id = role.parent
-            if task_id not in task_roles:
-                task_roles[task_id] = []
-            task_roles[task_id].append({
-                'role': role.role,
-                'user': role.user,
-                'is_primary': role.is_primary
-            })
-        
-        # 确保所有请求的任务ID都有返回值（即使是空数组）
-        for task_id in task_ids:
-            if task_id not in task_roles:
-                task_roles[task_id] = []
-        
-        return {
-            'success': True,
-            'task_roles': task_roles
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting bulk task roles: {str(e)}")
-        return {'success': False, 'error': str(e)}
-
-@frappe.whitelist()
-def set_task_roles(task_id, roles_data):
-    """
-    Set task role assignments and sync with legacy fields
-    roles_data: [{"role": "preparer", "user": "john@example.com", "is_primary": True}, ...]
-    """
-    try:
-        if not task_id:
-            return {'success': False, 'error': 'Task ID is required'}
-        
-        import json
-        if isinstance(roles_data, str):
-            roles_data = json.loads(roles_data)
-        
-        # Get task document
-        task_doc = frappe.get_doc("Task", task_id)
-        
-        # Check if custom_roles field exists
-        if not hasattr(task_doc, 'custom_roles'):
-            return {
-                'success': False, 
-                'error': 'Task Role Assignment sub-table not available. Please ensure custom_roles field is added to Task DocType.'
-            }
-        
-        # Clear existing roles
-        task_doc.custom_roles = []
-        
-        # Add new roles (clean sub-table only approach)
-        for role_data in roles_data:
-            role = role_data.get('role')
-            user = role_data.get('user')
-            is_primary = role_data.get('is_primary', False)
-            
-            if not role or not user:
-                continue
-            
-            # Validate user exists and is enabled
-            if not frappe.db.exists("User", user):
-                print(f"DEBUG: User {user} does not exist, skipping")
-                continue
-                
-            user_enabled = frappe.db.get_value("User", user, "enabled")
-            if not user_enabled:
-                print(f"DEBUG: User {user} is disabled, skipping")
-                continue
-                
-            # Add to sub-table
-            task_doc.append('custom_roles', {
-                'role': role,
-                'user': user,
-                'is_primary': is_primary
-            })
-        
-        task_doc.save()
-        frappe.db.commit()
-        
-        # Count actually added roles
-        actual_roles_added = len(task_doc.custom_roles)
-        
-        return {
-            'success': True,
-            'message': f'Task roles updated successfully. {actual_roles_added} roles assigned.',
-            'roles_count': actual_roles_added,
-            'requested_count': len(roles_data)
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error setting task roles: {str(e)}")
-        return {'success': False, 'error': str(e)}
-
-
-@frappe.whitelist()
-def update_task_person_role(task_id, role_type, user_email):
-    """
-    Update a single person role for a task - optimized for bulk updates
-    
-    Args:
-        task_id: Task ID to update
-        role_type: Role type (action_person, preparer, reviewer, partner)
-        user_email: User email to assign (can be None to clear)
-    
-    Returns:
-        dict: Success/error response
-    """
-    try:
-        # Get task document
-        task_doc = frappe.get_doc("Task", task_id)
-        
-        # Check if custom_roles field exists
-        if not hasattr(task_doc, 'custom_roles'):
-            return {
-                'success': False, 
-                'error': 'Task Role Assignment sub-table not available.'
-            }
-        
-        # Map role types to display names
-        role_mapping = {
-            'action_person': 'Action Person',
-            'preparer': 'Preparer',
-            'reviewer': 'Reviewer',
-            'partner': 'Partner'
-        }
-        
-        mapped_role = role_mapping.get(role_type, role_type)
-        
-        # Remove existing assignments for this role type
-        task_doc.custom_roles = [
-            role for role in task_doc.custom_roles 
-            if role.role != mapped_role
-        ]
-        
-        # Add new assignment if user_email provided
-        if user_email and user_email.strip():
-            # Validate user exists and is enabled
-            if not frappe.db.exists("User", user_email):
-                return {
-                    'success': False,
-                    'error': f'User {user_email} does not exist'
-                }
-                
-            user_enabled = frappe.db.get_value("User", user_email, "enabled")
-            if not user_enabled:
-                return {
-                    'success': False,
-                    'error': f'User {user_email} is disabled'
-                }
-            
-            # Add new role assignment
-            task_doc.append('custom_roles', {
-                'role': mapped_role,
-                'user': user_email,
-                'is_primary': 1  # Always primary for single role assignments
-            })
-            
-            # Also update the legacy field for backward compatibility
-            legacy_field_map = {
-                'action_person': 'custom_action_person',
-                'preparer': 'custom_preparer',
-                'reviewer': 'custom_reviewer',
-                'partner': 'custom_partner'
-            }
-            
-            legacy_field = legacy_field_map.get(role_type)
-            if legacy_field and hasattr(task_doc, legacy_field):
-                setattr(task_doc, legacy_field, user_email)
-        else:
-            # Clear legacy field if clearing role
-            legacy_field_map = {
-                'action_person': 'custom_action_person',
-                'preparer': 'custom_preparer',
-                'reviewer': 'custom_reviewer',
-                'partner': 'custom_partner'
-            }
-            
-            legacy_field = legacy_field_map.get(role_type)
-            if legacy_field and hasattr(task_doc, legacy_field):
-                setattr(task_doc, legacy_field, None)
-        
-        # Save the task
-        task_doc.save(ignore_permissions=True)
-        frappe.db.commit()
-        
-        return {
-            'success': True,
-            'message': f'Task {role_type} updated successfully',
-            'task_id': task_id,
-            'role_type': role_type,
-            'user_email': user_email
-        }
-        
-    except Exception as e:
-        frappe.db.rollback()
-        frappe.log_error(f"Error updating task person role for {task_id}: {str(e)}")
-        return {
-            'success': False,
-            'error': f'Failed to update task role: {str(e)}'
-        }
-
-
-@frappe.whitelist()
-def get_software_options():
-    """
-    Get available software options from Task Software DocType
-    带缓存机制，避免重复的元数据查询
-    """
-    # 缓存键
-    cache_key = "smart_accounting:software_options"
-    
-    # 尝试从缓存获取
-    cached_result = frappe.cache().get_value(cache_key)
-    if cached_result:
-        return cached_result
-    
-    try:
-        # Get software field options from Task Software DocType
-        task_software_meta = frappe.get_meta("Task Software")
-        software_field = None
-        
-        for field in task_software_meta.fields:
-            if field.fieldname == "software":
-                software_field = field
-                break
-        
-        if software_field and hasattr(software_field, 'options') and software_field.options:
-            # Split options by newline and clean them
-            options = [opt.strip() for opt in software_field.options.split('\n') if opt.strip()]
-            result = {'success': True, 'software_options': options}
-        else:
-            # Fallback to default options if not configured
-            result = {
-                'success': True, 
-                'software_options': ['Xero', 'MYOB', 'QuickBooks', 'Excel', 'Payroller', 'Oracle', 'Logdit', 'Other']
-            }
-        
-        # 缓存结果1小时
-        frappe.cache().set_value(cache_key, result, expires_in_sec=3600)
-        return result
-            
-    except Exception as e:
-        frappe.log_error(f"Error getting software options: {str(e)}")
-        # Return default options on error
-        result = {
-            'success': True,
-            'software_options': ['Xero', 'MYOB', 'QuickBooks', 'Excel', 'Other']
-        }
-        # 缓存错误结果较短时间（5分钟）
-        frappe.cache().set_value(cache_key, result, expires_in_sec=300)
-        return result
-
-@frappe.whitelist()
-def get_task_softwares(task_id):
-    """
-    Get task software assignments from sub-table
-    带短期缓存机制，减少重复查询
-    """
-    try:
-        if not task_id:
-            return {'success': False, 'error': 'Task ID is required'}
-        
-        # 缓存键
-        cache_key = f"smart_accounting:task_softwares:{task_id}"
-        
-        # 尝试从缓存获取
-        cached_result = frappe.cache().get_value(cache_key)
-        if cached_result:
-            return cached_result
-        
-        # Get softwares from sub-table
-        softwares = frappe.get_all("Task Software",
-            filters={"parent": task_id},
-            fields=["software", "is_primary"],
-            order_by="is_primary desc, software"
-        )
-        
-        result = {
-            'success': True,
-            'softwares': softwares
-        }
-        
-        # 缓存结果5分钟
-        frappe.cache().set_value(cache_key, result, expires_in_sec=300)
-        return result
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting task softwares: {str(e)}")
-        return {'success': False, 'error': str(e)}
-
-@frappe.whitelist()
-def set_task_softwares(task_id, softwares_data):
-    """
-    Set task software assignments and sync with legacy field
-    softwares_data: [{"software": "Xero", "is_primary": True}, ...]
-    """
-    try:
-        if not task_id:
-            return {'success': False, 'error': 'Task ID is required'}
-        
-        import json
-        if isinstance(softwares_data, str):
-            softwares_data = json.loads(softwares_data)
-        
-        # Get task document
-        task_doc = frappe.get_doc("Task", task_id)
-        
-        # Clear existing softwares
-        task_doc.custom_softwares = []
-        
-        # Add new softwares (clean sub-table only approach)
-        for software_data in softwares_data:
-            software = software_data.get('software')
-            is_primary = software_data.get('is_primary', False)
-            
-            if not software:
-                continue
-                
-            # Add to sub-table
-            task_doc.append('custom_softwares', {
-                'software': software,
-                'is_primary': is_primary
-            })
-        
-        task_doc.save()
-        frappe.db.commit()
-        
-        # 清除相关缓存
-        cache_key = f"smart_accounting:task_softwares:{task_id}"
-        frappe.cache().delete_value(cache_key)
-        
-        return {
-            'success': True,
-            'message': 'Task softwares updated successfully',
-            'softwares_count': len(softwares_data)
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error setting task softwares: {str(e)}")
-        return {'success': False, 'error': str(e)}
-
-@frappe.whitelist()
-def get_task_activity_log(task_id):
-    """
-    Get activity log for a specific task using ERPNext's Version system
-    """
-    try:
-        if not task_id:
-            return {
-                'success': False,
-                'error': 'Task ID is required'
-            }
-
-        # Get version history from ERPNext's Version doctype
-        versions = frappe.get_all(
-            'Version',
-            filters={
-                'ref_doctype': 'Task',
-                'docname': task_id
-            },
-            fields=[
-                'name', 'owner', 'creation', 'data'
-            ],
-            order_by='creation desc',
-            limit=50
-        )
-        
-        # Also get comments as activities
-        comments = frappe.get_all(
-            'Comment',
-            filters={
-                'reference_doctype': 'Task',
-                'reference_name': task_id,
-                'comment_type': 'Comment'
-            },
-            fields=[
-                'name', 'content', 'comment_by', 'creation', 'owner'
-            ],
-            order_by='creation desc'
-        )
-        
-        # Combine and sort activities
-        activities = []
-        
-        # Add version changes
-        for version in versions:
-            activities.append({
-                'type': 'change',
-                'name': version.name,
-                'owner': version.owner,
-                'creation': version.creation,
-                'data': version.data,
-                'description': 'Task updated'
-            })
-        
-        # Add comments
-        for comment in comments:
-            activities.append({
-                'type': 'comment',
-                'name': comment.name,
-                'owner': comment.comment_by or comment.owner,
-                'creation': comment.creation,
-                'data': None,
-                'description': f'Added comment: {comment.content[:50]}...' if len(comment.content) > 50 else f'Added comment: {comment.content}'
-            })
-        
-        # Sort by creation time (newest first)
-        activities.sort(key=lambda x: x['creation'], reverse=True)
-        
-        return {
-            'success': True,
-            'activities': activities,
-            'count': len(activities)
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting task activity log: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def get_review_notes(task_id):
-    """Get all review notes for a task"""
-    try:
-        if not task_id:
-            return {'success': False, 'error': 'Task ID is required'}
-        
-        # Get review notes from the custom_review_notes child table
-        task_doc = frappe.get_doc('Task', task_id)
-        review_notes = []
-        
-        if hasattr(task_doc, 'custom_review_notes') and task_doc.custom_review_notes:
-            for i, review_note in enumerate(task_doc.custom_review_notes):
-                # Handle both dict and object formats safely
-                note_text = ''
-                if hasattr(review_note, 'note'):
-                    note_text = review_note.note
-                elif isinstance(review_note, dict):
-                    note_text = review_note.get('note', '')
-                else:
-                    note_text = str(review_note)
-                
-                review_notes.append({
-                    'name': f"{task_id}-review-{i}",
-                    'note': note_text,
-                    'creation': frappe.utils.now(),
-                    'owner': frappe.session.user,
-                    'modified': frappe.utils.now(),
-                    'created_by': frappe.get_cached_value('User', frappe.session.user, 'full_name') or frappe.session.user
-                })
-        
-        return {
-            'success': True,
-            'review_notes': review_notes
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting review notes: {str(e)}")
-        return {'success': False, 'error': str(e)}
-
-@frappe.whitelist()
-def add_review_note(task_id, note):
-    """Add a new review note to a task"""
-    try:
-        if not task_id or not note:
-            return {'success': False, 'error': 'Task ID and note are required'}
-        
-        # Check permissions
-        if not can_add_review_note(task_id):
-            return {'success': False, 'error': 'You do not have permission to add review notes'}
-        
-        # Get task document
-        task_doc = frappe.get_doc('Task', task_id)
-        
-        # Add review note to child table - only use fields that exist in the child table
-        task_doc.append('custom_review_notes', {
-            'note': note
-        })
-        
-        # Save task
-        task_doc.save()
-        frappe.db.commit()
-        
-        # Get updated count
-        review_count = len(task_doc.custom_review_notes)
-        
-        return {
-            'success': True,
-            'message': 'Review note added successfully',
-            'review_count': review_count
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error adding review note: {str(e)}")
-        return {'success': False, 'error': str(e)}
-
-@frappe.whitelist()
-def check_review_permissions(task_id):
-    """Check if current user can add review notes"""
-    try:
-        can_add = can_add_review_note(task_id)
-        return {'can_add_review': can_add}
-    except Exception as e:
-        frappe.log_error(f"Error checking review permissions: {str(e)}")
-        return {'can_add_review': False}
-
-def can_add_review_note(task_id):
-    """Check if user has permission to add review notes"""
-    try:
-        # Check if user is Administrator
-        if 'Administrator' in frappe.get_roles():
-            return True
-        
-        # Check if user has System Manager role
-        if 'System Manager' in frappe.get_roles():
-            return True
-            
-        # Check if user has a reviewer role (you can customize this)
-        user_roles = frappe.get_roles()
-        reviewer_roles = ['Reviewer', 'Project Manager', 'Partner']  # Add your reviewer roles here
-        
-        if any(role in user_roles for role in reviewer_roles):
-            return True
-            
-        # Check if user is assigned to the task in reviewer capacity
-        task_doc = frappe.get_doc('Task', task_id)
-        if hasattr(task_doc, 'custom_roles'):
-            for role_assignment in task_doc.custom_roles:
-                if role_assignment.user == frappe.session.user and role_assignment.role in ['Reviewer', 'Partner']:
-                    return True
-        
-        return False
-        
-    except Exception as e:
-        frappe.log_error(f"Error checking review permissions: {str(e)}")
-        return False
-
-@frappe.whitelist()
-def get_bulk_review_counts(task_ids):
-    """Get review note counts for multiple tasks at once"""
-    try:
-        if not task_ids:
-            return {'success': False, 'error': 'Task IDs are required'}
-        
-        # Parse task_ids if it's a string
-        if isinstance(task_ids, str):
-            import json
-            task_ids = json.loads(task_ids)
-        
-        review_counts = {}
-        
-        for task_id in task_ids:
-            try:
-                task_doc = frappe.get_doc('Task', task_id)
-                count = 0
-                
-                if hasattr(task_doc, 'custom_review_notes') and task_doc.custom_review_notes:
-                    # Count non-empty review notes
-                    for review_note in task_doc.custom_review_notes:
-                        note_text = ''
-                        if hasattr(review_note, 'note'):
-                            note_text = review_note.note
-                        elif isinstance(review_note, dict):
-                            note_text = review_note.get('note', '')
-                        
-                        if note_text and note_text.strip():
-                            count += 1
-                
-                review_counts[task_id] = count
-            except:
-                review_counts[task_id] = 0
-        
-        return {
-            'success': True,
-            'review_counts': review_counts
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting bulk review counts: {str(e)}")
-        return {'success': False, 'error': str(e)}
-
-@frappe.whitelist()
-def get_engagement_info(task_id, engagement_id=None):
-    """
-    Get engagement information for a task
-    """
-    try:
-        # Get task document
-        task = frappe.get_doc("Task", task_id)
-        
-        # If engagement_id provided, use it; otherwise get from task
-        engagement_id = engagement_id or getattr(task, 'custom_engagement', None)
-        
-        if not engagement_id:
-            return {
-                'success': False,
-                'message': 'No engagement linked to this task'
-            }
-        
-        # Get engagement document with minimal field access
-        try:
-            engagement = frappe.get_doc("Engagement", engagement_id)
-        except:
-            return {
-                'success': False,
-                'error': 'Engagement not found or no access permission'
-            }
-        
-        # Count engagement letters (assuming they are stored as attachments)
-        engagement_letters = []
-        el_count = 0
-        
-        try:
-            # Get file attachments for this engagement
-            files = frappe.get_all("File", 
-                filters={
-                    "attached_to_doctype": "Engagement",
-                    "attached_to_name": engagement_id
-                },
-                fields=["file_name", "file_url"]
-            )
-            
-            for file in files:
-                engagement_letters.append({
-                    'file_name': file.file_name,
-                    'file_url': file.file_url
-                })
-            
-            el_count = len(engagement_letters)
-        except:
-            # If file access fails, just set count to 0
-            el_count = 0
-        
-        # Prepare engagement info - dynamically get all fields for extensibility
-        engagement_info = {
-            'name': engagement.name,
-            'customer': getattr(engagement, 'customer', None),
-            'customer_name': '',
-            'company': getattr(engagement, 'company', None),
-            'company_name': '',
-            'service_line': getattr(engagement, 'service_line', None),
-            'service_line_name': '',
-            'frequency': getattr(engagement, 'frequency', None),
-            'fiscal_year': getattr(engagement, 'fiscal_year', None),
-            'fiscal_year_name': '',
-            'engagement_letter': getattr(engagement, 'engagement_letter', None),
-            'owner_partner': getattr(engagement, 'owner_partner', None),
-            'owner_partner_name': '',
-            'primary_contact': getattr(engagement, 'primary_contact', None),
-            'accounting_contact': getattr(engagement, 'accounting_contact', None),
-            'tax_contact': getattr(engagement, 'tax_contact', None),
-            'grants_contact': getattr(engagement, 'grants_contact', None)
-        }
-        
-        # Get display names for linked fields
-        try:
-            if engagement_info['customer']:
-                customer_doc = frappe.get_doc("Customer", engagement_info['customer'])
-                engagement_info['customer_name'] = customer_doc.customer_name
-        except:
-            engagement_info['customer_name'] = engagement_info['customer'] or 'Unknown Customer'
-        
-        try:
-            if engagement_info['company']:
-                company_doc = frappe.get_doc("Company", engagement_info['company'])
-                engagement_info['company_name'] = company_doc.company_name
-        except:
-            engagement_info['company_name'] = engagement_info['company'] or 'Unknown Company'
-        
-        try:
-            if engagement_info['service_line']:
-                service_line_doc = frappe.get_doc("Service Line", engagement_info['service_line'])
-                engagement_info['service_line_name'] = service_line_doc.service_line_name if hasattr(service_line_doc, 'service_line_name') else engagement_info['service_line']
-        except:
-            engagement_info['service_line_name'] = engagement_info['service_line'] or 'Not specified'
-        
-        try:
-            if engagement_info['fiscal_year']:
-                fiscal_year_doc = frappe.get_doc("Fiscal Year", engagement_info['fiscal_year'])
-                engagement_info['fiscal_year_name'] = fiscal_year_doc.year if hasattr(fiscal_year_doc, 'year') else engagement_info['fiscal_year']
-        except:
-            engagement_info['fiscal_year_name'] = engagement_info['fiscal_year'] or 'Not specified'
-        
-        try:
-            if engagement_info['owner_partner']:
-                user_doc = frappe.get_doc("User", engagement_info['owner_partner'])
-                engagement_info['owner_partner_name'] = user_doc.full_name or user_doc.name
-        except:
-            engagement_info['owner_partner_name'] = engagement_info['owner_partner'] or 'Not assigned'
-        
-        return {
-            'success': True,
-            'engagement_info': engagement_info,
-            'engagement_letters': engagement_letters,
-            'el_count': el_count
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting engagement info: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def upload_engagement_file(engagement_id, file_content, file_name):
-    """
-    Upload a file to an engagement and attach it
-    """
-    try:
-        if not engagement_id or not file_content or not file_name:
-            return {
-                'success': False,
-                'error': 'Engagement ID, file content and file name are required'
-            }
-        
-        # Verify engagement exists
-        if not frappe.db.exists('Engagement', engagement_id):
-            return {
-                'success': False,
-                'error': 'Engagement not found'
-            }
-        
-        # Create file record
-        file_doc = frappe.get_doc({
-            'doctype': 'File',
-            'file_name': file_name,
-            'attached_to_doctype': 'Engagement',
-            'attached_to_name': engagement_id,
-            'content': file_content,
-            'is_private': 0
-        })
-        
-        file_doc.insert(ignore_permissions=False)
-        frappe.db.commit()
-        
-        return {
-            'success': True,
-            'file_url': file_doc.file_url,
-            'file_name': file_doc.file_name,
-            'message': 'File uploaded successfully'
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error uploading engagement file: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def delete_engagement_file(file_name, engagement_id):
-    """
-    Delete a file attached to an engagement
-    """
-    try:
-        if not file_name or not engagement_id:
-            return {
-                'success': False,
-                'error': 'File name and engagement ID are required'
-            }
-        
-        # Find the file by name and attachment info
-        files = frappe.get_all("File", 
-            filters={
-                'file_name': file_name,
-                'attached_to_doctype': 'Engagement',
-                'attached_to_name': engagement_id
-            },
-            fields=['name']
-        )
-        
-        if files:
-            file_name_to_delete = files[0].name
-            frappe.delete_doc("File", file_name_to_delete)
-            frappe.db.commit()
-            
-            return {
-                'success': True,
-                'message': 'File deleted successfully'
-            }
-        else:
-            return {
-                'success': False,
-                'error': 'File not found'
-            }
-        
-    except Exception as e:
-        frappe.log_error(f"Error deleting engagement file: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def batch_delete_tasks(task_ids):
-    """
-    Batch delete multiple tasks
-    """
-    if not task_ids:
-        return {'success': False, 'error': 'No task IDs provided'}
-    
-    if isinstance(task_ids, str):
-        import json
-        try:
-            task_ids = json.loads(task_ids)
-        except:
-            task_ids = [task_ids]
-    
-    if not isinstance(task_ids, list):
-        task_ids = [task_ids]
-    
-    success_count = 0
-    errors = []
-    
-    for task_id in task_ids:
-        try:
-            # Check if task exists and user has permission
-            if not frappe.db.exists("Task", task_id):
-                errors.append(f"Task {task_id} not found")
-                continue
-                
-            # Check permissions
-            if not frappe.has_permission("Task", "delete", task_id):
-                errors.append(f"No permission to delete task {task_id}")
-                continue
-            
-            # Delete the task
-            frappe.delete_doc("Task", task_id, ignore_permissions=False)
-            success_count += 1
-            
-        except Exception as e:
-            errors.append(f"Error deleting task {task_id}: {str(e)}")
-    
-    frappe.db.commit()
-    
-    return {
-        'success': True,
-        'success_count': success_count,
-        'errors': errors,
-        'total_processed': len(task_ids)
-    }
-
-# Removed get_excluded_task_statuses() function - now showing all customer tasks
-# This allows management of all tasks including "Hold" and "Not Trading" statuses
-
-@frappe.whitelist()
-def batch_archive_tasks(task_ids):
-    """
-    Batch archive multiple tasks by setting custom_is_archived = 1
-    """
-    if not task_ids:
-        return {'success': False, 'error': 'No task IDs provided'}
-    
-    if isinstance(task_ids, str):
-        import json
-        try:
-            task_ids = json.loads(task_ids)
-        except:
-            task_ids = [task_ids]
-    
-    if not isinstance(task_ids, list):
-        task_ids = [task_ids]
-    
-    success_count = 0
-    errors = []
-    
-    for task_id in task_ids:
-        try:
-            # Check if task exists and user has permission
-            if not frappe.db.exists("Task", task_id):
-                errors.append(f"Task {task_id} not found")
-                continue
-                
-            # Check permissions
-            if not frappe.has_permission("Task", "write", task_id):
-                errors.append(f"No permission to modify task {task_id}")
-                continue
-            
-            # Archive the task by setting custom_is_archived = 1
-            frappe.db.set_value("Task", task_id, "custom_is_archived", 1)
-            success_count += 1
-            
-        except Exception as e:
-            errors.append(f"Error archiving task {task_id}: {str(e)}")
-    
-    frappe.db.commit()
-    
-    return {
-        'success': True,
-        'success_count': success_count,
-        'errors': errors,
-        'total_processed': len(task_ids)
-    }
-
-@frappe.whitelist()
-def get_task_role_assignments(task_id, role_filter=None):
-    """
-    Get all role assignments for a specific task and optional role filter
-    带缓存机制和批量查询优化
-    """
-    try:
-        # 缓存键
-        cache_key = f"smart_accounting:task_roles:{task_id}:{role_filter or 'all'}"
-        
-        # 尝试从缓存获取
-        cached_result = frappe.cache().get_value(cache_key)
-        if cached_result:
-            return cached_result
-        
-        # Build filters
-        filters = {"parent": task_id}
-        if role_filter:
-            filters["role"] = role_filter
-        
-        # Get role assignments from Task Role Assignment child table
-        assignments = frappe.get_all("Task Role Assignment",
-            filters=filters,
-            fields=["user", "role", "is_primary"],
-            order_by="is_primary desc, creation asc"
-        )
-        
-        # 批量获取用户信息，避免N+1查询问题
-        role_assignments = []
-        if assignments:
-            # 提取所有用户邮箱
-            user_emails = list(set([assignment.user for assignment in assignments]))
-            
-            # 批量查询用户信息
-            users_info = {}
-            if user_emails:
-                try:
-                    users_data = frappe.get_all("User",
-                        filters={"email": ["in", user_emails]},
-                        fields=["email", "full_name"],
-                        as_dict=True
-                    )
-                    users_info = {user.email: user for user in users_data}
-                except Exception as e:
-                    frappe.log_error(f"Error batch loading user info: {str(e)}")
-            
-            # 组装结果
-            for assignment in assignments:
-                user_info = users_info.get(assignment.user)
-                if user_info:
-                    role_assignments.append({
-                        "user": assignment.user,
-                        "role": assignment.role,
-                        "is_primary": assignment.is_primary,
-                        "full_name": user_info.full_name,
-                        "email": user_info.email
-                    })
-                else:
-                    # 降级处理：用户信息获取失败时的默认值
-                    role_assignments.append({
-                        "user": assignment.user,
-                        "role": assignment.role,
-                        "is_primary": assignment.is_primary,
-                        "full_name": assignment.user,
-                        "email": assignment.user
-                    })
-        
-        result = {
-            'success': True,
-            'role_assignments': role_assignments
-        }
-        
-        # 缓存结果5分钟
-        frappe.cache().set_value(cache_key, result, expires_in_sec=300)
-        return result
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting task role assignments: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def get_automation_count():
-    """
-    Get count of automations (placeholder for future automation system)
-    """
-    try:
-        # For now, return a placeholder count
-        # In the future, this would count actual automation records
-        # Example: automation_count = frappe.db.count('Automation', {'is_active': 1})
-        automation_count = 0  # Placeholder count
-        
-        return {
-            'success': True,
-            'count': automation_count
-        }
-    except Exception as e:
-        frappe.log_error(f"Error getting automation count: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e),
-            'count': 0
-        }
-
-@frappe.whitelist()
-def create_customer_and_link(task_id, customer_name, year_end="June", customer_type="Company"):
-    """
-    Create a new customer with detailed information and link to task
-    """
-    try:
-        # Validate inputs
-        if not task_id or not customer_name:
-            return {
-                'success': False,
-                'error': 'Task ID and customer name are required'
-            }
-        
-        customer_name = customer_name.strip()
-        if len(customer_name) < 1:
-            return {
-                'success': False,
-                'error': 'Customer name cannot be empty'
-            }
-        
-        # Check if customer already exists
-        existing = frappe.db.get_value("Customer", {"customer_name": customer_name})
-        if existing:
-            # Link existing customer to task
-            link_response = update_task_client(task_id, existing)
-            if link_response.get('success'):
-                return {
-                    'success': True,
-                    'customer_id': existing,
-                    'customer_name': customer_name,
-                    'message': 'Existing customer linked to task',
-                    'was_existing': True
-                }
-            else:
-                return link_response
-        
-        # Create new customer with enhanced fields
-        new_customer = frappe.new_doc("Customer")
-        new_customer.customer_name = customer_name
-        new_customer.customer_type = customer_type
-        
-        # Set year end if custom field exists
-        if hasattr(new_customer, 'custom_year_end'):
-            new_customer.custom_year_end = year_end
-        
-        # Set default required fields
-        new_customer.customer_group = frappe.db.get_single_value("Selling Settings", "customer_group") or "All Customer Groups"
-        new_customer.territory = frappe.db.get_single_value("Selling Settings", "territory") or "All Territories"
-        
-        # Save customer
-        new_customer.save()
-        
-        # Link customer to task
-        link_response = update_task_client(task_id, new_customer.name)
-        if not link_response.get('success'):
-            # If linking fails, still return success for customer creation
-            frappe.log_error(f"Customer created but linking failed: {link_response.get('error')}")
-            return {
-                'success': True,
-                'customer_id': new_customer.name,
-                'customer_name': new_customer.customer_name,
-                'message': 'Customer created but linking to task failed',
-                'link_error': link_response.get('error')
-            }
-        
-        return {
-            'success': True,
-            'customer_id': new_customer.name,
-            'customer_name': new_customer.customer_name,
-            'customer_type': new_customer.customer_type,
-            'year_end': year_end,
-            'message': 'Customer created and linked successfully'
-        }
-        
-    except Exception as e:
-        error_msg = f"Create customer and link error: {str(e)}"
-        frappe.log_error(error_msg)
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-# Client Management System API Methods
-# Comprehensive CRUD operations for client management
-
-@frappe.whitelist()
-def get_all_clients():
-    """
-    Get all clients with statistics for client management system
-    """
-    try:
-        # Get all customers with enhanced information
-        customers = frappe.get_all("Customer",
-            fields=[
-                "name", "customer_name", "customer_type", "territory", 
-                "customer_group", "disabled", "website", "creation", 
-                "modified", "customer_primary_contact", "customer_primary_address"
-            ],
-            order_by="customer_name"
-        )
-        
-        # Enhance each customer with statistics
-        enhanced_customers = []
-        for customer in customers:
-            # Get project count
-            project_count = frappe.db.count("Project", {
-                "customer": customer.name,
-                "status": ["!=", "Cancelled"]
-            })
-            
-            # Get task count and active task count
-            task_count = frappe.db.count("Task", {
-                "custom_client": customer.name
-            })
-            
-            active_task_count = frappe.db.count("Task", {
-                "custom_client": customer.name,
-                "status": ["not in", ["Completed", "Cancelled"]]
-            })
-            
-            # Get client group (from custom field if exists)
-            client_group = None
-            try:
-                if hasattr(frappe.get_doc("Customer", customer.name), 'client_group'):
-                    client_group = frappe.db.get_value("Customer", customer.name, "client_group")
-            except:
-                pass
-            
-            enhanced_customer = customer.copy()
-            enhanced_customer.update({
-                'project_count': project_count,
-                'task_count': task_count,
-                'active_tasks': active_task_count,
-                'client_group': client_group
-            })
-            
-            enhanced_customers.append(enhanced_customer)
-        
-        return {
-            'success': True,
-            'clients': enhanced_customers,
-            'total_count': len(enhanced_customers)
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Get all clients error: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def get_client_details(client_id):
-    """
-    Get detailed information for a specific client
-    """
-    try:
-        if not client_id:
-            return {
-                'success': False,
-                'error': 'Client ID is required'
-            }
-        
-        # Get customer document
-        customer = frappe.get_doc("Customer", client_id)
-        
-        # Get enhanced statistics
-        project_count = frappe.db.count("Project", {
-            "customer": client_id,
-            "status": ["!=", "Cancelled"]
-        })
-        
-        task_count = frappe.db.count("Task", {
-            "custom_client": client_id
-        })
-        
-        active_task_count = frappe.db.count("Task", {
-            "custom_client": client_id,
-            "status": ["not in", ["Completed", "Cancelled"]]
-        })
-        
-        # Get recent projects
-        recent_projects = frappe.get_all("Project",
-            filters={
-                "customer": client_id,
-                "status": ["!=", "Cancelled"]
-            },
-            fields=["name", "project_name", "status", "creation"],
-            order_by="creation desc",
-            limit=5
-        )
-        
-        # Get recent tasks
-        recent_tasks = frappe.get_all("Task",
-            filters={
-                "custom_client": client_id
-            },
-            fields=["name", "subject", "status", "creation", "project"],
-            order_by="creation desc",
-            limit=10
-        )
-        
-        # Prepare client details
-        client_details = {
-            'name': customer.name,
-            'customer_name': customer.customer_name,
-            'customer_type': customer.customer_type,
-            'territory': customer.territory,
-            'customer_group': customer.customer_group,
-            'disabled': customer.disabled,
-            'website': customer.website,
-            'creation': customer.creation,
-            'modified': customer.modified,
-            'customer_primary_contact': customer.customer_primary_contact,
-            'customer_primary_address': customer.customer_primary_address,
-            'project_count': project_count,
-            'task_count': task_count,
-            'active_tasks': active_task_count,
-            'recent_projects': recent_projects,
-            'recent_tasks': recent_tasks
-        }
-        
-        # Add custom fields if they exist
-        try:
-            if hasattr(customer, 'client_group'):
-                client_details['client_group'] = customer.client_group
-            if hasattr(customer, 'custom_year_end'):
-                client_details['custom_year_end'] = customer.custom_year_end
-            if hasattr(customer, 'custom_company'):
-                client_details['custom_company'] = customer.custom_company
-            if hasattr(customer, 'custom_entity_type'):
-                client_details['custom_entity_type'] = customer.custom_entity_type
-        except:
-            pass
-        
-        return {
-            'success': True,
-            'client': client_details
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Get client details error: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def create_client(customer_name, customer_type="Company", territory=None, customer_group=None, 
-                 client_group=None, website=None, disabled=0, custom_year_end="June"):
-    """
-    Create a new client with comprehensive fields
-    """
-    try:
-        if not customer_name or not customer_name.strip():
-            return {
-                'success': False,
-                'error': 'Customer name is required'
-            }
-        
-        customer_name = customer_name.strip()
-        
-        # Check if customer already exists
-        existing = frappe.db.get_value("Customer", {"customer_name": customer_name})
-        if existing:
-            return {
-                'success': False,
-                'error': f'Customer with name "{customer_name}" already exists'
-            }
-        
-        # Create new customer
-        new_customer = frappe.new_doc("Customer")
-        new_customer.customer_name = customer_name
-        new_customer.customer_type = customer_type or "Company"
-        new_customer.disabled = int(disabled) if disabled else 0
-        
-        # Set territory
-        if territory:
-            new_customer.territory = territory
-        else:
-            new_customer.territory = frappe.db.get_single_value("Selling Settings", "territory") or "All Territories"
-        
-        # Set customer group
-        if customer_group:
-            new_customer.customer_group = customer_group
-        else:
-            new_customer.customer_group = frappe.db.get_single_value("Selling Settings", "customer_group") or "All Customer Groups"
-        
-        # Set website if provided
-        if website:
-            new_customer.website = website
-        
-        # Set custom fields if they exist
-        try:
-            if client_group and hasattr(new_customer, 'client_group'):
-                new_customer.client_group = client_group
-            if custom_year_end and hasattr(new_customer, 'custom_year_end'):
-                new_customer.custom_year_end = custom_year_end
-        except:
-            pass
-        
-        # Save customer
-        new_customer.save()
-        
-        return {
-            'success': True,
-            'customer_id': new_customer.name,
-            'customer_name': new_customer.customer_name,
-            'message': 'Client created successfully'
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Create client error: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def update_client(client_id, customer_name=None, customer_type=None, territory=None, 
-                 customer_group=None, client_group=None, website=None, disabled=None, custom_year_end=None):
-    """
-    Update an existing client
-    """
-    try:
-        if not client_id:
-            return {
-                'success': False,
-                'error': 'Client ID is required'
-            }
-        
-        # Get existing customer
-        customer = frappe.get_doc("Customer", client_id)
-        
-        # Update fields if provided
-        if customer_name and customer_name.strip():
-            # Check if new name conflicts with existing customers (excluding current)
-            existing = frappe.db.get_value("Customer", {
-                "customer_name": customer_name.strip(),
-                "name": ["!=", client_id]
-            })
-            if existing:
-                return {
-                    'success': False,
-                    'error': f'Another customer with name "{customer_name}" already exists'
-                }
-            customer.customer_name = customer_name.strip()
-        
-        if customer_type:
-            customer.customer_type = customer_type
-        
-        if territory:
-            customer.territory = territory
-            
-        if customer_group:
-            customer.customer_group = customer_group
-        
-        if website is not None:  # Allow empty string to clear website
-            customer.website = website
-        
-        if disabled is not None:
-            customer.disabled = int(disabled)
-        
-        # Update custom fields if they exist
-        try:
-            if client_group is not None and hasattr(customer, 'client_group'):
-                customer.client_group = client_group
-            if custom_year_end is not None and hasattr(customer, 'custom_year_end'):
-                customer.custom_year_end = custom_year_end
-        except:
-            pass
-        
-        # Save customer
-        customer.save()
-        
-        return {
-            'success': True,
-            'customer_id': customer.name,
-            'customer_name': customer.customer_name,
-            'message': 'Client updated successfully'
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Update client error: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def delete_client(client_id):
-    """
-    Delete a client (with safety checks)
-    """
-    try:
-        if not client_id:
-            return {
-                'success': False,
-                'error': 'Client ID is required'
-            }
-        
-        # Check if client has associated projects
-        project_count = frappe.db.count("Project", {
-            "customer": client_id,
-            "status": ["!=", "Cancelled"]
-        })
-        
-        if project_count > 0:
-            return {
-                'success': False,
-                'error': f'Cannot delete client. {project_count} active projects are associated with this client.'
-            }
-        
-        # Check if client has associated tasks
-        task_count = frappe.db.count("Task", {
-            "custom_client": client_id,
-            "status": ["not in", ["Completed", "Cancelled"]]
-        })
-        
-        if task_count > 0:
-            return {
-                'success': False,
-                'error': f'Cannot delete client. {task_count} active tasks are associated with this client.'
-            }
-        
-        # Get customer name for confirmation message
-        customer_name = frappe.db.get_value("Customer", client_id, "customer_name")
-        
-        # Delete customer
-        frappe.delete_doc("Customer", client_id)
-        
-        return {
-            'success': True,
-            'message': f'Client "{customer_name}" deleted successfully'
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Delete client error: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def get_client_groups():
-    """
-    Get all available client groups for dropdown
-    """
-    try:
-        # Try to get from Client Group doctype if it exists
-        client_groups = []
-        
-        try:
-            # First try to get from Client Group doctype
-            client_groups = frappe.get_all("Client Group",
-                fields=["name", "group_name"],
-                order_by="group_name"
-            )
-        except:
-            # Fallback: get unique client groups from existing customers
-            try:
-                unique_groups = frappe.db.sql("""
-                    SELECT DISTINCT client_group as name, client_group as group_name
-                    FROM `tabCustomer` 
-                    WHERE client_group IS NOT NULL AND client_group != ''
-                    ORDER BY client_group
-                """, as_dict=True)
-                client_groups = unique_groups
-            except:
-                # Final fallback: create some default groups if none exist
-                client_groups = [
-                    {"name": "individual_clients", "group_name": "Individual Clients"},
-                    {"name": "corporate_clients", "group_name": "Corporate Clients"},
-                    {"name": "small_business", "group_name": "Small Business"}
-                ]
-        
-        return {
-            'success': True,
-            'client_groups': client_groups
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Get client groups error: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e),
-            'client_groups': []
-        }
-
-@frappe.whitelist()
-def get_project_form_data():
-    """
-    Get data needed for project creation form
-    """
-    try:
-        # Get available partitions
-        partitions = frappe.get_all("Partition", 
-            fields=["name", "partition_name"],
-            filters={"is_archived": ["!=", 1]},
-            order_by="partition_name"
-        )
-        
-        # Get service lines (if Service Line DocType exists)
-        service_lines = []
-        try:
-            if frappe.db.exists("DocType", "Service Line"):
-                # First try to get all service lines to debug
-                all_service_lines = frappe.get_all("Service Line", 
-                    fields=["*"],
-                    limit=10
-                )
-                print(f"DEBUG: Found {len(all_service_lines)} service lines")
-                for sl in all_service_lines:
-                    print(f"DEBUG: Service Line: {sl}")
-                
-                # Get service lines with correct field names
-                service_lines = frappe.get_all("Service Line",
-                    fields=["name", "service_name"],
-                    order_by="service_name"
-                )
-                print(f"DEBUG: Final service_lines: {service_lines}")
-        except Exception as e:
-            print(f"DEBUG: Error getting service lines: {str(e)}")
-            # If Service Line DocType doesn't exist, return empty list
-            pass
-        
-        return {
-            'success': True,
-            'partitions': partitions,
-            'service_lines': service_lines
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting project form data: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e),
-            'partitions': [],
-            'service_lines': []
-        }
-
-@frappe.whitelist()
-def create_project(project_name, service_line=None, partition=None, is_archived=0):
-    """
-    Create a new project with the provided data
-    """
-    try:
-        if not project_name or not project_name.strip():
-            return {'success': False, 'error': 'Project name is required'}
-        
-        if not partition:
-            return {'success': False, 'error': 'Partition is required'}
-        
-        # Validate partition exists
-        if not frappe.db.exists("Partition", partition):
-            return {'success': False, 'error': f'Partition "{partition}" not found'}
-        
-        # Create new project
-        project_doc = frappe.new_doc("Project")
-        project_doc.project_name = project_name.strip()
-        
-        # Set default naming series
-        if hasattr(project_doc, 'naming_series'):
-            # Get default series from Project DocType
-            try:
-                series_list = frappe.get_meta("Project").get_field("naming_series")
-                if series_list and series_list.options:
-                    default_series = series_list.options.split('\n')[0].strip()
-                    project_doc.naming_series = default_series
-                else:
-                    project_doc.naming_series = "PROJ-.####"
-            except:
-                project_doc.naming_series = "PROJ-.####"
-        
-        # Set service line if provided and field exists
-        if service_line and hasattr(project_doc, 'service_line'):
-            project_doc.service_line = service_line
-        
-        # Set partition (custom field)
-        if hasattr(project_doc, 'custom_partition'):
-            project_doc.custom_partition = partition
-        
-        # Set archived status
-        if hasattr(project_doc, 'is_archived'):
-            project_doc.is_archived = 1 if frappe.utils.cint(is_archived) else 0
-        
-        # Set default values
-        project_doc.status = "Open"
-        
-        # Save the project
-        project_doc.save()
-        frappe.db.commit()
-        
-        return {
-            'success': True,
-            'message': f'Project "{project_name}" created successfully',
-            'project_name': project_doc.name,
-            'project_title': project_doc.project_name
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error creating project: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def get_available_boards_for_combination():
-    """
-    Get all available boards for combination view
-    """
-    try:
-        # Get only boards (not workspaces) that are not archived
-        boards = frappe.db.get_all("Partition",
-            fields=["name", "partition_name", "description", "parent_partition"],
-            filters={
-                "is_workspace": 0,  # Only boards, not workspaces
-                "is_archived": ["!=", 1]
-            },
-            order_by="partition_name"
-        )
-        
-        # Get project and task counts for each board
-        boards_with_stats = []
-        for board in boards:
-            # Get project count
-            project_count = frappe.db.count("Project", {
-                "custom_partition": board.name,
-                "status": ["!=", "Cancelled"]
-            })
-            
-            # Get task count through projects
-            # First get projects for this board
-            board_projects = frappe.db.get_all("Project", {
-                "custom_partition": board.name,
-                "status": ["!=", "Cancelled"]
-            }, pluck="name")
-            
-            # Then count tasks in those projects
-            task_count = 0
-            if board_projects:
-                task_count = frappe.db.count("Task", {
-                    "project": ["in", board_projects],
-                    "custom_is_archived": ["!=", 1],
-                    "parent_task": ["is", "not set"]  # Only top-level tasks
-                })
-            
-            boards_with_stats.append({
-                "name": board.name,
-                "partition_name": board.partition_name,
-                "description": board.description,
-                "project_count": project_count,
-                "task_count": task_count
-            })
-        
-        return {
-            'success': True,
-            'boards': boards_with_stats
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Get available boards error: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e),
-            'boards': []
-        }
-
-@frappe.whitelist()
-def test_combination_search(board_name):
-    """
-    Test function to debug combination view search
-    """
-    try:
-        frappe.log_error(f"TEST: Searching for board: '{board_name}'", "Test Combination")
-        
-        # Test all search methods
-        results = {}
-        
-        # Method 1: partition_name exact match
-        result1 = frappe.db.get_value("Partition", 
-            {"partition_name": board_name, "is_workspace": 0, "is_archived": ["!=", 1]}, 
-            ["name", "partition_name", "description"], as_dict=True)
-        results["method1_partition_name"] = result1
-        
-        # Method 2: name exact match  
-        result2 = frappe.db.get_value("Partition", 
-            {"name": board_name, "is_workspace": 0, "is_archived": ["!=", 1]}, 
-            ["name", "partition_name", "description"], as_dict=True)
-        results["method2_name"] = result2
-        
-        # Method 3: Get all partitions for manual comparison
-        all_partitions = frappe.db.get_all("Partition",
-            fields=["name", "partition_name", "is_workspace", "is_archived"],
-            filters={"is_workspace": 0, "is_archived": ["!=", 1]},
-            order_by="partition_name"
-        )
-        results["all_partitions"] = all_partitions
-        
-        # Method 4: Case insensitive search
-        matching_partitions = []
-        for p in all_partitions:
-            if (p.partition_name.lower() == board_name.lower() or 
-                p.name.lower() == board_name.lower()):
-                matching_partitions.append(p)
-        results["case_insensitive_matches"] = matching_partitions
-        
-        return {
-            'success': True,
-            'search_term': board_name,
-            'results': results
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"TEST ERROR: {str(e)}", "Test Combination")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def debug_partitions():
-    """
-    Debug function to see all partitions in database
-    """
-    try:
-        all_partitions = frappe.db.get_all("Partition",
-            fields=["name", "partition_name", "is_workspace", "is_archived"],
-            order_by="partition_name"
-        )
-        
-        boards_only = frappe.db.get_all("Partition",
-            fields=["name", "partition_name", "description"],
-            filters={
-                "is_workspace": 0,
-                "is_archived": ["!=", 1]
-            },
-            order_by="partition_name"
-        )
-        
-        return {
-            'success': True,
-            'all_partitions': all_partitions,
-            'boards_only': boards_only
-        }
-    except Exception as e:
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def test_partition_query(board_name="Debt Collection"):
-    """Test partition query to debug the issue"""
-    try:
-        # Test 1: Simple query
-        result1 = frappe.db.get_value("Partition", 
-            {"partition_name": board_name}, 
-            ["name", "partition_name", "is_workspace", "is_archived"], 
-            as_dict=True)
-        
-        # Test 2: Query with is_workspace filter
-        result2 = frappe.db.get_value("Partition", 
-            {"partition_name": board_name, "is_workspace": 0}, 
-            ["name", "partition_name", "is_workspace", "is_archived"], 
-            as_dict=True)
-        
-        # Test 3: Query with both filters
-        result3 = frappe.db.get_value("Partition", 
-            {"partition_name": board_name, "is_workspace": 0, "is_archived": ["!=", 1]}, 
-            ["name", "partition_name", "is_workspace", "is_archived"], 
-            as_dict=True)
-        
-        # Test 4: Get all partitions with this name
-        result4 = frappe.db.get_all("Partition",
-            filters={"partition_name": board_name},
-            fields=["name", "partition_name", "is_workspace", "is_archived"]
-        )
-        
-        return {
-            'success': True,
-            'test_board': board_name,
-            'simple_query': result1,
-            'with_workspace_filter': result2,
-            'with_both_filters': result3,
-            'get_all_result': result4
-        }
-        
-    except Exception as e:
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def debug_partition_data():
-    """Debug function to check partition data"""
-    try:
-        all_partitions = frappe.db.get_all("Partition",
-            fields=["name", "partition_name", "description", "is_workspace", "is_archived"],
-            order_by="partition_name"
-        )
-        
-        boards_only = frappe.db.get_all("Partition",
-            fields=["name", "partition_name", "description"],
-            filters={"is_workspace": 0, "is_archived": ["!=", 1]},
-            order_by="partition_name"
-        )
-        
-        return {
-            'success': True,
-            'all_partitions': all_partitions,
-            'boards_only': boards_only,
-            'total_partitions': len(all_partitions),
-            'total_boards': len(boards_only)
-        }
-    except Exception as e:
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def test_combination_doctype():
-    """
-    Test function to verify Combination View DocType configuration
-    """
-    try:
-        # Check if DocTypes exist
-        if not frappe.db.exists("DocType", "Combination View"):
-            return {
-                'success': False,
-                'error': 'Combination View DocType does not exist. Please create it first.'
-            }
-        
-        if not frappe.db.exists("DocType", "Combination View Board"):
-            return {
-                'success': False,
-                'error': 'Combination View Board DocType does not exist. Please create it first.'
-            }
-        
-        # Get DocType meta
-        combination_meta = frappe.get_meta("Combination View")
-        board_meta = frappe.get_meta("Combination View Board")
-        
-        # Check required fields
-        main_fields = [field.fieldname for field in combination_meta.fields]
-        child_fields = [field.fieldname for field in board_meta.fields]
-        
-        return {
-            'success': True,
-            'main_doctype_fields': main_fields,
-            'child_doctype_fields': child_fields,
-            'message': 'DocTypes are properly configured'
-        }
-        
-    except Exception as e:
-        return {
-            'success': False,
-            'error': f'DocType test error: {str(e)}'
-        }
-
-@frappe.whitelist()
-def save_combination_view(view_name, description, board_ids, is_public=0):
-    """
-    Save a combination view for quick access later
-    """
-    try:
-        # Handle board_ids parameter
-        if isinstance(board_ids, str):
-            try:
-                board_ids = json.loads(board_ids)
-            except:
-                board_ids = [bid.strip() for bid in board_ids.split(',') if bid.strip()]
-        
-        # Create new Combination View document
-        combination_view = frappe.new_doc("Combination View")
-        combination_view.view_name = view_name
-        combination_view.description = description or ""
-        combination_view.is_public = int(is_public)
-        combination_view.usage_count = 0
-        
-        # Add boards to child table
-        for i, board_id in enumerate(board_ids):
-            # Get board display name
-            board_name = frappe.db.get_value("Partition", 
-                {"name": board_id}, "partition_name") or board_id
-            if not board_name:
-                board_name = frappe.db.get_value("Partition", 
-                    {"partition_name": board_id}, "partition_name") or board_id
-            
-            combination_view.append("boards", {
-                "board_id": str(board_id),
-                "board_name": str(board_name),
-                "display_order": i + 1
-            })
-        
-        combination_view.insert()
-        
-        return {
-            'success': True,
-            'message': f'Combination view "{view_name}" saved successfully',
-            'combination_id': combination_view.name
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Save combination view error: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def get_saved_combinations():
-    """
-    Get all saved combination views for current user
-    """
-    try:
-        combinations = frappe.get_all("Combination View",
-            filters={
-                "owner": frappe.session.user
-            },
-            fields=["name", "view_name", "description", "usage_count", "last_used", "creation"],
-            order_by="last_used desc, creation desc"
-        )
-        
-        # Get boards for each combination
-        for combination in combinations:
-            boards = frappe.get_all("Combination View Board",
-                filters={"parent": combination.name},
-                fields=["board_id", "board_name", "display_order"],
-                order_by="display_order"
-            )
-            combination.boards = boards
-            combination.board_count = len(boards)
-        
-        return {
-            'success': True,
-            'combinations': combinations
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Get saved combinations error: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e),
-            'combinations': []
-        }
-
-@frappe.whitelist()
-def load_combination_view(combination_id):
-    """
-    Load a saved combination view and update usage stats
-    """
-    try:
-        combination = frappe.get_doc("Combination View", combination_id)
-        
-        # Update usage statistics
-        combination.usage_count = (combination.usage_count or 0) + 1
-        combination.last_used = frappe.utils.now()
-        combination.save(ignore_permissions=True)
-        
-        # Get board IDs in correct order
-        boards = frappe.get_all("Combination View Board",
-            filters={"parent": combination_id},
-            fields=["board_id", "board_name"],
-            order_by="display_order"
-        )
-        
-        board_ids = [board.board_id for board in boards]
-        
-        return {
-            'success': True,
-            'combination_name': combination.view_name,
-            'board_ids': board_ids,
-            'boards': boards
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Load combination view error: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def delete_combination_view(combination_id):
-    """
-    Delete a saved combination view
-    """
-    try:
-        frappe.delete_doc("Combination View", combination_id)
-        return {
-            'success': True,
-            'message': 'Combination view deleted successfully'
-        }
-    except Exception as e:
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def get_combination_view_data(board_ids):
-    """
-    Get data for combination view with multiple boards
-    """
-    try:
-        # Handle board_ids parameter - fix JSON serialization issue
-        if isinstance(board_ids, str):
-            try:
-                # Try to parse as JSON array first (Frappe serializes JS arrays to JSON)
-                parsed_board_ids = json.loads(board_ids)
-                if isinstance(parsed_board_ids, list):
-                    board_ids = [str(bid).strip() for bid in parsed_board_ids if str(bid).strip()]
-                else:
-                    # Fallback to comma-separated
-                    board_ids = [bid.strip() for bid in board_ids.split(',') if bid.strip()]
-            except (json.JSONDecodeError, TypeError):
-                # If not valid JSON, treat as comma-separated
-                board_ids = [bid.strip() for bid in board_ids.split(',') if bid.strip()]
-        elif isinstance(board_ids, list):
-            board_ids = [str(bid).strip() for bid in board_ids if str(bid).strip()]
-        else:
-            board_ids = []
-        
-        boards_data = []
-        
-        # Direct approach - for each requested board, try to find it
-        for board_id in board_ids:
-            # Try to find partition by partition_name first (non-workspace, non-archived)
-            partition = frappe.db.get_value("Partition", 
-                {
-                    "partition_name": board_id, 
-                    "is_workspace": 0,
-                    "is_archived": ["!=", 1]
-                }, 
-                ["name", "partition_name", "description"], 
-                as_dict=True)
-            
-            # If not found by partition_name, try by name
-            if not partition:
-                partition = frappe.db.get_value("Partition", 
-                    {
-                        "name": board_id, 
-                        "is_workspace": 0,
-                        "is_archived": ["!=", 1]
-                    }, 
-                    ["name", "partition_name", "description"], 
-                    as_dict=True)
-            
-            # Skip if not found
-            if not partition:
-                continue
-            
-            # Get board's column configuration
-            try:
-                column_config = get_partition_column_config(partition.name)
-            except:
-                column_config = {
-                    'visible_columns': ['client', 'task-name', 'status', 'target-month'],
-                    'column_widths': {}
-                }
-            
-            # Get board's tasks with full data
-            try:
-                board_data = get_project_management_data(partition.name)
-                organized_data = board_data.get('organized_data', {})
-                total_tasks = board_data.get('total_tasks', 0)
-                total_projects = board_data.get('total_projects', 0)
-            except:
-                organized_data = {}
-                total_tasks = 0
-                total_projects = 0
-            
-            boards_data.append({
-                "board_id": partition.name,
-                "board_name": partition.partition_name,
-                "description": partition.description or "",
-                "column_config": column_config,
-                "tasks": organized_data,
-                "total_tasks": total_tasks,
-                "total_projects": total_projects
-            })
-        
-        return {
-            'success': True,
-            'boards_data': boards_data,
-            'debug_info': {
-                'requested_boards': board_ids,
-                'found_boards': len(boards_data),
-                'board_names': [b['board_name'] for b in boards_data]
-            }
-        }
-        
-    except Exception as e:
-        return {
-            'success': False,
-            'error': str(e),
-            'boards_data': []
-        }
-
-@frappe.whitelist()
-def get_field_options(doctype, fieldname):
-    """
-    Get options for a specific field from DocType or Custom Field
-    """
-    try:
-        # First check if it's a custom field
-        custom_field = frappe.db.get_value("Custom Field", 
-            {"dt": doctype, "fieldname": fieldname}, 
-            ["options"], as_dict=True)
-        
-        if custom_field and custom_field.options:
-            options = [opt.strip() for opt in custom_field.options.split('\n') if opt.strip()]
-            return {
-                'success': True,
-                'options': options,
-                'source': 'custom_field'
-            }
-        
-        # If not custom field, check standard DocType field
-        doctype_meta = frappe.get_meta(doctype)
-        field = doctype_meta.get_field(fieldname)
-        
-        if field and field.options:
-            options = [opt.strip() for opt in field.options.split('\n') if opt.strip()]
-            return {
-                'success': True,
-                'options': options,
-                'source': 'doctype_field'
-            }
-        
-        return {
-            'success': False,
-            'error': f'Field {fieldname} not found or has no options'
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting field options: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def get_current_user_info():
-    """
-    Get current user information including roles and permissions
-    """
-    try:
-        current_user = frappe.session.user
-        if current_user == 'Guest':
-            return {
-                'success': True,
-                'user': 'Guest',
-                'full_name': 'Guest User',
-                'roles': ['Guest'],
-                'permissions': 'Guest Access'
-            }
-        
-        # Get user roles using the correct method found in existing code
-        user_roles = frappe.get_roles()
-        # Filter out system roles
-        filtered_roles = [role for role in user_roles if role not in ['All', 'Guest']]
-        
-        # Get user full name
-        full_name = frappe.get_cached_value('User', current_user, 'full_name') or current_user
-        
-        # Determine permission level
-        permissions = 'Guest Access'
-        if current_user == 'Administrator':
-            permissions = 'Full System Access'
-        elif 'System Manager' in user_roles:
-            permissions = 'System Manager Access'
-        else:
-            permissions = 'Smart Accounting User'
-        
-        return {
-            'success': True,
-            'user': current_user,
-            'full_name': full_name,
-            'roles': filtered_roles,
-            'permissions': permissions
-        }
-        
-    except Exception as e:
-        frappe.log_error(f"Error getting current user info: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def grant_dev_access(password):
-    """
-    验证开发者密码并授予系统访问权限
-    """
-    try:
-        # 调试信息
-        frappe.log_error(f"Dev access request - User: {frappe.session.user}, Password received: '{password}', Type: {type(password)}")
-        
-        # 只允许管理员角色申请开发者访问
-        user_roles = frappe.get_roles()
-        if 'System Manager' not in user_roles and 'Administrator' not in user_roles:
-            return {
-                'success': False,
-                'message': 'Only administrators can request developer access'
-            }
-        
-        # 验证密码（硬编码为devdev）
-        # 确保密码是字符串并去除空格
-        password_clean = str(password).strip() if password else ""
-        
-        if password_clean == 'devdev':
-            frappe.session['dev_system_access'] = True
-            frappe.log_error(f"Dev access granted to user: {frappe.session.user}")
-            return {
-                'success': True,
-                'message': 'Developer access granted',
-                'redirect_url': '/app'
-            }
-        else:
-            frappe.log_error(f"Invalid password attempt - Expected: 'devdev', Received: '{password_clean}'")
-            return {
-                'success': False,
-                'message': f'Invalid password. Received: "{password_clean}"'
-            }
-            
-    except Exception as e:
-        frappe.log_error(f"Error granting dev access: {str(e)}")
-        return {
-            'success': False,
-            'message': 'Error processing request'
-        }
-
-@frappe.whitelist()
-def revoke_dev_access():
-    """
-    撤销开发者系统访问权限
-    """
-    try:
-        frappe.session.pop('dev_system_access', None)
-        return {
-            'success': True,
-            'message': 'Developer access revoked'
-        }
-    except Exception as e:
-        frappe.log_error(f"Error revoking dev access: {str(e)}")
-        return {
-            'success': False,
-            'message': 'Error processing request'
-        }
-
-@frappe.whitelist(allow_guest=True)
-def handle_login_redirect():
-    """
-    Handle post-login redirect to ensure users go to project management
-    """
-    try:
-        if frappe.session.user != 'Guest':
-            return {
-                'success': True,
-                'redirect_url': '/project_management',
-                'user': frappe.session.user
-            }
-        else:
-            return {
-                'success': False,
-                'redirect_url': '/login',
-                'message': 'Not logged in'
-            }
-    except Exception as e:
-        frappe.log_error(f"Error handling login redirect: {str(e)}")
-        return {
-            'success': False,
-            'redirect_url': '/login',
-            'message': 'Error processing request'
-        }
-
-
 def get_contact_centric_data(view='main'):
     """
     Get contact-centric data for Contact-Centric board display type
@@ -6593,452 +2300,760 @@ def get_client_centric_data(view='main'):
             'error': str(e)
         }
 
-# ==================== Subtask Batch Operations ====================
 
-@frappe.whitelist()
-def batch_delete_subtasks(subtask_ids):
+# =============================================================================
+# 🔧 HELPER FUNCTIONS - Used by core data loading functions
+# =============================================================================
+
+def get_project_management_data_paginated(view='main', offset=0, limit=50, filters=None):
     """
-    Batch delete subtasks
+    Paginated data loading for large datasets
     """
     try:
-        if isinstance(subtask_ids, str):
-            import json
-            subtask_ids = json.loads(subtask_ids)
+        conditions = ["1=1"]
+        values = []
         
-        if not subtask_ids:
-            return {
-                'success': False,
-                'error': 'No subtasks provided'
-            }
+        if view != 'main':
+            partition_projects = frappe.get_all("Project", 
+                filters={"custom_partition": view},
+                fields=["name"]
+            )
+            if partition_projects:
+                project_names = [p.name for p in partition_projects]
+                conditions.append("t.project IN ({})".format(','.join(['%s'] * len(project_names))))
+                values.extend(project_names)
         
-        success_count = 0
-        errors = []
+        if filters:
+            if filters.get('client'):
+                conditions.append("t.custom_client = %s")
+                values.append(filters['client'])
+            if filters.get('status'):
+                conditions.append("t.status = %s")
+                values.append(filters['status'])
         
-        for subtask_id in subtask_ids:
-            try:
-                if frappe.db.exists("Task", subtask_id):
-                    # Check if it's actually a subtask (has parent_task)
-                    parent_task = frappe.db.get_value("Task", subtask_id, "parent_task")
-                    if parent_task:
-                        frappe.delete_doc("Task", subtask_id, ignore_permissions=True)
-                        success_count += 1
-                    else:
-                        errors.append(f"Task {subtask_id} is not a subtask")
-                else:
-                    errors.append(f"Subtask {subtask_id} not found")
-            except Exception as e:
-                errors.append(f"Error deleting subtask {subtask_id}: {str(e)}")
+        where_clause = " AND ".join(conditions)
         
-        frappe.db.commit()
+        tasks_data = frappe.db.sql(f"""
+            SELECT 
+                t.name as task_id,
+                t.subject as task_name,
+                t.custom_client,
+                t.status,
+                t.custom_entity_type,
+                t.modified as last_modified,
+                COALESCE(c.customer_name, 'No Client') as client_name
+            FROM `tabTask` t
+            LEFT JOIN `tabCustomer` c ON t.custom_client = c.name
+            WHERE {where_clause}
+            ORDER BY COALESCE(c.customer_name, 'No Client'), t.subject
+            LIMIT %s OFFSET %s
+        """, values + [limit, offset], as_dict=True)
+        
+        enriched_tasks = []
+        for task in tasks_data:
+            enriched_tasks.append({
+                'task_id': task.task_id,
+                'task_name': task.task_name,
+                'client_name': task.client_name,
+                'status': task.status,
+                'entity_type': task.custom_entity_type or 'Company',
+                'last_modified': task.last_modified
+            })
         
         return {
-            'success': True,
-            'success_count': success_count,
-            'errors': errors,
-            'message': f'Successfully deleted {success_count} subtask(s)'
+            'tasks': enriched_tasks,
+            'total_loaded': len(enriched_tasks)
         }
         
     except Exception as e:
-        frappe.db.rollback()
-        frappe.log_error(f"Error in batch_delete_subtasks: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
+        frappe.log_error(f"Error in paginated data fetch: {str(e)}")
+        return {'tasks': [], 'total_loaded': 0}
 
-@frappe.whitelist()
-def batch_archive_subtasks(subtask_ids):
+
+def get_communication_methods_info(task_doc):
     """
-    Batch archive subtasks by setting custom_is_archived = 1 (same as task archive)
+    Get all communication methods assignments for display
     """
     try:
-        if isinstance(subtask_ids, str):
-            import json
-            subtask_ids = json.loads(subtask_ids)
+        if not hasattr(task_doc, 'custom_communication_methods') or not task_doc.custom_communication_methods:
+            return None
         
-        if not subtask_ids:
-            return {
-                'success': False,
-                'error': 'No subtasks provided'
-            }
+        methods = []
+        for method_assignment in task_doc.custom_communication_methods:
+            methods.append({
+                'communication_method': method_assignment.communication_method,
+                'is_primary': method_assignment.is_primary
+            })
         
-        success_count = 0
-        errors = []
+        return methods if methods else None
         
-        for subtask_id in subtask_ids:
-            try:
-                if frappe.db.exists("Task", subtask_id):
-                    # Check if it's actually a subtask (has parent_task)
-                    parent_task = frappe.db.get_value("Task", subtask_id, "parent_task")
-                    if parent_task:
-                        # Archive subtask by setting custom_is_archived = 1 (same as task)
-                        frappe.db.set_value("Task", subtask_id, "custom_is_archived", 1)
-                        success_count += 1
-                    else:
-                        errors.append(f"Task {subtask_id} is not a subtask")
-                else:
-                    errors.append(f"Subtask {subtask_id} not found")
-            except Exception as e:
-                errors.append(f"Error archiving subtask {subtask_id}: {str(e)}")
+    except:
+        return None
+
+
+def get_client_contacts_info(task_doc):
+    """
+    Get all client contacts assignments for display
+    """
+    try:
+        if not hasattr(task_doc, 'custom_client_contacts') or not task_doc.custom_client_contacts:
+            return None
         
-        frappe.db.commit()
+        contacts = []
+        for contact_assignment in task_doc.custom_client_contacts:
+            contacts.append({
+                'contact': contact_assignment.contact,
+                'contact_name': contact_assignment.contact_name
+            })
         
-        return {
-            'success': True,
-            'success_count': success_count,
-            'errors': errors,
-            'message': f'Successfully archived {success_count} subtask(s)'
-        }
+        return contacts if contacts else None
+        
+    except:
+        return None
+
+
+# =============================================================================
+# 🔌 API FUNCTIONS - Called by frontend JavaScript
+# =============================================================================
+
+@frappe.whitelist()
+def get_bulk_subtask_counts(task_ids):
+    """
+    Get subtask counts for multiple tasks at once (batch operation for performance)
+    """
+    try:
+        if isinstance(task_ids, str):
+            task_ids = json.loads(task_ids)
+        
+        if not task_ids:
+            return {'success': True, 'counts': {}}
+        
+        # Batch query to get all subtask counts
+        task_ids_placeholder = ','.join(['%s'] * len(task_ids))
+        
+        subtask_counts = frappe.db.sql(f"""
+            SELECT parent_task, COUNT(*) as count
+            FROM `tabTask`
+            WHERE parent_task IN ({task_ids_placeholder})
+            AND custom_is_archived != 1
+            GROUP BY parent_task
+        """, task_ids, as_dict=True)
+        
+        # Create counts map
+        counts = {task_id: 0 for task_id in task_ids}
+        for sc in subtask_counts:
+            if sc.parent_task:
+                counts[sc.parent_task] = sc['count']
+        
+        return {'success': True, 'counts': counts}
         
     except Exception as e:
-        frappe.db.rollback()
-        frappe.log_error(f"Error in batch_archive_subtasks: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
+        frappe.log_error(f"Error getting bulk subtask counts: {str(e)}")
+        return {'success': False, 'error': str(e), 'counts': {}}
 
-# ==================== Subtask Column Configuration ====================
 
 @frappe.whitelist()
-def get_all_task_columns():
+def get_automation_count():
     """
-    获取所有可用的task列定义，从前端ColumnConfigManager同步
+    Get count of automation rules for the Automate button badge
     """
-    # 这个列表应该与前端ColumnConfigManager.allColumns保持同步
-    # 当添加新列时，只需要在前端ColumnConfigManager中添加，这里会自动包含
-    return [
-        'client', 'task-name', 'entity', 'tf-tg', 'software', 'communication-methods', 'client-contact', 'status', 'note', 
-        'target-month', 'budget', 'actual', 'review-note', 'action-person', 'preparer', 'reviewer', 'partner', 
-        'process-date', 'lodgment-due', 'engagement', 'group', 'year-end', 'last-updated', 'priority', 'frequency', 'reset-date'
-    ]
-
-def get_default_subtask_column_config():
-    """
-    动态获取默认的subtask列配置，避免硬编码
-    """
-    # 获取所有task列
-    all_task_columns = get_all_task_columns()
-    
-    # 不适合subtask的列（排除法）- 这是唯一需要维护的列表
-    excluded_subtask_columns = [
-        'client',           # Subtask继承父task的client
-        'entity',           # Subtask继承父task的entity  
-        'tf-tg',            # Subtask继承父task的tf-tg
-        'software',         # 通常subtask不需要单独的software配置
-        'communication-methods', # 通常subtask不需要单独的communication配置
-        'client-contact',   # Subtask继承父task的client contact
-        'group',            # Subtask不需要group分组
-        'review-note'       # Review note通常在父task级别
-    ]
-    
-    # 动态生成适合subtask的列
-    suitable_subtask_columns = [col for col in all_task_columns if col not in excluded_subtask_columns]
-    
-    # 默认可见的subtask列 - 选择最常用的几个列作为默认
-    # 用户可以在manage columns里调整
-    default_visible_columns = [
-        'task-name', 'status', 'note', 'action-person', 'priority', 
-        'target-month', 'budget', 'actual', 'preparer', 'reviewer'
-    ]
-    # 确保默认列都在适合的列中
-    default_visible_columns = [col for col in default_visible_columns if col in suitable_subtask_columns]
-    
-    return {
-        'default_visible_columns': default_visible_columns,
-        'default_column_order': suitable_subtask_columns,
-        'primary_column': 'task-name',
-        'excluded_columns': excluded_subtask_columns
-    }
-
-@frappe.whitelist()
-def get_subtask_column_config(partition_name):
-    """Get subtask column configuration for a specific partition"""
     try:
-        frappe.logger().info(f"Getting subtask column config for partition: {partition_name}, User: {frappe.session.user}")
-        
-        if partition_name == 'main':
-            # 和普通task一样，main视图返回用户在manage columns里选择的列
-            # 但是对于subtask，我们需要从某个地方读取用户的选择
-            # 先返回默认的可见列，让用户可以在manage columns里调整
-            default_config = get_default_subtask_column_config()
-            result = {
-                'success': True,
-                'visible_columns': default_config['default_visible_columns'],  # 返回默认可见列，用户可以调整
-                'column_config': {
-                    'column_order': default_config['default_column_order'],
-                    'primary_column': default_config['primary_column']
-                }
-            }
-            frappe.logger().info(f"Returning main subtask config: {result}")
-            return result
-        
-        # Get partition configuration
-        if not frappe.db.exists("Partition", partition_name):
-            return {
-                'success': False,
-                'error': f'Partition "{partition_name}" not found'
-            }
-        
-        # Get subtask configuration from partition
-        partition_doc = frappe.get_doc("Partition", partition_name)
-        
-        # Parse subtask configuration
-        import json
-        default_config = get_default_subtask_column_config()
-        
+        count = 0
         try:
-            visible_columns = json.loads(partition_doc.subtask_visible_columns) if partition_doc.subtask_visible_columns else default_config['default_visible_columns']
-            column_config = json.loads(partition_doc.subtask_column_config) if partition_doc.subtask_column_config else {}
-        except (json.JSONDecodeError, AttributeError):
-            # Fallback to defaults if parsing fails
-            visible_columns = default_config['default_visible_columns']
-            column_config = {}
+            if frappe.db.exists("DocType", "Automation Rule"):
+                count = frappe.db.count("Automation Rule", {"enabled": 1})
+        except:
+            pass
         
-        # 关键修复：column_order必须包含所有可用的subtask列，不只是可见列
-        column_config['column_order'] = default_config['default_column_order']
-        
-        # Ensure primary_column exists
-        if 'primary_column' not in column_config:
-            column_config['primary_column'] = default_config['primary_column']
-        
-        result = {
-            'success': True,
-            'visible_columns': visible_columns,
-            'column_config': column_config
-        }
-        
-        frappe.logger().info(f"Returning subtask config for {partition_name}: {result}")
-        return result
+        return {'success': True, 'count': count}
         
     except Exception as e:
-        frappe.log_error(f"Error getting subtask column config: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
+        frappe.log_error(f"Error getting automation count: {str(e)}")
+        return {'success': False, 'count': 0}
+
 
 @frappe.whitelist()
-def save_subtask_column_config(partition_name, visible_columns, column_config=None):
-    """Save subtask column configuration for a specific partition"""
+def batch_delete_tasks(task_ids):
+    """Batch delete multiple tasks"""
     try:
-        if not partition_name:
-            return {'success': False, 'error': 'Partition name is required'}
+        if isinstance(task_ids, str):
+            task_ids = json.loads(task_ids)
         
-        # Handle main view - don't save, always use default (和普通task一样)
-        if partition_name == 'main':
-            default_config = get_default_subtask_column_config()
-            return {
-                'success': True,
-                'message': 'Main view uses default subtask configuration (not saved)',
-                'visible_columns': default_config['default_visible_columns'],  # 返回默认可见列
-                'column_config': {
-                    'column_order': default_config['default_column_order'],
-                    'primary_column': default_config['primary_column']
-                }
-            }
+        if not task_ids:
+            return {'success': False, 'error': 'No tasks provided'}
         
-        # For non-main partitions, save to Partition record
-        if not frappe.db.exists("Partition", partition_name):
-            return {'success': False, 'error': f'Partition "{partition_name}" not found'}
+        success_count = 0
+        errors = []
         
-        # Parse and validate visible_columns
-        import json
-        if isinstance(visible_columns, str):
+        for task_id in task_ids:
             try:
-                visible_columns = json.loads(visible_columns)
-            except json.JSONDecodeError:
-                return {'success': False, 'error': 'Invalid visible_columns format'}
-        
-        if not isinstance(visible_columns, list):
-            return {'success': False, 'error': 'visible_columns must be a list'}
-        
-        # Parse column_config
-        if column_config and isinstance(column_config, str):
-            try:
-                column_config = json.loads(column_config)
-            except json.JSONDecodeError:
-                return {'success': False, 'error': 'Invalid column_config format'}
-        
-        if not column_config:
-            column_config = {}
-        
-        # 关键修复：确保column_order包含所有可用列，而不只是可见列
-        default_config = get_default_subtask_column_config()
-        column_config['column_order'] = default_config['default_column_order']
-        
-        if 'primary_column' not in column_config:
-            column_config['primary_column'] = default_config['primary_column']
-        
-        # Update partition document
-        partition_doc = frappe.get_doc("Partition", partition_name)
-        partition_doc.subtask_visible_columns = json.dumps(visible_columns)
-        partition_doc.subtask_column_config = json.dumps(column_config)
-        partition_doc.save(ignore_permissions=True)
+                frappe.delete_doc("Task", task_id, force=1)
+                success_count += 1
+            except Exception as e:
+                errors.append(f"{task_id}: {str(e)}")
         
         frappe.db.commit()
         
         return {
             'success': True,
-            'message': f'Subtask column configuration saved for partition "{partition_name}"',
-            'visible_columns': visible_columns,
-            'column_config': column_config
+            'deleted_count': success_count,
+            'errors': errors,
+            'message': f'Successfully deleted {success_count} tasks'
         }
         
     except Exception as e:
-        frappe.db.rollback()
-        frappe.log_error(f"Error saving subtask column config: {str(e)}")
+        frappe.log_error(f"Error in batch delete tasks: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+
+@frappe.whitelist()
+def batch_archive_tasks(task_ids):
+    """Batch archive multiple tasks"""
+    try:
+        if isinstance(task_ids, str):
+            task_ids = json.loads(task_ids)
+        
+        if not task_ids:
+            return {'success': False, 'error': 'No tasks provided'}
+        
+        success_count = 0
+        errors = []
+        
+        for task_id in task_ids:
+            try:
+                frappe.db.set_value("Task", task_id, "custom_is_archived", 1)
+                success_count += 1
+            except Exception as e:
+                errors.append(f"{task_id}: {str(e)}")
+        
+        frappe.db.commit()
+        
         return {
-            'success': False,
-            'error': str(e)
+            'success': True,
+            'archived_count': success_count,
+            'errors': errors,
+            'message': f'Successfully archived {success_count} tasks'
         }
+        
+    except Exception as e:
+        frappe.log_error(f"Error in batch archive tasks: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+
+@frappe.whitelist()
+def get_task_activity_log(task_id):
+    """Get activity log for a task"""
+    try:
+        if not task_id:
+            return {'success': False, 'error': 'Task ID is required'}
+        
+        # Get versions (change history)
+        versions = frappe.get_all("Version",
+            filters={
+                "ref_doctype": "Task",
+                "docname": task_id
+            },
+            fields=["name", "owner", "creation", "data"],
+            order_by="creation desc",
+            limit=50
+        )
+        
+        activities = []
+        for version in versions:
+            try:
+                data = json.loads(version.data) if version.data else {}
+                changed_fields = data.get('changed', [])
+                
+                for change in changed_fields:
+                    activities.append({
+                        'field': change[0] if len(change) > 0 else '',
+                        'old_value': change[1] if len(change) > 1 else '',
+                        'new_value': change[2] if len(change) > 2 else '',
+                        'user': version.owner,
+                        'timestamp': version.creation
+                    })
+            except:
+                pass
+        
+        return {'success': True, 'activities': activities}
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting task activity log: {str(e)}")
+        return {'success': False, 'error': str(e), 'activities': []}
+
+
+@frappe.whitelist()
+def check_review_permissions(task_id):
+    """Check if current user can add review notes"""
+    try:
+        user = frappe.session.user
+        user_roles = frappe.get_roles(user)
+        
+        can_review = any(role in user_roles for role in ['System Manager', 'Reviewer', 'Partner', 'Administrator'])
+        
+        return {
+            'success': True,
+            'can_review': can_review,
+            'user': user
+        }
+    except Exception as e:
+        return {'success': False, 'can_review': False, 'error': str(e)}
+
+
+@frappe.whitelist()
+def get_bulk_task_roles(task_ids):
+    """Get role assignments for multiple tasks"""
+    try:
+        if isinstance(task_ids, str):
+            task_ids = json.loads(task_ids)
+        
+        if not task_ids:
+            return {'success': True, 'roles': {}}
+        
+        task_ids_placeholder = ','.join(['%s'] * len(task_ids))
+        
+        roles_data = frappe.db.sql(f"""
+            SELECT parent, role, user, is_primary
+            FROM `tabTask Role Assignment`
+            WHERE parent IN ({task_ids_placeholder})
+        """, task_ids, as_dict=True)
+        
+        # Group by task
+        task_roles = {}
+        for role in roles_data:
+            if role.parent not in task_roles:
+                task_roles[role.parent] = []
+            
+            user_info = None
+            try:
+                user_data = frappe.db.get_value("User", role.user, ["full_name", "user_image"], as_dict=True)
+                if user_data:
+                    user_info = {
+                        'email': role.user,
+                        'full_name': user_data.full_name or role.user,
+                        'initials': get_initials(user_data.full_name or role.user),
+                        'image': user_data.user_image
+                    }
+            except:
+                user_info = {'email': role.user, 'full_name': role.user, 'initials': get_initials(role.user)}
+            
+            task_roles[role.parent].append({
+                'role': role.role,
+                'user': role.user,
+                'is_primary': role.is_primary,
+                'user_info': user_info
+            })
+        
+        return {'success': True, 'roles': task_roles}
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting bulk task roles: {str(e)}")
+        return {'success': False, 'error': str(e), 'roles': {}}
+
+
+@frappe.whitelist()
+def set_task_roles(task_id, roles_data):
+    """Set role assignments for a task"""
+    try:
+        if isinstance(roles_data, str):
+            roles_data = json.loads(roles_data)
+        
+        task_doc = frappe.get_doc("Task", task_id)
+        
+        # Clear existing roles
+        task_doc.custom_roles = []
+        
+        # Add new roles
+        for role_data in roles_data:
+            task_doc.append('custom_roles', {
+                'role': role_data.get('role'),
+                'user': role_data.get('user'),
+                'is_primary': role_data.get('is_primary', False)
+            })
+        
+        task_doc.save()
+        frappe.db.commit()
+        
+        return {'success': True, 'message': 'Roles updated successfully'}
+        
+    except Exception as e:
+        frappe.log_error(f"Error setting task roles: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+
+@frappe.whitelist()
+def get_task_role_assignments(task_id, role_filter=None):
+    """Get role assignments for a specific task"""
+    try:
+        filters = {"parent": task_id}
+        if role_filter:
+            filters["role"] = role_filter
+        
+        roles = frappe.get_all("Task Role Assignment",
+            filters=filters,
+            fields=["name", "role", "user", "is_primary"],
+            order_by="role, is_primary desc"
+        )
+        
+        # Enrich with user info
+        for role in roles:
+            try:
+                user_data = frappe.db.get_value("User", role.user, ["full_name", "user_image"], as_dict=True)
+                if user_data:
+                    role['full_name'] = user_data.full_name or role.user
+                    role['initials'] = get_initials(user_data.full_name or role.user)
+                    role['image'] = user_data.user_image
+                else:
+                    role['full_name'] = role.user
+                    role['initials'] = get_initials(role.user)
+            except:
+                role['full_name'] = role.user
+                role['initials'] = get_initials(role.user)
+        
+        return {'success': True, 'roles': roles}
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting task role assignments: {str(e)}")
+        return {'success': False, 'error': str(e), 'roles': []}
+
+
+@frappe.whitelist()
+def create_new_task(project_name, client_name=None):
+    """Create a new task in a project"""
+    try:
+        if not project_name:
+            return {'success': False, 'error': 'Project name is required'}
+        
+        # Get project info
+        project = frappe.get_doc("Project", project_name)
+        
+        # Create new task
+        new_task = frappe.new_doc("Task")
+        new_task.subject = "New Task"
+        new_task.project = project_name
+        new_task.custom_task_status = "Not Started"
+        new_task.priority = "Medium"
+        
+        # Set client if provided
+        if client_name:
+            new_task.custom_client = client_name
+        elif project.customer:
+            new_task.custom_client = project.customer
+        
+        new_task.insert()
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'task_id': new_task.name,
+            'task_subject': new_task.subject,
+            'message': 'Task created successfully'
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error creating new task: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+
+@frappe.whitelist()
+def get_subtask_count(parent_task_id):
+    """Get subtask count for a single task"""
+    try:
+        count = frappe.db.count("Task", {
+            "parent_task": parent_task_id,
+            "custom_is_archived": ["!=", 1]
+        })
+        
+        return {'success': True, 'count': count}
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting subtask count: {str(e)}")
+        return {'success': False, 'count': 0}
+
+
+@frappe.whitelist()
+def create_customer_and_link(task_id, customer_name, year_end="June", customer_type="Company"):
+    """Create a new customer and link it to a task"""
+    try:
+        if not task_id or not customer_name:
+            return {'success': False, 'error': 'Task ID and customer name are required'}
+        
+        # Check if customer already exists
+        existing = frappe.db.get_value("Customer", {"customer_name": customer_name})
+        if existing:
+            # Link existing customer to task
+            frappe.db.set_value("Task", task_id, "custom_client", existing)
+            frappe.db.commit()
+            return {
+                'success': True,
+                'customer_id': existing,
+                'customer_name': customer_name,
+                'message': 'Existing customer linked to task'
+            }
+        
+        # Create new customer
+        new_customer = frappe.new_doc("Customer")
+        new_customer.customer_name = customer_name
+        new_customer.customer_type = customer_type
+        new_customer.territory = frappe.db.get_single_value("Selling Settings", "territory") or "All Territories"
+        new_customer.customer_group = frappe.db.get_single_value("Selling Settings", "customer_group") or "All Customer Groups"
+        
+        if hasattr(new_customer, 'custom_year_end'):
+            new_customer.custom_year_end = year_end
+        
+        new_customer.insert()
+        
+        # Link to task
+        frappe.db.set_value("Task", task_id, "custom_client", new_customer.name)
+        frappe.db.commit()
+        
+        return {
+            'success': True,
+            'customer_id': new_customer.name,
+            'customer_name': new_customer.customer_name,
+            'message': 'Customer created and linked to task'
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error creating customer and linking: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+
+@frappe.whitelist()
+def get_current_user_info():
+    """Get current user information"""
+    try:
+        user = frappe.session.user
+        
+        if user == 'Guest':
+            return {'success': False, 'error': 'Not logged in'}
+        
+        user_doc = frappe.get_doc("User", user)
+        user_roles = frappe.get_roles(user)
+        
+        return {
+            'success': True,
+            'user': {
+                'email': user,
+                'full_name': user_doc.full_name or user,
+                'first_name': user_doc.first_name,
+                'last_name': user_doc.last_name,
+                'user_image': user_doc.user_image,
+                'roles': user_roles,
+                'is_administrator': user == 'Administrator',
+                'is_system_manager': 'System Manager' in user_roles
+            }
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting current user info: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+
+@frappe.whitelist()
+def grant_dev_access(password):
+    """Grant developer system access"""
+    try:
+        # Simple password check (you should use a more secure method)
+        dev_password = frappe.conf.get('dev_system_password', 'dev123')
+        
+        if password == dev_password:
+            frappe.session['dev_system_access'] = True
+            return {'success': True, 'message': 'Developer access granted'}
+        else:
+            return {'success': False, 'message': 'Invalid password'}
+            
+    except Exception as e:
+        frappe.log_error(f"Error granting dev access: {str(e)}")
+        return {'success': False, 'message': 'Error processing request'}
+
+
+@frappe.whitelist()
+def test_combination_doctype():
+    """Test if Combination View doctype exists and is working"""
+    try:
+        exists = frappe.db.exists("DocType", "Combination View")
+        
+        if exists:
+            count = frappe.db.count("Combination View")
+            return {
+                'success': True,
+                'doctype_exists': True,
+                'record_count': count
+            }
+        else:
+            return {
+                'success': True,
+                'doctype_exists': False,
+                'message': 'Combination View DocType does not exist'
+            }
+            
+    except Exception as e:
+        frappe.log_error(f"Error testing combination doctype: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
 
 @frappe.whitelist()
 def initialize_single_partition_subtask_config(partition_name):
-    """
-    为单个partition初始化subtask列配置
-    """
+    """Initialize subtask column configuration for a single partition"""
     try:
-        import json
+        if not partition_name or partition_name == 'main':
+            return {'success': False, 'error': 'Valid partition name required'}
         
-        # 如果是main view，不需要初始化
-        if partition_name == 'main':
-            return {
-                'success': True,
-                'updated': False,
-                'message': 'Main view does not require subtask configuration initialization'
-            }
-        
-        # 检查partition是否存在
         if not frappe.db.exists("Partition", partition_name):
-            return {
-                'success': False,
-                'error': f'Partition "{partition_name}" not found'
-            }
+            return {'success': False, 'error': 'Partition not found'}
         
         partition_doc = frappe.get_doc("Partition", partition_name)
         
-        # 检查是否需要初始化subtask配置
-        needs_update = False
-        default_config = get_default_subtask_column_config()
-        default_subtask_columns = default_config['default_visible_columns']
-        default_subtask_config = {
-            "column_order": default_config['default_column_order'],
-            "primary_column": default_config['primary_column']
-        }
-        
-        if not partition_doc.subtask_visible_columns:
-            partition_doc.subtask_visible_columns = json.dumps(default_subtask_columns)
-            needs_update = True
-        
-        if not partition_doc.subtask_column_config:
-            partition_doc.subtask_column_config = json.dumps(default_subtask_config)
-            needs_update = True
-        
-        if needs_update:
-            partition_doc.save(ignore_permissions=True)
-            frappe.db.commit()
-            frappe.logger().info(f"Initialized subtask config for partition: {partition_name}")
-            
+        # Check if already initialized
+        if getattr(partition_doc, 'subtask_visible_columns', None):
             return {
                 'success': True,
-                'updated': True,
-                'message': f'Successfully initialized subtask configuration for partition "{partition_name}"',
-                'debug_info': {
-                    'visible_columns': default_subtask_columns,
-                    'column_order': default_subtask_config['column_order']
-                }
+                'message': 'Subtask config already initialized',
+                'already_initialized': True
             }
-        else:
-            # 即使配置存在，也检查是否需要更新column_order
-            try:
-                existing_config = json.loads(partition_doc.subtask_column_config) if partition_doc.subtask_column_config else {}
-                if existing_config.get('column_order') != default_subtask_config['column_order']:
-                    # 更新column_order但保留visible_columns
-                    existing_config['column_order'] = default_subtask_config['column_order']
-                    partition_doc.subtask_column_config = json.dumps(existing_config)
-                    partition_doc.save(ignore_permissions=True)
-                    frappe.db.commit()
-                    
-                    return {
-                        'success': True,
-                        'updated': True,
-                        'message': f'Updated subtask column order for partition "{partition_name}"',
-                        'debug_info': {
-                            'updated_column_order': existing_config['column_order']
-                        }
-                    }
-            except:
-                pass
-                
-            return {
-                'success': True,
-                'updated': False,
-                'message': f'Subtask configuration already exists for partition "{partition_name}"'
-            }
-                    
-    except Exception as e:
-        frappe.db.rollback()
-        frappe.log_error(f"Error initializing subtask config for partition {partition_name}: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-@frappe.whitelist()
-def initialize_existing_partitions_subtask_config():
-    """
-    为现有的partition添加默认的subtask列配置
-    """
-    try:
-        import json
         
-        # 获取所有现有的partition
-        partitions = frappe.get_all("Partition", fields=["name", "subtask_visible_columns", "subtask_column_config"])
-        
-        updated_count = 0
+        # Get default subtask config
         default_config = get_default_subtask_column_config()
-        default_subtask_columns = default_config['default_visible_columns']
-        default_subtask_config = {
+        
+        partition_doc.subtask_visible_columns = json.dumps(default_config['default_visible_columns'])
+        partition_doc.subtask_column_config = json.dumps({
             "column_order": default_config['default_column_order'],
             "primary_column": default_config['primary_column']
-        }
+        })
         
-        for partition in partitions:
-            try:
-                partition_doc = frappe.get_doc("Partition", partition.name)
-                
-                # 检查是否需要初始化subtask配置
-                needs_update = False
-                
-                if not partition_doc.subtask_visible_columns:
-                    partition_doc.subtask_visible_columns = json.dumps(default_subtask_columns)
-                    needs_update = True
-                
-                if not partition_doc.subtask_column_config:
-                    partition_doc.subtask_column_config = json.dumps(default_subtask_config)
-                    needs_update = True
-                
-                if needs_update:
-                    partition_doc.save(ignore_permissions=True)
-                    updated_count += 1
-                    frappe.logger().info(f"Initialized subtask config for partition: {partition.name}")
-                    
-            except Exception as e:
-                frappe.log_error(f"Error initializing subtask config for partition {partition.name}: {str(e)}")
-        
+        partition_doc.save()
         frappe.db.commit()
         
         return {
             'success': True,
-            'updated_count': updated_count,
-            'message': f'Successfully initialized subtask configuration for {updated_count} partitions'
+            'message': 'Subtask config initialized successfully'
         }
         
     except Exception as e:
-        frappe.db.rollback()
-        frappe.log_error(f"Error in initialize_existing_partitions_subtask_config: {str(e)}")
+        frappe.log_error(f"Error initializing subtask config: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+
+@frappe.whitelist()
+def get_all_partition_column_status():
+    """Get column configuration status for all partitions"""
+    try:
+        partitions = frappe.get_all("Partition",
+            fields=["name", "partition_name", "visible_columns", "column_config"],
+            filters={"is_archived": ["!=", 1]}
+        )
+        
+        status_list = []
+        for partition in partitions:
+            has_config = bool(partition.visible_columns or partition.column_config)
+            status_list.append({
+                'name': partition.name,
+                'partition_name': partition.partition_name,
+                'has_config': has_config
+            })
+        
         return {
-            'success': False,
-            'error': str(e)
+            'success': True,
+            'partitions': status_list,
+            'total_count': len(status_list)
         }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting partition column status: {str(e)}")
+        return {'success': False, 'error': str(e), 'partitions': []}
+
+
+@frappe.whitelist()
+def get_subtask_column_config(partition_name):
+    """Get subtask column configuration for a partition"""
+    try:
+        default_config = get_default_subtask_column_config()
+        
+        if not partition_name or partition_name == 'main':
+            return {
+                'success': True,
+                'visible_columns': json.dumps(default_config['default_visible_columns']),
+                'column_config': json.dumps({
+                    "column_order": default_config['default_column_order'],
+                    "primary_column": default_config['primary_column']
+                })
+            }
+        
+        if not frappe.db.exists("Partition", partition_name):
+            return {
+                'success': True,
+                'visible_columns': json.dumps(default_config['default_visible_columns']),
+                'column_config': json.dumps({
+                    "column_order": default_config['default_column_order'],
+                    "primary_column": default_config['primary_column']
+                })
+            }
+        
+        partition = frappe.get_doc("Partition", partition_name)
+        
+        visible_columns = getattr(partition, 'subtask_visible_columns', None) or json.dumps(default_config['default_visible_columns'])
+        column_config = getattr(partition, 'subtask_column_config', None) or json.dumps({
+            "column_order": default_config['default_column_order'],
+            "primary_column": default_config['primary_column']
+        })
+        
+        return {
+            'success': True,
+            'visible_columns': visible_columns,
+            'column_config': column_config
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error getting subtask column config: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+
+@frappe.whitelist()
+def get_task_status_options():
+    """
+    Get available status options for Task doctype from custom_task_status field
+    """
+    try:
+        # Get Task doctype meta to fetch custom_task_status field options
+        task_meta = frappe.get_meta("Task")
+        status_field = None
+        
+        for field in task_meta.fields:
+            if field.fieldname == "custom_task_status":
+                status_field = field
+                break
+        
+        if status_field and hasattr(status_field, 'options') and status_field.options:
+            # Split options by newline and clean them
+            options = [opt.strip() for opt in status_field.options.split('\n') if opt.strip()]
+            return {'success': True, 'status_options': options}
+        else:
+            # Fallback: Get existing values from database as options
+            try:
+                existing_statuses = frappe.db.sql("""
+                    SELECT DISTINCT custom_task_status 
+                    FROM `tabTask` 
+                    WHERE custom_task_status IS NOT NULL 
+                    AND custom_task_status != ''
+                    ORDER BY custom_task_status
+                """, as_list=True)
+                
+                if existing_statuses:
+                    options = [status[0] for status in existing_statuses]
+                    return {'success': True, 'status_options': options}
+                else:
+                    # Ultimate fallback if no data exists
+                    return {'success': True, 'status_options': [
+                        'Not Started', 'Done', 'Working on it', 'Stuck',
+                        'Ready for Manager Review', 'Ready for Partner Review',
+                        'Review Points to be Actioned', 'Ready To Lodge',
+                        'Lodged', 'Ready For Manage'
+                    ]}
+            except Exception as fallback_error:
+                frappe.log_error(f"Error getting existing status values: {str(fallback_error)}")
+                return {'success': True, 'status_options': ['Not Started', 'Done', 'Working on it', 'Stuck']}
+                
+    except Exception as e:
+        frappe.log_error(f"Error getting task status options: {str(e)}")
+        return {'success': True, 'status_options': ['Not Started', 'Done', 'Working on it', 'Stuck']}

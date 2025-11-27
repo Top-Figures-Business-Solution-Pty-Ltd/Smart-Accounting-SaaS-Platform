@@ -260,35 +260,29 @@
                     }
                 });
             } else {
-                // Fallback for when frappe is not available
-                fetch('/api/method/smart_accounting.www.project_management.index.get_current_user_info', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Frappe-CSRF-Token': window.frappe?.csrf_token || ''
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.message && data.message.success) {
-                        const userInfo = data.message;
-                        rolesElement.textContent = userInfo.roles.length > 0 ? userInfo.roles.join(', ') : 'No roles assigned';
-                        if (permissionsElement) {
-                            permissionsElement.textContent = userInfo.permissions;
-                        }
+                // Fallback: wait for frappe to be ready, then retry with delay
+                setTimeout(() => {
+                    if (window.frappe && frappe.call && frappe.csrf_token) {
+                        frappe.call({
+                            method: 'smart_accounting.www.project_management.index.get_current_user_info',
+                            callback: (r) => {
+                                if (r.message && r.message.success) {
+                                    const userInfo = r.message;
+                                    rolesElement.textContent = userInfo.roles.length > 0 ? userInfo.roles.join(', ') : 'No roles assigned';
+                                    if (permissionsElement) {
+                                        permissionsElement.textContent = userInfo.permissions;
+                                    }
+                                }
+                            }
+                        });
                     } else {
+                        // Frappe still not ready, use default values
                         rolesElement.textContent = 'Standard User';
                         if (permissionsElement) {
                             permissionsElement.textContent = 'Basic Access';
                         }
                     }
-                })
-                .catch(() => {
-                    rolesElement.textContent = 'Standard User';
-                    if (permissionsElement) {
-                        permissionsElement.textContent = 'Basic Access';
-                    }
-                });
+                }, 500);
             }
         },
         
