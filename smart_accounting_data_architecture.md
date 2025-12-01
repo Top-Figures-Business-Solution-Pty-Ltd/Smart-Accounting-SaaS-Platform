@@ -51,7 +51,6 @@ flowchart TB
     
     %% Referral Person 关系
     RP -->|custom_referred_by| CUS
-    RP -->|custom_referred_by| CON
     RP -->|referral_person| ENG
     
     %% Customer 关系
@@ -161,7 +160,6 @@ flowchart TB
 | 字段名 | 类型 | Link到 | 说明 |
 |--------|------|--------|------|
 | custom_contact_role | Select | - | 联系人角色 |
-| custom_referred_by | Link | Referral Person | 推荐人 |
 | custom_social_app | Table | Contact Social | 社交账号 |
 | custom_contact_notes | Text | - | 备注 |
 | custom_last_contact_date | Date | - | 最后联系日期 |
