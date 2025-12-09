@@ -2,9 +2,19 @@
 # 代码架构审查文档
 
 **项目**: Smart Accounting  
-**版本**: v1.0  
+**版本**: v1.1  
 **日期**: 2025-12-01  
 **作者**: AI Assistant  
+
+---
+
+## 文档目的
+
+> 本文档的目的是**客观记录当前代码架构的现状**。
+> 
+> - **只做分析，不做建议** 
+> - **记录事实，不做评判** 
+> - **当前系统能够正常运行**，本文档仅作为架构评估的输入材料
 
 ---
 
@@ -16,7 +26,6 @@
 4. [Module Boundaries](#4-module-boundaries)
 5. [Key Business Flows](#5-key-business-flows)
 6. [Technical Debt Inventory](#6-technical-debt-inventory)
-7. [Refactoring Recommendations](#7-refactoring-recommendations)
 
 ---
 
@@ -46,12 +55,12 @@
 ### 1.3 关键发现
 
 ```
-🔴 严重问题:
+🔴 技术债务 (需要长期关注):
 - 20+ 全局 Manager 对象挂在 window 上
 - 无 ES6 模块系统
 - 单文件超过 2000 行 (combination-view.js)
 
-🟡 中等问题:
+🟡 待改进 (可逐步优化):
 - 后端 index.py 仍有 3000+ 行
 - 前后端 API 调用分散
 - 事件处理无统一管理
@@ -60,7 +69,14 @@
 - 后端已部分模块化 (api/ 目录)
 - UI 组件有初步分离 (ui/ 目录)
 - 有性能优化模块 (performance/)
+- 系统能够正常运行，业务流程可以走通
 ```
+
+### 1.4 当前状态
+
+> **系统可用性**: 当前架构下系统能够正常运行。
+> 
+> **本文档定位**: 客观记录架构现状和技术债务。
 
 ---
 
@@ -475,7 +491,10 @@ User fills form & Submit
 
 ## 6. Technical Debt Inventory
 
-### 6.1 严重问题 (P0)
+> **说明**: 以下列出的技术债务**不影响系统当前运行**。
+> 分类仅基于影响范围。
+
+### 6.1 高影响范围
 
 #### TD-001: 全局变量污染
 
@@ -542,7 +561,7 @@ class CombinationViewManager {
 
 ---
 
-### 6.2 中等问题 (P1)
+### 6.2 中等影响范围
 
 #### TD-004: 无模块系统
 
@@ -605,9 +624,37 @@ frappe.call({ method: 'smart_accounting.www.project_management.index.create_proj
 
 ---
 
-### 6.3 低优先级问题 (P2)
+### 6.3 性能相关问题
 
-#### TD-007: CSS 无预处理器
+#### TD-007: 页面加载缓慢
+
+```
+现象:
+- 数据量大的页面（如 Top Figures, Top Grants Clients）加载时间较长
+- 页面刷新后需要等待较长时间才能交互
+- 滚动和操作时偶尔出现卡顿
+
+原因分析:
+1. 一次性加载所有数据，无分页/虚拟滚动
+2. 40+ JS 文件顺序加载，阻塞渲染
+3. 多个 API 调用串行执行
+4. DOM 元素过多（大量任务行）
+5. 内存占用较高（曾观察到 ~1GB）
+
+已有优化:
+- performance/ 目录下有优化模块
+- 有 loading 进度显示
+- 部分 API 调用已并行化
+```
+
+**影响**: 用户体验  
+**现状**: 已做部分优化，但仍有明显延迟
+
+---
+
+### 6.4 低影响范围
+
+#### TD-009: CSS 无预处理器
 
 ```css
 /* 纯 CSS，无变量、无嵌套、无模块化 */
@@ -623,7 +670,7 @@ frappe.call({ method: 'smart_accounting.www.project_management.index.create_proj
 
 ---
 
-#### TD-008: 无错误边界
+#### TD-010: 无错误边界
 
 ```javascript
 // 一个组件错误可能导致整个页面崩溃
@@ -641,7 +688,7 @@ async loadData() {
 
 ---
 
-#### TD-009: 无单元测试
+#### TD-011: 无单元测试
 
 ```
 当前测试覆盖率: 0%
@@ -657,176 +704,20 @@ async loadData() {
 
 ---
 
-### 6.4 技术债务汇总
+### 6.5 技术债务汇总
 
-| ID | 问题 | 严重程度 | 修复成本 | 优先级 |
-|----|------|---------|---------|--------|
-| TD-001 | 全局变量污染 | 🔴 高 | 高 | P0 |
-| TD-002 | God File (index.py) | 🔴 高 | 中 | P0 |
-| TD-003 | God File (combination-view.js) | 🔴 高 | 高 | P0 |
-| TD-004 | 无模块系统 | 🟡 中 | 高 | P1 |
-| TD-005 | 重复代码 (编辑器) | 🟡 中 | 中 | P1 |
-| TD-006 | API 调用分散 | 🟡 中 | 中 | P1 |
-| TD-007 | CSS 无预处理器 | 🟢 低 | 低 | P2 |
-| TD-008 | 无错误边界 | 🟢 低 | 中 | P2 |
-| TD-009 | 无单元测试 | 🟢 低 | 高 | P2 |
-
----
-
-## 7. Refactoring Recommendations
-
-### 7.1 优先级矩阵
-
-```
-                    业务价值高
-                        │
-     TD-001 模块系统    │    TD-002 拆分 index.py
-           ●           │          ●
-                       │
-    ───────────────────┼─────────────────── 实施难度
-                       │
-     TD-006 API封装    │    TD-003 拆分 combination
-           ●           │          ●
-                       │
-                    业务价值低
-
-推荐顺序:
-1. TD-002: 继续拆分 index.py (已开始)
-2. TD-006: 封装 API Client
-3. TD-001: 引入模块系统
-4. TD-003: 拆分 combination-view.js
-```
-
-### 7.2 短期建议（1-2周）
-
-#### R1: 完成 index.py 拆分
-
-```python
-# 目标: index.py 只保留路由和协调逻辑
-# 当前: 3,059 行 → 目标: < 500 行
-
-# 迁移到 api/ 目录:
-# - get_project_management_data → api/data.py
-# - update_task_field → api/tasks.py
-# - create_subtask → api/tasks.py
-# ...
-```
-
-#### R2: 创建 API Client
-
-```javascript
-// services/api-client.js
-class APIClient {
-    constructor() {
-        this.baseMethod = 'smart_accounting.www.project_management';
-    }
-    
-    async call(endpoint, args) {
-        return frappe.call({
-            method: `${this.baseMethod}.${endpoint}`,
-            args: args
-        });
-    }
-    
-    // 业务方法
-    async updateTaskField(taskId, field, value) {
-        return this.call('index.update_task_field', { task_id: taskId, field, value });
-    }
-    
-    async createSubtask(parentTask, data) {
-        return this.call('index.create_subtask', { parent_task: parentTask, ...data });
-    }
-}
-
-window.APIClient = new APIClient();
-```
-
-### 7.3 中期建议（1-2月）
-
-#### R3: 引入 EventBus
-
-详见 `smart_accounting_modularization_plan.md`
-
-#### R4: 拆分大文件
-
-```
-combination-view.js (2,325行) 拆分为:
-├── combination/
-│   ├── CombinationManager.js    # 主管理器
-│   ├── CombinationRenderer.js   # 渲染逻辑
-│   ├── CombinationConfig.js     # 配置管理
-│   └── CombinationEvents.js     # 事件处理
-
-editors.js (2,046行) 拆分为:
-├── editors/
-│   ├── BaseEditor.js            # 基类
-│   ├── TextEditor.js
-│   ├── SelectEditor.js
-│   ├── DateEditor.js
-│   ├── StatusEditor.js
-│   └── CurrencyEditor.js
-```
-
-### 7.4 长期建议（3-6月）
-
-#### R5: 引入构建工具
-
-```javascript
-// 使用 Rollup 或 Webpack
-// 支持:
-// - ES6 模块
-// - Tree Shaking
-// - 代码分割
-// - 压缩优化
-
-// rollup.config.js
-export default {
-    input: 'src/main.js',
-    output: {
-        file: 'dist/smart-accounting.js',
-        format: 'iife'
-    }
-};
-```
-
-#### R6: 添加测试框架
-
-```javascript
-// 使用 Jest 或 Vitest
-// 覆盖核心业务逻辑
-
-// tests/task-manager.test.js
-describe('TaskManager', () => {
-    test('should update task field', async () => {
-        const result = await taskManager.updateField('TASK-001', 'status', 'Done');
-        expect(result.success).toBe(true);
-    });
-});
-```
-
-### 7.5 重构路线图
-
-```
-Phase 1 (Week 1-2): 基础清理
-├── 完成 index.py 拆分
-├── 创建 API Client
-└── 统一错误处理
-
-Phase 2 (Week 3-4): 核心模块化
-├── 引入 EventBus
-├── 拆分 combination-view.js
-└── 拆分 editors.js
-
-Phase 3 (Week 5-6): UI 组件化
-├── 抽象 BaseEditor
-├── 统一 Modal 组件
-└── 统一 Filter 组件
-
-Phase 4 (Week 7-8): 工具链
-├── 引入构建工具
-├── 添加测试框架
-└── 配置 CI/CD
-```
+| ID     | 问题                            | 影响范围 | 预估修复成本 |
+|--------|---------------------------------|---------|-------------|
+| TD-001 | 全局变量污染                     | 🔴 高   | 高 |
+| TD-002 | God File (index.py)             | 🔴 高   | 中 |
+| TD-003 | God File (combination-view.js)  | 🔴 高   | 高 |
+| TD-004 | 无模块系统                       | 🟡 中   | 高 |
+| TD-005 | 重复代码 (编辑器)                | 🟡 中   | 中 |
+| TD-006 | API 调用分散                     | 🟡 中   | 中 |
+| TD-007 | 页面加载缓慢                     | 🟡 中   | 中 |
+| TD-009 | CSS 无预处理器                   | 🟢 低   | 低 |
+| TD-010 | 无错误边界                       | 🟢 低   | 中 |
+| TD-011 | 无单元测试                       | 🟢 低   | 高 |
 
 ---
 
@@ -849,8 +740,6 @@ POST /api/method/smart_accounting.www.project_management.index.create_project
 
 ### C. 相关文档
 
-- `smart_accounting_data_architecture.md` - 数据架构
-- `smart_accounting_modularization_plan.md` - 模块化重构方案
 - `docs/A_Data_Model_Assessment.md` - 数据模型评估
 
 ### D. 修订历史
@@ -858,4 +747,5 @@ POST /api/method/smart_accounting.www.project_management.index.create_project
 | 版本 | 日期 | 修改内容 |
 |------|------|---------|
 | 1.0 | 2025-12-01 | 初始版本 |
+| 1.1 | 2025-12-01 | 调整文档定位：移除重构建议章节，只保留现状分析|
 
