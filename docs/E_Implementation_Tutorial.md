@@ -106,20 +106,21 @@
 
 ### 3.3 添加字段（按顺序）
 
-| # | Label | Fieldname | Fieldtype | Options | Mandatory |
-|---|-------|-----------|-----------|---------|-----------|
-| 1 | Title | `title` | Data | | ✅ |
-| 2 | View Type | `view_type` | Select | system<br/>tenant<br/>personal | ✅ |
-| 3 | Target DocType | `target_doctype` | Select | Project<br/>Task | ✅ |
-| 4 | Project Type | `project_type` | Data | | |
-| 5 | Filters | `filters` | JSON | | |
-| 6 | Columns | `columns` | JSON | | ✅ |
-| 7 | Group By | `group_by` | Data | | |
-| 8 | Sort By | `sort_by` | Data | | |
-| 9 | Sort Order | `sort_order` | Select | asc<br/>desc | |
-| 10 | Company | `company` | Link | Company | |
-| 11 | Is Default | `is_default` | Check | | |
-| 12 | Is System | `is_system` | Check | | |
+| # | Label | Fieldname | Fieldtype | Options | Mandatory | 说明 |
+|---|-------|-----------|-----------|---------|-----------|------|
+| 1 | Title | `title` | Data | | ✅ | 视图名称 |
+| 2 | View Type | `view_type` | Select | system<br/>tenant<br/>personal | ✅ | 视图层级 |
+| 3 | Target DocType | `target_doctype` | Select | Project<br/>Task | ✅ | 目标类型 |
+| 4 | Project Type | `project_type` | Data | | | 关联业务类型 |
+| 5 | Filters | `filters` | JSON | | | 筛选条件 |
+| 6 | Columns | `columns` | JSON | | ✅ | 列配置 |
+| 7 | Field Options | `field_options` | JSON | | | 各字段可见选项 |
+| 8 | Group By | `group_by` | Data | | | 分组字段 |
+| 9 | Sort By | `sort_by` | Data | | | 排序字段 |
+| 10 | Sort Order | `sort_order` | Select | asc<br/>desc | | 排序方向 |
+| 11 | Company | `company` | Link | Company | | 租户隔离 |
+| 12 | Is Default | `is_default` | Check | | | 是否默认 |
+| 13 | Is System | `is_system` | Check | | | 系统预置 |
 
 ### 3.4 设置权限
 
@@ -217,9 +218,9 @@ Completed
 
 ---
 
-### Phase 4: 创建 Saved View
+### Phase 4: 创建 Saved View（13 个字段）
 
-按照 [第 3 节](#3-创建-saved-view-doctype) 的步骤创建。
+按照 [第 3 节](#3-创建-saved-view-doctype) 的步骤创建，共 13 个字段。
 
 ---
 

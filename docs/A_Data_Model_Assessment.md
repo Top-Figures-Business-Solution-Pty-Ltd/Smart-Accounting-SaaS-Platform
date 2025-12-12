@@ -2,7 +2,7 @@
 # 数据模型 - 重构规划文档
 
 **项目**: Smart Accounting  
-**版本**: v5.5  
+**版本**: v5.6  
 **日期**: 2025-12-12  
 **状态**: 🔄 重构规划中 (Prototype 阶段)  
 **重构策略**: ✅ **最大化利用 ERPNext 原生 DocType**
@@ -124,7 +124,7 @@ flowchart TB
     end
     
     subgraph 辅助数据
-        SV["<b>Saved View</b> (新建)<br/>──────────<br/>✅ title<br/>✅ target_doctype<br/>✅ project_type<br/>✅ columns (JSON)<br/>✅ filters (JSON)<br/>✅ group_by<br/>✅ sort_by, sort_order<br/>✅ view_type<br/>✅ company<br/>✅ is_default, is_system"]
+        SV["<b>Saved View</b> (新建)<br/>──────────<br/>✅ title<br/>✅ view_type<br/>✅ target_doctype<br/>✅ project_type<br/>✅ columns (JSON)<br/>✅ filters (JSON)<br/>✅ field_options (JSON)<br/>✅ group_by<br/>✅ sort_by, sort_order<br/>✅ company<br/>✅ is_default, is_system"]
     end
     
     subgraph 原生功能
@@ -181,11 +181,11 @@ Step 1: 基础层扩展
         └── Contact 扩展（is_referrer, contact_role）
 
 Step 2: 核心层扩展
-        ├── Project 扩展（team, fiscal_year, target_month, primary_contact, referral_person, ...）
-        └── Task 扩展（assigned_to, priority, ...）
+        ├── Project 扩展（8 个字段：project_type, team, team_members, fiscal_year, target_month, lodgement_due_date, frequency, softwares）
+        └── Task 扩展（assigned_to, due_date, notes, priority）
 
 Step 3: 视图层
-        └── 创建 Saved View DocType
+        └── 创建 Saved View DocType（13 个字段）
 
 Step 4: 数据迁移
         └── 旧 Task 数据 → Project
@@ -315,7 +315,7 @@ Grants:   R&D Grant / Export Grant / ...
 
 ### 3.3 Saved View（视图配置）
 
-> **状态**：✅ **基础字段已确认**（12 个通用字段）
+> **状态**：✅ **基础字段已确认**（13 个通用字段）
 
 > **定位**：替代 Partition，用户自定义显示哪些字段，实现多 Board 功能
 
@@ -339,9 +339,12 @@ Grants:   R&D Grant / Export Grant / ...
 | **标记** |||||
 | 是否默认 | `is_default` | Check | | 该 project_type 的默认视图 |
 | 是否系统预置 | `is_system` | Check | | 系统预置 = 不可删除 |
+| **字段选项配置** |||||
+| 字段选项 | `field_options` | JSON | | 各字段可见选项配置（通用，任意字段）|
 
 > **设计原则**：
-> - `columns` 和 `filters` 使用 JSON，保证最大灵活性，UI 变化不需要改字段结构
+> - `columns`、`filters`、`field_options` 使用 JSON，保证最大灵活性
+> - UI 变化不需要改字段结构，新增可配置字段无需改 DocType
 > - `column_widths`（列宽）使用 localStorage 存储，不存在 DocType 中
 
 **JSON 字段格式示例**：
@@ -358,6 +361,13 @@ Grants:   R&D Grant / Export Grant / ...
 {
   "status": ["Working", "Ready for Review"],
   "company": "TF"
+}
+
+// field_options 格式（每个 View 可自定义字段选项）
+{
+  "status": ["Not Started", "Working", "Ready for Review", "Lodged"],
+  "frequency": ["Annually"],
+  "softwares": ["Xero", "MYOB"]
 }
 ```
 
@@ -441,12 +451,12 @@ ITR Board (Saved View: project_type = "ITR")
 
 ```
 Bookkeeping Board (Saved View: project_type = "Bookkeeping")
-┌─────────────┬────────────────┬───────────┬───────────────────┬─────────┐
-│ Client      │ Job Name       │ Frequency │ Bank Transactions │ Status  │
-├─────────────┼────────────────┼───────────┼───────────────────┼─────────┤
-│ Client A    │ Monthly BK     │ Monthly   │ Integrated        │ Working │
-│ Client B    │ Quarterly BK   │ Quarterly │ Client Provide    │ Done    │
-└─────────────┴────────────────┴───────────┴───────────────────┴─────────┘
+┌─────────────┬────────────────┬───────────┬──────────┬──────────┬─────────┐
+│ Client      │ Job Name       │ Frequency │ Preparer │ Reviewer │ Status  │
+├─────────────┼────────────────┼───────────┼──────────┼──────────┼─────────┤
+│ Client A    │ Monthly BK     │ Monthly   │ Bob      │ Charlie  │ Working │
+│ Client B    │ Quarterly BK   │ Quarterly │ David    │ Charlie  │ Done    │
+└─────────────┴────────────────┴───────────┴──────────┴──────────┴─────────┘
 ```
 
 ### 6.3 场景 3：Project + Task（详细模式）
@@ -526,9 +536,8 @@ Task 列表：
 | SaaS 多租户隔离？ | ✅ 已确认 | Frappe 原生多 Site 架构，每租户独立 Site，Property Setter 自动隔离 |
 | Project 状态选项具体列表？ | 📋 待确认 | 需与同事商讨，他们有自己的 status 使用习惯（Property Setter 可配置）|
 | Task 状态选项具体列表？ | 📋 待确认 | 跟随 Project 状态讨论后确定（Property Setter 可配置）|
-| Saved View 基础字段？ | ✅ 已确认 | 12 个通用字段，`columns` 和 `filters` 用 JSON 保证灵活性 |
-| `project_type` 分类最终列表？ | 📋 后续确认 | 人工商议后添加（ITR/BAS/Bookkeeping/R&D Grant/...）|
-| `reset_date` 和 `process_date` 用途？ | 📋 后续确认 | 暂时保留在 Project 扩展字段中，待确认具体用途 |
+| Saved View 基础字段？ | ✅ 已确认 | 13 个通用字段，含 `field_options` 用于各 View 自定义字段选项 |
+| `project_type` 分类最终列表？ | 📋 后续确认 | 人工商议后添加（ITR/BAS/Bookkeeping/Payroll/...）|
 | Team JSON 格式细节？ | 📋 后续确认 | email / user name / user ID，implement 前统一 |
 
 ---
@@ -563,3 +572,4 @@ Task 列表：
 | 5.3 | 2025-12-12 | **确认 Saved View 基础字段**：12 个通用字段，`columns` 和 `filters` 使用 JSON 保证最大灵活性；UI 变化不影响字段结构 |
 | 5.4 | 2025-12-12 | **优化 Project 字段**：最大化使用原生字段（notes/estimated_costing/priority/is_active）；扩展字段统一加 `custom_` 前缀 |
 | 5.5 | 2025-12-12 | **精简 Project 扩展字段**：删除 lodgement_date/bank_transactions/grant_amount/actual_billing/primary_contact/referral_person/reset_date/process_date/preferred_communication；保留 8 个核心扩展字段 |
+| 5.6 | 2025-12-12 | **完善 Saved View**：新增 `field_options` 字段（13 个字段），支持每个 View 自定义 status/frequency 等字段的可见选项；清理过时的待确认问题；更新使用场景示例 |
