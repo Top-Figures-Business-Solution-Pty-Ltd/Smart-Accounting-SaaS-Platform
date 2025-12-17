@@ -2,10 +2,22 @@
 # 数据模型 - 重构规划文档
 
 **项目**: Smart Accounting  
-**版本**: v5.6  
-**日期**: 2025-12-12  
+**版本**: v6.0  
+**日期**: 2025-12-16  
 **状态**: 🔄 重构规划中 (Prototype 阶段)  
-**重构策略**: ✅ **最大化利用 ERPNext 原生 DocType**
+**重构策略**: ✅ **最大化利用 ERPNext 原生 DocType**  
+**SaaS架构**: ✅ **Frappe原生多Site架构**（每租户独立Site，天然隔离）
+
+---
+
+## 更新日志 (v6.0 - 2025-12-16)
+
+### 架构优化
+- ✅ **Software字段**：新建独立DocType（支持租户自定义，多Site架构天然隔离）
+- ✅ **Project Type**：使用ERPNext原生DocType + 扩展companies字段（支持单Site多Company场景）
+- ✅ **Status**：使用原生字段 + Property Setter配置（多Site架构下每租户独立配置）
+- ✅ **SaaS架构**：确认采用Frappe原生多Site架构（每租户独立Site，天然数据隔离）
+- ❌ **Fiscal Year**：从Project中删除（财年信息可包含在project_name中，如"FY24 ITR"）
 
 ---
 
@@ -47,9 +59,10 @@
 
 | 层级 | 处理方式 |
 |------|---------|
-| **ERPNext 原生** | Customer / Contact / User / Company / Project / Task 保持原生，添加扩展字段 |
-| **Saved View** | **唯一需要新建的 DocType**，替代 Partition |
-| **Property Setter** | Select 字段选项配置（Status / Softwares 等），支持用户自定义 |
+| **ERPNext 原生扩展** | Customer / Contact / User / Company / Project / Task 保持原生，添加扩展字段 |
+| **新建 DocType** | Software（软件列表）、Saved View（视图配置）|
+| **Project Type** | 使用ERPNext原生Project Type + 扩展companies字段 |
+| **Property Setter** | Status 等Select字段选项配置（多Site架构下每租户独立配置）|
 | **原生功能利用** | Comment 系统（审核备注）、User Settings（用户偏好）|
 | **现有数据** | 编写迁移脚本从旧 Task 结构转移到 Project |
 
@@ -95,7 +108,6 @@ flowchart TB
     COMPANY --> PROJ
     USER --> PROJ
     USER --> TASK
-    CONTACT --> PROJ
     PROJ --> TASK
 ```
 
@@ -118,13 +130,17 @@ flowchart TB
     end
     
     subgraph 业务数据
-        PROJ["<b>Project</b><br/>──────────<br/>⚫ project_name<br/>⚫ customer<br/>⚫ company (租户隔离)<br/>⚫ status (可配置)<br/>⚫ priority<br/>⚫ estimated_costing<br/>⚫ notes<br/>⚫ is_active<br/>✅ custom_project_type<br/>✅ custom_team (JSON)<br/>✅ custom_fiscal_year<br/>✅ custom_target_month<br/>✅ custom_lodgement_due_date<br/>✅ custom_frequency<br/>✅ custom_softwares"]
+        PROJ["<b>Project</b><br/>──────────<br/>⚫ project_name<br/>⚫ customer<br/>⚫ company (租户隔离)<br/>⚫ project_type → Project Type<br/>⚫ status (超集选项)<br/>⚫ priority<br/>⚫ estimated_costing<br/>⚫ notes<br/>⚫ is_active<br/>✅ custom_team (JSON)<br/>✅ custom_target_month<br/>✅ custom_lodgement_due_date<br/>✅ custom_frequency<br/>✅ custom_softwares → Software"]
         
         TASK["<b>Task</b><br/>──────────<br/>⚫ subject<br/>⚫ project<br/>⚫ status (可配置)<br/>✅ assigned_to<br/>✅ due_date<br/>✅ notes (静态备注)<br/>✅ priority (可配置)"]
     end
     
     subgraph 辅助数据
         SV["<b>Saved View</b> (新建)<br/>──────────<br/>✅ title<br/>✅ view_type<br/>✅ target_doctype<br/>✅ project_type<br/>✅ columns (JSON)<br/>✅ filters (JSON)<br/>✅ field_options (JSON)<br/>✅ group_by<br/>✅ sort_by, sort_order<br/>✅ company<br/>✅ is_default, is_system"]
+        
+        PT["<b>Project Type</b><br/>(原生+扩展)<br/>──────────<br/>⚫ project_type<br/>⚫ description<br/>✅ companies (MultiSelect)<br/>✅ is_global"]
+        
+        SW["<b>Software</b> (新建)<br/>──────────<br/>✅ software_name<br/>✅ companies (MultiSelect)<br/>✅ is_global<br/>✅ is_active"]
     end
     
     subgraph 原生功能
@@ -137,8 +153,10 @@ flowchart TB
     COMPANY --> PROJ
     USER --> PROJ
     USER --> TASK
-    CONTACT --> PROJ
     PROJ --> TASK
+    
+    PT --> PROJ
+    SW --> PROJ
     
     SV -.-> PROJ
     SV -.-> TASK
@@ -181,8 +199,8 @@ Step 1: 基础层扩展
         └── Contact 扩展（is_referrer, contact_role）
 
 Step 2: 核心层扩展
-        ├── Project 扩展（8 个字段：project_type, team, team_members, fiscal_year, target_month, lodgement_due_date, frequency, softwares）
-        └── Task 扩展（assigned_to, due_date, notes, priority）
+        ├── Project 扩展（6 个扩展字段：team, team_members, target_month, lodgement_due_date, frequency, softwares + 配置原生project_type字段）
+        └── Task 扩展（4 个扩展字段：assigned_to, due_date, notes, priority）
 
 Step 3: 视图层
         └── 创建 Saved View DocType（13 个字段）
@@ -212,13 +230,11 @@ Step 4: 数据迁移
 | 预算 | `estimated_costing` | Currency | | ERPNext 原生 | 预算金额 |
 | 备注 | `notes` | Text Editor | | ERPNext 原生 | 静态备注（对标 Monday Notes）|
 | 是否活跃 | `is_active` | Select | | ERPNext 原生 | Yes=未归档 / No=已归档 |
-| **扩展字段 - 核心** ||||||
-| 业务类型 | `custom_project_type` | Select | ✅ | 扩展 | ITR/BAS/Bookkeeping/Payroll/...（Property Setter 配置）|
+| 项目类型 | `project_type` | Link → Project Type | | ERPNext 原生 | 业务类型（ITR/BAS/Payroll...），扩展Project Type添加companies字段支持租户隔离 |
 | **扩展字段 - 团队** ||||||
 | 团队 | `custom_team` | JSON | | 扩展 | 存储角色人员 `{preparers:[], reviewers:[], partners:[]}` |
 | 团队成员 | `custom_team_members` | Data | | 扩展 | 辅助筛选字段（逗号分隔，自动生成）|
 | **扩展字段 - 业务** ||||||
-| 财年 | `custom_fiscal_year` | Data | | 扩展 | 如 "FY24", "FY25" |
 | 目标月份 | `custom_target_month` | Select | | 扩展 | January~December |
 | 法定截止日期 | `custom_lodgement_due_date` | Date | | 扩展 | ATO 规定的法定截止日期 |
 | 频率 | `custom_frequency` | Select | | 扩展 | Annually/Quarterly/Monthly/...（按需显示）|
@@ -396,6 +412,79 @@ Grants:   R&D Grant / Export Grant / ...
 | **Company** | - | - | ✅ 已确认 | 保持原生，无需扩展 |
 | **User** | - | - | ✅ 已确认 | 保持原生，无需扩展 |
 
+### 4.3 Software DocType（新建）
+
+> **定位**：独立DocType，管理软件列表（Xero/MYOB/QuickBooks等）
+> 
+> **租户隔离**：多Site架构下，每个Site有自己的Software列表，天然隔离
+
+| 字段 | 字段名 | 类型 | 必填 | 说明 |
+|------|--------|------|------|------|
+| 软件名称 | `software_name` | Data | ✅ | 如 "Xero", "MYOB", "QuickBooks" |
+| 可用公司 | `companies` | Table MultiSelect | | 单Site多Company场景下使用（多Site架构可忽略）|
+| 全局可用 | `is_global` | Check | | 是否所有公司可用 |
+| 是否启用 | `is_active` | Check | | 默认 Yes |
+
+**在Project中使用**：
+```
+Project.custom_softwares → Table MultiSelect → Software
+```
+
+**优势**：
+- ✅ 租户可以自己添加/管理软件列表
+- ✅ 可扩展存储额外信息（版本、API配置等）
+- ✅ 未来可集成Software API
+
+### 4.4 Project Type 扩展
+
+> **定位**：使用ERPNext原生Project Type，扩展字段支持租户隔离
+> 
+> **租户隔离**：多Site架构下，每个Site有自己的Project Type列表
+
+| 字段 | 字段名 | 类型 | 来源 | 说明 |
+|------|--------|------|------|------|
+| 类型名称 | `project_type` | Data | 原生 | 如 "ITR", "BAS", "Payroll" |
+| 描述 | `description` | Text | 原生 | 类型说明 |
+| 可用公司 | `companies` | Table MultiSelect | 扩展 | 单Site多Company场景下使用 |
+| 全局可用 | `is_global` | Check | 扩展 | 是否所有公司可用 |
+
+**扩展方式**：
+通过 Customize Form 或 Custom Fields 添加 `companies` 和 `is_global` 字段。
+
+**优势**：
+- ✅ 利用ERPNext原生功能（权限、报表等）
+- ✅ 标准化，减少开发量
+- ✅ 支持租户自定义业务类型
+
+### 4.5 Status 配置（Property Setter）
+
+> **定位**：使用Project原生status字段，通过Property Setter配置选项
+> 
+> **租户隔离**：多Site架构下，每个Site独立配置Property Setter
+
+**配置方式**：
+```
+Setup → Customize Form → Project → status字段 → Options
+```
+
+**默认选项**：
+```
+Not Started
+Working
+Ready for Review
+Under Review
+Completed
+Cancelled
+```
+
+**优势**：
+- ✅ 简单，利用Frappe原生机制
+- ✅ UI友好，用户可自己修改
+- ✅ 多Site架构下天然隔离
+
+**注意**：
+- ⚠️ 如果未来改为单Site多Company架构，需要改为DocType方案
+
 ---
 
 ## 5. 删除的 DocType
@@ -421,7 +510,7 @@ Grants:   R&D Grant / Export Grant / ...
 |---------|------|---------|
 | **Task Role Assignment** | 简化架构 | Project 的 `team` JSON 字段 |
 | **Review Note** | 用原生功能 | Frappe Comment 系统 |
-| **Software Item** | 过度设计 | MultiSelect 字段 |
+| **Software Item** | 不再作为子表 | 改为独立DocType Software（支持租户自定义）|
 | **Communication Method** | 过度设计 | MultiSelect 字段 |
 | **Customer Company Tag** | 不需要 | 通过 Project 关系自然建立 |
 | **Contact Social** | 过度设计 | 直接用 Data 字段（wechat_id, linkedin_url）|
@@ -437,11 +526,11 @@ Grants:   R&D Grant / Export Grant / ...
 ```
 ITR Board (Saved View: project_type = "ITR")
 ┌─────────────┬────────────────┬─────────────┬──────────┬──────────┬─────────┐
-│ Client      │ Job Name       │ Fiscal Year │ Preparer │ Reviewer │ Status  │
+│ Client      │ Job Name       │ Due Date    │ Preparer │ Reviewer │ Status  │
 ├─────────────┼────────────────┼─────────────┼──────────┼──────────┼─────────┤
-│ Client A    │ FY24 ITR       │ FY24        │ Bob      │ Charlie  │ Working │
-│ Client B    │ FY24 ITR       │ FY24        │ David    │ Charlie  │ Review  │
-│ Client C    │ FY24 ITR       │ FY24        │ Eva      │ Frank    │ Done    │
+│ Client A    │ FY24 ITR       │ 2025-03-15  │ Bob      │ Charlie  │ Working │
+│ Client B    │ FY24 ITR       │ 2025-04-30  │ David    │ Charlie  │ Review  │
+│ Client C    │ FY24 ITR       │ 2025-02-28  │ Eva      │ Frank    │ Done    │
 └─────────────┴────────────────┴─────────────┴──────────┴──────────┴─────────┘
 ```
 
@@ -501,8 +590,8 @@ Task 列表：
 - [ ] Contact 扩展字段（is_referrer, contact_role）
 
 ### Phase 2: 核心层扩展
-- [ ] Project 扩展字段（project_type, team, fiscal_year, target_month, primary_contact, referral_person, ...）
-- [ ] Task 扩展字段（assigned_to, priority, ...）
+- [ ] Project 扩展字段（6个字段：team, team_members, target_month, lodgement_due_date, frequency, softwares）
+- [ ] Task 扩展字段（4个字段：assigned_to, due_date, notes, priority）
 
 ### Phase 3: 视图层
 - [ ] 创建 Saved View DocType
@@ -532,8 +621,10 @@ Task 列表：
 | User Preferences？ | ✅ 已确认 | 不需要，用 Frappe 原生机制 |
 | Notes vs Comments？ | ✅ 已确认 | **双轨制**：`notes` 字段（静态备注）+ Frappe Comment（动态讨论）|
 | 法定截止日期？ | ✅ 已确认 | 新增 `lodgement_due_date` 字段，区别于 `expected_end_date`（内部目标）|
-| Status/Softwares 等选项配置？ | ✅ 已确认 | 使用 **Property Setter**（Frappe 原生），前端提供 Edit Options，不新建 DocType |
-| SaaS 多租户隔离？ | ✅ 已确认 | Frappe 原生多 Site 架构，每租户独立 Site，Property Setter 自动隔离 |
+| Software 配置？ | ✅ 已确认 | 新建独立DocType Software（支持租户自定义软件列表）|
+| Project Type 配置？ | ✅ 已确认 | 使用ERPNext原生Project Type + 扩展companies字段（支持租户隔离）|
+| Status 配置？ | ✅ 已确认 | 使用原生字段 + **Property Setter**配置选项（多Site架构下每租户独立配置）|
+| SaaS 多租户隔离？ | ✅ 已确认 | **Frappe 原生多 Site 架构**，每租户独立 Site，天然数据隔离 |
 | Project 状态选项具体列表？ | 📋 待确认 | 需与同事商讨，他们有自己的 status 使用习惯（Property Setter 可配置）|
 | Task 状态选项具体列表？ | 📋 待确认 | 跟随 Project 状态讨论后确定（Property Setter 可配置）|
 | Saved View 基础字段？ | ✅ 已确认 | 13 个通用字段，含 `field_options` 用于各 View 自定义字段选项 |
@@ -571,5 +662,9 @@ Task 列表：
 | 5.2 | 2025-12-11 | **确认配置机制**：① Select 字段选项（Status/Softwares 等）使用 Property Setter，不新建 DocType；② 确认 SaaS 采用 Frappe 原生多 Site 架构；③ 确认 Task 字段（assigned_to/status/due_date/notes）；④ 确认默认状态列表（可配置）|
 | 5.3 | 2025-12-12 | **确认 Saved View 基础字段**：12 个通用字段，`columns` 和 `filters` 使用 JSON 保证最大灵活性；UI 变化不影响字段结构 |
 | 5.4 | 2025-12-12 | **优化 Project 字段**：最大化使用原生字段（notes/estimated_costing/priority/is_active）；扩展字段统一加 `custom_` 前缀 |
-| 5.5 | 2025-12-12 | **精简 Project 扩展字段**：删除 lodgement_date/bank_transactions/grant_amount/actual_billing/primary_contact/referral_person/reset_date/process_date/preferred_communication；保留 8 个核心扩展字段 |
+| 5.5 | 2025-12-12 | **精简 Project 扩展字段**：删除 lodgement_date/bank_transactions/grant_amount/actual_billing/primary_contact/referral_person/reset_date/process_date/preferred_communication；保留 7 个核心扩展字段 |
 | 5.6 | 2025-12-12 | **完善 Saved View**：新增 `field_options` 字段（13 个字段），支持每个 View 自定义 status/frequency 等字段的可见选项；清理过时的待确认问题；更新使用场景示例 |
+| 5.7 | 2025-12-16 | **初步确认三个关键字段方案**：Software（独立DocType）、Project Type（原生扩展）、Status（Property Setter）|
+| 5.8 | 2025-12-16 | **🎯 明确SaaS架构和租户隔离方案**：① 确认采用Frappe原生多Site架构（每租户独立Site）；② 详细说明Software DocType、Project Type扩展、Status配置的租户隔离机制；③ 新增4.3-4.5节详细说明三个字段的实现方案；④ 更新架构处理方式，明确区分新建DocType（Software/Saved View）、原生扩展（Project Type）和Property Setter（Status）|
+| 5.9 | 2025-12-16 | **🔧 修正架构图和字段数量**：① 删除架构图中过时的CONTACT → PROJ关系线（Project已不再有primary_contact/referral_person字段）；② 修正字段数量：Project扩展字段从8个改为7个；③ 更新Phase 2实施步骤，删除已废弃的字段引用 |
+| 6.0 | 2025-12-16 | **📉 精简Project字段**：① 删除custom_fiscal_year字段（财年信息包含在project_name中）；② Project扩展字段从7个减少到6个；③ 更新所有相关示例和实施步骤 |
