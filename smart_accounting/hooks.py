@@ -1,304 +1,88 @@
+"""
+Smart Accounting - hooks.py
+Version: 2.0 (Clean Slate - 2025-12-16)
+Based on: Document A v6.0, Document E v2.0
+"""
+
 app_name = "smart_accounting"
 app_title = "Smart Accounting"
 app_publisher = "Top Figures Pty Ltd"
-app_description = "Top Figures"
+app_description = "Smart Accounting SaaS Platform for Accounting Firms"
 app_email = "Jeffrey@topfigures.com.au"
 app_license = "mit"
+app_version = "2.0.0"
 
-# Apps
-# ------------------
-
+# Required apps
 # required_apps = []
 
-# Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "smart_accounting",
-# 		"logo": "/assets/smart_accounting/logo.png",
-# 		"title": "Smart Accounting",
-# 		"route": "/smart_accounting",
-# 		"has_permission": "smart_accounting.api.permission.has_app_permission"
-# 	}
-# ]
-
-# Includes in <head>
-# ------------------
-
-# include js, css files in header of desk.html
-# app_include_css = "/assets/smart_accounting/css/smart_accounting.css"
-# app_include_js = "/assets/smart_accounting/js/smart_accounting.js"
-
-# include js, css files in header of web template
-# web_include_css = "/assets/smart_accounting/css/smart_accounting.css"
-# web_include_js = "/assets/smart_accounting/js/smart_accounting.js"
-
-# include custom scss in every website theme (without file extension ".scss")
-# website_theme_scss = "smart_accounting/public/scss/website"
-
-# include js, css files in header of web form
-# webform_include_js = {"doctype": "public/js/doctype.js"}
-# webform_include_css = {"doctype": "public/css/doctype.css"}
-
-# include js in page
-# page_js = {"page" : "public/js/file.js"}
-
-# include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
-# doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
-# doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
-# doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
-
-# Svg Icons
-# ------------------
-# include app icons in desk
-# app_include_icons = "smart_accounting/public/icons.svg"
-
-# Home Pages
-# ----------
-
-# application home page (will override Website Settings)
-home_page = "/project_management"
-
-
-# website user home page (by Role)
-# role_home_page = {
-# 	"Role": "home_page"
-# }
-
-# Generators
-# ----------
-
-# automatically create page for each record of this doctype
-# website_generators = ["Web Page"]
-
-# Jinja
-# ----------
-
-# add methods and filters to jinja environment
-# jinja = {
-# 	"methods": "smart_accounting.utils.jinja_methods",
-# 	"filters": "smart_accounting.utils.jinja_filters"
-# }
-
-# Installation
-# ------------
-
-# before_install = "smart_accounting.install.before_install"
-# after_install = "smart_accounting.install.after_install"
-
-# Uninstallation
-# ------------
-
-# before_uninstall = "smart_accounting.uninstall.before_uninstall"
-# after_uninstall = "smart_accounting.uninstall.after_uninstall"
-
-# Integration Setup
-# ------------------
-# To set up dependencies/integrations with other apps
-# Name of the app being installed is passed as an argument
-
-# before_app_install = "smart_accounting.utils.before_app_install"
-# after_app_install = "smart_accounting.utils.after_app_install"
-
-# Integration Cleanup
-# -------------------
-# To clean up dependencies/integrations with other apps
-# Name of the app being uninstalled is passed as an argument
-
-# before_app_uninstall = "smart_accounting.utils.before_app_uninstall"
-# after_app_uninstall = "smart_accounting.utils.after_app_uninstall"
-
-# Desk Notifications
-# ------------------
-# See frappe.core.notifications.get_notification_config
-
-# notification_config = "smart_accounting.notifications.get_notification_config"
-
-# Permissions
-# -----------
-# Permissions evaluated in scripted ways
-
-# permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
-# }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
-
-# DocType Class
-# ---------------
-# Override standard doctype classes
-
-# override_doctype_class = {
-# 	"ToDo": "custom_app.overrides.CustomToDo"
-# }
+# Home Page
+# Set your home page route here (after implementing frontend)
+# home_page = "/smart_accounting"
 
 # Document Events
-# ---------------
 # Hook on document methods and events
-
-# Auto-sync customer associated companies when tasks are saved
-doc_events = {
-	"Task": {
-		"after_insert": "smart_accounting.www.client_management.index.on_task_save_sync_customer_company",
-		"on_update": "smart_accounting.www.client_management.index.on_task_save_sync_customer_company"
-	}
-}
-
-# Scheduled Tasks
-# ---------------
-
-# scheduler_events = {
-# 	"all": [
-# 		"smart_accounting.tasks.all"
-# 	],
-# 	"daily": [
-# 		"smart_accounting.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"smart_accounting.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"smart_accounting.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"smart_accounting.tasks.monthly"
-# 	],
-# }
-
-# Testing
-# -------
-
-# before_tests = "smart_accounting.install.before_tests"
-
-# Overriding Methods
-# ------------------------------
-#
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "smart_accounting.event.get_events"
-# }
-#
-# each overriding function accepts a `data` argument;
-# generated from the base implementation of the doctype dashboard,
-# along with any modifications made in other Frappe apps
-# override_doctype_dashboards = {
-# 	"Task": "smart_accounting.task.get_dashboard_data"
-# }
-
-# exempt linked doctypes from being automatically cancelled
-#
-# auto_cancel_exempted_doctypes = ["Auto Repeat"]
-
-# Ignore links to specified DocTypes when deleting documents
-# -----------------------------------------------------------
-
-# ignore_links_on_delete = ["Communication", "ToDo"]
-
-# Request Events
-# ----------------
-before_request = ["smart_accounting.access_control.before_request"]  # Enabled for Administrator-only ERPNext access
-# after_request = ["smart_accounting.utils.after_request"]
-
-# Job Events
-# ----------
-# before_job = ["smart_accounting.utils.before_job"]
-# after_job = ["smart_accounting.utils.after_job"]
-
-# User Data Protection
-# --------------------
-
-# user_data_fields = [
-# 	{
-# 		"doctype": "{doctype_1}",
-# 		"filter_by": "{filter_by}",
-# 		"redact_fields": ["{field_1}", "{field_2}"],
-# 		"partial": 1,
-# 	},
-# 	{
-# 		"doctype": "{doctype_2}",
-# 		"filter_by": "{filter_by}",
-# 		"partial": 1,
-# 	},
-# 	{
-# 		"doctype": "{doctype_3}",
-# 		"strict": False,
-# 	},
-# 	{
-# 		"doctype": "{doctype_4}"
-# 	}
-# ]
-
-# Authentication and authorization
-# --------------------------------
-
-# auth_hooks = [
-# 	"smart_accounting.auth.validate"
-# ]
-
-# Automatically update python controller files with type annotations for this app.
-# export_python_type_annotations = True
-
-# default_log_clearing_doctypes = {
-# 	"Logging DocType Name": 30  # days to retain logs
-# }
-
-# Fixtures
-# --------
-# Export these doctypes and their configurations to fixtures
-# Only export custom/non-standard items to avoid conflicts
-fixtures = [
-	{
-		"doctype": "Custom Field",
-		"filters": [["dt", "in", ["Task", "Project", "Customer", "User", "Contact", "Partition", "Engagement"]]]
-	},
-	{
-		"doctype": "Property Setter", 
-		"filters": [["doc_type", "in", ["Task", "Project", "Customer", "Contact", "Partition", "Engagement"]]]
-	},
-	{
-		"doctype": "Workspace",
-		"filters": [["name", "like", "%Smart%"]]
-	},
-	{
-		"doctype": "Role",
-		"filters": [["name", "like", "%Smart%"]]
-	},
-	{
-		"doctype": "Custom DocPerm",
-		"filters": [["parent", "in", ["Task", "Project", "Customer", "Contact", "Engagement"]]]
-	},
-	{
-		"doctype": "DocType",
-		"filters": [["name", "in", ["User Preferences", "Partition", "Task Role Assignment", "Task Software", "Customer Company Tag", "Board Column", "Board Cell", "Service Line", "Review Note", "Engagement", "Client Group", "Combination View", "Combination View Board", "Task Communication Method", "Contact Social", "Referral Person", "Task Process Value", "Process Tracker Configwo'sh"]]]
-	}
-	# 不导出 Dashboard Chart, Number Card 等可能包含标准内容的 DocType
-]
-
-# IP Protection Configuration
-# ---------------------------
-# Multi-layer IP protection strategy for Smart Accounting SaaS
-
-# IP Protection Settings
-ip_protection_enabled = True
-ip_audit_logging = True
-ip_data_encryption = True
-
-# Protected IP Assets (to be implemented)
-protected_ip_assets = [
-    "business_logic",
-    "service_methodologies", 
-    "client_relationships",
-    "automation_scripts",
-    "partner_network_structure",
-    "pricing_models"
-]
-
-# IP Protection Hooks (to be implemented)
 # doc_events = {
-#     "*": {
-#         "before_save": "smart_accounting.ip_protection.utils.data_protection.encrypt_sensitive_fields",
-#         "after_insert": "smart_accounting.ip_protection.security.operational_security.log_proprietary_access"
+#     "Project": {
+#         "before_save": "smart_accounting.custom_methods.project.before_save"
 #     }
 # }
 
+# Scheduled Tasks
+# scheduler_events = {
+#     "daily": [
+#         "smart_accounting.tasks.daily"
+#     ]
+# }
+
+# Fixtures
+# Export DocTypes and Custom Fields to fixtures for version control
+fixtures = [
+    # Custom Fields for ERPNext native DocTypes
+    {
+        "doctype": "Custom Field",
+        "filters": [
+            ["dt", "in", [
+                "Project",
+                "Task", 
+                "Customer",
+                "Contact",
+                "Project Type"
+            ]]
+        ]
+    },
+    # Property Setters for Select field options
+    {
+        "doctype": "Property Setter",
+        "filters": [
+            ["doc_type", "in", [
+                "Project",
+                "Task",
+                "Customer", 
+                "Contact",
+                "Project Type"
+            ]]
+        ]
+    },
+    # Custom DocTypes
+    {
+        "doctype": "DocType",
+        "filters": [
+            ["name", "in", [
+                "Software",
+                "Saved View"
+            ]]
+        ]
+    }
+]
+
+# Override standard ERPNext methods (if needed)
+# override_whitelisted_methods = {
+#     "frappe.desk.doctype.event.event.get_events": "smart_accounting.overrides.get_events"
+# }
+
+# Access Control (optional - uncomment if needed)
+# before_request = ["smart_accounting.access_control.before_request"]
+
+# Installation
+# before_install = "smart_accounting.setup.before_install"
+# after_install = "smart_accounting.setup.after_install"

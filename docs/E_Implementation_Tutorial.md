@@ -2,9 +2,45 @@
 # 实施教程文档
 
 **项目**: Smart Accounting  
-**版本**: v1.0  
-**日期**: 2025-12-12  
+**版本**: v4.3  
+**日期**: 2025-12-18  
 **用途**: 🔧 **开发指南** - 如何在 ERPNext 中通过 UI 实现数据结构
+
+---
+
+## 更新日志 (v4.3 - 2025-12-18)
+
+### 团队字段架构优化（Critical - 提升SaaS可扩展性）
+- ✅ **custom_team从JSON改为子表**：提升查询性能和数据完整性
+- ✅ **新增Phase 2.5**：创建Project Team Member子表DocType（3个字段）
+- ✅ **Project扩展字段优化**：从8个减少到7个（删除custom_team，custom_team_members改为Table类型）
+- ✅ **验证清单更新**：新增Project Team Member子表验证项
+- ✅ **实施步骤更新**：添加Project Team Member子表创建详细步骤
+
+---
+
+## 更新日志 (v4.2 - 2025-12-17)
+
+### Status动态过滤（Phase 7新增）
+- ✅ **Client Script实现**：根据project_type动态过滤status选项
+- ✅ **状态超集配置**：在Property Setter配置所有可能的状态
+- ✅ **用户体验优化**：每个project_type只显示相关状态，避免混淆
+- ✅ **验证清单更新**：新增7.5 Status动态过滤验证项
+
+---
+
+## 更新日志 (v4.1 - 2025-12-17)
+
+### 客户多实体支持（Critical）
+- ✅ **Customer Entity子表**：新增子表DocType支持一个客户拥有多个实体
+- ✅ **Customer字段简化**：从3个字段减少到2个（entities替代entity_type和year_end）
+- ✅ **Project添加entity字段**：custom_entity_name关联具体实体（8个扩展字段）
+- ✅ **Auto Repeat自动创建**：明确after_insert钩子自动创建Auto Repeat机制
+
+### 周期性业务架构优化（v4.0）
+- ✅ **Auto Repeat方案**：使用Frappe原生Auto Repeat自动创建周期性Project
+- ✅ **Task字段减少**：Task扩展字段从4个减少到2个（删除team相关字段）
+- ✅ **新增实施步骤**：添加Project Auto Repeat钩子配置说明
 
 ---
 
@@ -15,7 +51,17 @@
 3. [创建 Saved View DocType](#3-创建-saved-view-doctype)
 4. [配置 Select 选项](#4-配置-select-选项)
 5. [实施顺序](#5-实施顺序)
-6. [验证清单](#6-验证清单)
+   - Phase 1: 创建 Customer Entity 子表 DocType
+   - Phase 2: Customer & Contact 扩展
+   - Phase 2.5: 创建 Project Team Member 子表 DocType
+   - Phase 3: 创建 Software DocType
+   - Phase 4: Project 扩展（7字段）
+   - Phase 5: Task 扩展（2字段）
+   - Phase 6: 创建 Saved View DocType
+   - Phase 7: 配置 Status 选项和动态过滤
+   - Phase 8: 配置 Auto Repeat（周期性Project）
+6. [实施顺序总结](#6-实施顺序总结)
+7. [验证清单](#7-验证清单)
 
 ---
 
@@ -25,16 +71,28 @@
 
 | 任务 | 说明 |
 |------|------|
-| **扩展 Project** | 添加 custom fields |
-| **扩展 Task** | 添加 custom fields |
-| **扩展 Customer** | 添加 custom fields |
-| **扩展 Contact** | 添加 custom fields |
-| **创建 Saved View** | 新建 DocType |
-| **配置选项** | 配置 Select 字段的选项 |
+| **创建 Customer Entity 子表** | 新建子表 DocType（5 个字段）|
+| **扩展 Customer** | 添加 2 个 custom fields（含entities子表）|
+| **扩展 Contact** | 添加 3 个 custom fields |
+| **创建 Project Team Member 子表** | 新建子表 DocType（3 个字段）|
+| **扩展 Project** | 添加 7 个 custom fields（含team_members子表）|
+| **扩展 Task** | 添加 2 个 custom fields（最大化利用原生字段）|
+| **创建 Software DocType** | 新建极简 DocType（2 个字段）|
+| **创建 Saved View DocType** | 新建精简 DocType（7 个字段）|
+| **Status 动态过滤** | project.js Client Script（根据project_type显示不同status）|
+| **Project Auto Repeat 钩子** | project.py 实现after_insert, validate, on_recurring方法（代码）|
+| **配置选项** | 配置 Select 字段的选项（通过 Property Setter）|
 
 ### 1.2 操作方式
 
-所有操作通过 ERPNext **UI 界面**完成，无需写代码。
+- **UI操作**：Custom Fields、DocType创建、Property Setter配置
+- **代码实现**：
+  - **Client Script（project.js）**：根据project_type动态过滤status选项
+  - **Server Override（project.py）**：
+    - Project.after_insert()：自动创建Auto Repeat
+    - Project.validate()：同步custom_frequency到Auto Repeat
+    - Project.on_recurring()：Auto Repeat创建新Project时的钩子
+  - **hooks.py配置**：注册doctype_js和override_doctype_class
 
 ---
 
@@ -60,15 +118,15 @@
 
 | Fieldtype | 用途 | 示例 |
 |-----------|------|------|
-| `Data` | 单行文本 | custom_fiscal_year |
-| `Select` | 下拉选择 | custom_project_type |
-| `Link` | 链接到其他 DocType | custom_primary_contact → Contact |
+| `Data` | 单行文本 | custom_team_members |
+| `Select` | 下拉选择 | custom_target_month |
+| `Link` | 链接到其他 DocType | custom_referred_by → Contact |
 | `Date` | 日期 | custom_lodgement_due_date |
-| `Currency` | 货币金额 | custom_actual_billing |
-| `Check` | 复选框 | is_active |
+| `Check` | 复选框 | custom_is_referrer |
+| `Text` | 多行纯文本 | custom_notes |
 | `Text Editor` | 多行富文本 | notes（原生）|
 | `JSON` | JSON 数据 | custom_team |
-| `Table MultiSelect` | 多选 | custom_softwares |
+| `Table MultiSelect` | 多选 | custom_softwares → Software |
 
 ### 2.4 字段属性说明
 
@@ -104,23 +162,22 @@
 | Allow Rename | ✅ Yes |
 | Track Changes | ✅ Yes |
 
-### 3.3 添加字段（按顺序）
+### 3.3 添加字段（精简设计，7个字段）
 
 | # | Label | Fieldname | Fieldtype | Options | Mandatory | 说明 |
 |---|-------|-----------|-----------|---------|-----------|------|
-| 1 | Title | `title` | Data | | ✅ | 视图名称 |
-| 2 | View Type | `view_type` | Select | system<br/>tenant<br/>personal | ✅ | 视图层级 |
-| 3 | Target DocType | `target_doctype` | Select | Project<br/>Task | ✅ | 目标类型 |
-| 4 | Project Type | `project_type` | Data | | | 关联业务类型 |
-| 5 | Filters | `filters` | JSON | | | 筛选条件 |
-| 6 | Columns | `columns` | JSON | | ✅ | 列配置 |
-| 7 | Field Options | `field_options` | JSON | | | 各字段可见选项 |
-| 8 | Group By | `group_by` | Data | | | 分组字段 |
-| 9 | Sort By | `sort_by` | Data | | | 排序字段 |
-| 10 | Sort Order | `sort_order` | Select | asc<br/>desc | | 排序方向 |
-| 11 | Company | `company` | Link | Company | | 租户隔离 |
-| 12 | Is Default | `is_default` | Check | | | 是否默认 |
-| 13 | Is System | `is_system` | Check | | | 系统预置 |
+| 1 | Title | `title` | Data | | ✅ | 视图名称（如 "ITR Board", "Bob本周任务"）|
+| 2 | Project Type | `project_type` | Data | | | 关联业务类型（空=跨类型筛选）|
+| 3 | Columns | `columns` | JSON | | ✅ | 列配置（字段、顺序、标签）|
+| 4 | Filters | `filters` | JSON | | | 筛选条件组合 |
+| 5 | Sort By | `sort_by` | Data | | | 排序字段 |
+| 6 | Sort Order | `sort_order` | Select | asc<br/>desc | | 排序方向 |
+| 7 | Is Default | `is_default` | Check | | | 该 project_type 的默认视图 |
+
+> **说明**：
+> - 极简设计，仅保留核心功能
+> - 不区分 company（TF/TG 共用配置）
+> - 通过 owner 字段区分系统视图和用户视图（Frappe 原生）
 
 ### 3.4 设置权限
 
@@ -172,17 +229,45 @@ Completed
 
 ## 5. 实施顺序
 
-### Phase 1: Customer & Contact 扩展
+### Phase 1: 创建 Customer Entity 子表 DocType
 
-**Step 1: Customer 扩展**
+> ⚠️ **重要**：必须先创建Customer Entity子表，才能在Customer中添加custom_entities字段！
+
+**Step 1: 创建 Customer Entity DocType（子表）**
+
+1. 进入：Setup → DocType → New DocType
+2. 填写基本信息：
+   - Name: `Customer Entity`
+   - Module: `Smart Accounting`
+   - **Is Child Table**: ✅ **Yes**（重要！）
+   - Is Submittable: ❌ No
+
+**Step 2: 添加字段（5个）**
+
+| # | Label | Fieldname | Fieldtype | Options | Mandatory |
+|---|-------|-----------|-----------|---------|-----------|
+| 1 | Entity Name | `entity_name` | Data | | ✅ |
+| 2 | Entity Type | `entity_type` | Select | Individual<br/>Company<br/>Trust<br/>Partnership<br/>SMSF | ✅ |
+| 3 | ABN | `abn` | Data | | |
+| 4 | Year End | `year_end` | Select | June<br/>December<br/>March<br/>September | |
+| 5 | Is Primary | `is_primary` | Check | | |
+
+**Step 3: 设置权限并保存**
+
+---
+
+### Phase 2: Customer & Contact 扩展
+
+**Step 1: Customer 扩展（2个字段）**
 
 | Label | Fieldname | Fieldtype | Options |
 |-------|-----------|-----------|---------|
 | Referred By | `custom_referred_by` | Link | Contact |
-| Entity Type | `custom_entity_type` | Select | Individual<br/>Company<br/>Trust<br/>Partnership<br/>SMSF |
-| Year End | `custom_year_end` | Select | June<br/>December<br/>March<br/>September |
+| Entities | `custom_entities` | Table | Customer Entity |
 
-**Step 2: Contact 扩展**
+> **v4.1 变化**：删除了`custom_entity_type`和`custom_year_end`字段，改为`custom_entities`子表
+
+**Step 2: Contact 扩展（3个字段）**
 
 | Label | Fieldname | Fieldtype | Options |
 |-------|-----------|-----------|---------|
@@ -192,64 +277,641 @@ Completed
 
 ---
 
-### Phase 2: Project 扩展（8 个字段）
+### Phase 2.5: 创建 Project Team Member 子表 DocType
+
+> ⚠️ **重要**：必须先创建Project Team Member子表，才能在Project中添加custom_team_members字段！
+
+**Step 1: 创建 Project Team Member DocType（子表）**
+
+1. 进入：Setup → DocType → New DocType
+2. 填写基本信息：
+   - Name: `Project Team Member`
+   - Module: `Smart Accounting`
+   - **Is Child Table**: ✅ **Yes**（重要！）
+   - Is Submittable: ❌ No
+
+**Step 2: 添加字段（3个）**
+
+| # | Label | Fieldname | Fieldtype | Options | Mandatory |
+|---|-------|-----------|-----------|---------|-----------|
+| 1 | User | `user` | Link | User | ✅ |
+| 2 | Role | `role` | Select | Preparer<br/>Reviewer<br/>Partner | ✅ |
+| 3 | Assigned Date | `assigned_date` | Date | | |
+
+**role 选项**：
+```
+Preparer
+Reviewer
+Partner
+```
+
+**Step 3: 设置权限并保存**
+
+**优势**：
+- ✅ 支持数据库级别查询：可以高效查询"Bob的所有Projects"
+- ✅ 数据完整性：外键约束，用户删除时可以检查关联
+- ✅ 报表友好：直接SQL聚合统计每个人的工作量
+- ✅ SaaS可扩展：大规模数据（>10000 Projects）性能稳定
+
+---
+
+### Phase 3: 创建 Software DocType
+
+> **重要**：必须先创建 Software DocType，才能在 Project 中添加 custom_softwares 字段！
+
+**Step 1: 创建 Software DocType**
+
+1. 进入：Setup → DocType → New DocType
+2. 填写基本信息：
+   - Name: `Software`
+   - Module: `Smart Accounting`
+   - Is Submittable: ❌ No
+   - Allow Rename: ✅ Yes
+
+**Step 2: 添加字段（仅2个）**
+
+| # | Label | Fieldname | Fieldtype | Mandatory | 默认值 |
+|---|-------|-----------|-----------|-----------|--------|
+| 1 | Software Name | `software_name` | Data | ✅ | |
+| 2 | Is Active | `is_active` | Check | | ✅ Yes |
+
+> **说明**：极简设计，TF/TG 共用。无需 company 字段。
+
+**Step 3: 设置权限并保存**
+
+**Step 4: 创建 Software 记录（推荐）**
+
+创建常用的会计软件记录，方便后续在Project中选择：
+
+1. 进入：Accounting → Software → New
+2. 创建常用软件记录：
+   - Xero
+   - MYOB
+   - QuickBooks
+   - Reckon
+   - 其他业务使用的软件
+
+> **提示**：这一步可以现在做，也可以在需要时再创建
+
+---
+
+### Phase 4: Project 扩展（7 个字段）
+
+> ⚠️ **注意**：project_type 是 ERPNext 原生字段，无需添加 custom 字段！
+
+> **前提条件**：
+> 1. 确保已创建业务所需的Project Type记录（如ITR、BAS、Bookkeeping、R&D Grant、Financial Statements等）
+> 2. 确保已创建Project Team Member子表（Phase 2.5）
+> 
+> 创建Project Type方式：
+> 1. 进入：Projects → Project Type → New
+> 2. 填写Project Type名称（如 "ITR", "BAS", "R&D Grant"）
+> 3. 保存
 
 | Label | Fieldname | Fieldtype | Options | 说明 |
 |-------|-----------|-----------|---------|------|
-| Project Type | `custom_project_type` | Select | ITR<br/>BAS<br/>Bookkeeping<br/>Payroll<br/>Financial Statements | 必填，In List View，In Standard Filter |
-| Team | `custom_team` | JSON | | 存储人员分配 `{preparers:[], reviewers:[], partners:[]}` |
-| Team Members | `custom_team_members` | Data | | 辅助筛选，Read Only，自动生成 |
-| Fiscal Year | `custom_fiscal_year` | Data | | 如 "FY24"，In List View |
-| Target Month | `custom_target_month` | Select | January<br/>February<br/>...<br/>December | |
+| Entity Name | `custom_entity_name` | Data | | **v4.1新增**：关联Customer Entity，如 "Client A Pty Ltd" |
+| Team Members | `custom_team_members` | Table | Project Team Member | **v4.3优化**：从JSON改为子表，提升查询性能 |
+| Fiscal Year | `custom_fiscal_year` | Data | | 如 "FY24", "FY25" |
+| Target Month | `custom_target_month` | Select | January<br/>February<br/>March<br/>April<br/>May<br/>June<br/>July<br/>August<br/>September<br/>October<br/>November<br/>December | 目标月份 |
 | Lodgement Due Date | `custom_lodgement_due_date` | Date | | ATO 法定截止日期 |
-| Frequency | `custom_frequency` | Select | Annually<br/>Quarterly<br/>Monthly<br/>One-off | 按需显示 |
-| Softwares | `custom_softwares` | Table MultiSelect | Software Item | 需先创建 Software Item 子表 |
+| Frequency | `custom_frequency` | Select | Annually<br/>Quarterly<br/>Monthly<br/>One-off | **会自动创建Auto Repeat**（非One-off时）|
+| Softwares | `custom_softwares` | Table MultiSelect | Software | 链接到 Software DocType（需先创建）|
+
+> **custom_team_members 说明**：子表字段，可以添加多个团队成员，每个成员有角色（Preparer/Reviewer/Partner）。支持高效的数据库查询和统计。
+
+> **custom_frequency 说明**：选择频率后，系统会自动创建Auto Repeat记录（通过after_insert钩子）
 
 ---
 
-### Phase 3: Task 扩展
+### Phase 5: Task 扩展（2 个字段）
 
-| Label | Fieldname | Fieldtype | Options |
-|-------|-----------|-----------|---------|
-| Assigned To | `custom_assigned_to` | Link | User |
-| Due Date | `custom_due_date` | Date | |
-| Notes | `custom_notes` | Text | |
-| Priority | `custom_priority` | Select | Low<br/>Medium<br/>High |
+> ⚠️ **注意**：Task 大量使用 ERPNext 原生字段，仅添加业务扩展字段
+> 
+> **原生字段**（无需添加）：exp_start_date, exp_end_date, expected_time, actual_time, status, priority, description 等
 
----
-
-### Phase 4: 创建 Saved View（13 个字段）
-
-按照 [第 3 节](#3-创建-saved-view-doctype) 的步骤创建，共 13 个字段。
+| Label | Fieldname | Fieldtype | Options | 说明 |
+|-------|-----------|-----------|---------|------|
+| Fiscal Year | `custom_fiscal_year` | Data | | 如 "FY24", "FY25" |
+| Period | `custom_period` | Data | | 如 "Q1", "Q2", "Q3", "Q4" |
 
 ---
 
-### Phase 5: 配置 Select 选项
+### Phase 6: 创建 Saved View DocType（7 个字段）
 
-按照 [第 4 节](#4-配置-select-选项) 配置 status 等字段选项。
+按照 [第 3 节](#3-创建-saved-view-doctype) 的步骤创建，共 7 个字段（极简设计）。
 
 ---
 
-## 6. 验证清单
+### Phase 7: 配置 Status 选项和动态过滤
 
-### 6.1 字段验证
+> **核心需求**：不同project_type需要显示不同的status选项（如ITR只需5个状态，R&D Grant需要10个状态）
 
-- [ ] 在 Project 表单中能看到所有新字段
-- [ ] 在 Project 列表视图能看到 custom_project_type
-- [ ] 能通过 custom_project_type 筛选 Project
+#### Step 1: 配置 Status 超集（Property Setter）
+
+首先在Project.status字段配置所有可能的状态（超集）：
+
+1. 进入：Setup → Customize → Customize Form
+2. 选择 DocType: `Project`
+3. 找到 `status` 字段
+4. 修改 **Options**（所有可能的状态）：
+
+```
+Not Started
+Working
+Ready for Review
+Under Review
+Query from ATO
+Query from AusIndustry
+Resubmit
+Partner Review
+Lodged
+Approved
+Completed
+Cancelled
+```
+
+5. 点击 **Update**
+
+> **说明**：这是所有project_type的状态并集，包含ITR、BAS、R&D Grant等所有业务类型可能用到的状态
+
+---
+
+#### Step 2: 实现动态过滤（Client Script - 推荐）
+
+**目标**：根据project_type动态显示相关的status选项
+
+**实现步骤：**
+
+**2.1 创建Client Script文件**
+
+1. 创建目录（如果不存在）：
+
+```bash
+mkdir -p /home/jeffrey/frappe-bench/apps/smart_accounting/smart_accounting/public/js
+```
+
+2. 创建文件：`apps/smart_accounting/smart_accounting/public/js/project.js`
+
+```bash
+touch /home/jeffrey/frappe-bench/apps/smart_accounting/smart_accounting/public/js/project.js
+```
+
+3. 将以下代码写入 `project.js`：
+
+```javascript
+// Project Client Script - Dynamic Status Filtering
+
+frappe.ui.form.on('Project', {
+    refresh: function(frm) {
+        filter_status_options(frm);
+    },
+    
+    project_type: function(frm) {
+        // 切换project_type时重新过滤status选项
+        filter_status_options(frm);
+    }
+});
+
+function filter_status_options(frm) {
+    // 定义每个project_type允许的status
+    const status_map = {
+        'ITR': [
+            'Not Started',
+            'Working',
+            'Ready for Review',
+            'Under Review',
+            'Lodged',
+            'Completed',
+            'Cancelled'
+        ],
+        'BAS': [
+            'Not Started',
+            'Working',
+            'Ready for Review',
+            'Query from ATO',
+            'Resubmit',
+            'Lodged',
+            'Completed',
+            'Cancelled'
+        ],
+        'Bookkeeping': [
+            'Not Started',
+            'Working',
+            'Completed',
+            'Cancelled'
+        ],
+        'R&D Grant': [
+            'Not Started',
+            'Working',
+            'Partner Review',
+            'Under Review',
+            'Query from AusIndustry',
+            'Resubmit',
+            'Approved',
+            'Completed',
+            'Cancelled'
+        ],
+        'Financial Statements': [
+            'Not Started',
+            'Working',
+            'Ready for Review',
+            'Partner Review',
+            'Completed',
+            'Cancelled'
+        ]
+        // 可以继续添加其他project_type...
+    };
+    
+    // 获取当前project_type允许的status
+    const project_type = frm.doc.project_type;
+    const allowed_statuses = status_map[project_type];
+    
+    if (allowed_statuses && allowed_statuses.length > 0) {
+        // 动态设置status字段的选项
+        frm.set_df_property('status', 'options', allowed_statuses);
+        frm.refresh_field('status');
+    }
+}
+```
+
+**2.2 配置到hooks.py**
+
+编辑：`apps/smart_accounting/smart_accounting/hooks.py`
+
+```python
+# 添加或更新以下配置
+
+# 方式1：全局JS
+app_include_js = [
+    "/assets/smart_accounting/js/project.js"
+]
+
+# 或者方式2：针对特定DocType（推荐）
+doctype_js = {
+    "Project": "public/js/project.js"
+}
+```
+
+**2.3 清除缓存**
+
+```bash
+cd /home/jeffrey/frappe-bench
+bench clear-cache
+bench restart
+```
+
+---
+
+#### Step 3: 验证
+
+1. 打开或创建一个Project
+2. 选择 `project_type = "ITR"`
+3. 查看 `status` 下拉选项，应该只显示ITR相关的6个状态
+4. 切换 `project_type = "R&D Grant"`
+5. 查看 `status` 下拉选项，应该显示R&D Grant相关的8个状态
+
+---
+
+#### 优势
+
+- ✅ **用户体验好**：每个project_type只看到相关状态，避免混淆
+- ✅ **实现简单**：一个JS文件即可
+- ✅ **易于维护**：修改status_map即可调整
+- ✅ **数据完整**：后端保存完整status值，不影响数据
+- ✅ **灵活配置**：可以随时添加新的project_type映射
+
+#### 未来升级路径（Phase 2+）
+
+如果需要更灵活的配置（通过UI而非代码），可以升级到：
+
+**方案：Status DocType + 关系表**
+```python
+# 创建独立的Status DocType
+Status:
+  - status_name
+  - color
+  - is_active
+
+# 扩展Project Type
+Project Type:
+  - custom_allowed_statuses (Table → Status)
+```
+
+这样每个租户可以通过UI自定义每个project_type的status列表。
+
+---
+
+### Phase 8: 配置 Auto Repeat（周期性Project）
+
+> **v4.1 更新**：用户创建Project时选择frequency，系统自动创建Auto Repeat（无需手动配置）
+
+#### Step 1: 实现 Auto Repeat 自动创建（代码 - 必须）
+
+**after_insert 钩子**：Project创建后自动创建Auto Repeat
+
+```python
+# apps/smart_accounting/smart_accounting/overrides/project.py
+
+from erpnext.projects.doctype.project.project import Project
+import frappe
+
+class CustomProject(Project):
+    def after_insert(self):
+        """Project创建后自动创建Auto Repeat"""
+        super().after_insert()
+        if self.custom_frequency and self.custom_frequency != "One-off":
+            self.create_auto_repeat()
+    
+    def create_auto_repeat(self):
+        """根据custom_frequency创建Auto Repeat"""
+        try:
+            auto_repeat = frappe.new_doc("Auto Repeat")
+            auto_repeat.reference_doctype = "Project"
+            auto_repeat.reference_document = self.name
+            auto_repeat.frequency = self.custom_frequency  # Monthly/Quarterly/Yearly
+            auto_repeat.start_date = self.expected_start_date or frappe.utils.today()
+            auto_repeat.insert(ignore_permissions=True)
+            
+            # 关联到Project
+            frappe.db.set_value("Project", self.name, "auto_repeat", auto_repeat.name)
+            
+            frappe.msgprint(f"已自动创建Auto Repeat: {auto_repeat.name}")
+        except Exception as e:
+            frappe.log_error(f"Failed to create Auto Repeat for {self.name}: {str(e)}")
+    
+    def validate(self):
+        """修改frequency时同步Auto Repeat"""
+        super().validate()
+        if self.has_value_changed("custom_frequency") and self.auto_repeat:
+            self.sync_auto_repeat_frequency()
+    
+    def sync_auto_repeat_frequency(self):
+        """同步frequency到Auto Repeat"""
+        if self.custom_frequency == "One-off":
+            # 改为One-off，禁用Auto Repeat
+            frappe.db.set_value("Auto Repeat", self.auto_repeat, "disabled", 1)
+        else:
+            auto_repeat = frappe.get_doc("Auto Repeat", self.auto_repeat)
+            auto_repeat.frequency = self.custom_frequency
+            auto_repeat.disabled = 0
+            auto_repeat.save(ignore_permissions=True)
+```
+
+#### Step 2: 实现 on_recurring 钩子（代码 - 必须）
+
+**on_recurring 钩子**：Auto Repeat创建新Project时自动命名
+
+在代码中实现 Project 的 on_recurring 方法：
+
+```python
+# apps/smart_accounting/smart_accounting/overrides/project.py
+
+from erpnext.projects.doctype.project.project import Project
+from frappe.utils import getdate, add_months, get_last_day
+
+class CustomProject(Project):
+    def on_recurring(self, reference_doc, auto_repeat_doc):
+        """Auto Repeat创建新Project时触发"""
+        
+        # 1. 生成新名称（包含entity信息）
+        date = getdate(auto_repeat_doc.next_schedule_date)
+        
+        # 构建名称部分
+        parts = [self.customer]
+        
+        # 如果有entity，添加到名称中（v4.1新增）
+        if self.custom_entity_name:
+            # 从entity_name提取简短标识
+            # 例如："Client A Pty Ltd" -> "(Pty Ltd)"
+            entity_short = self.custom_entity_name.replace(self.customer, "").strip()
+            if entity_short:
+                parts.append(f"({entity_short})")
+        
+        # 生成period
+        if auto_repeat_doc.frequency == "Monthly":
+            period = date.strftime("%B %Y")  # "August 2025"
+        elif auto_repeat_doc.frequency == "Quarterly":
+            quarter = (date.month - 1) // 3 + 1
+            period = f"Q{quarter} FY{date.year % 100}"
+        else:
+            period = f"FY{date.year % 100}"
+        
+        parts.append(period)
+        parts.append(self.project_type)
+        
+        self.project_name = " - ".join(parts)
+        # 结果："Client A (Pty Ltd) - August 2025 - BAS"
+        
+        # 2. 更新日期
+        self.expected_start_date = date
+        if auto_repeat_doc.frequency == "Monthly":
+            self.expected_end_date = get_last_day(date)
+        elif auto_repeat_doc.frequency == "Quarterly":
+            self.expected_end_date = get_last_day(add_months(date, 3))
+        else:
+            self.expected_end_date = get_last_day(add_months(date, 12))
+        
+        # 3. 继承关键字段（用户可修改）
+        self.custom_entity_name = reference_doc.custom_entity_name
+        
+        # 继承团队成员子表
+        for member in reference_doc.custom_team_members:
+            self.append('custom_team_members', {
+                'user': member.user,
+                'role': member.role,
+                'assigned_date': frappe.utils.today()
+            })
+        
+        # 4. 重置状态
+        self.status = "Not Started"
+        self.percent_complete = 0
+        self.notes = ""
+```
+
+#### Step 3: 创建文件结构（必须）
+
+**创建overrides目录和文件**：
+
+1. 创建目录结构（如果不存在）：
+
+```bash
+mkdir -p /home/jeffrey/frappe-bench/apps/smart_accounting/smart_accounting/overrides
+```
+
+2. 创建 `__init__.py`（让Python识别为包）：
+
+```bash
+touch /home/jeffrey/frappe-bench/apps/smart_accounting/smart_accounting/overrides/__init__.py
+```
+
+3. 创建 `project.py` 文件：
+
+```bash
+touch /home/jeffrey/frappe-bench/apps/smart_accounting/smart_accounting/overrides/project.py
+```
+
+4. 将上面Step 1和Step 2的代码复制到 `project.py` 文件中（完整的CustomProject类，包含after_insert, create_auto_repeat, validate, sync_auto_repeat_frequency, on_recurring方法）
+
+**文件结构示例**：
+```
+apps/smart_accounting/smart_accounting/
+├── overrides/
+│   ├── __init__.py
+│   └── project.py  ← 完整的CustomProject类代码
+└── hooks.py  ← 配置override_doctype_class
+```
+
+---
+
+#### Step 4: 配置钩子到 hooks.py
+
+```python
+# apps/smart_accounting/smart_accounting/hooks.py
+
+# 覆盖 ERPNext 原生 Project（Phase 8）
+override_doctype_class = {
+    "Project": "smart_accounting.overrides.project.CustomProject"
+}
+
+# Project Client Script（Phase 7）
+doctype_js = {
+    "Project": "public/js/project.js"
+}
+```
+
+> **重要提示**：hooks.py需要同时配置Phase 7（project.js）和Phase 8（project.py）的内容
+
+---
+
+#### Step 5: 清除缓存并重启（必须）
+
+```bash
+cd /home/jeffrey/frappe-bench
+bench clear-cache
+bench restart
+```
+
+> **说明**：修改Python代码后必须重启，否则不会生效
+
+---
+
+#### Step 6: 验证 Auto Repeat
+
+1. 等待系统定时任务运行（每天检查）
+2. 或者手动触发：在 Auto Repeat 文档点击 **Create Documents**
+3. 检查是否自动创建了新 Project：
+   - 名称自动更新（如 "Client A - August 2025 BAS"）
+   - 日期自动更新
+   - 团队配置继承
+   - 状态重置为 "Not Started"
+
+#### 优势
+
+- ✅ 完全利用 Frappe 原生功能
+- ✅ 自动化程度高，无需人工干预
+- ✅ 每个周期是独立 Project，层级清晰
+- ✅ 支持 Monthly/Quarterly/Yearly 频率
+
+---
+
+## 6. 实施顺序总结
+
+| Phase | 内容 | 方式 |
+|-------|------|------|
+| **准备** | 创建 Project Type 记录 | UI (Projects → Project Type → New) |
+| **1** | 创建 Customer Entity 子表 DocType | UI (New DocType - 子表，5字段) |
+| **2** | Customer & Contact 扩展 | UI (Customize Form) |
+| **2.5** | 创建 Project Team Member 子表 DocType | UI (New DocType - 子表，3字段) |
+| **3** | 创建 Software DocType 和记录 | UI (New DocType + 创建记录，2字段) |
+| **4** | Project 扩展（7字段）| UI (Customize Form) |
+| **5** | Task 扩展（2字段）| UI (Customize Form) |
+| **6** | 创建 Saved View DocType | UI (New DocType，7字段) |
+| **7** | Status动态过滤 | 代码（Client Script + hooks.py）|
+| **8** | Auto Repeat 自动创建 | 代码（after_insert, validate, on_recurring钩子）|
+
+> **说明**：
+> - "准备"阶段需要创建业务所需的Project Type记录（如ITR、BAS、R&D Grant等），这些是ERPNext原生数据，在后续Phase中会用到。
+> - Phase 2.5（v4.3新增）：创建Project Team Member子表，用于Project的团队成员管理，相比JSON方式大幅提升查询性能和数据完整性。
+
+---
+
+## 7. 验证清单
+
+### 7.1 DocType 和基础数据创建验证
+
+- [ ] Customer Entity 子表DocType 创建成功（**v4.1新增**，5字段）
+- [ ] Project Team Member 子表DocType 创建成功（**v4.3新增**，3字段）
+- [ ] Software DocType 创建成功（2字段）
+- [ ] Saved View DocType 创建成功（7字段）
+- [ ] 能创建 Customer Entity 记录（entity_name, entity_type, abn, year_end, is_primary）
+- [ ] 能创建 Project Team Member 记录（user, role, assigned_date）
+- [ ] 能创建 Software 记录（如 Xero, MYOB）
+- [ ] 已创建业务所需的 Project Type 记录（ITR, BAS, Bookkeeping, R&D Grant, Financial Statements等）
+
+### 7.2 字段扩展验证
+
+- [ ] Customer 扩展：2 个字段（referred_by, entities）**v4.1更新**
+- [ ] Contact 扩展：3 个字段（is_referrer, contact_role, social_accounts）
+- [ ] Project 扩展：7 个字段（entity_name, team_members, fiscal_year, target_month, lodgement_due_date, frequency, softwares）**v4.3更新**
+- [ ] Task 扩展：2 个字段（fiscal_year, period）
+
+### 7.3 功能验证
+
+- [ ] Customer 可以添加多个 entities（子表）
+- [ ] Project 可以添加多个 team_members（子表）**v4.3新增**
+- [ ] 在 Project 表单中能看到所有 7 个新字段
+- [ ] Project.custom_entity_name 可以从 Customer.custom_entities 选择
+- [ ] Project.custom_team_members 可以添加团队成员并选择角色（Preparer/Reviewer/Partner）**v4.3新增**
+- [ ] Project.project_type 可以正常选择（ERPNext 原生字段，无需扩展）
+- [ ] Project.custom_softwares 可以选择 Software 记录
 - [ ] Customer、Contact、Task 的扩展字段都能正常显示
+- [ ] Saved View 能正常保存 JSON 字段内容（7 个字段）
 
-### 6.2 Saved View 验证
+### 7.4 Select 选项验证
 
-- [ ] Saved View DocType 创建成功
-- [ ] 能新建 Saved View 记录
-- [ ] 能正常保存 JSON 字段内容
-
-### 6.3 Select 选项验证
-
-- [ ] Project status 选项正确
+- [ ] Project status 选项正确（配置了所有状态超集）
 - [ ] Task status 选项正确
+- [ ] Customer Entity.entity_type 选项正确
 - [ ] 其他 Select 字段选项正确
+
+### 7.5 Status动态过滤验证（Phase 7 - v4.2新增）
+
+**代码文件验证**：
+- [ ] 目录存在：`apps/smart_accounting/smart_accounting/public/js/`
+- [ ] 文件存在：`apps/smart_accounting/smart_accounting/public/js/project.js`
+- [ ] hooks.py配置正确：`doctype_js = {"Project": "public/js/project.js"}`
+- [ ] 执行了 `bench clear-cache` 和 `bench restart`
+
+**功能验证**：
+- [ ] Project.status字段配置了所有状态超集（12个状态）
+- [ ] 打开Project表单，根据project_type显示对应status选项：
+  - [ ] project_type = "ITR" → status只显示ITR相关状态（7个）
+  - [ ] project_type = "BAS" → status只显示BAS相关状态（8个）
+  - [ ] project_type = "Bookkeeping" → status只显示简化状态（4个）
+  - [ ] project_type = "R&D Grant" → status只显示R&D相关状态（8个）
+- [ ] 切换project_type时，status选项动态更新
+- [ ] 保存的status值在后端完整保留（不受前端过滤影响）
+
+### 7.6 Auto Repeat 自动创建验证（Phase 8 - v4.1更新）
+
+**代码文件验证**：
+- [ ] 目录存在：`apps/smart_accounting/smart_accounting/overrides/`
+- [ ] 文件存在：`apps/smart_accounting/smart_accounting/overrides/__init__.py`
+- [ ] 文件存在：`apps/smart_accounting/smart_accounting/overrides/project.py`
+- [ ] project.py包含完整的CustomProject类（5个方法：after_insert, create_auto_repeat, validate, sync_auto_repeat_frequency, on_recurring）
+- [ ] hooks.py配置正确：`override_doctype_class = {"Project": "smart_accounting.overrides.project.CustomProject"}`
+- [ ] 执行了 `bench clear-cache` 和 `bench restart`
+
+**功能验证**：
+- [ ] 创建Project时选择custom_frequency（非One-off）
+- [ ] Project保存后自动创建Auto Repeat记录（**after_insert钩子**）
+- [ ] Project.auto_repeat字段自动关联到Auto Repeat
+- [ ] 修改custom_frequency时Auto Repeat同步更新（**validate钩子**）
+- [ ] Auto Repeat自动创建新Project（名称包含entity信息和period）
+- [ ] 新Project的custom_entity_name正确继承
+- [ ] 新Project团队配置正确继承（custom_team, custom_team_members）
+- [ ] 新Project状态重置为"Not Started"，percent_complete=0
 
 ---
 
@@ -267,3 +929,6 @@ Completed
 | 版本 | 日期 | 修改内容 |
 |------|------|---------|
 | 1.0 | 2025-12-12 | 初始版本，纯 UI 操作方式 |
+| 2.0 | 2025-12-16 | **重大更新**：① 删除 custom_fiscal_year 字段（Project 从 8 个改为 6 个扩展字段）；② 删除过时字段引用（custom_primary_contact 等）；③ 添加 Software DocType 创建步骤（Phase 2）；④ 添加 Project Type 扩展步骤（Phase 3）；⑤ 修正 project_type 为原生字段；⑥ 更新字段类型示例；⑦ 完善验证清单 |
+| 2.1 | 2025-12-17 | **周期性任务优化**：① Project 恢复 fiscal_year 字段（从 6 个改为 7 个扩展字段）；② Task 精简为 2 个扩展字段（fiscal_year, period），最大化利用 ERPNext 原生字段；③ 明确 Project + Task 架构处理周期性任务；④ 更新所有字段数量和验证清单 |
+| 3.0 | 2025-12-17 | **最终精简优化**：① Software DocType 精简到 2 个字段（删除 companies/is_global，TF/TG 共用）；② 删除 Phase 3（Project Type 无需扩展）；③ Saved View 精简到 7 个字段（删除 view_type/target_doctype/group_by/company/is_system 等）；④ 重新编号 Phase（原 Phase 4-7 改为 Phase 3-6）；⑤ 更新所有字段数量和验证清单 |

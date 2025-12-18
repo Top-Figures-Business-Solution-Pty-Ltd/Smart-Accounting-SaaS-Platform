@@ -2,22 +2,66 @@
 # 数据模型 - 重构规划文档
 
 **项目**: Smart Accounting  
-**版本**: v6.0  
-**日期**: 2025-12-16  
+**版本**: v8.2  
+**日期**: 2025-12-18  
 **状态**: 🔄 重构规划中 (Prototype 阶段)  
-**重构策略**: ✅ **最大化利用 ERPNext 原生 DocType**  
-**SaaS架构**: ✅ **Frappe原生多Site架构**（每租户独立Site，天然隔离）
+**重构策略**: ✅ **最大化利用 ERPNext 原生 DocType + Frappe Auto Repeat**  
+**SaaS架构**: ✅ **Frappe原生多Site架构**（两阶段演进，无需tenant_id）
 
 ---
 
-## 更新日志 (v6.0 - 2025-12-16)
+## 更新日志 (v8.2 - 2025-12-18)
 
-### 架构优化
-- ✅ **Software字段**：新建独立DocType（支持租户自定义，多Site架构天然隔离）
-- ✅ **Project Type**：使用ERPNext原生DocType + 扩展companies字段（支持单Site多Company场景）
-- ✅ **Status**：使用原生字段 + Property Setter配置（多Site架构下每租户独立配置）
-- ✅ **SaaS架构**：确认采用Frappe原生多Site架构（每租户独立Site，天然数据隔离）
-- ❌ **Fiscal Year**：从Project中删除（财年信息可包含在project_name中，如"FY24 ITR"）
+### 🎯 团队字段架构优化（Critical - 提升SaaS可扩展性）
+- ✅ **custom_team从JSON改为子表**：提升查询性能和数据完整性
+- ✅ **创建Project Team Member子表**：3个字段（user, role, assigned_date）
+- ✅ **Project扩展字段优化**：从8个减少到7个（custom_team删除，custom_team_members改为Table类型）
+- ✅ **查询性能提升**：支持数据库级别索引和JOIN，高效查询"用户的所有Projects"
+- ✅ **SaaS可扩展性**：大规模数据（>10000 Projects）性能稳定
+- ✅ **数据完整性**：外键约束，用户删除时可级联清理
+- ✅ **报表友好**：直接SQL聚合统计，无需应用层解析JSON
+
+### 更新影响范围
+- ✅ Auto Repeat继承逻辑更新：从JSON复制改为子表append
+- ✅ 架构图更新：custom_team (JSON)改为custom_team_members → Project Team Member
+- ✅ 实施步骤更新：Step 3新增创建Project Team Member子表
+
+---
+
+## 更新日志 (v8.1 - 2025-12-17)
+
+### 🎯 客户多实体支持（Critical）
+- ✅ **Customer Entity子表**：支持一个客户拥有多个实体（Individual/Company/Trust等）
+- ✅ **Project关联实体**：添加custom_entity_name字段，明确每个Project对应哪个实体
+- ✅ **避免数据冗余**：不需要为同一客户的不同实体创建多个Customer记录
+- ✅ **实施简单**：仅需1个子表DocType + 2个字段修改
+
+### 🔧 Auto Repeat自动创建机制
+- ✅ **UI选择frequency**：用户创建Project时选择custom_frequency（Monthly/Quarterly/Yearly）
+- ✅ **自动创建Auto Repeat**：Project保存后自动创建对应的Auto Repeat记录
+- ✅ **双向同步**：修改custom_frequency时自动更新Auto Repeat.frequency
+- ✅ **开发成本**：约2-3小时（after_insert和validate钩子）
+
+### 🎯 周期性业务架构优化（v8.0）
+- ✅ **采用Frappe原生Auto Repeat**：自动创建周期性Project，完全利用原生功能
+- ✅ **每个周期独立Project**：每个月/季度是独立的Project，不是Task（层级清晰）
+- ✅ **符合Monday.com风格**：每行都是独立工作项，不是容器+子任务的混乱层级
+- ✅ **Task回归本来用途**：仅作为Project的执行步骤（可选），扩展字段保持2个
+- ✅ **自动命名和归档**：通过on_recurring钩子自动生成新Project名称
+
+### SaaS架构演进策略（v7.1）
+- ✅ **两阶段演进路径**：第一阶段单Site部署（当前），第二阶段多Site SaaS（未来）
+- ✅ **完全利用原生机制**：不需要添加tenant_id字段，Site本身就是租户隔离单元
+- ✅ **零额外成本**：第一阶段完全利用原生功能，无额外开发
+- ✅ **平滑升级**：第二阶段仅需3-4周（主要是SaaS门户），核心代码无需修改
+- ✅ **架构优势**：物理隔离 > 逻辑隔离，Site方案比传统tenant_id方案更安全、更简单
+
+### 架构优化（v7.0）
+- ✅ **Software DocType**：极简设计，仅2个字段（software_name, is_active）
+- ✅ **Project Type**：使用ERPNext原生，无需扩展字段
+- ✅ **Saved View**：精简到7个核心字段（删除company等冗余字段）
+- ✅ **Project扩展**：7个字段（含fiscal_year）
+- ✅ **数据隔离**：Company字段区分TF/TG，User Permissions控制访问范围
 
 ---
 
@@ -59,12 +103,120 @@
 
 | 层级 | 处理方式 |
 |------|---------|
-| **ERPNext 原生扩展** | Customer / Contact / User / Company / Project / Task 保持原生，添加扩展字段 |
-| **新建 DocType** | Software（软件列表）、Saved View（视图配置）|
-| **Project Type** | 使用ERPNext原生Project Type + 扩展companies字段 |
+| **ERPNext 原生扩展** | Customer / Contact / Project / Task 保持原生，添加扩展字段 |
+| **ERPNext 原生直接使用** | User / Company / Project Type 保持原生，无需扩展 |
+| **新建 DocType** | Customer Entity（子表4字段）、Software（极简2字段）、Saved View（精简7字段）|
 | **Property Setter** | Status 等Select字段选项配置（多Site架构下每租户独立配置）|
-| **原生功能利用** | Comment 系统（审核备注）、User Settings（用户偏好）|
+| **原生功能利用** | Comment 系统、User Settings、Assignment（任务分配）|
+| **Auto Repeat 自动创建** | Project创建时根据custom_frequency自动创建Auto Repeat |
 | **现有数据** | 编写迁移脚本从旧 Task 结构转移到 Project |
+
+### 1.4 SaaS架构演进策略 ✅ **完全利用Frappe原生Site机制**
+
+> **核心原则**：不需要添加任何 `tenant_id` 字段，Frappe 的 Site 本身就是租户隔离单元
+
+#### 第一阶段（当前）：单租户部署
+
+```
+物理架构：单物理服务器 + 单 Site
+数据隔离：Company 字段区分 TF/TG
+权限控制：User Permissions 限制用户访问范围
+
+Site: your-company.yoursite.com (单租户)
+  ├── Company: TF (会计事务所)
+  │   ├── Project (ITR/BAS/Bookkeeping...)
+  │   ├── Customer
+  │   └── Task
+  │
+  └── Company: TG (R&D 业务)
+      ├── Project (R&D Grant...)
+      ├── Customer
+      └── Task
+```
+
+**利用的原生资源：**
+- ✅ **Site**：单租户环境
+- ✅ **Company**：TF/TG 数据隔离（ERPNext 原生）
+- ✅ **User Permissions**：限制用户只看特定 Company（Frappe 原生）
+- ✅ **Project/Task/Customer**：ERPNext 原生 + 扩展字段
+
+**开发成本：** ✅ 零额外成本（完全利用原生功能）
+
+#### 第二阶段（未来）：多租户 SaaS
+
+```
+物理架构：云服务器 + 多 Site（每租户独立 Site）
+租户隔离：Site 级别（独立数据库，完全物理隔离）
+扩展能力：Frappe Bench 原生支持管理数百个 Site
+
+SaaS 服务器（云端）
+├── Site 1: firm-a.accounting.com (租户A - 会计所A)
+│   ├── Company: Main Office
+│   └── Company: Branch Office
+│
+├── Site 2: firm-b.accounting.com (租户B - 会计所B)
+│   └── Company: Firm B
+│
+└── Site 3: firm-c.accounting.com (租户C - 会计所C)
+    └── Company: Firm C
+```
+
+**改造工作量评估：**
+
+| 工作项 | 工作量 | 说明 |
+|-------|-------|------|
+| **Site 创建自动化** | 🟢 低（1周） | 脚本自动创建新 Site |
+| **SaaS 门户开发** | 🔴 高（2-3周） | 注册、计费、Site 管理界面 |
+| **数据迁移** | ✅ 不需要 | 新租户使用新 Site，无迁移 |
+| **核心代码修改** | ✅ 不需要 | App 代码完全不变 |
+| **权限系统改造** | ✅ 不需要 | Site 天然隔离 |
+| **配置隔离** | ✅ 不需要 | 每个 Site 独立配置 |
+
+**预估改造时间：** 3-4 周（主要是 SaaS 门户开发）
+
+#### 为什么不需要 tenant_id 字段？
+
+```python
+# ❌ 传统 SaaS 架构（共享数据库）
+Project:
+  - tenant_id         # 需要手动添加
+  - company
+  - customer
+  
+WHERE tenant_id = ? AND company = ?  # 每个查询都要过滤
+
+# ✅ Frappe Site 架构（Site 隔离）
+Project:
+  - company           # 只需要 Company 字段
+  - customer
+  
+# 每个 Site 有独立数据库，Site 本身就是租户边界
+# 查询自动限定在当前 Site 的数据库中
+```
+
+**优势对比：**
+
+| 特性 | 传统 tenant_id 方案 | Frappe Site 方案 |
+|-----|-------------------|-----------------|
+| **数据隔离** | 逻辑隔离（同一数据库） | 物理隔离（独立数据库） |
+| **安全性** | 中等（依赖代码正确性） | 高（数据库级别隔离） |
+| **第一阶段开发成本** | 需要添加字段和过滤逻辑 | ✅ 零成本 |
+| **第二阶段改造成本** | 2-3个月（数据迁移+代码） | 3-4周（仅 SaaS 门户） |
+| **租户配置独立性** | 需要额外设计 | ✅ 天然独立 |
+| **性能** | 需要索引优化 | ✅ 租户间完全独立 |
+
+#### 架构演进路径
+
+```mermaid
+flowchart LR
+    A[第一阶段<br/>单Site部署] -->|3-4周开发| B[第二阶段<br/>多Site SaaS]
+    
+    A1[单服务器<br/>单Site<br/>多Company] --> A
+    B1[云服务器<br/>多Site<br/>SaaS门户] --> B
+    
+    style A fill:#90EE90
+    style B fill:#87CEEB
+```
 
 ---
 
@@ -120,9 +272,11 @@ flowchart TB
 ```mermaid
 flowchart TB
     subgraph 基础数据
-        CUSTOMER["<b>Customer</b><br/>──────────<br/>⚫ customer_name<br/>✅ referred_by → Contact<br/>✅ entity_type<br/>✅ year_end"]
+        CUSTOMER["<b>Customer</b><br/>──────────<br/>⚫ customer_name<br/>✅ custom_referred_by → Contact<br/>✅ custom_entities → Customer Entity (子表)"]
         
-        CONTACT["<b>Contact</b><br/>──────────<br/>⚫ contact_name<br/>✅ is_referrer<br/>✅ contact_role<br/>✅ social_accounts (JSON)"]
+        CONTACT["<b>Contact</b><br/>──────────<br/>⚫ contact_name<br/>✅ custom_is_referrer<br/>✅ custom_contact_role<br/>✅ custom_social_accounts (JSON)"]
+        
+        CUST_ENTITY["<b>Customer Entity</b> (子表)<br/>──────────<br/>✅ entity_name<br/>✅ entity_type<br/>✅ abn<br/>✅ year_end<br/>✅ is_primary"]
         
         COMPANY["<b>Company</b><br/>──────────<br/>⚫ company_name<br/>✅ 保持原生"]
         
@@ -130,17 +284,17 @@ flowchart TB
     end
     
     subgraph 业务数据
-        PROJ["<b>Project</b><br/>──────────<br/>⚫ project_name<br/>⚫ customer<br/>⚫ company (租户隔离)<br/>⚫ project_type → Project Type<br/>⚫ status (超集选项)<br/>⚫ priority<br/>⚫ estimated_costing<br/>⚫ notes<br/>⚫ is_active<br/>✅ custom_team (JSON)<br/>✅ custom_target_month<br/>✅ custom_lodgement_due_date<br/>✅ custom_frequency<br/>✅ custom_softwares → Software"]
+        PROJ["<b>Project</b><br/>──────────<br/>⚫ project_name<br/>⚫ customer<br/>⚫ company (区分 TF/TG)<br/>⚫ project_type → Project Type<br/>⚫ status (可配置)<br/>⚫ priority<br/>⚫ estimated_costing<br/>⚫ notes<br/>⚫ is_active<br/>⚫ auto_repeat → Auto Repeat<br/>✅ custom_entity_name<br/>✅ custom_fiscal_year<br/>✅ custom_team_members → Project Team Member<br/>✅ custom_target_month<br/>✅ custom_lodgement_due_date<br/>✅ custom_frequency<br/>✅ custom_softwares → Software"]
         
-        TASK["<b>Task</b><br/>──────────<br/>⚫ subject<br/>⚫ project<br/>⚫ status (可配置)<br/>✅ assigned_to<br/>✅ due_date<br/>✅ notes (静态备注)<br/>✅ priority (可配置)"]
+        TASK["<b>Task</b><br/>──────────<br/>⚫ subject<br/>⚫ project<br/>⚫ status (可配置)<br/>⚫ priority<br/>⚫ exp_start_date / exp_end_date<br/>⚫ expected_time / actual_time<br/>⚫ description / progress<br/>✅ custom_fiscal_year<br/>✅ custom_period"]
     end
     
     subgraph 辅助数据
-        SV["<b>Saved View</b> (新建)<br/>──────────<br/>✅ title<br/>✅ view_type<br/>✅ target_doctype<br/>✅ project_type<br/>✅ columns (JSON)<br/>✅ filters (JSON)<br/>✅ field_options (JSON)<br/>✅ group_by<br/>✅ sort_by, sort_order<br/>✅ company<br/>✅ is_default, is_system"]
+        SV["<b>Saved View</b> (新建)<br/>──────────<br/>✅ title<br/>✅ project_type<br/>✅ columns (JSON)<br/>✅ filters (JSON)<br/>✅ sort_by<br/>✅ sort_order<br/>✅ is_default"]
         
-        PT["<b>Project Type</b><br/>(原生+扩展)<br/>──────────<br/>⚫ project_type<br/>⚫ description<br/>✅ companies (MultiSelect)<br/>✅ is_global"]
+        PT["<b>Project Type</b><br/>(ERPNext 原生)<br/>──────────<br/>⚫ project_type<br/>⚫ description<br/>✅ 无需扩展"]
         
-        SW["<b>Software</b> (新建)<br/>──────────<br/>✅ software_name<br/>✅ companies (MultiSelect)<br/>✅ is_global<br/>✅ is_active"]
+        SW["<b>Software</b> (新建)<br/>──────────<br/>✅ software_name<br/>✅ is_active"]
     end
     
     subgraph 原生功能
@@ -149,6 +303,7 @@ flowchart TB
     end
     
     CONTACT --> CUSTOMER
+    CUSTOMER --> CUST_ENTITY
     CUSTOMER --> PROJ
     COMPANY --> PROJ
     USER --> PROJ
@@ -194,18 +349,24 @@ flowchart TB
 > **从干净原生 ERPNext 开始，逐步扩展：**
 
 ```
-Step 1: 基础层扩展
-        ├── Customer 扩展（referred_by, entity_type, year_end）
-        └── Contact 扩展（is_referrer, contact_role）
+Step 1: 创建子表DocType
+        └── Customer Entity 子表（4个字段：entity_name, entity_type, abn, year_end, is_primary）
 
-Step 2: 核心层扩展
-        ├── Project 扩展（6 个扩展字段：team, team_members, target_month, lodgement_due_date, frequency, softwares + 配置原生project_type字段）
-        └── Task 扩展（4 个扩展字段：assigned_to, due_date, notes, priority）
+Step 2: 基础层扩展
+        ├── Customer 扩展（2个字段：custom_referred_by, custom_entities → Customer Entity）
+        └── Contact 扩展（3个字段：custom_is_referrer, custom_contact_role, custom_social_accounts）
 
-Step 3: 视图层
-        └── 创建 Saved View DocType（13 个字段）
+Step 3: 核心层扩展
+        ├── 创建 Project Team Member 子表（3个字段：user, role, assigned_date）
+        ├── Project 扩展（7个扩展字段：custom_entity_name, custom_team_members, custom_fiscal_year, custom_target_month, custom_lodgement_due_date, custom_frequency, custom_softwares）
+        ├── Task 扩展（2个扩展字段：custom_fiscal_year, custom_period + 利用原生时间/工时/成本字段）
+        └── Project Auto Repeat 钩子（after_insert/validate方法：自动创建和同步Auto Repeat）
 
-Step 4: 数据迁移
+Step 4: 视图层
+        ├── 创建 Software DocType（2个字段）
+        └── 创建 Saved View DocType（7个字段）
+
+Step 5: 数据迁移
         └── 旧 Task 数据 → Project
 ```
 
@@ -222,7 +383,7 @@ Step 4: 数据迁移
 | **原生字段（直接使用）** ||||||
 | 项目名称 | `project_name` | Data | ✅ | ERPNext 原生 | 如 "Client A - FY24 ITR" |
 | 客户 | `customer` | Link → Customer | ✅ | ERPNext 原生 | 所属客户 |
-| 公司 | `company` | Link → Company | ✅ | ERPNext 原生 | 所属公司（**SaaS 租户隔离关键**）|
+| 公司 | `company` | Link → Company | ✅ | ERPNext 原生 | 所属公司（区分 TF/TG，用于筛选和权限控制）|
 | 状态 | `status` | Select | ✅ | ERPNext 原生 | 工作状态（可通过 Property Setter 配置选项）|
 | 优先级 | `priority` | Select | | ERPNext 原生 | Low/Medium/High |
 | 预计开始 | `expected_start_date` | Date | | ERPNext 原生 | 开始日期 |
@@ -230,29 +391,54 @@ Step 4: 数据迁移
 | 预算 | `estimated_costing` | Currency | | ERPNext 原生 | 预算金额 |
 | 备注 | `notes` | Text Editor | | ERPNext 原生 | 静态备注（对标 Monday Notes）|
 | 是否活跃 | `is_active` | Select | | ERPNext 原生 | Yes=未归档 / No=已归档 |
-| 项目类型 | `project_type` | Link → Project Type | | ERPNext 原生 | 业务类型（ITR/BAS/Payroll...），扩展Project Type添加companies字段支持租户隔离 |
+| 项目类型 | `project_type` | Link → Project Type | | ERPNext 原生 | 业务类型（ITR/BAS/Payroll/R&D Grant...），TF和TG共用 |
 | **扩展字段 - 团队** ||||||
-| 团队 | `custom_team` | JSON | | 扩展 | 存储角色人员 `{preparers:[], reviewers:[], partners:[]}` |
-| 团队成员 | `custom_team_members` | Data | | 扩展 | 辅助筛选字段（逗号分隔，自动生成）|
+| 团队成员 | `custom_team_members` | Table | | 扩展 | 子表：Project Team Member（用户+角色）|
 | **扩展字段 - 业务** ||||||
+| 实体名称 | `custom_entity_name` | Data | | 扩展（v8.1新增）| 关联Customer Entity，如 "Client A Pty Ltd" |
+| 财年 | `custom_fiscal_year` | Data | | 扩展 | 如 "FY24", "FY25" |
 | 目标月份 | `custom_target_month` | Select | | 扩展 | January~December |
 | 法定截止日期 | `custom_lodgement_due_date` | Date | | 扩展 | ATO 规定的法定截止日期 |
-| 频率 | `custom_frequency` | Select | | 扩展 | Annually/Quarterly/Monthly/...（按需显示）|
+| 频率 | `custom_frequency` | Select | | 扩展 | Annually/Quarterly/Monthly/One-off（**会自动创建Auto Repeat**）|
 | 使用软件 | `custom_softwares` | Table MultiSelect | | 扩展 | Xero/MYOB/QuickBooks/Excel/... |
 
-**团队 JSON 格式**：
-```json
-{
-  "preparers": ["bob@tf.com", "david@tf.com"],
-  "reviewers": ["charlie@tf.com"],
-  "partners": ["alice@tf.com"]
-}
+**团队成员子表（Project Team Member）**：
+
+| 字段 | 字段名 | 类型 | 必填 | 说明 |
+|------|--------|------|------|------|
+| 用户 | `user` | Link → User | ✅ | 团队成员（Email） |
+| 角色 | `role` | Select | ✅ | Preparer/Reviewer/Partner |
+| 分配日期 | `assigned_date` | Date | | 分配时间（可选）|
+
+**role 选项**：
+```
+Preparer (准备者)
+Reviewer (审核者)
+Partner (合伙人)
 ```
 
-> **为什么用 JSON？** Monday.com 风格的多人分配 UI 需要：
-> - 列表加载快（无需 JOIN 子表）
-> - 前端直接解析显示多人头像
-> - 点击即弹出选择器，可多选
+**使用示例**：
+```
+Project: Client A - FY25 ITR
+└── Team Members (子表):
+    ├── bob@tf.com (Preparer)
+    ├── david@tf.com (Preparer)
+    ├── charlie@tf.com (Reviewer)
+    └── alice@tf.com (Partner)
+```
+
+> **为什么用子表而非JSON？**
+> - ✅ **查询性能**：数据库级别索引和JOIN，支持高效查询"Bob的所有Projects"
+>   ```sql
+>   SELECT p.* FROM `tabProject` p
+>   JOIN `tabProject Team Member` tm ON tm.parent = p.name
+>   WHERE tm.user = 'bob@tf.com' AND p.status != 'Completed'
+>   ```
+> - ✅ **数据完整性**：外键约束，用户删除时可以级联清理或警告
+> - ✅ **报表统计**：可以直接用SQL聚合每个人的工作量、按角色统计
+> - ✅ **SaaS可扩展**：数据量大时（>5000 Projects）性能稳定，查询速度不受影响
+> - ✅ **Frappe原生支持**：子表机制成熟，前端UI组件完善（拖拽排序、行内编辑）
+> - ✅ **Monday.com体验**：前端仍可实现多人头像显示，点击弹出编辑
 
 **Notes vs Comments（已确认）**：
 ```
@@ -285,83 +471,292 @@ Grants:   R&D Grant / Export Grant / ...
 - SaaS 多租户时，每个 Site 独立配置
 ```
 
+**custom_frequency 与 Auto Repeat 自动创建（v8.1）**：
+```python
+# 用户工作流程：
+1. 用户在UI创建Project，选择custom_frequency = "Monthly"
+2. Project保存后，系统自动创建Auto Repeat记录
+3. Auto Repeat根据频率自动创建后续的Project
+
+# 实现逻辑（after_insert钩子）：
+class CustomProject(Project):
+    def after_insert(self):
+        if self.custom_frequency and self.custom_frequency != "One-off":
+            # 自动创建Auto Repeat
+            auto_repeat = frappe.new_doc("Auto Repeat")
+            auto_repeat.reference_doctype = "Project"
+            auto_repeat.reference_document = self.name
+            auto_repeat.frequency = self.custom_frequency  # Monthly/Quarterly/Yearly
+            auto_repeat.start_date = self.expected_start_date
+            auto_repeat.save()
+            
+            # 关联到Project
+            self.auto_repeat = auto_repeat.name
+            self.save()
+
+# 同步机制（validate钩子）：
+# 用户修改custom_frequency时，自动更新Auto Repeat.frequency
+```
+
+**优势：**
+- ✅ 用户体验：在Project表单直接选择frequency，无需手动创建Auto Repeat
+- ✅ 数据一致性：custom_frequency和Auto Repeat.frequency自动同步
+- ✅ 灵活性：用户仍可进入Auto Repeat修改详细配置（如end_date）
+
 ---
 
 ### 3.2 Task（任务/子任务）
 
-> **定位**：可作为 Project 的子任务，也可独立使用
+> **定位**：Project 的执行步骤（可选）或独立任务
+> 
+> **设计原则**：最大化利用 ERPNext 原生字段（时间、工时、成本等），仅添加必要的业务扩展字段
+>
+> **v8.0 架构变化**：周期性业务改用 Auto Repeat 自动创建独立 Project，Task 不再承载周期性工作，回归执行步骤用途
 
 | 字段 | 字段名 | 类型 | 必填 | 说明 |
 |------|--------|------|------|------|
-| **原生字段** |||||
-| 任务名称 | `subject` | Data | ✅ | ERPNext 原生 |
-| 状态 | `status` | Select | ✅ | ERPNext 原生，选项可通过 Property Setter 自定义 |
-| 所属项目 | `project` | Link → Project | | ERPNext 原生 |
-| 父任务 | `parent_task` | Link → Task | | ERPNext 原生 |
-| **扩展字段（已确认）** |||||
-| 负责人 | `assigned_to` | Link → User | | ✅ 任务负责人（Owner）|
-| 截止日期 | `due_date` | Date | | ✅ 任务截止日期 |
-| 备注 | `notes` | Text | | ✅ 静态备注（对标 Monday Notes）|
-| **扩展字段（其他）** |||||
-| 客户 | `customer` | Link → Customer | | 独立任务时填写 |
-| 完成日期 | `completed_date` | Date | | 实际完成日期 |
-| 优先级 | `priority` | Select | | Low/Medium/High（可配置）|
-| 排序 | `sequence` | Int | | 在父级下的排序 |
+| **扩展字段（2个）** |||||
+| 财年 | `custom_fiscal_year` | Data | | 如 "FY24", "FY25"（可从Project继承）|
+| 周期 | `custom_period` | Data | | 如 "Q1", "July"（可从Project继承）|
 
-> **审核备注**：使用 Frappe 原生 Comment 系统，无需单独字段
+> **利用的原生字段**（无需添加）：
+> - `subject`, `status`, `priority`, `project`, `parent_task` - 基础信息
+> - `exp_start_date`, `exp_end_date`, `act_start_date`, `act_end_date`, `completed_on` - 时间管理
+> - `expected_time`, `actual_time` - 工时追踪
+> - `total_billing_amount`, `total_costing_amount` - 成本计费
+> - `description`, `progress`, `color` - 其他
+> - **任务分配**：使用 ERPNext 原生 Assignment DocType（单人分配）
+
+**使用场景 1：Project 的执行步骤**
+```
+Project: Client A - July 2025 BAS (独立Project，由Auto Repeat创建)
+  Team: Bob (Preparer), Charlie (Reviewer)
+  
+  ├── Task: Collect Documents from Client
+  ├── Task: Prepare BAS Worksheet
+  ├── Task: Internal Review
+  ├── Task: Partner Approval
+  └── Task: Lodge to ATO
+
+说明：Task用于追踪Project内部的执行步骤（可选）
+```
+
+**使用场景 2：独立临时任务**
+```
+Task: Call Client A about missing invoice
+Task: Follow up with ATO on lodgement confirmation
+Task: Update Client B's contact details
+
+说明：不需要Project的独立任务，快速记录
+```
+
+**周期性业务的新架构（v8.0）**
+```
+旧方案（v7.2 - 已废弃）：
+  Project: Client A - BAS FY25 (容器)
+    ├── Task: Q1 BAS ← 实际工作在这里（混乱）
+    ├── Task: Q2 BAS
+    └── ...
+
+新方案（v8.0 - 推荐）：
+  Project: Client A - July 2025 BAS    ← 独立工作项（Auto Repeat创建）
+  Project: Client A - August 2025 BAS  ← 独立工作项（Auto Repeat创建）
+  Project: Client A - September 2025 BAS ← 独立工作项（Auto Repeat创建）
+  
+优势：
+  ✅ 层级清晰：每个周期是独立Project，不是Task
+  ✅ 符合Monday.com：每行是独立工作项
+  ✅ Task回归本来用途：执行步骤（可选）
+  ✅ 团队配置在Project级别，不需要Task.team字段
+```
 
 **Task 状态选项（可配置）**：
 ```
-默认值: Open → Working → Completed
+原生选项: Open / Working / Pending Review / Overdue / Completed / Cancelled
 
-配置方式: Property Setter（与 Project 相同）
-```
-
-**字段继承逻辑**：
-```
-如果 Task 有父级 Project:
-  - customer/company 从 Project 继承（无需填写）
-  - assigned_to 可以覆盖 Project 的 preparer
-
-如果 Task 独立使用:
-  - customer 自己填写
+配置方式: Property Setter（Customize Form）
 ```
 
 ---
 
-### 3.3 Saved View（视图配置）
+### 3.3 Auto Repeat 配置（周期性Project）
 
-> **状态**：✅ **基础字段已确认**（13 个通用字段）
+> **状态**：✅ **v8.0 新增** - 完全利用 Frappe 原生 Auto Repeat 功能
+>
+> **定位**：自动创建周期性 Project，替代旧的 Project + Task 容器方案
 
-> **定位**：替代 Partition，用户自定义显示哪些字段，实现多 Board 功能
+#### 3.3.1 配置说明
+
+| 字段 | 字段名 | 类型 | 说明 |
+|------|--------|------|------|
+| 引用DocType | `reference_doctype` | Link | "Project" |
+| 引用文档 | `reference_document` | Dynamic Link | 模板Project（第一个Project）|
+| 频率 | `frequency` | Select | Daily/Weekly/Monthly/Quarterly/Yearly |
+| 开始日期 | `start_date` | Date | 开始创建的日期 |
+| 结束日期 | `end_date` | Date | 可选，不设置则永久重复 |
+| 下次创建日期 | `next_schedule_date` | Date | 系统自动计算 |
+| 状态 | `status` | Select | Active/Disabled/Completed |
+
+#### 3.3.2 工作流程
+
+```mermaid
+flowchart LR
+    A[创建第一个Project] --> B[配置Auto Repeat]
+    B --> C[系统自动创建新Project]
+    C --> D{到达结束日期?}
+    D -->|否| C
+    D -->|是| E[Auto Repeat完成]
+    
+    style A fill:#90EE90
+    style C fill:#87CEEB
+    style E fill:#FFB6C1
+```
+
+**流程说明：**
+1. **手动创建模板Project**：例如 "Client A - July 2025 BAS"
+2. **配置Auto Repeat**：设置frequency=Monthly, start_date=2025-07-01
+3. **系统自动创建**：每月自动创建新Project（August 2025 BAS, September 2025 BAS...）
+4. **自动命名**：通过`on_recurring`钩子自动生成新名称
+5. **自动归档**：旧的已完成Project设置is_active=No
+
+#### 3.3.3 on_recurring 钩子
+
+```python
+# Project.on_recurring() 方法会在Auto Repeat创建新Project时触发
+
+def on_recurring(self, reference_doc, auto_repeat_doc):
+    """Auto Repeat创建新Project时的钩子"""
+    
+    # 1. 生成新的project_name
+    #    Monthly: "Client A - July 2025 BAS"
+    #    Quarterly: "Client A - Q2 FY25 BAS"
+    #    Yearly: "Client A - FY25 ITR"
+    self.project_name = generate_name(...)
+    
+    # 2. 更新日期
+    self.expected_start_date = auto_repeat_doc.next_schedule_date
+    self.expected_end_date = calculate_end_date(...)
+    
+    # 3. 继承团队配置（用户可以在新Project中修改）
+    # 复制团队成员子表
+    for member in reference_doc.custom_team_members:
+        self.append('custom_team_members', {
+            'user': member.user,
+            'role': member.role,
+            'assigned_date': frappe.utils.today()
+        })
+    
+    # 4. 重置状态
+    self.status = "Not Started"
+    self.percent_complete = 0
+    
+    # 5. 清除不应该继承的字段
+    self.notes = ""
+```
+
+#### 3.3.4 命名规则
+
+| 频率 | 命名格式 | 示例 |
+|------|---------|------|
+| **Monthly** | `{Customer} - {Month Year} {Type}` | "Client A - July 2025 BAS" |
+| **Quarterly** | `{Customer} - Q{N} FY{YY} {Type}` | "Client A - Q2 FY25 BAS" |
+| **Yearly** | `{Customer} - FY{YY} {Type}` | "Client A - FY25 ITR" |
+
+#### 3.3.5 归档策略
+
+```python
+# 选项A：自动归档（推荐）
+# Project完成后，自动设置is_active=No
+old_project.is_active = "No"
+
+# 选项B：保留所有历史
+# 不做任何处理，用于历史追溯
+
+# 选项C：物理删除（不推荐）
+# 仅在特殊情况下手动删除
+```
+
+#### 3.3.6 使用场景
+
+**场景1：Monthly BAS**
+```
+模板Project: Client A - July 2025 BAS
+Auto Repeat配置:
+  - frequency: Monthly
+  - start_date: 2025-07-01
+  - end_date: 2026-06-30 (可选)
+
+自动创建：
+  ├── Client A - July 2025 BAS (模板)
+  ├── Client A - August 2025 BAS (自动创建)
+  ├── Client A - September 2025 BAS (自动创建)
+  └── ... (每月自动创建)
+```
+
+**场景2：Quarterly BAS**
+```
+模板Project: Client A - Q1 FY25 BAS
+Auto Repeat配置:
+  - frequency: Quarterly
+  - start_date: 2025-07-01
+
+自动创建：
+  ├── Client A - Q1 FY25 BAS (模板)
+  ├── Client A - Q2 FY25 BAS (自动创建)
+  ├── Client A - Q3 FY25 BAS (自动创建)
+  └── Client A - Q4 FY25 BAS (自动创建)
+```
+
+**场景3：Yearly ITR**
+```
+模板Project: Client A - FY25 ITR
+Auto Repeat配置:
+  - frequency: Yearly
+  - start_date: 2025-07-01
+
+自动创建：
+  ├── Client A - FY25 ITR (模板)
+  ├── Client A - FY26 ITR (自动创建)
+  └── ... (每年自动创建)
+```
+
+#### 3.3.7 优势总结
+
+| 优势 | 说明 |
+|-----|------|
+| **完全利用原生功能** | Frappe Auto Repeat是成熟的原生功能，无需自定义 |
+| **自动化程度高** | 系统定时任务自动创建，无需人工干预 |
+| **灵活的频率选项** | Daily/Weekly/Monthly/Quarterly/Yearly |
+| **可控的结束日期** | 可设置end_date或永久重复 |
+| **支持通知** | Auto Repeat支持邮件通知 |
+| **层级清晰** | 每个周期是独立Project，不是Task |
+
+---
+
+### 3.4 Saved View（视图配置）
+
+> **状态**：✅ **精简设计确认**（7 个核心字段）
+
+> **定位**：用户自定义视图配置，支持两个核心场景：
+> 1. 为不同 project_type 配置显示字段
+> 2. 保存复杂的筛选条件组合
 
 | 字段 | 字段名 | 类型 | 必填 | 说明 |
 |------|--------|------|------|------|
-| **基础信息** |||||
-| 视图名称 | `title` | Data | ✅ | 如 "Payroll", "ITR Board" |
-| 视图类型 | `view_type` | Select | ✅ | system / tenant / personal |
-| 目标 DocType | `target_doctype` | Select | ✅ | Project / Task（预留扩展）|
-| **筛选配置** |||||
-| 业务类型 | `project_type` | Data | | 关联的 project_type，如 "ITR" |
-| 额外筛选 | `filters` | JSON | | 其他筛选条件（万能容器）|
-| **列配置** |||||
-| 可见列 | `columns` | JSON | ✅ | 列定义：字段、标签、顺序（万能容器）|
-| **分组/排序** |||||
-| 分组字段 | `group_by` | Data | | 按哪个字段分组显示 |
+| 视图名称 | `title` | Data | ✅ | 如 "ITR Board", "Bob本周任务" |
+| 业务类型 | `project_type` | Data | | 关联的 project_type（空=跨类型筛选）|
+| 列配置 | `columns` | JSON | ✅ | 定义显示哪些列、顺序、标签 |
+| 筛选条件 | `filters` | JSON | | 保存筛选条件组合（万能容器）|
 | 排序字段 | `sort_by` | Data | | 默认排序字段 |
 | 排序方向 | `sort_order` | Select | | asc / desc |
-| **权限/隔离** |||||
-| 所属公司 | `company` | Link → Company | | 租户隔离（空 = 系统级）|
-| **标记** |||||
-| 是否默认 | `is_default` | Check | | 该 project_type 的默认视图 |
-| 是否系统预置 | `is_system` | Check | | 系统预置 = 不可删除 |
-| **字段选项配置** |||||
-| 字段选项 | `field_options` | JSON | | 各字段可见选项配置（通用，任意字段）|
+| 默认视图 | `is_default` | Check | | 该 project_type 的默认视图 |
 
 > **设计原则**：
-> - `columns`、`filters`、`field_options` 使用 JSON，保证最大灵活性
-> - UI 变化不需要改字段结构，新增可配置字段无需改 DocType
-> - `column_widths`（列宽）使用 localStorage 存储，不存在 DocType 中
+> - 极简设计，仅保留核心功能字段
+> - `columns` 和 `filters` 使用 JSON，保证最大灵活性
+> - `column_widths`（列宽）使用 localStorage 存储
+> - 不区分 company（TF/TG 共用相同配置）
+> - 通过 owner 字段区分系统视图和用户视图（Frappe 原生）
 
 **JSON 字段格式示例**：
 
@@ -399,31 +794,135 @@ Grants:   R&D Grant / Export Grant / ...
 | **用户偏好（列宽等）** | Frappe User Settings / localStorage | 原生机制，无需额外存储 |
 | **客户-公司关联** | 通过 Project 自然建立 | 查询 Project 即可知道客户和哪些公司有往来 |
 
-### 4.2 ERPNext 原生 DocType 扩展
+### 4.2 Customer Entity 子表（新建 - v8.1）
+
+> **定位**：支持一个客户拥有多个实体（Individual/Company/Trust等）
+> 
+> **必要性**：实际业务中，一个客户（如"Client A"）可能同时拥有个人实体、公司实体、家族信托等，每个实体需要独立的BAS/ITR业务
+
+#### 4.2.1 Customer Entity 子表字段
+
+| 字段 | 字段名 | 类型 | 必填 | 说明 |
+|------|--------|------|------|------|
+| 实体名称 | `entity_name` | Data | ✅ | 如 "Client A Pty Ltd", "Client A Family Trust" |
+| 实体类型 | `entity_type` | Select | ✅ | Individual/Company/Trust/Partnership/SMSF |
+| ABN | `abn` | Data | | 澳洲商业号码（可选）|
+| 财年结束 | `year_end` | Select | | June/December/March/September（可选）|
+| 主要实体 | `is_primary` | Check | | 是否为该客户的主要实体 |
+
+**entity_type 选项：**
+```
+Individual (个人)
+Company (公司)
+Trust (信托)
+Partnership (合伙)
+SMSF (自管退休金)
+```
+
+**使用示例：**
+```
+Customer: Client A
+  ├── Entity 1: "Client A" (Individual, primary=Yes)
+  ├── Entity 2: "Client A Pty Ltd" (Company)
+  └── Entity 3: "Client A Family Trust" (Trust)
+
+Project命名：
+- "Client A (Individual) - FY25 ITR"
+- "Client A (Pty Ltd) - July 2025 BAS"
+- "Client A (Family Trust) - FY25 Trust Tax Return"
+```
+
+**优势：**
+- ✅ 避免为同一客户创建多个Customer记录
+- ✅ 清晰区分客户的不同实体
+- ✅ 每个实体可以有独立的entity_type和year_end
+- ✅ Project可以明确关联到具体实体
+
+---
+
+### 4.3 Project Team Member 子表（新建 - v8.2）
+
+> **定位**：支持Project的多角色团队分配（Preparer/Reviewer/Partner）
+> 
+> **必要性**：实际业务中，一个Project需要多人协作，每人有不同角色，需要高效查询和统计
+
+#### 4.3.1 Project Team Member 子表字段
+
+| 字段 | 字段名 | 类型 | 必填 | 说明 |
+|------|--------|------|------|------|
+| 用户 | `user` | Link → User | ✅ | 团队成员（Email，如 bob@tf.com） |
+| 角色 | `role` | Select | ✅ | Preparer/Reviewer/Partner |
+| 分配日期 | `assigned_date` | Date | | 分配时间（可选，用于追踪）|
+
+**role 选项：**
+```
+Preparer (准备者)
+Reviewer (审核者)
+Partner (合伙人)
+```
+
+**使用示例：**
+```
+Project: Client A - FY25 ITR
+└── Team Members:
+    ├── bob@tf.com (Preparer, 2025-07-01)
+    ├── david@tf.com (Preparer, 2025-07-15)
+    ├── charlie@tf.com (Reviewer, 2025-07-01)
+    └── alice@tf.com (Partner, 2025-07-01)
+```
+
+**查询示例：**
+```sql
+-- 查询Bob的所有未完成Projects
+SELECT p.project_name, p.status, p.customer, tm.role
+FROM `tabProject` p
+JOIN `tabProject Team Member` tm ON tm.parent = p.name
+WHERE tm.user = 'bob@tf.com' 
+  AND p.status != 'Completed'
+ORDER BY p.custom_lodgement_due_date
+
+-- 统计每个人作为Preparer的工作量
+SELECT tm.user, COUNT(*) as project_count
+FROM `tabProject Team Member` tm
+JOIN `tabProject` p ON p.name = tm.parent
+WHERE tm.role = 'Preparer' 
+  AND p.status IN ('Working', 'Ready for Review')
+GROUP BY tm.user
+```
+
+**优势：**
+- ✅ **查询性能优秀**：数据库索引支持，快速查询用户的Projects
+- ✅ **数据完整性**：外键约束，删除用户时可以检查关联
+- ✅ **报表友好**：直接SQL聚合统计，无需应用层解析
+- ✅ **SaaS可扩展**：支持大规模数据（>10000 Projects）
+- ✅ **角色明确**：清晰区分Preparer/Reviewer/Partner职责
+
+---
+
+### 4.4 ERPNext 原生 DocType 扩展
 
 | DocType | 扩展字段 | 类型 | 状态 | 说明 |
 |---------|---------|------|------|------|
-| **Customer** | `referred_by` | Link → Contact | ✅ 已确认 | 推荐人 |
-| | `entity_type` | Select | ✅ 已确认 | 实体类型（Individual/Company/Trust/...）|
-| | `year_end` | Select | ✅ 已确认 | 财年结束月（June/December/...）|
-| **Contact** | `is_referrer` | Check | ✅ 已确认 | 标记是否为推荐人 |
-| | `contact_role` | Select | ✅ 已确认 | 联系人角色（Director/Accountant/...）|
-| | `social_accounts` | JSON | ✅ 已确认 | 社交账号（灵活存储多平台）|
+| **Customer** | `custom_referred_by` | Link → Contact | ✅ 已确认 | 推荐人 |
+| | `custom_entities` | Table → Customer Entity | ✅ v8.1新增 | 客户的多个实体（子表）|
+| **Contact** | `custom_is_referrer` | Check | ✅ 已确认 | 标记是否为推荐人 |
+| | `custom_contact_role` | Select | ✅ 已确认 | 联系人角色（Director/Accountant/...）|
+| | `custom_social_accounts` | JSON | ✅ 已确认 | 社交账号（灵活存储多平台）|
 | **Company** | - | - | ✅ 已确认 | 保持原生，无需扩展 |
 | **User** | - | - | ✅ 已确认 | 保持原生，无需扩展 |
 
-### 4.3 Software DocType（新建）
+> **v8.1 变化**：Customer的`custom_entity_type`和`custom_year_end`字段改为Customer Entity子表，支持多实体
 
-> **定位**：独立DocType，管理软件列表（Xero/MYOB/QuickBooks等）
+### 4.5 Software DocType（新建）
+
+> **定位**：极简设计，管理软件列表（Xero/MYOB/QuickBooks等）
 > 
-> **租户隔离**：多Site架构下，每个Site有自己的Software列表，天然隔离
+> **共享范围**：TF和TG两个公司共用，无需区分
 
 | 字段 | 字段名 | 类型 | 必填 | 说明 |
 |------|--------|------|------|------|
 | 软件名称 | `software_name` | Data | ✅ | 如 "Xero", "MYOB", "QuickBooks" |
-| 可用公司 | `companies` | Table MultiSelect | | 单Site多Company场景下使用（多Site架构可忽略）|
-| 全局可用 | `is_global` | Check | | 是否所有公司可用 |
-| 是否启用 | `is_active` | Check | | 默认 Yes |
+| 是否启用 | `is_active` | Check | | 默认 Yes，停用后不在选项列表显示 |
 
 **在Project中使用**：
 ```
@@ -431,36 +930,35 @@ Project.custom_softwares → Table MultiSelect → Software
 ```
 
 **优势**：
-- ✅ 租户可以自己添加/管理软件列表
-- ✅ 可扩展存储额外信息（版本、API配置等）
+- ✅ 极简设计，仅2个字段
+- ✅ TF/TG 共用，无需重复维护
+- ✅ 支持启用/停用，而非硬删除
 - ✅ 未来可集成Software API
 
-### 4.4 Project Type 扩展
+### 4.6 Project Type（原生直接使用）
 
-> **定位**：使用ERPNext原生Project Type，扩展字段支持租户隔离
+> **定位**：使用ERPNext原生Project Type，无需扩展
 > 
-> **租户隔离**：多Site架构下，每个Site有自己的Project Type列表
+> **共享范围**：TF和TG两个公司共用
 
 | 字段 | 字段名 | 类型 | 来源 | 说明 |
 |------|--------|------|------|------|
-| 类型名称 | `project_type` | Data | 原生 | 如 "ITR", "BAS", "Payroll" |
+| 类型名称 | `project_type` | Data | 原生 | 如 "ITR", "BAS", "Payroll", "R&D Grant" |
 | 描述 | `description` | Text | 原生 | 类型说明 |
-| 可用公司 | `companies` | Table MultiSelect | 扩展 | 单Site多Company场景下使用 |
-| 全局可用 | `is_global` | Check | 扩展 | 是否所有公司可用 |
 
-**扩展方式**：
-通过 Customize Form 或 Custom Fields 添加 `companies` 和 `is_global` 字段。
+**使用方式**：
+直接在 Project Type List 中添加业务类型，无需任何自定义。
 
 **优势**：
-- ✅ 利用ERPNext原生功能（权限、报表等）
-- ✅ 标准化，减少开发量
-- ✅ 支持租户自定义业务类型
+- ✅ 零开发，完全利用原生功能
+- ✅ TF/TG 共用（会计事务所和R&D业务都可用）
+- ✅ 标准化，减少维护成本
 
-### 4.5 Status 配置（Property Setter）
+### 4.7 Status 配置（Property Setter）
 
-> **定位**：使用Project原生status字段，通过Property Setter配置选项
+> **定位**：使用Project和Task原生status字段，通过Property Setter配置选项
 > 
-> **租户隔离**：多Site架构下，每个Site独立配置Property Setter
+> **共享范围**：整个Site共用（包括TF和TG）
 
 **配置方式**：
 ```
@@ -585,13 +1083,22 @@ Task 列表：
 
 ## 7. 实施步骤
 
-### Phase 1: 基础层扩展
-- [ ] Customer 扩展字段（referred_by, entity_type, year_end）
-- [ ] Contact 扩展字段（is_referrer, contact_role）
+### Phase 1: 创建子表DocType
+- [ ] Customer Entity 子表DocType（4个字段：entity_name, entity_type, abn, year_end, is_primary）
 
-### Phase 2: 核心层扩展
-- [ ] Project 扩展字段（6个字段：team, team_members, target_month, lodgement_due_date, frequency, softwares）
-- [ ] Task 扩展字段（4个字段：assigned_to, due_date, notes, priority）
+### Phase 2: 基础层扩展
+- [ ] Customer 扩展字段（2个字段：custom_referred_by, custom_entities）
+- [ ] Contact 扩展字段（3个字段：custom_is_referrer, custom_contact_role, custom_social_accounts）
+
+### Phase 3: 核心层扩展
+- [ ] 创建 Project Team Member 子表 DocType（3个字段：user, role, assigned_date）
+- [ ] Project 扩展字段（7个字段：custom_entity_name, custom_team_members, custom_fiscal_year, custom_target_month, custom_lodgement_due_date, custom_frequency, custom_softwares）
+- [ ] Task 扩展字段（2个字段：custom_fiscal_year, custom_period）
+- [ ] Project Auto Repeat钩子（after_insert和validate方法：自动创建和同步Auto Repeat）
+
+### Phase 4: 创建辅助DocType
+- [ ] Software DocType（2个字段：software_name, is_active）
+- [ ] Saved View DocType（7个字段）
 
 ### Phase 3: 视图层
 - [ ] 创建 Saved View DocType
@@ -621,13 +1128,13 @@ Task 列表：
 | User Preferences？ | ✅ 已确认 | 不需要，用 Frappe 原生机制 |
 | Notes vs Comments？ | ✅ 已确认 | **双轨制**：`notes` 字段（静态备注）+ Frappe Comment（动态讨论）|
 | 法定截止日期？ | ✅ 已确认 | 新增 `lodgement_due_date` 字段，区别于 `expected_end_date`（内部目标）|
-| Software 配置？ | ✅ 已确认 | 新建独立DocType Software（支持租户自定义软件列表）|
-| Project Type 配置？ | ✅ 已确认 | 使用ERPNext原生Project Type + 扩展companies字段（支持租户隔离）|
-| Status 配置？ | ✅ 已确认 | 使用原生字段 + **Property Setter**配置选项（多Site架构下每租户独立配置）|
-| SaaS 多租户隔离？ | ✅ 已确认 | **Frappe 原生多 Site 架构**，每租户独立 Site，天然数据隔离 |
+| Software 配置？ | ✅ 已确认 | 新建极简DocType（2字段），TF/TG共用 |
+| Project Type 配置？ | ✅ 已确认 | 使用ERPNext原生，无需扩展，TF/TG共用 |
+| Status 配置？ | ✅ 已确认 | 使用原生字段 + **Property Setter**配置选项 |
+| SaaS 多租户隔离？ | ✅ 已确认 | **Frappe 多 Site 架构** + **Company字段区分TF/TG** |
 | Project 状态选项具体列表？ | 📋 待确认 | 需与同事商讨，他们有自己的 status 使用习惯（Property Setter 可配置）|
 | Task 状态选项具体列表？ | 📋 待确认 | 跟随 Project 状态讨论后确定（Property Setter 可配置）|
-| Saved View 基础字段？ | ✅ 已确认 | 13 个通用字段，含 `field_options` 用于各 View 自定义字段选项 |
+| Saved View 基础字段？ | ✅ 已确认 | 精简到7个核心字段，不区分company |
 | `project_type` 分类最终列表？ | 📋 后续确认 | 人工商议后添加（ITR/BAS/Bookkeeping/Payroll/...）|
 | Team JSON 格式细节？ | 📋 后续确认 | email / user name / user ID，implement 前统一 |
 
@@ -668,3 +1175,10 @@ Task 列表：
 | 5.8 | 2025-12-16 | **🎯 明确SaaS架构和租户隔离方案**：① 确认采用Frappe原生多Site架构（每租户独立Site）；② 详细说明Software DocType、Project Type扩展、Status配置的租户隔离机制；③ 新增4.3-4.5节详细说明三个字段的实现方案；④ 更新架构处理方式，明确区分新建DocType（Software/Saved View）、原生扩展（Project Type）和Property Setter（Status）|
 | 5.9 | 2025-12-16 | **🔧 修正架构图和字段数量**：① 删除架构图中过时的CONTACT → PROJ关系线（Project已不再有primary_contact/referral_person字段）；② 修正字段数量：Project扩展字段从8个改为7个；③ 更新Phase 2实施步骤，删除已废弃的字段引用 |
 | 6.0 | 2025-12-16 | **📉 精简Project字段**：① 删除custom_fiscal_year字段（财年信息包含在project_name中）；② Project扩展字段从7个减少到6个；③ 更新所有相关示例和实施步骤 |
+| 6.1 | 2025-12-17 | **🎯 周期性任务架构确认**：① 恢复Project.custom_fiscal_year字段（Project扩展字段改为7个）；② Task添加fiscal_year和period字段（仅2个扩展字段）；③ 最大化利用ERPNext Task原生字段（时间、工时、成本等）；④ 确认Project + Task架构处理周期性任务和拖延场景 |
+| 7.0 | 2025-12-17 | **🎯 最终精简优化**：① Software DocType精简到2个字段（删除company，TF/TG共用）；② Project Type无需扩展（TF/TG共用）；③ Saved View精简到7个字段（删除company等冗余字段）；④ 修正所有"租户隔离"描述为"多Site隔离 + Company区分" |
+| 7.1 | 2025-12-17 | **✅ SaaS架构演进策略确认**：① 新增1.4节详细说明两阶段SaaS演进路径；② 明确不需要添加tenant_id字段（完全利用Frappe原生Site机制）；③ 详细对比传统tenant_id方案与Frappe Site方案的优劣；④ 评估第二阶段改造成本（3-4周，主要是SaaS门户开发）；⑤ 确认第一阶段零额外开发成本 |
+| 7.2 | 2025-12-17 | **✅ Task团队字段优化**：① Task添加custom_team和custom_team_members字段（扩展字段从2个增加到4个）；② 支持Task级别的独立团队配置（覆盖Project默认团队）；③ 满足周期性任务场景（如Quarterly BAS不同季度由不同人负责）；④ 与Project.team保持相同JSON结构，前端UI可复用；⑤ 更新架构图和实施步骤 |
+| 8.0 | 2025-12-17 | **🎯 周期性业务架构重大优化（Auto Repeat方案）**：① 采用Frappe原生Auto Repeat自动创建周期性Project；② 每个周期是独立Project而非Task（层级清晰，符合Monday.com风格）；③ Task回归执行步骤用途，扩展字段从4个减少到2个；④ 新增3.3节Auto Repeat配置详细说明；⑤ 通过on_recurring钩子实现自动命名和归档；⑥ 完全利用原生功能，开发成本降低；⑦ 更新所有相关章节和示例 |
+| 8.1 | 2025-12-17 | **✅ 客户多实体支持+Auto Repeat自动创建**：① 新增Customer Entity子表DocType（4字段），支持一个客户拥有多个实体；② Customer字段从3个减少到2个（custom_entities替代entity_type和year_end）；③ Project添加custom_entity_name字段（8个扩展字段）；④ 明确custom_frequency自动创建Auto Repeat机制（after_insert钩子）；⑤ 更新所有Mermaid架构图；⑥ 更新实施步骤和Phase划分；⑦ 删除独立的架构评审文档，融合关键改进到本文档 |
+| 8.2 | 2025-12-18 | **🎯 团队字段架构优化（Critical - SaaS可扩展性）**：① custom_team从JSON改为子表，创建Project Team Member子表（3字段：user, role, assigned_date）；② Project扩展字段从8个减少到7个（删除custom_team，custom_team_members改为Table类型）；③ 提升查询性能和数据完整性；④ 支持数据库级别索引和JOIN查询；⑤ 支持大规模数据（>10000 Projects）；⑥ 更新Auto Repeat继承逻辑（JSON复制改为子表append）；⑦ 更新架构图和实施步骤 |
