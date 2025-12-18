@@ -19,6 +19,16 @@ app_version = "2.0.0"
 # Set your home page route here (after implementing frontend)
 # home_page = "/smart_accounting"
 
+# Client Scripts (JavaScript)
+doctype_js = {
+    "Project": "public/js/project.js"
+}
+
+# DocType Class Overrides (Python)
+override_doctype_class = {
+    "Project": "smart_accounting.custom.project.CustomProject"
+}
+
 # Document Events
 # Hook on document methods and events
 # doc_events = {
@@ -69,7 +79,9 @@ fixtures = [
         "filters": [
             ["name", "in", [
                 "Software",
-                "Saved View"
+                "Saved View",
+                "Customer Entity",
+                "Project Team Member"
             ]]
         ]
     }

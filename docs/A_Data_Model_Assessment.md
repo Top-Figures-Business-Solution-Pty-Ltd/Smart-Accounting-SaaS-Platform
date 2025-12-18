@@ -32,14 +32,14 @@
 
 ### 🎯 客户多实体支持（Critical）
 - ✅ **Customer Entity子表**：支持一个客户拥有多个实体（Individual/Company/Trust等）
-- ✅ **Project关联实体**：添加custom_entity_name字段，明确每个Project对应哪个实体
+- ✅ **Project关联实体**：添加custom_entity_type字段，明确每个Project对应哪个实体
 - ✅ **避免数据冗余**：不需要为同一客户的不同实体创建多个Customer记录
 - ✅ **实施简单**：仅需1个子表DocType + 2个字段修改
 
 ### 🔧 Auto Repeat自动创建机制
-- ✅ **UI选择frequency**：用户创建Project时选择custom_frequency（Monthly/Quarterly/Yearly）
+- ✅ **UI选择frequency**：用户创建Project时选择custom_project_frequency（Monthly/Quarterly/Yearly）
 - ✅ **自动创建Auto Repeat**：Project保存后自动创建对应的Auto Repeat记录
-- ✅ **双向同步**：修改custom_frequency时自动更新Auto Repeat.frequency
+- ✅ **双向同步**：修改custom_project_frequency时自动更新Auto Repeat.frequency
 - ✅ **开发成本**：约2-3小时（after_insert和validate钩子）
 
 ### 🎯 周期性业务架构优化（v8.0）
@@ -108,7 +108,7 @@
 | **新建 DocType** | Customer Entity（子表4字段）、Software（极简2字段）、Saved View（精简7字段）|
 | **Property Setter** | Status 等Select字段选项配置（多Site架构下每租户独立配置）|
 | **原生功能利用** | Comment 系统、User Settings、Assignment（任务分配）|
-| **Auto Repeat 自动创建** | Project创建时根据custom_frequency自动创建Auto Repeat |
+| **Auto Repeat 自动创建** | Project创建时根据custom_project_frequency自动创建Auto Repeat |
 | **现有数据** | 编写迁移脚本从旧 Task 结构转移到 Project |
 
 ### 1.4 SaaS架构演进策略 ✅ **完全利用Frappe原生Site机制**
@@ -284,7 +284,7 @@ flowchart TB
     end
     
     subgraph 业务数据
-        PROJ["<b>Project</b><br/>──────────<br/>⚫ project_name<br/>⚫ customer<br/>⚫ company (区分 TF/TG)<br/>⚫ project_type → Project Type<br/>⚫ status (可配置)<br/>⚫ priority<br/>⚫ estimated_costing<br/>⚫ notes<br/>⚫ is_active<br/>⚫ auto_repeat → Auto Repeat<br/>✅ custom_entity_name<br/>✅ custom_fiscal_year<br/>✅ custom_team_members → Project Team Member<br/>✅ custom_target_month<br/>✅ custom_lodgement_due_date<br/>✅ custom_frequency<br/>✅ custom_softwares → Software"]
+        PROJ["<b>Project</b><br/>──────────<br/>⚫ project_name<br/>⚫ customer<br/>⚫ company (区分 TF/TG)<br/>⚫ project_type → Project Type<br/>⚫ status (可配置)<br/>⚫ priority<br/>⚫ estimated_costing<br/>⚫ notes<br/>⚫ is_active<br/>⚫ auto_repeat → Auto Repeat<br/>✅ custom_entity_type<br/>✅ custom_fiscal_year<br/>✅ custom_team_members → Project Team Member<br/>✅ custom_target_month<br/>✅ custom_lodgement_due_date<br/>✅ custom_project_frequency<br/>✅ custom_softwares → Software"]
         
         TASK["<b>Task</b><br/>──────────<br/>⚫ subject<br/>⚫ project<br/>⚫ status (可配置)<br/>⚫ priority<br/>⚫ exp_start_date / exp_end_date<br/>⚫ expected_time / actual_time<br/>⚫ description / progress<br/>✅ custom_fiscal_year<br/>✅ custom_period"]
     end
@@ -358,7 +358,7 @@ Step 2: 基础层扩展
 
 Step 3: 核心层扩展
         ├── 创建 Project Team Member 子表（3个字段：user, role, assigned_date）
-        ├── Project 扩展（7个扩展字段：custom_entity_name, custom_team_members, custom_fiscal_year, custom_target_month, custom_lodgement_due_date, custom_frequency, custom_softwares）
+        ├── Project 扩展（7个扩展字段：custom_entity_type, custom_team_members, custom_fiscal_year, custom_target_month, custom_lodgement_due_date, custom_project_frequency, custom_softwares）
         ├── Task 扩展（2个扩展字段：custom_fiscal_year, custom_period + 利用原生时间/工时/成本字段）
         └── Project Auto Repeat 钩子（after_insert/validate方法：自动创建和同步Auto Repeat）
 
@@ -395,11 +395,11 @@ Step 5: 数据迁移
 | **扩展字段 - 团队** ||||||
 | 团队成员 | `custom_team_members` | Table | | 扩展 | 子表：Project Team Member（用户+角色）|
 | **扩展字段 - 业务** ||||||
-| 实体名称 | `custom_entity_name` | Data | | 扩展（v8.1新增）| 关联Customer Entity，如 "Client A Pty Ltd" |
-| 财年 | `custom_fiscal_year` | Data | | 扩展 | 如 "FY24", "FY25" |
+| 实体类型 | `custom_entity_type` | Data | | 扩展（v8.1新增）| 关联Customer Entity，如 "Client A Pty Ltd" |
+| 财年 | `custom_fiscal_year` | Link → Fiscal Year | | 扩展 | 如 "FY24", "FY25" |
 | 目标月份 | `custom_target_month` | Select | | 扩展 | January~December |
 | 法定截止日期 | `custom_lodgement_due_date` | Date | | 扩展 | ATO 规定的法定截止日期 |
-| 频率 | `custom_frequency` | Select | | 扩展 | Annually/Quarterly/Monthly/One-off（**会自动创建Auto Repeat**）|
+| 项目频率 | `custom_project_frequency` | Select | | 扩展 | Annually/Quarterly/Monthly/One-off（**会自动创建Auto Repeat**）|
 | 使用软件 | `custom_softwares` | Table MultiSelect | | 扩展 | Xero/MYOB/QuickBooks/Excel/... |
 
 **团队成员子表（Project Team Member）**：
@@ -471,22 +471,22 @@ Grants:   R&D Grant / Export Grant / ...
 - SaaS 多租户时，每个 Site 独立配置
 ```
 
-**custom_frequency 与 Auto Repeat 自动创建（v8.1）**：
+**custom_project_frequency 与 Auto Repeat 自动创建（v8.1）**：
 ```python
 # 用户工作流程：
-1. 用户在UI创建Project，选择custom_frequency = "Monthly"
+1. 用户在UI创建Project，选择custom_project_frequency = "Monthly"
 2. Project保存后，系统自动创建Auto Repeat记录
 3. Auto Repeat根据频率自动创建后续的Project
 
 # 实现逻辑（after_insert钩子）：
 class CustomProject(Project):
     def after_insert(self):
-        if self.custom_frequency and self.custom_frequency != "One-off":
+        if self.custom_project_frequency and self.custom_project_frequency != "One-off":
             # 自动创建Auto Repeat
             auto_repeat = frappe.new_doc("Auto Repeat")
             auto_repeat.reference_doctype = "Project"
             auto_repeat.reference_document = self.name
-            auto_repeat.frequency = self.custom_frequency  # Monthly/Quarterly/Yearly
+            auto_repeat.frequency = self.custom_project_frequency  # Monthly/Quarterly/Yearly
             auto_repeat.start_date = self.expected_start_date
             auto_repeat.save()
             
@@ -495,12 +495,12 @@ class CustomProject(Project):
             self.save()
 
 # 同步机制（validate钩子）：
-# 用户修改custom_frequency时，自动更新Auto Repeat.frequency
+# 用户修改custom_project_frequency时，自动更新Auto Repeat.frequency
 ```
 
 **优势：**
 - ✅ 用户体验：在Project表单直接选择frequency，无需手动创建Auto Repeat
-- ✅ 数据一致性：custom_frequency和Auto Repeat.frequency自动同步
+- ✅ 数据一致性：custom_project_frequency和Auto Repeat.frequency自动同步
 - ✅ 灵活性：用户仍可进入Auto Repeat修改详细配置（如end_date）
 
 ---
@@ -516,7 +516,7 @@ class CustomProject(Project):
 | 字段 | 字段名 | 类型 | 必填 | 说明 |
 |------|--------|------|------|------|
 | **扩展字段（2个）** |||||
-| 财年 | `custom_fiscal_year` | Data | | 如 "FY24", "FY25"（可从Project继承）|
+| 财年 | `custom_fiscal_year` | Link → Fiscal Year | | 如 "FY24", "FY25"（可从Project继承）|
 | 周期 | `custom_period` | Data | | 如 "Q1", "July"（可从Project继承）|
 
 > **利用的原生字段**（无需添加）：
@@ -744,7 +744,7 @@ Auto Repeat配置:
 | 字段 | 字段名 | 类型 | 必填 | 说明 |
 |------|--------|------|------|------|
 | 视图名称 | `title` | Data | ✅ | 如 "ITR Board", "Bob本周任务" |
-| 业务类型 | `project_type` | Data | | 关联的 project_type（空=跨类型筛选）|
+| 业务类型 | `project_type` | Link → Project Type | | 关联的 project_type（空=跨类型筛选）|
 | 列配置 | `columns` | JSON | ✅ | 定义显示哪些列、顺序、标签 |
 | 筛选条件 | `filters` | JSON | | 保存筛选条件组合（万能容器）|
 | 排序字段 | `sort_by` | Data | | 默认排序字段 |
@@ -753,6 +753,7 @@ Auto Repeat配置:
 
 > **设计原则**：
 > - 极简设计，仅保留核心功能字段
+> - `project_type` 使用 Link 类型，确保关联到有效的 Project Type；留空表示跨类型视图
 > - `columns` 和 `filters` 使用 JSON，保证最大灵活性
 > - `column_widths`（列宽）使用 localStorage 存储
 > - 不区分 company（TF/TG 共用相同配置）
@@ -1092,7 +1093,7 @@ Task 列表：
 
 ### Phase 3: 核心层扩展
 - [ ] 创建 Project Team Member 子表 DocType（3个字段：user, role, assigned_date）
-- [ ] Project 扩展字段（7个字段：custom_entity_name, custom_team_members, custom_fiscal_year, custom_target_month, custom_lodgement_due_date, custom_frequency, custom_softwares）
+- [ ] Project 扩展字段（7个字段：custom_entity_type, custom_team_members, custom_fiscal_year, custom_target_month, custom_lodgement_due_date, custom_project_frequency, custom_softwares）
 - [ ] Task 扩展字段（2个字段：custom_fiscal_year, custom_period）
 - [ ] Project Auto Repeat钩子（after_insert和validate方法：自动创建和同步Auto Repeat）
 
@@ -1180,5 +1181,5 @@ Task 列表：
 | 7.1 | 2025-12-17 | **✅ SaaS架构演进策略确认**：① 新增1.4节详细说明两阶段SaaS演进路径；② 明确不需要添加tenant_id字段（完全利用Frappe原生Site机制）；③ 详细对比传统tenant_id方案与Frappe Site方案的优劣；④ 评估第二阶段改造成本（3-4周，主要是SaaS门户开发）；⑤ 确认第一阶段零额外开发成本 |
 | 7.2 | 2025-12-17 | **✅ Task团队字段优化**：① Task添加custom_team和custom_team_members字段（扩展字段从2个增加到4个）；② 支持Task级别的独立团队配置（覆盖Project默认团队）；③ 满足周期性任务场景（如Quarterly BAS不同季度由不同人负责）；④ 与Project.team保持相同JSON结构，前端UI可复用；⑤ 更新架构图和实施步骤 |
 | 8.0 | 2025-12-17 | **🎯 周期性业务架构重大优化（Auto Repeat方案）**：① 采用Frappe原生Auto Repeat自动创建周期性Project；② 每个周期是独立Project而非Task（层级清晰，符合Monday.com风格）；③ Task回归执行步骤用途，扩展字段从4个减少到2个；④ 新增3.3节Auto Repeat配置详细说明；⑤ 通过on_recurring钩子实现自动命名和归档；⑥ 完全利用原生功能，开发成本降低；⑦ 更新所有相关章节和示例 |
-| 8.1 | 2025-12-17 | **✅ 客户多实体支持+Auto Repeat自动创建**：① 新增Customer Entity子表DocType（4字段），支持一个客户拥有多个实体；② Customer字段从3个减少到2个（custom_entities替代entity_type和year_end）；③ Project添加custom_entity_name字段（8个扩展字段）；④ 明确custom_frequency自动创建Auto Repeat机制（after_insert钩子）；⑤ 更新所有Mermaid架构图；⑥ 更新实施步骤和Phase划分；⑦ 删除独立的架构评审文档，融合关键改进到本文档 |
+| 8.1 | 2025-12-17 | **✅ 客户多实体支持+Auto Repeat自动创建**：① 新增Customer Entity子表DocType（4字段），支持一个客户拥有多个实体；② Customer字段从3个减少到2个（custom_entities替代entity_type和year_end）；③ Project添加custom_entity_type字段（8个扩展字段）；④ 明确custom_project_frequency自动创建Auto Repeat机制（after_insert钩子）；⑤ 更新所有Mermaid架构图；⑥ 更新实施步骤和Phase划分；⑦ 删除独立的架构评审文档，融合关键改进到本文档 |
 | 8.2 | 2025-12-18 | **🎯 团队字段架构优化（Critical - SaaS可扩展性）**：① custom_team从JSON改为子表，创建Project Team Member子表（3字段：user, role, assigned_date）；② Project扩展字段从8个减少到7个（删除custom_team，custom_team_members改为Table类型）；③ 提升查询性能和数据完整性；④ 支持数据库级别索引和JOIN查询；⑤ 支持大规模数据（>10000 Projects）；⑥ 更新Auto Repeat继承逻辑（JSON复制改为子表append）；⑦ 更新架构图和实施步骤 |

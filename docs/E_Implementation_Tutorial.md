@@ -34,7 +34,7 @@
 ### 客户多实体支持（Critical）
 - ✅ **Customer Entity子表**：新增子表DocType支持一个客户拥有多个实体
 - ✅ **Customer字段简化**：从3个字段减少到2个（entities替代entity_type和year_end）
-- ✅ **Project添加entity字段**：custom_entity_name关联具体实体（8个扩展字段）
+- ✅ **Project添加entity字段**：custom_entity_type关联具体实体（8个扩展字段）
 - ✅ **Auto Repeat自动创建**：明确after_insert钩子自动创建Auto Repeat机制
 
 ### 周期性业务架构优化（v4.0）
@@ -90,7 +90,7 @@
   - **Client Script（project.js）**：根据project_type动态过滤status选项
   - **Server Override（project.py）**：
     - Project.after_insert()：自动创建Auto Repeat
-    - Project.validate()：同步custom_frequency到Auto Repeat
+    - Project.validate()：同步custom_project_frequency到Auto Repeat
     - Project.on_recurring()：Auto Repeat创建新Project时的钩子
   - **hooks.py配置**：注册doctype_js和override_doctype_class
 
@@ -167,7 +167,7 @@
 | # | Label | Fieldname | Fieldtype | Options | Mandatory | 说明 |
 |---|-------|-----------|-----------|---------|-----------|------|
 | 1 | Title | `title` | Data | | ✅ | 视图名称（如 "ITR Board", "Bob本周任务"）|
-| 2 | Project Type | `project_type` | Data | | | 关联业务类型（空=跨类型筛选）|
+| 2 | Project Type | `project_type` | Link | Project Type | | 关联业务类型（空=跨类型筛选）|
 | 3 | Columns | `columns` | JSON | | ✅ | 列配置（字段、顺序、标签）|
 | 4 | Filters | `filters` | JSON | | | 筛选条件组合 |
 | 5 | Sort By | `sort_by` | Data | | | 排序字段 |
@@ -176,6 +176,7 @@
 
 > **说明**：
 > - 极简设计，仅保留核心功能
+> - project_type使用Link类型，确保关联到有效的Project Type；留空表示跨类型视图
 > - 不区分 company（TF/TG 共用配置）
 > - 通过 owner 字段区分系统视图和用户视图（Frappe 原生）
 
@@ -370,17 +371,17 @@ Partner
 
 | Label | Fieldname | Fieldtype | Options | 说明 |
 |-------|-----------|-----------|---------|------|
-| Entity Name | `custom_entity_name` | Data | | **v4.1新增**：关联Customer Entity，如 "Client A Pty Ltd" |
+| Entity Type | `custom_entity_type` | Data | | **v4.1新增**：关联Customer Entity，如 "Client A Pty Ltd" |
 | Team Members | `custom_team_members` | Table | Project Team Member | **v4.3优化**：从JSON改为子表，提升查询性能 |
-| Fiscal Year | `custom_fiscal_year` | Data | | 如 "FY24", "FY25" |
+| Fiscal Year | `custom_fiscal_year` | Link | Fiscal Year | 如 "FY24", "FY25" |
 | Target Month | `custom_target_month` | Select | January<br/>February<br/>March<br/>April<br/>May<br/>June<br/>July<br/>August<br/>September<br/>October<br/>November<br/>December | 目标月份 |
 | Lodgement Due Date | `custom_lodgement_due_date` | Date | | ATO 法定截止日期 |
-| Frequency | `custom_frequency` | Select | Annually<br/>Quarterly<br/>Monthly<br/>One-off | **会自动创建Auto Repeat**（非One-off时）|
+| Project Frequency | `custom_project_frequency` | Select | Annually<br/>Quarterly<br/>Monthly<br/>One-off | **会自动创建Auto Repeat**（非One-off时）|
 | Softwares | `custom_softwares` | Table MultiSelect | Software | 链接到 Software DocType（需先创建）|
 
 > **custom_team_members 说明**：子表字段，可以添加多个团队成员，每个成员有角色（Preparer/Reviewer/Partner）。支持高效的数据库查询和统计。
 
-> **custom_frequency 说明**：选择频率后，系统会自动创建Auto Repeat记录（通过after_insert钩子）
+> **custom_project_frequency 说明**：选择频率后，系统会自动创建Auto Repeat记录（通过after_insert钩子）
 
 ---
 
@@ -392,7 +393,7 @@ Partner
 
 | Label | Fieldname | Fieldtype | Options | 说明 |
 |-------|-----------|-----------|---------|------|
-| Fiscal Year | `custom_fiscal_year` | Data | | 如 "FY24", "FY25" |
+| Fiscal Year | `custom_fiscal_year` | Link | Fiscal Year | 如 "FY24", "FY25" |
 | Period | `custom_period` | Data | | 如 "Q1", "Q2", "Q3", "Q4" |
 
 ---
@@ -620,16 +621,16 @@ class CustomProject(Project):
     def after_insert(self):
         """Project创建后自动创建Auto Repeat"""
         super().after_insert()
-        if self.custom_frequency and self.custom_frequency != "One-off":
+        if self.custom_project_frequency and self.custom_project_frequency != "One-off":
             self.create_auto_repeat()
     
     def create_auto_repeat(self):
-        """根据custom_frequency创建Auto Repeat"""
+        """根据custom_project_frequency创建Auto Repeat"""
         try:
             auto_repeat = frappe.new_doc("Auto Repeat")
             auto_repeat.reference_doctype = "Project"
             auto_repeat.reference_document = self.name
-            auto_repeat.frequency = self.custom_frequency  # Monthly/Quarterly/Yearly
+            auto_repeat.frequency = self.custom_project_frequency  # Monthly/Quarterly/Yearly
             auto_repeat.start_date = self.expected_start_date or frappe.utils.today()
             auto_repeat.insert(ignore_permissions=True)
             
@@ -643,17 +644,17 @@ class CustomProject(Project):
     def validate(self):
         """修改frequency时同步Auto Repeat"""
         super().validate()
-        if self.has_value_changed("custom_frequency") and self.auto_repeat:
+        if self.has_value_changed("custom_project_frequency") and self.auto_repeat:
             self.sync_auto_repeat_frequency()
     
     def sync_auto_repeat_frequency(self):
         """同步frequency到Auto Repeat"""
-        if self.custom_frequency == "One-off":
+        if self.custom_project_frequency == "One-off":
             # 改为One-off，禁用Auto Repeat
             frappe.db.set_value("Auto Repeat", self.auto_repeat, "disabled", 1)
         else:
             auto_repeat = frappe.get_doc("Auto Repeat", self.auto_repeat)
-            auto_repeat.frequency = self.custom_frequency
+            auto_repeat.frequency = self.custom_project_frequency
             auto_repeat.disabled = 0
             auto_repeat.save(ignore_permissions=True)
 ```
@@ -681,10 +682,10 @@ class CustomProject(Project):
         parts = [self.customer]
         
         # 如果有entity，添加到名称中（v4.1新增）
-        if self.custom_entity_name:
-            # 从entity_name提取简短标识
+        if self.custom_entity_type:
+            # 从entity_type提取简短标识
             # 例如："Client A Pty Ltd" -> "(Pty Ltd)"
-            entity_short = self.custom_entity_name.replace(self.customer, "").strip()
+            entity_short = self.custom_entity_type.replace(self.customer, "").strip()
             if entity_short:
                 parts.append(f"({entity_short})")
         
@@ -713,7 +714,7 @@ class CustomProject(Project):
             self.expected_end_date = get_last_day(add_months(date, 12))
         
         # 3. 继承关键字段（用户可修改）
-        self.custom_entity_name = reference_doc.custom_entity_name
+        self.custom_entity_type = reference_doc.custom_entity_type
         
         # 继承团队成员子表
         for member in reference_doc.custom_team_members:
@@ -853,7 +854,7 @@ bench restart
 
 - [ ] Customer 扩展：2 个字段（referred_by, entities）**v4.1更新**
 - [ ] Contact 扩展：3 个字段（is_referrer, contact_role, social_accounts）
-- [ ] Project 扩展：7 个字段（entity_name, team_members, fiscal_year, target_month, lodgement_due_date, frequency, softwares）**v4.3更新**
+- [ ] Project 扩展：7 个字段（entity_type, team_members, fiscal_year, target_month, lodgement_due_date, project_frequency, softwares）**v4.3更新**
 - [ ] Task 扩展：2 个字段（fiscal_year, period）
 
 ### 7.3 功能验证
@@ -861,7 +862,7 @@ bench restart
 - [ ] Customer 可以添加多个 entities（子表）
 - [ ] Project 可以添加多个 team_members（子表）**v4.3新增**
 - [ ] 在 Project 表单中能看到所有 7 个新字段
-- [ ] Project.custom_entity_name 可以从 Customer.custom_entities 选择
+- [ ] Project.custom_entity_type 可以从 Customer.custom_entities 选择
 - [ ] Project.custom_team_members 可以添加团队成员并选择角色（Preparer/Reviewer/Partner）**v4.3新增**
 - [ ] Project.project_type 可以正常选择（ERPNext 原生字段，无需扩展）
 - [ ] Project.custom_softwares 可以选择 Software 记录
@@ -904,12 +905,12 @@ bench restart
 - [ ] 执行了 `bench clear-cache` 和 `bench restart`
 
 **功能验证**：
-- [ ] 创建Project时选择custom_frequency（非One-off）
+- [ ] 创建Project时选择custom_project_frequency（非One-off）
 - [ ] Project保存后自动创建Auto Repeat记录（**after_insert钩子**）
 - [ ] Project.auto_repeat字段自动关联到Auto Repeat
-- [ ] 修改custom_frequency时Auto Repeat同步更新（**validate钩子**）
+- [ ] 修改custom_project_frequency时Auto Repeat同步更新（**validate钩子**）
 - [ ] Auto Repeat自动创建新Project（名称包含entity信息和period）
-- [ ] 新Project的custom_entity_name正确继承
+- [ ] 新Project的custom_entity_type正确继承
 - [ ] 新Project团队配置正确继承（custom_team, custom_team_members）
 - [ ] 新Project状态重置为"Not Started"，percent_complete=0
 
