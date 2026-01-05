@@ -10,6 +10,7 @@ export class Sidebar {
         this.projectTypes = options.projectTypes || [];
         this.currentView = options.currentView || 'ITR';
         this.onViewChange = options.onViewChange || (() => {});
+        this._onContainerClick = null;
         
         this.render();
         this.bindEvents();
@@ -96,15 +97,16 @@ export class Sidebar {
     }
     
     bindEvents() {
-        // 导航点击事件
-        this.container.addEventListener('click', (e) => {
+        // 导航点击事件（事件委托）
+        this._onContainerClick = (e) => {
             const navItem = e.target.closest('.nav-item');
             if (navItem) {
                 e.preventDefault();
                 const view = navItem.dataset.view;
                 this.selectView(view);
             }
-        });
+        };
+        this.container.addEventListener('click', this._onContainerClick);
     }
     
     selectView(view) {
@@ -159,7 +161,10 @@ export class Sidebar {
     }
     
     destroy() {
-        // 清理事件监听器
+        if (this._onContainerClick) {
+            this.container.removeEventListener('click', this._onContainerClick);
+            this._onContainerClick = null;
+        }
         this.container.innerHTML = '';
     }
 }

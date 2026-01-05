@@ -13,6 +13,7 @@ export class BoardTable {
         this.viewType = options.viewType || 'ITR';
         this.store = options.store;
         this.onRowClick = options.onRowClick || (() => {});
+        this._unsubscribe = null;
         
         this.projects = [];
         this.columns = this.getColumnsForView();
@@ -195,7 +196,13 @@ export class BoardTable {
         if (!this.store) return;
         
         // 订阅store的projects变化
-        this.store.subscribe((state) => {
+        // 先确保不会重复订阅
+        if (this._unsubscribe) {
+            try { this._unsubscribe(); } catch (e) {}
+            this._unsubscribe = null;
+        }
+
+        this._unsubscribe = this.store.subscribe((state) => {
             this.projects = state.projects.items || [];
             this.updateRows();
         });
@@ -250,6 +257,10 @@ export class BoardTable {
     }
     
     destroy() {
+        if (this._unsubscribe) {
+            try { this._unsubscribe(); } catch (e) {}
+            this._unsubscribe = null;
+        }
         this.rows.forEach(row => row.destroy && row.destroy());
         this.rows = [];
         this.container.innerHTML = '';

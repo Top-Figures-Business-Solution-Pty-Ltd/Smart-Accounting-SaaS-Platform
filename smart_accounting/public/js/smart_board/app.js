@@ -16,6 +16,8 @@ export class SmartBoardApp {
         this.store = new Store();
         this.currentView = 'ITR'; // 默认视图（若系统有 Project Type，会在 init 时替换为第一个）
         this.projectTypes = [];   // 运行时从系统获取
+        this._unsubscribers = [];
+        this._onWindowResize = null;
         
         this.init();
     }
@@ -51,7 +53,7 @@ export class SmartBoardApp {
     
     initComponents() {
         // 初始化侧边栏
-        const sidebarContainer = document.getElementById('smartBoardSidebar');
+        const sidebarContainer = this.container.querySelector('#smartBoardSidebar');
         this.sidebar = new Sidebar(sidebarContainer, {
             projectTypes: this.projectTypes,
             currentView: this.currentView,
@@ -59,14 +61,14 @@ export class SmartBoardApp {
         });
         
         // 初始化头部
-        const headerContainer = document.getElementById('smartBoardHeader');
+        const headerContainer = this.container.querySelector('#smartBoardHeader');
         this.header = new Header(headerContainer, {
             currentView: this.currentView,
             onAction: (action, data) => this.handleHeaderAction(action, data)
         });
         
         // 初始化主内容区
-        const contentContainer = document.getElementById('smartBoardContent');
+        const contentContainer = this.container.querySelector('#smartBoardContent');
         this.mainContent = new MainContent(contentContainer, {
             currentView: this.currentView,
             store: this.store,
@@ -76,7 +78,7 @@ export class SmartBoardApp {
     
     bindEvents() {
         // 监听 store 变化：只更新 loading/empty 状态，避免反复 render 导致订阅泄漏
-        this.store.subscribe((state) => {
+        const unsubStore = this.store.subscribe((state) => {
             const loading = !!state.projects?.loading;
             const items = state.projects?.items || [];
 
@@ -85,11 +87,11 @@ export class SmartBoardApp {
                 this.mainContent.showEmptyState(!loading && items.length === 0);
             }
         });
+        this._unsubscribers.push(unsubStore);
         
         // 监听窗口resize
-        window.addEventListener('resize', () => {
-            this.handleWindowResize();
-        });
+        this._onWindowResize = () => this.handleWindowResize();
+        window.addEventListener('resize', this._onWindowResize);
     }
     
     async loadInitialData() {
@@ -225,6 +227,20 @@ export class SmartBoardApp {
     }
     
     destroy() {
+        // 取消订阅 / 解绑全局事件（避免多次进入页面后越来越卡）
+        try {
+            this._unsubscribers.forEach((fn) => {
+                try { fn && fn(); } catch (e) {}
+            });
+        } finally {
+            this._unsubscribers = [];
+        }
+
+        if (this._onWindowResize) {
+            window.removeEventListener('resize', this._onWindowResize);
+            this._onWindowResize = null;
+        }
+
         // 清理资源
         if (this.sidebar) this.sidebar.destroy();
         if (this.header) this.header.destroy();

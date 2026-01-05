@@ -19,7 +19,12 @@ smart_accounting.show_smart_board = function() {
     if (!mountTarget) {
         container.id = 'smart-board-container';
         container.className = 'smart-board-container';
+        // Fullscreen 模式：挂到 body，需要覆盖整个视窗
+        container.classList.add('smart-board-fullscreen');
         document.body.appendChild(container);
+    } else {
+        // Embedded 模式：挂到 Desk Page 的 root，避免 fixed 覆盖 Desk
+        container.classList.add('smart-board-embedded');
     }
     
     // 初始化应用

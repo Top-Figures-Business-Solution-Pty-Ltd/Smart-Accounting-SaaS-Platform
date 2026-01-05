@@ -20,20 +20,34 @@
    容器
    ============================================ */
 .smart-board-container {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    /* 默认按“嵌入 Desk Page”的方式布局，不覆盖整个 Desk */
+    position: relative;
     background: var(--smart-board-bg);
     z-index: 1000;
     overflow: hidden;
 }
 
+.smart-board-container.smart-board-embedded {
+    position: relative;
+    width: 100%;
+    min-height: 600px;
+    height: calc(100vh - var(--smart-board-header-height));
+}
+
+.smart-board-container.smart-board-fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+}
+
 .smart-board-app {
     display: flex;
-    height: 100vh;
-    width: 100vw;
+    height: 100%;
+    width: 100%;
 }
 
 /* Loading状态 */
