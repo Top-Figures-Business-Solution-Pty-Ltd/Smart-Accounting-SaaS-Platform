@@ -3,17 +3,21 @@
  * 全局常量配置
  */
 
-// Project Types 配置
-export const PROJECT_TYPES = [
-    { value: 'ITR', label: 'ITR', icon: '📋' },
-    { value: 'BAS', label: 'BAS', icon: '📋' },
-    { value: 'Payroll', label: 'Payroll', icon: '📋' },
-    { value: 'Bookkeeping', label: 'Bookkeeping', icon: '📋' },
-    { value: 'R&D Grant', label: 'Grants', icon: '📋' },
-    { value: 'SMSF', label: 'SMSF', icon: '📋' },
-    { value: 'Audit', label: 'Audit', icon: '📋' },
-    { value: 'Financial Statements', label: 'Financial Statements', icon: '📋' }
-];
+// Project Types（Sidebar 会从系统实时读取 Project Type 列表）
+// 这里仅保留“显示层”的 icon 映射与空态建议，不再写死具体有哪些业务类型
+export const PROJECT_TYPE_ICONS = {
+    'ITR': '📋',
+    'BAS': '📋',
+    'Payroll': '📋',
+    'Bookkeeping': '📋',
+    'R&D Grant': '📋',
+    'Grants': '📋',
+    'SMSF': '📋',
+    'Audit': '📋',
+    'Financial Statements': '📋'
+};
+
+export const DEFAULT_PROJECT_TYPE_ICON = '📋';
 
 // Status 配置（这些可以从后端动态获取）
 export const STATUS_OPTIONS = {

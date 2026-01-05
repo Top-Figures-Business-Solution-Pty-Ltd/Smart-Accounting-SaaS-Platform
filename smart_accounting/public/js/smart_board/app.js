@@ -6,14 +6,16 @@
 import { Sidebar } from './components/Layout/Sidebar.js';
 import { Header } from './components/Layout/Header.js';
 import { MainContent } from './components/Layout/MainContent.js';
-import { PROJECT_TYPES } from './utils/constants.js';
+import { PROJECT_TYPE_ICONS, DEFAULT_PROJECT_TYPE_ICON } from './utils/constants.js';
 import { Store } from './store/store.js';
+import { ProjectTypeService } from './services/projectTypeService.js';
 
 export class SmartBoardApp {
     constructor(container) {
         this.container = container;
         this.store = new Store();
-        this.currentView = 'ITR'; // 默认视图
+        this.currentView = 'ITR'; // 默认视图（若系统有 Project Type，会在 init 时替换为第一个）
+        this.projectTypes = [];   // 运行时从系统获取
         
         this.init();
     }
@@ -51,7 +53,7 @@ export class SmartBoardApp {
         // 初始化侧边栏
         const sidebarContainer = document.getElementById('smartBoardSidebar');
         this.sidebar = new Sidebar(sidebarContainer, {
-            projectTypes: PROJECT_TYPES,
+            projectTypes: this.projectTypes,
             currentView: this.currentView,
             onViewChange: (viewType) => this.handleViewChange(viewType)
         });
@@ -94,6 +96,9 @@ export class SmartBoardApp {
         try {
             // 显示加载状态
             this.showLoading(true);
+
+            // 先加载系统 Project Type（让左侧导航实时反映系统配置）
+            await this.loadProjectTypes();
             
             // 加载当前视图的数据
             await this.loadViewData(this.currentView);
@@ -111,9 +116,34 @@ export class SmartBoardApp {
     
     async loadViewData(viewType) {
         // 从store加载数据
-        await this.store.dispatch('projects/fetchProjects', {
-            project_type: viewType
-        });
+        const projectTypeValues = new Set(this.projectTypes.map(t => t.value));
+
+        // 如果是系统存在的 project_type，则按类型过滤；否则默认拉全部（如 Dashboard 可用）
+        const filters = projectTypeValues.has(viewType)
+            ? { project_type: viewType }
+            : {};
+
+        await this.store.dispatch('projects/fetchProjects', filters);
+    }
+
+    async loadProjectTypes() {
+        const names = await ProjectTypeService.fetchProjectTypes();
+        this.projectTypes = names.map((name) => ({
+            value: name,
+            label: name,
+            icon: PROJECT_TYPE_ICONS[name] || DEFAULT_PROJECT_TYPE_ICON
+        }));
+
+        // 如果系统里有 Project Type，就把默认视图切到第一个（避免写死 ITR）
+        if (this.projectTypes.length && !this.projectTypes.find(t => t.value === this.currentView)) {
+            this.currentView = this.projectTypes[0].value;
+        }
+
+        // 刷新 Sidebar + Header 标题
+        this.sidebar?.setProjectTypes(this.projectTypes);
+        this.sidebar?.updateView(this.currentView);
+        this.header?.updateView(this.currentView);
+        this.mainContent?.updateView(this.currentView);
     }
     
     handleViewChange(viewType) {

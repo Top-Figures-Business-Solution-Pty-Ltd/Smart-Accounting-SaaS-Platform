@@ -73,6 +73,20 @@ export class Sidebar {
     }
     
     renderProjectTypes() {
+        if (!this.projectTypes || this.projectTypes.length === 0) {
+            return `
+                <div class="nav-empty">
+                    <div class="text-muted" style="padding: 8px 20px; font-size: 13px;">
+                        No Project Types yet
+                    </div>
+                    <a href="#" class="nav-item" data-view="__create_project_type__">
+                        <span class="nav-icon">➕</span>
+                        <span class="nav-label">Create Project Type</span>
+                    </a>
+                </div>
+            `;
+        }
+
         return this.projectTypes.map(type => `
             <a href="#" class="nav-item" data-view="${type.value}">
                 <span class="nav-icon">${type.icon}</span>
@@ -96,6 +110,12 @@ export class Sidebar {
     selectView(view) {
         if (view === this.currentView) return;
         
+        // Special action: go to Project Type list
+        if (view === '__create_project_type__') {
+            frappe.set_route('List', 'Project Type');
+            return;
+        }
+
         this.currentView = view;
         this.highlightCurrentView();
         
@@ -130,6 +150,12 @@ export class Sidebar {
     updateView(view) {
         this.currentView = view;
         this.highlightCurrentView();
+    }
+
+    setProjectTypes(projectTypes) {
+        this.projectTypes = projectTypes || [];
+        this.render();
+        // 事件是绑定在 container 上的（事件委托），render 后无需重复绑定
     }
     
     destroy() {

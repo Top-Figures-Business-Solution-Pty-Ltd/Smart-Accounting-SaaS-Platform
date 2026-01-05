@@ -839,6 +839,78 @@ bench restart
 
 ## 7. 验证清单
 
+### 7.0 执行顺序（TODO）
+
+> 建议按 **P0 → P1 → P2 → P3** 顺序推进：先让 Smart Board 有数据、再补齐缺失字段/基础数据、再验证状态与 Auto Repeat，最后再清理过期配置。
+
+#### P0：让 Smart Board 立刻能正常出数据
+
+- [ ] **补齐 Project 字段 `custom_softwares`**（Table MultiSelect → `Software`）
+  - 目的：避免前端请求字段不存在导致列表空白
+  - 步骤：
+    - Setup → Customize → **Customize Form** → DocType 选 `Project`
+    - Add Row：Label=Softwares / Fieldname=`custom_softwares` / Fieldtype=`Table MultiSelect` / Options=`Software`
+    - Save
+- [ ] **创建至少 1 条 Project 记录**（`project_type=ITR`，`status` 任意）
+  - 目的：验证页面“不是因为没数据才空”
+  - 步骤：
+    - Projects → Project → New
+    - 填 `project_name`、选 `customer`、选 `company`、选 `project_type=ITR`、随便选一个 `status` → Save
+- [ ] **（如果改了 UI 配置/fixtures）执行一次** `bench clear-cache` + `bench restart`
+  - 目的：让元数据/缓存刷新
+  - 步骤：
+    - 服务器命令行：`cd /home/jeffrey/frappe-bench`
+    - 执行：`bench --site dev.localhost clear-cache && bench restart`
+
+#### P1：补齐文档缺项的配置
+
+- [ ] **Contact 增加字段 `custom_contact_role`**（Select，按你们需要的选项）
+  - 步骤：
+    - Setup → Customize → Customize Form → DocType 选 `Contact`
+    - Add Row：Label=Contact Role / Fieldname=`custom_contact_role` / Fieldtype=`Select` / Options（每行一个，如 Director/Accountant/...）
+    - Save
+- [ ] **Software DocType 创建基础数据**：Xero / MYOB / QuickBooks / Excel（至少几条）
+  - 步骤：
+    - 搜索 “Software” 列表 → New
+    - 填 `software_name`（如 Xero），`is_active` 勾选 → Save（重复创建几条）
+- [ ] **创建 Project Type 记录**（ERPNext 原生）：ITR / BAS / Bookkeeping / Payroll / R&D Grant / Financial Statements（至少你侧边栏要用到的）
+  - 步骤：
+    - Projects → Project Type → New
+    - 填 `project_type`（如 ITR）→ Save（重复创建需要的类型）
+
+#### P1：修正容易踩坑的选项（避免后续自动化报错）
+
+- [ ] **检查 `custom_project_frequency` 选项**：建议去掉 `Half-Yearly`（Auto Repeat 不支持）
+  - 建议集合：Monthly / Quarterly / Yearly / One-off
+  - 步骤：
+    - Setup → Customize → Customize Form → DocType 选 `Project`
+    - 找到字段 `custom_project_frequency` → Options 改成建议集合（每行一个）→ Save
+
+#### P2：跑通两条关键业务链路（功能验证）
+
+- [ ] **Status 动态过滤验证**：Project 表单切换 `project_type`，status 选项会变化
+  - 步骤：
+    - 打开任意 Project 表单
+    - 切换 `project_type`（ITR/BAS/Bookkeeping/R&D Grant）观察 `status` 下拉选项是否随之变化
+- [ ] **Auto Repeat 验证**
+  - [ ] 创建 Project 时选 `custom_project_frequency != One-off`
+  - [ ] 保存后自动创建 Auto Repeat
+  - [ ] 修改 frequency 后 Auto Repeat 同步更新
+  - [ ] Auto Repeat 自动创建新 Project，并继承 team/entity，并重置 status
+  - 步骤（建议按顺序做）：
+    - 新建 Project：把 `custom_project_frequency` 选 Monthly/Quarterly/Yearly（不要选 One-off）→ Save
+    - 回到 Project，看 `auto_repeat` 字段是否自动填入
+    - 修改 `custom_project_frequency` 再 Save：检查对应 Auto Repeat 的 `frequency` 是否同步
+    - 等 scheduler 跑一次或手动触发 Auto Repeat：检查新 Project 的命名/团队/实体/状态是否符合预期
+
+#### P3：清理过期配置（不影响跑通，但影响表单体验/一致性）
+
+- [ ] **更新 `fixtures/property_setter.json` 的 Project `field_order`**（目前明显是旧字段名）
+  - 建议：等你确认最终字段/布局后再统一导出 fixtures
+  - 步骤（推荐做法）：
+    - 先在 UI 把 Project 表单布局/字段顺序调整到满意
+    - 执行导出 fixtures（你现在用的策略是把 Custom Field / Property Setter / DocType 导出到 `fixtures/`）
+
 > **说明（2026-01-05 自动对照）**：以下 ✅/⬜ 的勾选，若未特别说明，表示“**仅根据本仓库 `fixtures/*` 与代码目录结构**判断”，不代表你在 UI 中已完成实际创建/验证（比如“能创建记录”“功能跑通”等仍需你手动验证）。
 
 ### 7.1 DocType 和基础数据创建验证

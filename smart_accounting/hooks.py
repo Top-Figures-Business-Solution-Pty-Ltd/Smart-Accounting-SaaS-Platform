@@ -92,7 +92,8 @@ fixtures = [
                 "Software",
                 "Saved View",
                 "Customer Entity",
-                "Project Team Member"
+				"Project Team Member",
+				"Project Software"
             ]]
         ]
     }
