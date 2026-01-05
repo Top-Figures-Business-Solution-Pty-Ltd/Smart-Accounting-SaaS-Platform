@@ -1,0 +1,140 @@
+/**
+ * Smart Board - Sidebar Component
+ * 左侧导航栏组件
+ */
+
+export class Sidebar {
+    constructor(container, options = {}) {
+        this.container = container;
+        this.options = options;
+        this.projectTypes = options.projectTypes || [];
+        this.currentView = options.currentView || 'ITR';
+        this.onViewChange = options.onViewChange || (() => {});
+        
+        this.render();
+        this.bindEvents();
+    }
+    
+    render() {
+        this.container.innerHTML = `
+            <div class="sidebar-wrapper">
+                <!-- Logo/Header -->
+                <div class="sidebar-header">
+                    <h3 class="sidebar-title">Smart Accounting</h3>
+                </div>
+                
+                <!-- Navigation -->
+                <nav class="sidebar-nav">
+                    <!-- Dashboard -->
+                    <div class="nav-section">
+                        <a href="#" class="nav-item" data-view="dashboard">
+                            <span class="nav-icon">📊</span>
+                            <span class="nav-label">Dashboard</span>
+                        </a>
+                    </div>
+                    
+                    <!-- Divider -->
+                    <div class="nav-divider"></div>
+                    
+                    <!-- Project Types -->
+                    <div class="nav-section">
+                        <div class="nav-section-title">Boards</div>
+                        ${this.renderProjectTypes()}
+                    </div>
+                    
+                    <!-- Divider -->
+                    <div class="nav-divider"></div>
+                    
+                    <!-- Other Pages -->
+                    <div class="nav-section">
+                        <a href="#" class="nav-item" data-view="clients">
+                            <span class="nav-icon">👥</span>
+                            <span class="nav-label">Clients</span>
+                        </a>
+                        <a href="#" class="nav-item" data-view="settings">
+                            <span class="nav-icon">⚙️</span>
+                            <span class="nav-label">Settings</span>
+                        </a>
+                    </div>
+                </nav>
+                
+                <!-- Footer -->
+                <div class="sidebar-footer">
+                    <div class="user-info">
+                        <span class="user-avatar">${this.getUserInitial()}</span>
+                        <span class="user-name">${this.getUserName()}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // 高亮当前视图
+        this.highlightCurrentView();
+    }
+    
+    renderProjectTypes() {
+        return this.projectTypes.map(type => `
+            <a href="#" class="nav-item" data-view="${type.value}">
+                <span class="nav-icon">${type.icon}</span>
+                <span class="nav-label">${type.label}</span>
+            </a>
+        `).join('');
+    }
+    
+    bindEvents() {
+        // 导航点击事件
+        this.container.addEventListener('click', (e) => {
+            const navItem = e.target.closest('.nav-item');
+            if (navItem) {
+                e.preventDefault();
+                const view = navItem.dataset.view;
+                this.selectView(view);
+            }
+        });
+    }
+    
+    selectView(view) {
+        if (view === this.currentView) return;
+        
+        this.currentView = view;
+        this.highlightCurrentView();
+        
+        // 触发回调
+        this.onViewChange(view);
+    }
+    
+    highlightCurrentView() {
+        // 移除所有active状态
+        this.container.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        
+        // 添加active到当前视图
+        const currentItem = this.container.querySelector(
+            `.nav-item[data-view="${this.currentView}"]`
+        );
+        if (currentItem) {
+            currentItem.classList.add('active');
+        }
+    }
+    
+    getUserName() {
+        return frappe.session.user_fullname || frappe.session.user;
+    }
+    
+    getUserInitial() {
+        const name = this.getUserName();
+        return name.charAt(0).toUpperCase();
+    }
+    
+    updateView(view) {
+        this.currentView = view;
+        this.highlightCurrentView();
+    }
+    
+    destroy() {
+        // 清理事件监听器
+        this.container.innerHTML = '';
+    }
+}
+

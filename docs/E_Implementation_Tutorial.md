@@ -839,12 +839,14 @@ bench restart
 
 ## 7. 验证清单
 
+> **说明（2026-01-05 自动对照）**：以下 ✅/⬜ 的勾选，若未特别说明，表示“**仅根据本仓库 `fixtures/*` 与代码目录结构**判断”，不代表你在 UI 中已完成实际创建/验证（比如“能创建记录”“功能跑通”等仍需你手动验证）。
+
 ### 7.1 DocType 和基础数据创建验证
 
-- [ ] Customer Entity 子表DocType 创建成功（**v4.1新增**，5字段）
-- [ ] Project Team Member 子表DocType 创建成功（**v4.3新增**，3字段）
-- [ ] Software DocType 创建成功（2字段）
-- [ ] Saved View DocType 创建成功（7字段）
+- [x] Customer Entity 子表DocType 创建成功（**v4.1新增**，5字段）【fixtures/doctype.json】
+- [x] Project Team Member 子表DocType 创建成功（**v4.3新增**，3字段）【fixtures/doctype.json】
+- [x] Software DocType 创建成功（2字段）【fixtures/doctype.json】
+- [x] Saved View DocType 创建成功（7字段）【fixtures/doctype.json】
 - [ ] 能创建 Customer Entity 记录（entity_name, entity_type, abn, year_end, is_primary）
 - [ ] 能创建 Project Team Member 记录（user, role, assigned_date）
 - [ ] 能创建 Software 记录（如 Xero, MYOB）
@@ -852,10 +854,20 @@ bench restart
 
 ### 7.2 字段扩展验证
 
-- [ ] Customer 扩展：2 个字段（referred_by, entities）**v4.1更新**
-- [ ] Contact 扩展：3 个字段（is_referrer, contact_role, social_accounts）
-- [ ] Project 扩展：7 个字段（entity_type, team_members, fiscal_year, target_month, lodgement_due_date, project_frequency, softwares）**v4.3更新**
-- [ ] Task 扩展：2 个字段（fiscal_year, period）
+- [x] Customer 扩展：2 个字段（`custom_referred_by`, `custom_entities`）【fixtures/custom_field.json】
+- [ ] Contact 扩展：3 个字段（`custom_is_referrer`, `custom_contact_role`, `custom_social_accounts`）
+  - [x] `custom_is_referrer`【fixtures/custom_field.json】
+  - [ ] `custom_contact_role`（当前 fixtures 中未发现）
+  - [x] `custom_social_accounts`【fixtures/custom_field.json】
+- [ ] Project 扩展：7 个字段（`custom_entity_type`, `custom_team_members`, `custom_fiscal_year`, `custom_target_month`, `custom_lodgement_due_date`, `custom_project_frequency`, `custom_softwares`）**v4.3更新**
+  - [x] `custom_entity_type`【fixtures/custom_field.json】
+  - [x] `custom_team_members`【fixtures/custom_field.json】
+  - [x] `custom_fiscal_year`【fixtures/custom_field.json】
+  - [x] `custom_target_month`【fixtures/custom_field.json】
+  - [x] `custom_lodgement_due_date`【fixtures/custom_field.json】
+  - [x] `custom_project_frequency`【fixtures/custom_field.json】
+  - [ ] `custom_softwares`（当前 fixtures 中未发现；且你当前 site Meta 里也缺该字段）
+- [x] Task 扩展：2 个字段（`custom_fiscal_year`, `custom_period`）【fixtures/custom_field.json】
 
 ### 7.3 功能验证
 
@@ -879,9 +891,9 @@ bench restart
 ### 7.5 Status动态过滤验证（Phase 7 - v4.2新增）
 
 **代码文件验证**：
-- [ ] 目录存在：`apps/smart_accounting/smart_accounting/public/js/`
-- [ ] 文件存在：`apps/smart_accounting/smart_accounting/public/js/project.js`
-- [ ] hooks.py配置正确：`doctype_js = {"Project": "public/js/project.js"}`
+- [x] 目录存在：`apps/smart_accounting/smart_accounting/public/js/`
+- [x] 文件存在：`apps/smart_accounting/smart_accounting/public/js/project.js`
+- [x] hooks.py配置正确：`doctype_js = {"Project": "public/js/project.js"}`
 - [ ] 执行了 `bench clear-cache` 和 `bench restart`
 
 **功能验证**：
@@ -897,11 +909,10 @@ bench restart
 ### 7.6 Auto Repeat 自动创建验证（Phase 8 - v4.1更新）
 
 **代码文件验证**：
-- [ ] 目录存在：`apps/smart_accounting/smart_accounting/overrides/`
-- [ ] 文件存在：`apps/smart_accounting/smart_accounting/overrides/__init__.py`
-- [ ] 文件存在：`apps/smart_accounting/smart_accounting/overrides/project.py`
-- [ ] project.py包含完整的CustomProject类（5个方法：after_insert, create_auto_repeat, validate, sync_auto_repeat_frequency, on_recurring）
-- [ ] hooks.py配置正确：`override_doctype_class = {"Project": "smart_accounting.overrides.project.CustomProject"}`
+- [x] 目录存在：`apps/smart_accounting/smart_accounting/custom/`（本仓库使用 `custom/`，不是 `overrides/`）
+- [x] 文件存在：`apps/smart_accounting/smart_accounting/custom/project.py`
+- [x] project.py包含CustomProject类（after_insert, create_auto_repeat, validate, sync_auto_repeat_frequency, on_recurring）
+- [x] hooks.py配置正确：`override_doctype_class = {"Project": "smart_accounting.custom.project.CustomProject"}`
 - [ ] 执行了 `bench clear-cache` 和 `bench restart`
 
 **功能验证**：

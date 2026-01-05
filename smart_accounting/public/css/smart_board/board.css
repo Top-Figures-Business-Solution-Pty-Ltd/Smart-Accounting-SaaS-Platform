@@ -1,0 +1,216 @@
+/**
+ * Smart Board - Board Table Styles
+ * 表格样式（类Monday.com）
+ */
+
+/* ============================================
+   Board Table Container
+   ============================================ */
+.board-table-wrapper {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    margin: 16px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+/* ============================================
+   Table Header
+   ============================================ */
+.board-table-header {
+    background: #f8f9fa;
+    border-bottom: 2px solid var(--smart-board-border);
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.board-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.board-table thead th {
+    position: sticky;
+    top: 0;
+    background: #f8f9fa;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--smart-board-text-muted);
+    padding: 12px 16px;
+    text-align: left;
+    border-right: 1px solid #e9ecef;
+    white-space: nowrap;
+    position: relative;
+}
+
+.board-table thead th.frozen {
+    position: sticky;
+    left: 0;
+    z-index: 10;
+    background: #ffffff;
+}
+
+.cell-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.cell-label {
+    flex: 1;
+}
+
+.sort-icon {
+    width: 16px;
+    height: 16px;
+    margin-left: 4px;
+    opacity: 0.5;
+}
+
+.board-table thead th:hover .sort-icon {
+    opacity: 1;
+}
+
+/* 列宽调整手柄 */
+.resize-handle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    cursor: col-resize;
+    user-select: none;
+}
+
+.resize-handle:hover {
+    background: var(--smart-board-primary);
+}
+
+/* ============================================
+   Table Body
+   ============================================ */
+.board-table-body {
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: auto;
+}
+
+.board-table tbody tr {
+    border-bottom: 1px solid #f1f3f5;
+    transition: background 0.15s;
+}
+
+.board-table tbody tr:hover {
+    background: #f8f9fa;
+}
+
+.board-table tbody tr.selected {
+    background: #e7f3ff;
+}
+
+.board-table tbody td {
+    padding: 12px 16px;
+    font-size: 14px;
+    color: var(--smart-board-text);
+    border-right: 1px solid #f1f3f5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.board-table tbody td.frozen {
+    position: sticky;
+    left: 0;
+    background: #ffffff;
+    z-index: 1;
+}
+
+.board-table tbody tr:hover td.frozen {
+    background: #f8f9fa;
+}
+
+.board-table tbody td.editable {
+    cursor: pointer;
+}
+
+.board-table tbody td.editable:hover {
+    background: #f1f3f5;
+}
+
+/* ============================================
+   Table Cell 内容样式
+   ============================================ */
+.status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #ffffff;
+    text-align: center;
+}
+
+.team-avatars {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.team-avatars .user-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+}
+
+.team-avatars .more-count {
+    margin-left: 4px;
+    font-size: 12px;
+    color: var(--smart-board-text-muted);
+}
+
+.company-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.company-badge.company-tf {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.company-badge.company-tg {
+    background: #d4edda;
+    color: #155724;
+}
+
+.no-data {
+    padding: 40px;
+    text-align: center;
+    color: var(--smart-board-text-muted);
+}
+
+/* ============================================
+   响应式
+   ============================================ */
+@media (max-width: 768px) {
+    .board-table-wrapper {
+        margin: 8px;
+    }
+    
+    .board-table thead th,
+    .board-table tbody td {
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+}
+

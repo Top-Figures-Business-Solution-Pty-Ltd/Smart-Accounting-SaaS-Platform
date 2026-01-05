@@ -1,4 +1,4 @@
-# Smart Accounting v2.0
+# Smart Accounting
 
 **Monday.com-style Project Management SaaS for Accounting Firms**
 
@@ -50,9 +50,9 @@ Smart Accounting 是一个专为会计事务所设计的 SaaS 项目管理平台
 
 ### 设计文档
 
-- **Document A**: [数据模型设计](docs/A_Data_Model_Assessment.md) - v6.0
+- **Document A**: [数据模型设计](docs/A_Data_Model_Assessment.md) - v8.2
 - **Document D**: [UI 设计](docs/D_UI_Design.md)
-- **Document E**: [实施教程](docs/E_Implementation_Tutorial.md) - v2.0
+- **Document E**: [实施教程](docs/E_Implementation_Tutorial.md)
 
 ### 快速开始
 
@@ -64,6 +64,12 @@ Smart Accounting 是一个专为会计事务所设计的 SaaS 项目管理平台
 
 ## 🚀 版本历史
 
+### v2.1 (2026-01-04) - UI 架构骨架（Smart Board）
+
+**新增**：
+- ✅ 引入 `smart_board` 前端模块化目录结构（组件/服务/状态管理/样式）
+- ✅ `hooks.py` 中加入 Smart Board 的 `app_include_js/app_include_css`
+
 ### v2.0 (2025-12-16) - Clean Slate 重构
 
 **重大变更**：
@@ -74,11 +80,12 @@ Smart Accounting 是一个专为会计事务所设计的 SaaS 项目管理平台
 - ✅ 多 Site 架构实现租户隔离
 
 **数据模型**：
-- Project: 6 个扩展字段
-- Task: 4 个扩展字段  
-- Customer: 3 个扩展字段
+- Project: 7 个扩展字段（v8.2）
+- Task: 2 个扩展字段（v8.0+）
+- Customer: 2 个扩展字段（v8.1+）
 - Contact: 3 个扩展字段
-- Project Type: 2 个扩展字段
+- Project Type: 使用原生（无需扩展）
+- 新增子表：Customer Entity、Project Team Member
 
 ### v1.0 (2024-2025) - 已废弃
 
