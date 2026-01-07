@@ -12,6 +12,7 @@ export class MainContent {
         this.options = options;
         this.currentView = options.currentView || 'ITR';
         this.store = options.store;
+        this.isBoardView = options.isBoardView || (() => false);
         this.onProjectClick = options.onProjectClick || (() => {});
         
         this.render();
@@ -60,6 +61,7 @@ export class MainContent {
         this.boardTable = new BoardTable(container, {
             viewType: this.currentView,
             store: this.store,
+            isBoardView: (viewType) => this.isBoardView(viewType),
             onRowClick: (project) => this.onProjectClick(project)
         });
     }

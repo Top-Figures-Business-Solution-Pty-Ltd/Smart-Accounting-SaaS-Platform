@@ -6,14 +6,13 @@
 import { ApiService } from './api.js';
 
 export class ProjectService {
+    static _warnedMissingFields = false;
+
     /**
      * 获取Projects列表
      */
     static async fetchProjects(filters = {}) {
-        try {
-            const args = {
-                doctype: 'Project',
-                fields: [
+        const fullFields = [
                     'name',
                     'project_name',
                     'customer',
@@ -33,7 +32,25 @@ export class ProjectService {
                     'custom_lodgement_due_date',
                     'custom_project_frequency',
                     'custom_softwares'
-                ],
+        ];
+
+        const minimalFields = [
+            'name',
+            'project_name',
+            'customer',
+            'company',
+            'project_type',
+            'status',
+            'expected_start_date',
+            'expected_end_date',
+            'notes',
+            'is_active'
+        ];
+
+        const fetchWithFields = async (fields) => {
+            const args = {
+                doctype: 'Project',
+                fields,
                 filters: this.buildFilters(filters),
                 order_by: 'modified desc',
                 limit_page_length: filters.limit || 100
@@ -41,17 +58,35 @@ export class ProjectService {
             
             const response = await frappe.call({
                 method: 'frappe.client.get_list',
-                args: args
+                args
             });
             
             return response.message || [];
+        };
+
+        try {
+            return await fetchWithFields(fullFields);
         } catch (error) {
-            console.error('Failed to fetch projects:', error);
-            frappe.show_alert({
+            console.error('Failed to fetch projects (full fields):', error);
+
+            // If custom fields are missing on site meta, fallback so UI still works.
+            try {
+                if (!this._warnedMissingFields) {
+                    this._warnedMissingFields = true;
+                    frappe.show_alert?.({
+                        message: __('Some Project custom fields are missing on this site. Falling back to a minimal field set.'),
+                        indicator: 'orange'
+                    });
+                }
+                return await fetchWithFields(minimalFields);
+            } catch (error2) {
+                console.error('Failed to fetch projects (minimal fields):', error2);
+                frappe.show_alert?.({
                 message: __('Failed to load projects'),
                 indicator: 'red'
             });
             return [];
+            }
         }
     }
     

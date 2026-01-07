@@ -8,6 +8,8 @@ import { renderHeaderCells, renderRows } from './boardTableRender.js';
 import { initResizable } from './boardTableResize.js';
 import { loadColumnWidths, saveColumnWidths } from './boardTableStorage.js';
 import { shouldVirtualize, computeWindow, spacerRow } from './boardTableVirtualization.js';
+import { ViewService } from '../../services/viewService.js';
+import { ColumnManagerModal } from './ColumnManagerModal.js';
 
 export class BoardTable {
     constructor(container, options = {}) {
@@ -15,12 +17,15 @@ export class BoardTable {
         this.options = options;
         this.viewType = options.viewType || 'ITR';
         this.store = options.store;
+        this.isBoardView = options.isBoardView || (() => false);
         this.onRowClick = options.onRowClick || (() => {});
         this._unsubscribe = null;
         
         this.projects = [];
         this.columns = this.getColumnsForView();
         this.rows = [];
+        this._savedView = null; // Saved View doc (team shared default)
+        this._colMgr = null;
 
         // Virtualization / performance
         this._raf = null;
@@ -31,6 +36,9 @@ export class BoardTable {
         
         this.render();
         this.subscribeToStore();
+
+        // Load shared default columns (Saved View) after first paint to keep UI responsive
+        this.refreshColumnsFromSavedView();
     }
     
     getColumnsForView() {
@@ -40,6 +48,69 @@ export class BoardTable {
             if (widths[col.field]) col.width = widths[col.field];
         });
         return base;
+    }
+
+    getAvailableColumnDefs() {
+        // P0: available columns = what's defined in DEFAULT_COLUMNS for this view (fallback to DEFAULT)
+        return (DEFAULT_COLUMNS[this.viewType] || DEFAULT_COLUMNS['DEFAULT']).map(c => ({ ...c }));
+    }
+
+    _normalizeSavedColumns(raw) {
+        // Saved View.columns could be a JSON string or an array.
+        if (!raw) return [];
+        if (Array.isArray(raw)) return raw;
+        if (typeof raw === 'string') {
+            try {
+                const parsed = JSON.parse(raw);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+                return [];
+            }
+        }
+        return [];
+    }
+
+    buildColumnsFromConfig(columnsConfig) {
+        const widths = loadColumnWidths(this.viewType) || {};
+        const defs = this.getAvailableColumnDefs();
+        const map = new Map(defs.map(d => [d.field, d]));
+
+        const cols = (columnsConfig || [])
+            .map((c) => {
+                const field = c?.field;
+                if (!field) return null;
+                const def = map.get(field);
+                const base = def ? { ...def } : { field, label: field, width: 150 };
+                if (c.label) base.label = c.label;
+                if (widths[base.field]) base.width = widths[base.field];
+                return base;
+            })
+            .filter(Boolean);
+
+        // Ensure at least one column exists
+        if (cols.length === 0) return this.getColumnsForView();
+        return cols;
+    }
+
+    async refreshColumnsFromSavedView() {
+        if (!this.viewType) return;
+        // Only operate on real board views (system Project Type values)
+        if (!this.isBoardView(this.viewType)) return;
+
+        const fallbackCols = this.getAvailableColumnDefs().map(c => ({ field: c.field, label: c.label }));
+        const view = await ViewService.getOrCreateDefaultView(this.viewType, {
+            fallbackTitle: `${this.viewType} Board`,
+            fallbackColumns: fallbackCols
+        });
+
+        if (!view) return;
+        this._savedView = view;
+
+        const cfg = this._normalizeSavedColumns(view.columns);
+        if (!cfg || cfg.length === 0) return;
+
+        this.columns = this.buildColumnsFromConfig(cfg);
+        this.render();
     }
     
     render() {
@@ -240,8 +311,61 @@ export class BoardTable {
     
     updateView(viewType) {
         this.viewType = viewType;
-        this.columns = this.getColumnsForView();
+        this.columns = this.getColumnsForView(); // immediate fallback
         this.render();
+        this.refreshColumnsFromSavedView();
+    }
+
+    openColumnManager() {
+        if (!this.isBoardView(this.viewType)) {
+            alert('Columns 只在 Boards（Project Type）里可用。');
+            return;
+        }
+        const defs = this.getAvailableColumnDefs();
+        const currentOrder = (this._normalizeSavedColumns(this._savedView?.columns) || [])
+            .map(c => c?.field)
+            .filter(Boolean);
+
+        const currentSet = new Set((currentOrder.length ? currentOrder : this.columns.map(c => c.field)));
+
+        const baseOrder = currentOrder.length ? currentOrder : this.columns.map(c => c.field);
+        const rest = defs.map(d => d.field).filter(f => !baseOrder.includes(f));
+        const allOrder = baseOrder.concat(rest);
+
+        const byField = new Map(defs.map(d => [d.field, d]));
+        const list = allOrder.map((field) => {
+            const def = byField.get(field) || { field, label: field };
+            return {
+                field,
+                label: def.label || field,
+                enabled: currentSet.has(field),
+            };
+        });
+
+        this._colMgr?.close?.();
+        this._colMgr = new ColumnManagerModal({
+            title: `Columns · ${this.viewType}`,
+            columns: list,
+            onSave: async (enabledList) => {
+                const config = enabledList.map(c => ({ field: c.field, label: c.label }));
+
+                const fallbackCols = this.getAvailableColumnDefs().map(c => ({ field: c.field, label: c.label }));
+                const view = await ViewService.getOrCreateDefaultView(this.viewType, {
+                    fallbackTitle: `${this.viewType} Board`,
+                    fallbackColumns: fallbackCols
+                });
+
+                if (view?.name) {
+                    await ViewService.updateView(view.name, { columns: config });
+                    this._savedView = { ...view, columns: config };
+                }
+
+                this.columns = this.buildColumnsFromConfig(config);
+                this.render();
+            },
+            onClose: () => {}
+        });
+        this._colMgr.open();
     }
     
     saveColumnWidths() {
@@ -276,6 +400,8 @@ export class BoardTable {
             try { this._unsubscribe(); } catch (e) {}
             this._unsubscribe = null;
         }
+        this._colMgr?.close?.();
+        this._colMgr = null;
         this.rows.forEach(row => row.destroy && row.destroy());
         this.rows = [];
         this.container.innerHTML = '';

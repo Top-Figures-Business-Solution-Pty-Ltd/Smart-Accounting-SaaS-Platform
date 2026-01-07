@@ -18,7 +18,8 @@ export class SmartBoardApp {
     constructor(container) {
         this.container = container;
         this.store = new Store();
-        this.currentView = 'ITR'; // 默认视图（若系统有 Project Type，会在 init 时替换为第一个）
+        // 默认先落在 dashboard，避免系统还没加载 Project Type 时误用不存在的 type（例如 ITR）
+        this.currentView = 'dashboard';
         this.projectTypes = [];   // 运行时从系统获取
         this._unsubscribers = [];
         this._onWindowResize = null;
@@ -77,6 +78,7 @@ export class SmartBoardApp {
         this.mainContent = new MainContent(contentContainer, {
             currentView: this.currentView,
             store: this.store,
+            isBoardView: (viewType) => this.isBoardView(viewType),
             onProjectClick: (project) => this.handleProjectClick(project)
         });
     }
@@ -205,7 +207,12 @@ export class SmartBoardApp {
     }
     
     showColumnManager() {
-        msgprint('Column Manager - coming soon.');
+        // Delegate to BoardTable (only meaningful for board views)
+        const table = this.mainContent?.boardTable;
+        if (table?.openColumnManager) {
+            return table.openColumnManager();
+        }
+        msgprint('Column Manager is not available in this view.');
     }
     
     showLoading(show) {
