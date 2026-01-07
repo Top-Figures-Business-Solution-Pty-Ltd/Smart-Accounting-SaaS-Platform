@@ -4,6 +4,7 @@
  */
 
 import { BoardTable } from '../BoardView/BoardTable.js';
+import { isPlaceholderView, renderPlaceholderHTML } from './placeholderPages.js';
 
 export class MainContent {
     constructor(container, options = {}) {
@@ -21,6 +22,9 @@ export class MainContent {
             <div class="main-content-wrapper">
                 <!-- Board Table Container -->
                 <div class="board-table-container" id="boardTableContainer"></div>
+
+                <!-- Placeholder Pages (Dashboard / Clients / Settings) -->
+                <div class="page-placeholder" id="pagePlaceholder" style="display: none;"></div>
                 
                 <!-- Empty State -->
                 <div class="empty-state" id="emptyState" style="display: none;">
@@ -72,16 +76,31 @@ export class MainContent {
     
     updateView(view) {
         this.currentView = view;
-        
-        if (this.boardTable) {
-            this.boardTable.updateView(view);
+
+        // Non-board views should not show the projects table
+        if (isPlaceholderView(view)) {
+            this.showPlaceholder(view);
+            return;
         }
+
+        this.hidePlaceholder();
+
+        if (this.boardTable) this.boardTable.updateView(view);
     }
     
     showLoading(show) {
         const loadingState = this.container.querySelector('#loadingState');
         const boardTableContainer = this.container.querySelector('#boardTableContainer');
         const emptyState = this.container.querySelector('#emptyState');
+        const placeholder = this.container.querySelector('#pagePlaceholder');
+
+        // When placeholder pages are active, ignore loading UI from projects store
+        if (placeholder && placeholder.style.display !== 'none') {
+            if (loadingState) loadingState.style.display = 'none';
+            if (emptyState) emptyState.style.display = 'none';
+            if (boardTableContainer) boardTableContainer.style.display = 'none';
+            return;
+        }
         
         if (show) {
             if (loadingState) loadingState.style.display = 'flex';
@@ -96,6 +115,14 @@ export class MainContent {
     showEmptyState(show) {
         const emptyState = this.container.querySelector('#emptyState');
         const boardTableContainer = this.container.querySelector('#boardTableContainer');
+        const placeholder = this.container.querySelector('#pagePlaceholder');
+
+        // When placeholder pages are active, ignore empty UI from projects store
+        if (placeholder && placeholder.style.display !== 'none') {
+            if (emptyState) emptyState.style.display = 'none';
+            if (boardTableContainer) boardTableContainer.style.display = 'none';
+            return;
+        }
         
         if (show) {
             if (emptyState) emptyState.style.display = 'flex';
@@ -107,9 +134,29 @@ export class MainContent {
     }
     
     createNewProject() {
-        frappe.new_doc('Project', {
-            project_type: this.currentView
-        });
+        import('../../services/navigationService.js').then(({ createProject }) => createProject(this.currentView));
+    }
+
+    hidePlaceholder() {
+        const placeholder = this.container.querySelector('#pagePlaceholder');
+        const boardTableContainer = this.container.querySelector('#boardTableContainer');
+        if (placeholder) placeholder.style.display = 'none';
+        if (boardTableContainer) boardTableContainer.style.display = 'block';
+    }
+
+    showPlaceholder(view) {
+        const placeholder = this.container.querySelector('#pagePlaceholder');
+        const boardTableContainer = this.container.querySelector('#boardTableContainer');
+        const emptyState = this.container.querySelector('#emptyState');
+        const loadingState = this.container.querySelector('#loadingState');
+
+        if (boardTableContainer) boardTableContainer.style.display = 'none';
+        if (emptyState) emptyState.style.display = 'none';
+        if (loadingState) loadingState.style.display = 'none';
+        if (!placeholder) return;
+
+        placeholder.style.display = 'block';
+        placeholder.innerHTML = renderPlaceholderHTML(view, this.store);
     }
     
     handleResize() {

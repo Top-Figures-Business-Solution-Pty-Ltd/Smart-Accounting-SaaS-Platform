@@ -4,7 +4,7 @@
 **项目**: Smart Accounting  
 **版本**: v1.0  
 **日期**: 2025-12-09  
-**状态**: 🚧 规划中
+**状态**: ✅ 已开始落地（持续迭代）
 
 ---
 
@@ -39,14 +39,14 @@
 | **后端 Python** | ~5,000 行 / 15+ 文件 |
 | **CSS** | ~5,000 行 / 10+ 文件 |
 
-### 1.2 当前架构健康度
+### 1.2 当前架构健康度（2026-01 更新）
 
 | 维度 | 评分 | 说明 |
 |------|------|------|
-| **模块化** | 3/10 | 文件分离但无真正模块系统 |
-| **耦合度** | 4/10 | 全局变量污染，组件直接调用 |
-| **可维护性** | 5/10 | 部分文件过大，职责不清 |
-| **可测试性** | 2/10 | 无测试框架，难以单元测试 |
+| **模块化** | 7/10 | 已采用 ES Modules 分层（components/services/store/utils），并持续拆分大文件 |
+| **耦合度** | 7/10 | 已引入 env/ui/navigation adapter，减少对 `frappe.*` 的散落依赖 |
+| **可维护性** | 7/10 | Header/MainContent/BoardTable 已拆分；后续按功能继续拆分子模块 |
+| **可测试性** | 3/10 | 仍缺少测试框架，但模块边界已清晰，具备引入测试的基础 |
 
 ### 1.3 重构动机
 
@@ -118,13 +118,11 @@ smart_accounting/
 │   │   │   └── performance/        # 性能优化
 │   │   └── css/                    # 样式文件
 │   │
-│   └── www/                        # Web 页面
-│       ├── project_management/     # 项目管理页面 ⭐ 核心
-│       │   ├── index.py            # 后端 API ⚠️ 3,059行
-│       │   ├── api/                # 模块化 API ✅
-│       │   └── services/           # 服务层
-│       ├── client_management/
-│       └── management_dashboard/
+│   ├── www/                        # Website 页面（产品壳）
+│   │   └── smart/                  # ✅ `/smart`：外部用户入口（自定义顶栏/壳，mount Smart Board）
+│   │
+│   ├── page/                       # Desk Page（内部/管理员可用）
+│   │   └── project_management/     # `/app/project-management`：按需加载 Smart Board（Desk 内嵌）
 │
 └── docs/                           # 文档
 ```
@@ -175,17 +173,62 @@ window.TableManager.refreshRow();
 // 问题: 任何模块都可以调用任何其他模块
 ```
 
-### 2.4 核心技术债务
+### 2.4 核心技术债务（2026-01 更新）
 
 | ID | 问题 | 影响 | 优先级 |
 |----|------|------|--------|
 | TD-001 | 全局变量污染 (20+ window.Manager) | 可维护性、可测试性 | 🔴 高 |
 | TD-002 | God File - index.py (3,059行) | 可维护性 | 🔴 高 |
 | TD-003 | God File - combination-view.js (2,325行) | 可维护性 | 🔴 高 |
-| TD-004 | 无 ES6 模块系统 | 开发效率 | 🟡 中 |
+| TD-004 | 无 ES6 模块系统 | 开发效率 | ✅ 已解决（Smart Board 已使用 ES Modules） |
 | TD-005 | 编辑器重复代码 | 代码复用 | 🟡 中 |
 | TD-006 | API 调用分散 | 错误处理一致性 | 🟡 中 |
 | TD-007 | 无单元测试 | 重构信心 | 🟢 低 |
+
+---
+
+## 2.5 已落地的目标架构（2026-01）
+
+### 2.5.1 产品入口与隔离
+
+**对外用户**：
+- 只允许访问 `/smart`（Website Shell）
+- 访问任何 `/app*`（Desk）会被重定向回 `/smart`（由 `hooks.py before_request` + `access_control.py` 实现）
+
+**管理员/内部**：
+- 仍可访问 Desk（`/app`）用于系统维护与配置
+
+### 2.5.2 Smart Board 模块分层（已落地）
+
+```
+smart_board/
+├── app.js                          # 应用编排（尽量保持“薄”）
+├── components/
+│   ├── Layout/                     # Sidebar/Header/MainContent
+│   └── BoardView/                  # BoardTable/Row/Cell + 子模块
+├── controllers/                    # action handler（避免 app.js 膨胀）
+├── services/                       # api/ui/navigation adapter
+├── store/                          # state 管理
+└── utils/                          # constants/helpers/viewTypes/env
+```
+
+### 2.5.3 “防膨胀”策略（必须遵守）
+- `app.js`：只做编排；任何“动作分发/业务细节”下沉到 `controllers/*` 或 `services/*`
+- 组件内不得散落 `frappe.set_route/new_doc/ui.Dialog` 等 Desk-only 调用，统一走 `services/navigationService.js` 与 `services/uiAdapter.js`
+- `BoardTable` 等复杂组件按 “render / resize / storage / editing / sorting” 子模块持续拆分
+
+---
+
+## 2.6 构建与缓存策略（开发期注意）
+
+当前 Smart Board 以 ESM 文件直接从 `/assets/.../*.js` 载入，浏览器会对静态资源设置较长缓存（例如 `Cache-Control: max-age=43200`）。
+
+开发期建议：
+- Chrome DevTools → Network 勾选 **Disable cache**
+- 或使用无痕窗口测试
+- 修改代码后执行：`bench build --app smart_accounting` + `bench --site <site> clear-cache && bench --site <site> clear-website-cache`
+
+> 未来如果希望完全避免“旧模块缓存导致 UI 不更新”，可以将 Smart Board 打包为带 hash 的 bundle（文件名变化自动 cache-bust）。
 
 ---
 

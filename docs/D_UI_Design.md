@@ -183,6 +183,23 @@
 
 ---
 
+## 4.3 产品壳（/smart）与 Desk（/app）的 UI 边界（2026-01 更新）
+
+> **结论**：外部用户使用 **`/smart`**（Website Shell），不在 Desk（`/app`）中进行日常操作。
+
+### 原则
+- ✅ **不覆盖 ERPNext Desk 顶栏/导航**：Desk 只给管理员/内部使用，避免升级风险
+- ✅ **在 /smart 上实现品牌化顶栏与用户菜单**：通知、头像菜单、Logout 等都在产品壳实现
+
+### 现状落地（已实现）
+- `/smart`：
+  - 移除 website 默认 navbar/breadcrumb/footer
+  - 自定义 topbar（通知按钮、头像下拉菜单）
+- `/app/project-management`：
+  - 作为内部入口保留（按需加载 Smart Board），但不作为对外产品入口
+
+---
+
 ## 5. 主要视图设计
 
 ### 5.1 表格视图（核心）
@@ -217,6 +234,27 @@
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 5.2 工具栏（Header Actions）按视图类型切换（2026-01 更新）
+
+为了避免 “Clients/Settings/Dashboard 仍显示 Project 的 Filter/Columns/New Project” 的体验问题：
+
+- **Boards（Project Type）**：
+  - 工具栏：Search projects / Filter / Columns / New Project
+  - 内容：Project 表格
+- **Dashboard**：
+  - 工具栏：Refresh（或空）
+  - 内容：统计卡片/概览
+- **Clients**：
+  - 工具栏：Search clients / New Client（可先占位）
+  - 内容：客户列表/详情（逐步实现）
+- **Settings**：
+  - 工具栏：页面专属按钮（可先占位）
+  - 内容：个人/工作区设置（逐步实现）
+
+> 该规则已在代码中落地（Header 根据 viewType 渲染不同 toolbars）。
 
 ### 5.2 任务详情侧边栏
 

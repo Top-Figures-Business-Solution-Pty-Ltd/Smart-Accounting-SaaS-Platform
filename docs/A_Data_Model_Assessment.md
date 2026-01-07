@@ -505,6 +505,31 @@ class CustomProject(Project):
 
 ---
 
+## SaaS 产品壳（/smart）与 Desk（/app）的边界（2026-01）
+
+> **结论**：对外用户只使用 **`/smart`**（你们自研 UI/导航/样式），ERPNext Desk（`/app`）只保留给管理员/内部运维角色。
+
+### 为什么需要这个边界
+- ✅ **品牌一致**：用户永远在你们自己的 UI 壳里操作
+- ✅ **安全**：不是靠“隐藏 UI”，而是通过访问控制与最小权限保证隔离
+- ✅ **可演进**：后续逐步把 `frappe.client.*` 迁移到你们自建 API 时，不会受 Desk 限制
+
+### 与数据模型的关系
+- DocType（Project/Customer/Contact/Saved View 等）仍复用 ERPNext/Frappe 原生存储结构
+- 前端只是在 `/smart` 提供你们自己的交互视图（Boards / Clients / Settings 等）
+
+---
+
+## `custom_softwares` 字段现状与决策提醒（2026-01）
+
+当前 Smart Board 前端在拉取 Project 列表时会请求 `custom_softwares` 字段（用于 Software 列展示），但实施清单（Document E）提示：**fixtures / site meta 可能尚未包含该字段**。
+
+建议在数据模型层明确最终方案（避免前后端长期漂移）：
+- 方案 1（推荐，最贴合 UI）：`custom_softwares` 使用 **Table MultiSelect → Software**
+- 方案 2：使用子表 DocType（如 `Project Software`）并在 Project 上挂 Table
+
+> 一旦确定方案，请同步更新：Custom Field/DocType fixtures、Smart Board `ProjectService.fetchProjects()` 取数字段、以及 UI 显示/编辑逻辑。
+
 ### 3.2 Task（任务/子任务）
 
 > **定位**：Project 的执行步骤（可选）或独立任务

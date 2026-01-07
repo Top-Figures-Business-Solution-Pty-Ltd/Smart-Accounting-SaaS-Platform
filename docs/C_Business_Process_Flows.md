@@ -38,6 +38,15 @@
 > **注**: 当前图中没有 SYSTEM 泳道，系统操作隐含在 USER 操作中。
 > 后续细化时可以拆分出 SYSTEM 泳道。
 
+### 1.1 外部用户入口（/smart）说明（2026-01 更新）
+
+在 SaaS 产品化模式下：
+- 外部用户不进入 ERPNext Desk（`/app`），日常操作入口为 **`/smart`**
+- `/smart` 提供你们自己的 UI 壳（Boards / Clients / Settings 等），底层仍复用 ERPNext/Frappe 的 DocType 数据
+
+这不会改变业务流程本身，但会改变“用户触点”：
+- USER/CLIENT 的操作入口统一在 `/smart` 完成（查看项目、更新状态、沟通/评论等）
+
 ---
 
 ## 2. 主流程 - Tax Return Workflow

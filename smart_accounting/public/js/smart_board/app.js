@@ -9,6 +9,10 @@ import { MainContent } from './components/Layout/MainContent.js';
 import { PROJECT_TYPE_ICONS, DEFAULT_PROJECT_TYPE_ICON } from './utils/constants.js';
 import { Store } from './store/store.js';
 import { ProjectTypeService } from './services/projectTypeService.js';
+import { isBoardView as isBoardViewFn } from './utils/viewTypes.js';
+import { handleHeaderAction } from './controllers/headerActionHandler.js';
+import { openProject, createProject } from './services/navigationService.js';
+import { msgprint } from './services/uiAdapter.js';
 
 export class SmartBoardApp {
     constructor(container) {
@@ -64,6 +68,7 @@ export class SmartBoardApp {
         const headerContainer = this.container.querySelector('#smartBoardHeader');
         this.header = new Header(headerContainer, {
             currentView: this.currentView,
+            isBoardView: (viewType) => this.isBoardView(viewType),
             onAction: (action, data) => this.handleHeaderAction(action, data)
         });
         
@@ -128,6 +133,10 @@ export class SmartBoardApp {
         await this.store.dispatch('projects/fetchProjects', filters);
     }
 
+    isBoardView(viewType) {
+        return isBoardViewFn(viewType, this.projectTypes);
+    }
+
     async loadProjectTypes() {
         const names = await ProjectTypeService.fetchProjectTypes();
         this.projectTypes = names.map((name) => ({
@@ -156,35 +165,20 @@ export class SmartBoardApp {
         this.header.updateView(viewType);
         this.mainContent.updateView(viewType);
         
-        // 加载新视图的数据
-        this.loadViewData(viewType);
+        // 加载新视图的数据：只对 Boards（Project Type）和 Dashboard 有意义
+        if (this.isBoardView(viewType) || viewType === 'dashboard') {
+            this.loadViewData(viewType);
+        }
     }
     
     handleHeaderAction(action, data) {
         console.log('Header action:', action, data);
-        
-        switch (action) {
-            case 'new_project':
-                this.createNewProject();
-                break;
-            case 'filter':
-                this.applyFilters(data);
-                break;
-            case 'search':
-                this.performSearch(data);
-                break;
-            case 'manage_columns':
-                this.showColumnManager();
-                break;
-            default:
-                console.warn('Unknown action:', action);
-        }
+        return handleHeaderAction(this, action, data);
     }
     
     handleProjectClick(project) {
         console.log('Project clicked:', project);
-        // 打开详情面板或导航到Project表单
-        frappe.set_route('Form', 'Project', project.name);
+        return openProject(project.name);
     }
     
     // handleStoreUpdate 已废弃：交给 BoardTable 自己订阅 store 并更新行
@@ -197,10 +191,7 @@ export class SmartBoardApp {
     }
     
     createNewProject() {
-        // 创建新Project
-        frappe.new_doc('Project', {
-            project_type: this.currentView
-        });
+        return createProject(this.currentView);
     }
     
     applyFilters(filters) {
@@ -214,8 +205,7 @@ export class SmartBoardApp {
     }
     
     showColumnManager() {
-        // 显示列管理对话框
-        frappe.msgprint('Column Manager - Coming soon!');
+        msgprint('Column Manager - coming soon.');
     }
     
     showLoading(show) {

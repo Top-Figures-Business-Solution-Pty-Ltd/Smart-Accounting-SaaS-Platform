@@ -4,6 +4,8 @@
  */
 
 import { STATUS_OPTIONS } from '../../utils/constants.js';
+import { renderHeaderActions, bindHeaderActions } from './headerToolbars.js';
+import { isProductView } from '../../utils/viewTypes.js';
 
 export class Header {
     constructor(container, options = {}) {
@@ -16,7 +18,18 @@ export class Header {
         this.bindEvents();
     }
     
+    isBoardView() {
+        if (typeof this.options.isBoardView === 'function') {
+            try {
+                return !!this.options.isBoardView(this.currentView);
+            } catch (e) {}
+        }
+        // Default fallback
+        return !isProductView(this.currentView);
+    }
+
     render() {
+        const isBoard = this.isBoardView();
         this.container.innerHTML = `
             <div class="header-wrapper">
                 <!-- Left: View Title -->
@@ -27,80 +40,18 @@ export class Header {
                 
                 <!-- Right: Actions -->
                 <div class="header-right">
-                    <!-- Search -->
-                    <div class="header-search">
-                        <input 
-                            type="text" 
-                            class="form-control search-input" 
-                            placeholder="Search projects..."
-                            id="headerSearchInput"
-                        />
-                    </div>
-                    
-                    <!-- Filter Button -->
-                    <button class="btn btn-default btn-filter" id="btnFilter">
-                        <svg class="icon icon-sm">
-                            <use href="#icon-filter"></use>
-                        </svg>
-                        Filter
-                    </button>
-                    
-                    <!-- Manage Columns -->
-                    <button class="btn btn-default btn-columns" id="btnManageColumns">
-                        <svg class="icon icon-sm">
-                            <use href="#icon-columns"></use>
-                        </svg>
-                        Columns
-                    </button>
-                    
-                    <!-- New Project Button -->
-                    <button class="btn btn-primary btn-new-project" id="btnNewProject">
-                        <svg class="icon icon-sm">
-                            <use href="#icon-add"></use>
-                        </svg>
-                        New Project
-                    </button>
+                    ${renderHeaderActions(this.currentView, { isBoardView: isBoard })}
                 </div>
             </div>
         `;
     }
     
     bindEvents() {
-        // New Project按钮
-        const btnNewProject = this.container.querySelector('#btnNewProject');
-        if (btnNewProject) {
-            btnNewProject.addEventListener('click', () => {
-                this.onAction('new_project');
-            });
-        }
-        
-        // Filter按钮
-        const btnFilter = this.container.querySelector('#btnFilter');
-        if (btnFilter) {
-            btnFilter.addEventListener('click', () => {
-                this.showFilterDialog();
-            });
-        }
-        
-        // Manage Columns按钮
-        const btnManageColumns = this.container.querySelector('#btnManageColumns');
-        if (btnManageColumns) {
-            btnManageColumns.addEventListener('click', () => {
-                this.onAction('manage_columns');
-            });
-        }
-        
-        // Search输入框
-        const searchInput = this.container.querySelector('#headerSearchInput');
-        if (searchInput) {
-            let searchTimeout;
-            searchInput.addEventListener('input', (e) => {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    this.onAction('search', e.target.value);
-                }, 300);
-            });
-        }
+        bindHeaderActions(this.container, this.currentView, {
+            isBoardView: this.isBoardView(),
+            onAction: this.onAction,
+            onShowFilter: () => this.showFilterDialog(),
+        });
     }
     
     getViewTitle() {
@@ -127,6 +78,10 @@ export class Header {
     }
     
     showFilterDialog() {
+        if (!frappe?.ui?.Dialog) {
+            alert('Filter dialog is not available in this view yet.');
+            return;
+        }
         // 创建筛选对话框
         const dialog = new frappe.ui.Dialog({
             title: 'Filter Projects',
@@ -179,24 +134,10 @@ export class Header {
     
     updateView(view) {
         this.currentView = view;
-        
-        // 更新标题
-        const titleElement = this.container.querySelector('.view-title');
-        if (titleElement) {
-            titleElement.textContent = this.getViewTitle();
-        }
-        
-        // 更新subtitle
-        const subtitleElement = this.container.querySelector('.view-subtitle');
-        if (subtitleElement) {
-            subtitleElement.textContent = this.getViewSubtitle();
-        }
-        
-        // 清空搜索框
-        const searchInput = this.container.querySelector('#headerSearchInput');
-        if (searchInput) {
-            searchInput.value = '';
-        }
+
+        // Re-render to switch toolbars between board/page modes
+        this.render();
+        this.bindEvents();
     }
     
     destroy() {

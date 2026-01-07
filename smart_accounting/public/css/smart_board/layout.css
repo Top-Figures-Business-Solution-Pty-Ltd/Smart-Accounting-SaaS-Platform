@@ -21,17 +21,7 @@
     height: 100%;
 }
 
-.sidebar-header {
-    padding: 20px;
-    border-bottom: 1px solid var(--smart-board-border);
-}
-
-.sidebar-title {
-    font-size: 18px;
-    font-weight: 600;
-    margin: 0;
-    color: var(--smart-board-text);
-}
+/* Sidebar header removed in product shell; keep spacing via nav padding */
 
 .sidebar-nav {
     flex: 1;

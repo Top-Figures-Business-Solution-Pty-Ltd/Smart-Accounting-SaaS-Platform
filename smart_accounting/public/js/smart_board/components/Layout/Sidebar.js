@@ -19,18 +19,13 @@ export class Sidebar {
     render() {
         this.container.innerHTML = `
             <div class="sidebar-wrapper">
-                <!-- Logo/Header -->
-                <div class="sidebar-header">
-                    <h3 class="sidebar-title">Smart Accounting</h3>
-                </div>
-                
                 <!-- Navigation -->
                 <nav class="sidebar-nav">
-                    <!-- Dashboard -->
+                    <!-- Home -->
                     <div class="nav-section">
                         <a href="#" class="nav-item" data-view="dashboard">
-                            <span class="nav-icon">📊</span>
-                            <span class="nav-label">Dashboard</span>
+                            <span class="nav-icon">🏠</span>
+                            <span class="nav-label">Home</span>
                         </a>
                     </div>
                     
@@ -58,14 +53,6 @@ export class Sidebar {
                         </a>
                     </div>
                 </nav>
-                
-                <!-- Footer -->
-                <div class="sidebar-footer">
-                    <div class="user-info">
-                        <span class="user-avatar">${this.getUserInitial()}</span>
-                        <span class="user-name">${this.getUserName()}</span>
-                    </div>
-                </div>
             </div>
         `;
         
@@ -114,7 +101,8 @@ export class Sidebar {
         
         // Special action: go to Project Type list
         if (view === '__create_project_type__') {
-            frappe.set_route('List', 'Project Type');
+            // Lazy import to avoid circular deps and keep Sidebar lightweight
+            import('../../services/navigationService.js').then(({ openProjectTypeList }) => openProjectTypeList());
             return;
         }
 

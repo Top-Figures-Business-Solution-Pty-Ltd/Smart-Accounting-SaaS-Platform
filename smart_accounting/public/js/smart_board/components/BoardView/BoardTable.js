@@ -3,8 +3,11 @@
  * 类Monday.com的表格视图组件
  */
 
-import { BoardRow } from './BoardRow.js';
 import { DEFAULT_COLUMNS } from '../../utils/constants.js';
+import { renderHeaderCells, renderRows } from './boardTableRender.js';
+import { initResizable } from './boardTableResize.js';
+import { loadColumnWidths, saveColumnWidths } from './boardTableStorage.js';
+import { shouldVirtualize, computeWindow, spacerRow } from './boardTableVirtualization.js';
 
 export class BoardTable {
     constructor(container, options = {}) {
@@ -18,13 +21,25 @@ export class BoardTable {
         this.projects = [];
         this.columns = this.getColumnsForView();
         this.rows = [];
+
+        // Virtualization / performance
+        this._raf = null;
+        this._onScroll = null;
+        this._rowHeight = 44; // fallback, will be refined after first render
+        this._virtualThreshold = options.virtualThreshold || 200;
+        this._overscan = options.overscan || 6;
         
         this.render();
         this.subscribeToStore();
     }
     
     getColumnsForView() {
-        return DEFAULT_COLUMNS[this.viewType] || DEFAULT_COLUMNS['DEFAULT'];
+        const base = (DEFAULT_COLUMNS[this.viewType] || DEFAULT_COLUMNS['DEFAULT']).map(c => ({ ...c }));
+        const widths = loadColumnWidths(this.viewType) || {};
+        base.forEach(col => {
+            if (widths[col.field]) col.width = widths[col.field];
+        });
+        return base;
     }
     
     render() {
@@ -35,7 +50,7 @@ export class BoardTable {
                     <table class="board-table">
                         <thead>
                             <tr>
-                                ${this.renderHeaderCells()}
+                                ${renderHeaderCells(this.columns)}
                             </tr>
                         </thead>
                     </table>
@@ -55,41 +70,8 @@ export class BoardTable {
         this.bindEvents();
     }
     
-    renderHeaderCells() {
-        return this.columns.map(col => `
-            <th 
-                class="board-table-cell ${col.frozen ? 'frozen' : ''}"
-                style="width: ${col.width}px;"
-                data-field="${col.field}"
-            >
-                <div class="cell-content">
-                    <span class="cell-label">${col.label}</span>
-                    ${col.sortable !== false ? '<span class="sort-icon"></span>' : ''}
-                </div>
-                <div class="resize-handle"></div>
-            </th>
-        `).join('');
-    }
-    
     renderRows() {
-        if (!this.projects || this.projects.length === 0) {
-            return '<tr><td colspan="100"><div class="no-data">No projects found</div></td></tr>';
-        }
-        
-        return this.projects.map((project, index) => {
-            return this.renderRow(project, index);
-        }).join('');
-    }
-    
-    renderRow(project, index) {
-        const row = new BoardRow(project, {
-            columns: this.columns,
-            index: index,
-            onClick: () => this.handleRowClick(project)
-        });
-        
-        this.rows.push(row);
-        return row.getHTML();
+        return renderRows(this.projects, this.columns, (p) => this.handleRowClick(p), this.rows);
     }
     
     bindEvents() {
@@ -122,38 +104,30 @@ export class BoardTable {
         
         // 单元格编辑
         this.initCellEditing();
+
+        // Virtual scroll
+        this.bindScroll();
     }
     
+    bindScroll() {
+        const body = this.container.querySelector('#boardTableBody');
+        if (!body) return;
+
+        if (this._onScroll) {
+            body.removeEventListener('scroll', this._onScroll);
+            this._onScroll = null;
+        }
+
+        this._onScroll = () => {
+            if (!this.isVirtual()) return;
+            this.scheduleRowsUpdate();
+        };
+        body.addEventListener('scroll', this._onScroll, { passive: true });
+    }
+
     initResizable() {
-        // 实现列宽调整功能
-        const resizeHandles = this.container.querySelectorAll('.resize-handle');
-        
-        resizeHandles.forEach(handle => {
-            let startX, startWidth, th;
-            
-            handle.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                th = handle.closest('th');
-                startX = e.clientX;
-                startWidth = th.offsetWidth;
-                
-                document.addEventListener('mousemove', onMouseMove);
-                document.addEventListener('mouseup', onMouseUp);
-            });
-            
-            const onMouseMove = (e) => {
-                if (!th) return;
-                const diff = e.clientX - startX;
-                th.style.width = `${startWidth + diff}px`;
-            };
-            
-            const onMouseUp = () => {
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
-                
-                // 保存列宽到localStorage
-                this.saveColumnWidths();
-            };
+        initResizable(this.container, {
+            onWidthChangeDone: () => this.saveColumnWidths()
         });
     }
     
@@ -204,17 +178,64 @@ export class BoardTable {
 
         this._unsubscribe = this.store.subscribe((state) => {
             this.projects = state.projects.items || [];
-            this.updateRows();
+            this.scheduleRowsUpdate();
         });
     }
     
+    scheduleRowsUpdate() {
+        if (this._raf) return;
+        this._raf = requestAnimationFrame(() => {
+            this._raf = null;
+            this.updateRows();
+        });
+    }
+
+    isVirtual() {
+        return shouldVirtualize((this.projects || []).length, this._virtualThreshold);
+    }
+
     updateRows() {
         const tbody = this.container.querySelector('#tableBody');
         if (!tbody) return;
-        
-        // 清空现有行
+
+        // Clear row instances (only for visible rows in virtual mode)
         this.rows = [];
-        tbody.innerHTML = this.renderRows();
+
+        if (!this.isVirtual()) {
+            tbody.innerHTML = this.renderRows();
+            this._maybeUpdateRowHeight();
+            return;
+        }
+
+        const viewport = this.container.querySelector('#boardTableBody');
+        const viewportHeight = viewport?.clientHeight || 600;
+        const scrollTop = viewport?.scrollTop || 0;
+        const total = (this.projects || []).length;
+
+        const { start, end, topPad, bottomPad } = computeWindow({
+            scrollTop,
+            viewportHeight,
+            rowHeight: this._rowHeight,
+            total,
+            overscan: this._overscan
+        });
+
+        const slice = this.projects.slice(start, end);
+        const rowsHtml = renderRows(slice, this.columns, (p) => this.handleRowClick(p), this.rows);
+        tbody.innerHTML = spacerRow(topPad) + rowsHtml + spacerRow(bottomPad);
+        this._maybeUpdateRowHeight();
+    }
+
+    _maybeUpdateRowHeight() {
+        // Try to refine row height for virtualization accuracy
+        try {
+            const tbody = this.container.querySelector('#tableBody');
+            const firstRow = tbody?.querySelector('tr.board-table-row');
+            if (firstRow) {
+                const h = firstRow.getBoundingClientRect().height;
+                if (h && h > 10 && h < 200) this._rowHeight = h;
+            }
+        } catch (e) {}
     }
     
     updateView(viewType) {
@@ -224,31 +245,14 @@ export class BoardTable {
     }
     
     saveColumnWidths() {
-        // 保存列宽到localStorage
         const widths = {};
         const headers = this.container.querySelectorAll('th[data-field]');
         
         headers.forEach(th => {
             widths[th.dataset.field] = th.offsetWidth;
         });
-        
-        localStorage.setItem(
-            `column_widths_${this.viewType}`,
-            JSON.stringify(widths)
-        );
-    }
-    
-    loadColumnWidths() {
-        // 从localStorage加载列宽
-        const saved = localStorage.getItem(`column_widths_${this.viewType}`);
-        if (saved) {
-            try {
-                return JSON.parse(saved);
-            } catch (e) {
-                console.error('Failed to parse saved column widths:', e);
-            }
-        }
-        return null;
+
+        saveColumnWidths(this.viewType, widths);
     }
     
     handleResize() {
@@ -257,6 +261,17 @@ export class BoardTable {
     }
     
     destroy() {
+        if (this._raf) {
+            cancelAnimationFrame(this._raf);
+            this._raf = null;
+        }
+
+        const body = this.container.querySelector('#boardTableBody');
+        if (body && this._onScroll) {
+            body.removeEventListener('scroll', this._onScroll);
+            this._onScroll = null;
+        }
+
         if (this._unsubscribe) {
             try { this._unsubscribe(); } catch (e) {}
             this._unsubscribe = null;

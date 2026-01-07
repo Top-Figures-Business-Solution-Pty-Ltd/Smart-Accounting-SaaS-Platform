@@ -6,13 +6,38 @@
 {% block navbar %}{% endblock %}
 {% block breadcrumbs %}{% endblock %}
 {% block header %}{% endblock %}
+{% block footer %}{% endblock %}
 
 {% block page_content %}
 <div id="smart-shell" class="smart-shell">
   <div class="smart-shell__topbar">
-    <div class="smart-shell__brand">Smart Accounting</div>
+    <div class="smart-shell__left">
+      <div class="smart-shell__brand">Smart Accounting</div>
+    </div>
     <div class="smart-shell__actions">
-      <a class="btn btn-default btn-sm" href="/api/method/logout">Logout</a>
+      <button class="smart-shell__icon-btn" id="btnNotifications" aria-label="Notifications" type="button">
+        🔔
+      </button>
+      <button class="smart-shell__avatar" id="userAvatar" type="button" aria-label="User menu" title="{{ frappe.session.user }}">
+        {{ (frappe.session.user or 'U')[:1] | upper }}
+      </button>
+    </div>
+  </div>
+
+  <div class="smart-shell__popover" id="notificationsPopover" style="display:none;">
+    <div class="smart-shell__popover-title">Notifications</div>
+    <div class="smart-shell__popover-body">
+      <div class="text-muted">No notifications yet.</div>
+    </div>
+  </div>
+
+  <div class="smart-shell__popover" id="profilePopover" style="display:none;">
+    <div class="smart-shell__popover-title">Account</div>
+    <div class="smart-shell__popover-body smart-shell__menu">
+      <button class="smart-shell__menu-item" id="btnMyProfile" type="button">My Profile</button>
+      <button class="smart-shell__menu-item" id="btnMySettings" type="button">My Settings</button>
+      <div class="smart-shell__menu-divider"></div>
+      <a class="smart-shell__menu-item smart-shell__menu-link" href="/api/method/logout">Log out</a>
     </div>
   </div>
 
@@ -32,7 +57,54 @@
     height: 56px; display: flex; align-items: center; justify-content: space-between;
     padding: 0 16px; background: #fff; border-bottom: 1px solid #dee2e6;
   }
+  .smart-shell__left { display:flex; align-items:center; gap: 10px; }
   .smart-shell__brand { font-weight: 600; font-size: 16px; }
+  .smart-shell__actions { display:flex; align-items:center; gap: 10px; position: relative; }
+  .smart-shell__icon-btn {
+    width: 34px; height: 34px; border-radius: 8px;
+    border: 1px solid #dee2e6; background:#fff;
+  }
+  .smart-shell__icon-btn:hover { background:#f3f4f6; }
+  .smart-shell__avatar {
+    width: 34px; height: 34px; border-radius: 999px;
+    background: #0d6efd; color:#fff; font-weight: 700;
+    display:flex; align-items:center; justify-content:center;
+    user-select:none;
+    border: 0;
+  }
+  .smart-shell__popover {
+    position: absolute;
+    top: 56px;
+    right: 16px;
+    width: 320px;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.12);
+    z-index: 9999;
+  }
+  .smart-shell__popover-title {
+    padding: 10px 12px;
+    font-weight: 600;
+    border-bottom: 1px solid #dee2e6;
+  }
+  .smart-shell__popover-body { padding: 12px; }
+  .smart-shell__menu { padding: 6px; }
+  .smart-shell__menu-item,
+  .smart-shell__menu-link {
+    width: 100%;
+    display: block;
+    padding: 10px 10px;
+    border-radius: 8px;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    color: #111;
+    text-decoration: none;
+  }
+  .smart-shell__menu-item:hover,
+  .smart-shell__menu-link:hover { background: #f3f4f6; }
+  .smart-shell__menu-divider { height: 1px; background:#dee2e6; margin: 6px 4px; }
   #smartBoardMount { height: calc(100vh - 56px); }
 </style>
 
@@ -40,6 +112,50 @@
   // Website page: mount Smart Board into our container (not into body / Desk).
   const mount = document.getElementById("smartBoardMount");
   const entry = "/assets/smart_accounting/js/smart_board/index.js";
+  const btnNotifications = document.getElementById("btnNotifications");
+  const popover = document.getElementById("notificationsPopover");
+  const userAvatar = document.getElementById("userAvatar");
+  const profilePopover = document.getElementById("profilePopover");
+  const btnMyProfile = document.getElementById("btnMyProfile");
+  const btnMySettings = document.getElementById("btnMySettings");
+
+  function hideAllPopovers() {
+    popover.style.display = "none";
+    profilePopover.style.display = "none";
+  }
+
+  function togglePopover(el, show) {
+    const next = typeof show === "boolean" ? show : (el.style.display === "none");
+    hideAllPopovers();
+    el.style.display = next ? "block" : "none";
+  }
+
+  btnNotifications?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    togglePopover(popover);
+  });
+
+  userAvatar?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    togglePopover(profilePopover);
+  });
+
+  document.addEventListener("click", () => hideAllPopovers());
+  popover?.addEventListener("click", (e) => e.stopPropagation());
+  profilePopover?.addEventListener("click", (e) => e.stopPropagation());
+
+  btnMySettings?.addEventListener("click", () => {
+    hideAllPopovers();
+    // Reuse existing Smart Board view
+    window.smart_accounting?.smart_board_instance?.handleViewChange?.("settings");
+  });
+  btnMyProfile?.addEventListener("click", () => {
+    hideAllPopovers();
+    // Placeholder until we implement a real profile screen in /smart
+    alert("My Profile - coming soon.");
+  });
 
   // Surface module-load errors for debugging (Website doesn't have Desk console context)
   window.addEventListener("unhandledrejection", (ev) => {
