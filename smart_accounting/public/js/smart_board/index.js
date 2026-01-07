@@ -5,15 +5,19 @@
 
 import { SmartBoardApp } from './app.js';
 
-// 挂载到frappe全局对象
-frappe.provide('smart_accounting');
+// 挂载到全局对象（Desk 有 frappe.provide，Website 可能没有）
+if (window.frappe?.provide) {
+    frappe.provide('smart_accounting');
+} else {
+    window.smart_accounting = window.smart_accounting || {};
+}
 
 /**
  * 初始化Smart Board应用
  */
 smart_accounting.show_smart_board = function() {
     // 优先 mount 到 Desk Page 提供的容器（避免全屏覆盖/避免污染 body）
-    const mountTarget = smart_accounting.__mount_target;
+    const mountTarget = smart_accounting.mount_target || smart_accounting.__mount_target;
     const container = mountTarget || document.createElement('div');
 
     if (!mountTarget) {
@@ -46,8 +50,10 @@ smart_accounting.hide_smart_board = function() {
     }
     
     // 如果是挂在 Page 的 mount target 上，就只清空内容，不 remove 容器本身
-    if (smart_accounting.__mount_target) {
-        smart_accounting.__mount_target.innerHTML = '';
+    if (smart_accounting.mount_target || smart_accounting.__mount_target) {
+        const target = smart_accounting.mount_target || smart_accounting.__mount_target;
+        target.innerHTML = '';
+        smart_accounting.mount_target = null;
         smart_accounting.__mount_target = null;
         return;
     }
@@ -56,10 +62,8 @@ smart_accounting.hide_smart_board = function() {
     container?.remove();
 };
 
-// 如果是通过路由访问，自动显示
-if (frappe.get_route()[0] === 'smart-board') {
-    frappe.ready(() => {
-        smart_accounting.show_smart_board();
-    });
-}
+// NOTE:
+// We intentionally do NOT auto-mount based on Desk route here.
+// - /app routes are Desk-specific and rely on Desk APIs (get_route, ready, etc.)
+// - /smart (website shell) mounts explicitly from the page template.
 

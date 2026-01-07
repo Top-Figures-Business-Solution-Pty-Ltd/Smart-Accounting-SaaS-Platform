@@ -104,8 +104,9 @@ fixtures = [
 #     "frappe.desk.doctype.event.event.get_events": "smart_accounting.overrides.get_events"
 # }
 
-# Access Control (optional - uncomment if needed)
-# before_request = ["smart_accounting.access_control.before_request"]
+# Access Control (Product shell hard-gate)
+# External users will be redirected away from Desk (/app*) to /smart.
+before_request = ["smart_accounting.access_control.before_request"]
 
 # Installation
 # before_install = "smart_accounting.setup.before_install"

@@ -34,7 +34,7 @@ frappe.pages["project-management"].on_page_load = function (wrapper) {
 				if (window.smart_accounting?.show_smart_board) {
 					// 让 SPA mount 到当前 page 的 root，而不是 append 到 body
 					// 先设置一个临时 hook，供 SPA 读取（后续可以改成更正式的 mount API）
-					window.smart_accounting.__mount_target = root;
+					window.smart_accounting.mount_target = root;
 					window.smart_accounting.show_smart_board();
 				} else {
 					root.innerHTML = `<div class="text-muted p-3">Smart Board entry loaded, but API not found.</div>`;

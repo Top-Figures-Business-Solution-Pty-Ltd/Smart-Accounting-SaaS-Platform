@@ -1,0 +1,78 @@
+{% extends "templates/web.html" %}
+
+{% block title %}Smart Accounting{% endblock %}
+
+{# Product shell: remove standard website navbar + breadcrumbs #}
+{% block navbar %}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+{% block header %}{% endblock %}
+
+{% block page_content %}
+<div id="smart-shell" class="smart-shell">
+  <div class="smart-shell__topbar">
+    <div class="smart-shell__brand">Smart Accounting</div>
+    <div class="smart-shell__actions">
+      <a class="btn btn-default btn-sm" href="/api/method/logout">Logout</a>
+    </div>
+  </div>
+
+  <!-- Mount target for Smart Board SPA -->
+  <div id="smartBoardMount" class="smart-board-container smart-board-embedded"></div>
+</div>
+
+<!-- Smart Board styles (scoped to this page via normal CSS rules, no Desk injection) -->
+<link rel="stylesheet" href="/assets/smart_accounting/css/smart_board/main.css">
+<link rel="stylesheet" href="/assets/smart_accounting/css/smart_board/layout.css">
+<link rel="stylesheet" href="/assets/smart_accounting/css/smart_board/board.css">
+<link rel="stylesheet" href="/assets/smart_accounting/css/smart_board/components.css">
+
+<style>
+  .smart-shell { min-height: 100vh; background: #f8f9fa; }
+  .smart-shell__topbar {
+    height: 56px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; background: #fff; border-bottom: 1px solid #dee2e6;
+  }
+  .smart-shell__brand { font-weight: 600; font-size: 16px; }
+  #smartBoardMount { height: calc(100vh - 56px); }
+</style>
+
+<script type="module">
+  // Website page: mount Smart Board into our container (not into body / Desk).
+  const mount = document.getElementById("smartBoardMount");
+  const entry = "/assets/smart_accounting/js/smart_board/index.js";
+
+  // Surface module-load errors for debugging (Website doesn't have Desk console context)
+  window.addEventListener("unhandledrejection", (ev) => {
+    try {
+      const reason = ev?.reason;
+      const detail = reason?.stack || reason?.message || String(reason);
+      mount.innerHTML = `<div class="text-muted p-3">
+        <div style="font-weight:600;margin-bottom:8px;">Smart Board crashed</div>
+        <pre style="white-space:pre-wrap;overflow:auto;">${detail}</pre>
+      </div>`;
+    } catch (e) {}
+  });
+
+  import(entry)
+    .then(() => {
+      if (window.smart_accounting?.show_smart_board) {
+        // NOTE: Avoid "__" in Jinja templates; Frappe safe template render will block it.
+        window.smart_accounting.mount_target = mount;
+        window.smart_accounting.show_smart_board();
+      } else {
+        mount.innerHTML = '<div class="text-muted p-3">Smart Board entry loaded, but API not found.</div>';
+      }
+    })
+    .catch((e) => {
+      console.error(e);
+      const detail = e?.stack || e?.message || String(e);
+      mount.innerHTML = `<div class="text-muted p-3">
+        <div style="font-weight:600;margin-bottom:8px;">Failed to load Smart Board modules</div>
+        <div style="margin-bottom:8px;">Please hard refresh (Ctrl+F5). If still failing, use the error below:</div>
+        <pre style="white-space:pre-wrap;overflow:auto;">${detail}</pre>
+      </div>`;
+    });
+</script>
+{% endblock %}
+
+
