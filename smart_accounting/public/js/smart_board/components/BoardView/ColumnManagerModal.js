@@ -4,6 +4,7 @@
  * - Persist: caller decides (e.g. Saved View.columns)
  */
 import { escapeHtml } from '../../utils/dom.js';
+import { Modal } from '../Common/Modal.js';
 
 export class ColumnManagerModal {
   constructor({ title = 'Manage Columns', columns = [], onSave, onClose } = {}) {
@@ -20,52 +21,43 @@ export class ColumnManagerModal {
     this._overlay = null;
     this._dragIndex = null;
     this._onKeyDown = null;
+    this._modal = null;
   }
 
   open() {
     this.close(); // ensure single instance
 
-    const overlay = document.createElement('div');
-    overlay.className = 'sb-modal-overlay';
-    overlay.innerHTML = `
-      <div class="sb-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(this.title)}">
-        <div class="sb-modal__header">
-          <div class="sb-modal__title">${escapeHtml(this.title)}</div>
-          <button class="sb-modal__close" type="button" aria-label="Close">×</button>
-        </div>
-        <div class="sb-modal__body">
-          <div class="sb-modal__hint">勾选要显示的列，拖拽改变顺序（团队共享默认列）。</div>
-          <div class="sb-colmgr" id="sbColMgrList">
-            ${this.columns.map((c, idx) => this._rowHTML(c, idx)).join('')}
-          </div>
-        </div>
-        <div class="sb-modal__footer">
-          <button class="btn btn-default" type="button" id="sbColMgrCancel">Cancel</button>
-          <button class="btn btn-primary" type="button" id="sbColMgrSave">Save</button>
-        </div>
+    const content = document.createElement('div');
+    content.innerHTML = `
+      <div class="sb-modal__hint">勾选要显示的列，拖拽改变顺序（团队共享默认列）。</div>
+      <div class="sb-colmgr" id="sbColMgrList">
+        ${this.columns.map((c, idx) => this._rowHTML(c, idx)).join('')}
       </div>
     `;
 
-    document.body.appendChild(overlay);
-    this._overlay = overlay;
+    const footer = document.createElement('div');
+    footer.style.display = 'flex';
+    footer.style.justifyContent = 'flex-end';
+    footer.style.gap = '10px';
+    footer.innerHTML = `
+      <button class="btn btn-default" type="button" id="sbColMgrCancel">Cancel</button>
+      <button class="btn btn-primary" type="button" id="sbColMgrSave">Save</button>
+    `;
 
-    // Close on overlay click
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) this.close();
+    this._modal = new Modal({
+      title: this.title,
+      contentEl: content,
+      footerEl: footer,
+      onClose: () => this.onClose()
     });
 
-    overlay.querySelector('.sb-modal__close')?.addEventListener('click', () => this.close());
-    overlay.querySelector('#sbColMgrCancel')?.addEventListener('click', () => this.close());
-    overlay.querySelector('#sbColMgrSave')?.addEventListener('click', () => this._handleSave());
+    this._modal.open();
 
-    const list = overlay.querySelector('#sbColMgrList');
+    footer.querySelector('#sbColMgrCancel')?.addEventListener('click', () => this.close());
+    footer.querySelector('#sbColMgrSave')?.addEventListener('click', () => this._handleSave());
+
+    const list = content.querySelector('#sbColMgrList');
     if (list) this._bindDnD(list);
-
-    // ESC to close
-    this._onKeyDown = (e) => {
-      if (e.key === 'Escape') this.close();
-    };
-    document.addEventListener('keydown', this._onKeyDown);
   }
 
   _rowHTML(c, idx) {
@@ -139,13 +131,8 @@ export class ColumnManagerModal {
   }
 
   close() {
-    if (this._onKeyDown) {
-      document.removeEventListener('keydown', this._onKeyDown);
-      this._onKeyDown = null;
-    }
-    this._overlay?.remove();
-    this._overlay = null;
-    this.onClose();
+    this._modal?.close?.();
+    this._modal = null;
   }
 }
 

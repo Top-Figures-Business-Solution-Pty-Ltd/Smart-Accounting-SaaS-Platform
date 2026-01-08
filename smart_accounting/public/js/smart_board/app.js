@@ -70,6 +70,7 @@ export class SmartBoardApp {
         this.header = new Header(headerContainer, {
             currentView: this.currentView,
             isBoardView: (viewType) => this.isBoardView(viewType),
+            store: this.store,
             onAction: (action, data) => this.handleHeaderAction(action, data)
         });
         

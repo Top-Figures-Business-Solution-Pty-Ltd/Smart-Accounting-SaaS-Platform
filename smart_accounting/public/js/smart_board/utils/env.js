@@ -9,7 +9,9 @@ export function isDesk() {
 }
 
 export function hasDialog() {
-  return !!(window?.frappe?.ui?.Dialog);
+  // Website may have a partial frappe.ui.Dialog that can't render fields.
+  // Only treat it as available when core control builder exists.
+  return !!(window?.frappe?.ui?.Dialog && window?.frappe?.ui?.form?.make_control);
 }
 
 

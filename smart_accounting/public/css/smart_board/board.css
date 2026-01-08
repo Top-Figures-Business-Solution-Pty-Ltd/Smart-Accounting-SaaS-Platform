@@ -23,7 +23,8 @@
 .board-table-header {
     background: #f8f9fa;
     border-bottom: 2px solid var(--smart-board-border);
-    overflow-x: auto;
+    /* Header should follow body horizontal scroll (single scroll source) */
+    overflow-x: hidden;
     overflow-y: hidden;
 }
 

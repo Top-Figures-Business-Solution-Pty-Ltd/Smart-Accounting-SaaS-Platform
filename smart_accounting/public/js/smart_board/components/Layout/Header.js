@@ -6,6 +6,7 @@
 import { STATUS_OPTIONS } from '../../utils/constants.js';
 import { renderHeaderActions, bindHeaderActions } from './headerToolbars.js';
 import { isProductView } from '../../utils/viewTypes.js';
+import { FilterModal } from '../BoardView/FilterModal.js';
 
 export class Header {
     constructor(container, options = {}) {
@@ -78,52 +79,16 @@ export class Header {
     }
     
     showFilterDialog() {
-        if (!frappe?.ui?.Dialog) {
-            alert('Filter dialog is not available in this view yet.');
-            return;
-        }
-        // 创建筛选对话框
-        const dialog = new frappe.ui.Dialog({
-            title: 'Filter Projects',
-            fields: [
-                {
-                    fieldname: 'status',
-                    label: 'Status',
-                    fieldtype: 'MultiSelect',
-                    options: this.getStatusOptions()
-                },
-                {
-                    fieldname: 'company',
-                    label: 'Company',
-                    fieldtype: 'Link',
-                    options: 'Company'
-                },
-                {
-                    fieldname: 'customer',
-                    label: 'Customer',
-                    fieldtype: 'Link',
-                    options: 'Customer'
-                },
-                {
-                    fieldname: 'fiscal_year',
-                    label: 'Fiscal Year',
-                    fieldtype: 'Link',
-                    options: 'Fiscal Year'
-                },
-                {
-                    fieldname: 'date_range',
-                    label: 'Due Date Range',
-                    fieldtype: 'DateRange'
-                }
-            ],
-            primary_action_label: 'Apply',
-            primary_action: (values) => {
-                this.onAction('filter', values);
-                dialog.hide();
-            }
+        // Website-safe modal (Desk Dialog can crash in /smart due to partial frappe.ui)
+        const options = STATUS_OPTIONS[this.currentView] || STATUS_OPTIONS['DEFAULT'] || [];
+        const initial = this.options?.store?.getState?.()?.filters || {};
+        const modal = new FilterModal({
+            title: `Filter · ${this.currentView}`,
+            statusOptions: options,
+            initial,
+            onApply: (values) => this.onAction('filter', values),
         });
-        
-        dialog.show();
+        modal.open();
     }
     
     getStatusOptions() {

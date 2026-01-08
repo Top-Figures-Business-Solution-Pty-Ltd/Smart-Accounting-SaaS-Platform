@@ -98,6 +98,47 @@ export const ROLE_OPTIONS = [
     'Partner'
 ];
 
+// Project 字段列目录（用于 Columns Manager 的“可选列池”）
+// - 不依赖具体 project_type，方便未来租户自定义 Project Type
+// - 仅包含“Project 可能用到”的核心字段（来自 docs/A + docs/E + 现有 ProjectService）
+export const PROJECT_COLUMN_CATALOG = [
+    // Core identifiers
+    { field: 'project_name', label: 'Project Name', width: 260 },
+    { field: 'customer', label: 'Client Name', width: 200, frozen: true },
+    { field: 'custom_entity_type', label: 'Entity', width: 160 },
+
+    // Classification / workflow
+    { field: 'project_type', label: 'Project Type', width: 150 },
+    { field: 'company', label: 'Company', width: 120 },
+    { field: 'status', label: 'Status', width: 150 },
+    { field: 'priority', label: 'Priority', width: 120 },
+
+    // Team & tools
+    { field: 'custom_team_members', label: 'Team', width: 200 },
+    { field: 'custom_softwares', label: 'Software', width: 160 },
+
+    // Dates / planning
+    { field: 'expected_start_date', label: 'Start Date', width: 130 },
+    { field: 'expected_end_date', label: 'End Date', width: 130 },
+    { field: 'custom_lodgement_due_date', label: 'Lodgement Due', width: 140 },
+
+    // Periodicity / accounting specifics (docs confirmed)
+    { field: 'custom_project_frequency', label: 'Frequency', width: 120 },
+    { field: 'custom_target_month', label: 'Target Month', width: 130 },
+    { field: 'custom_fiscal_year', label: 'Fiscal Year', width: 120 },
+
+    // Money / notes / archive
+    { field: 'estimated_costing', label: 'Budget', width: 120 },
+    { field: 'notes', label: 'Notes', width: 260 },
+    { field: 'is_active', label: 'Active', width: 90 },
+    { field: 'percent_complete', label: '% Complete', width: 110 },
+
+    // Meta
+    { field: 'modified', label: 'Last Updated', width: 150 },
+    { field: 'auto_repeat', label: 'Auto Repeat', width: 140 },
+    { field: 'name', label: 'ID', width: 180 }
+];
+
 // 默认列配置（按 project_type）
 export const DEFAULT_COLUMNS = {
     'ITR': [

@@ -335,6 +335,65 @@
 }
 
 /* ============================================
+   Filter modal
+   ============================================ */
+.sb-filter__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 10px;
+}
+
+.sb-filter__item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid #f1f3f5;
+    border-radius: 10px;
+    background: #fff;
+    cursor: pointer;
+    user-select: none;
+}
+
+.sb-filter__item:hover {
+    background: #f8f9fa;
+}
+
+/* ============================================
+   LinkInput (dropdown search)
+   ============================================ */
+.sb-linkinput {
+    position: relative;
+}
+
+.sb-linkinput__menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid var(--smart-board-border);
+    border-radius: 10px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.12);
+    z-index: 21000;
+    max-height: 260px;
+    overflow: auto;
+}
+
+.sb-linkinput__item {
+    padding: 10px 10px;
+    cursor: pointer;
+}
+
+.sb-linkinput__item:hover {
+    background: #f8f9fa;
+}
+
+.sb-linkinput__empty {
+    padding: 10px 10px;
+}
+
+/* ============================================
    工具类
    ============================================ */
 .text-muted {

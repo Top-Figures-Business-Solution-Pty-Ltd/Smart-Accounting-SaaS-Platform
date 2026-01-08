@@ -53,6 +53,21 @@ export class BoardCell {
             case 'custom_softwares':
                 return this.formatSoftwares(value);
             
+            case 'priority':
+                return this.formatPriority(value);
+
+            case 'is_active':
+                return this.formatActive(value);
+
+            case 'percent_complete':
+                return this.formatPercent(value);
+
+            case 'modified':
+                return this.formatDate(value);
+
+            case 'auto_repeat':
+                return this.escapeHtml(value);
+
             case 'company':
                 return this.formatCompany(value);
             
@@ -111,6 +126,25 @@ export class BoardCell {
         }
         
         return this.escapeHtml(softwares);
+    }
+
+    formatPriority(priority) {
+        // Keep it simple for now; later we can map to colors.
+        return this.escapeHtml(priority);
+    }
+
+    formatActive(isActive) {
+        const v = (typeof isActive === 'string') ? isActive : String(isActive);
+        const yes = v === 'Yes' || v === '1' || v.toLowerCase?.() === 'yes' || v.toLowerCase?.() === 'true';
+        const text = yes ? 'Yes' : 'No';
+        const cls = yes ? 'company-badge company-tg' : 'company-badge company-tf';
+        return `<span class="${cls}">${text}</span>`;
+    }
+
+    formatPercent(pct) {
+        const n = Number(pct);
+        if (!Number.isFinite(n)) return this.escapeHtml(pct);
+        return `${Math.round(n)}%`;
     }
     
     formatCompany(company) {

@@ -3,7 +3,7 @@
  * 类Monday.com的表格视图组件
  */
 
-import { DEFAULT_COLUMNS } from '../../utils/constants.js';
+import { DEFAULT_COLUMNS, PROJECT_COLUMN_CATALOG } from '../../utils/constants.js';
 import { renderHeaderCells, renderRows } from './boardTableRender.js';
 import { initResizable } from './boardTableResize.js';
 import { loadColumnWidths, saveColumnWidths } from './boardTableStorage.js';
@@ -30,6 +30,8 @@ export class BoardTable {
         // Virtualization / performance
         this._raf = null;
         this._onScroll = null;
+        this._onBodyHScroll = null;
+        this._syncingHScroll = false;
         this._rowHeight = 44; // fallback, will be refined after first render
         this._virtualThreshold = options.virtualThreshold || 200;
         this._overscan = options.overscan || 6;
@@ -51,8 +53,13 @@ export class BoardTable {
     }
 
     getAvailableColumnDefs() {
-        // P0: available columns = what's defined in DEFAULT_COLUMNS for this view (fallback to DEFAULT)
-        return (DEFAULT_COLUMNS[this.viewType] || DEFAULT_COLUMNS['DEFAULT']).map(c => ({ ...c }));
+        // Available columns = global Project column catalog (not tied to project_type)
+        return (PROJECT_COLUMN_CATALOG || []).map(c => ({ ...c }));
+    }
+
+    getDefaultColumnConfigForView() {
+        // Default columns for initial Saved View creation (keep existing behavior)
+        return (DEFAULT_COLUMNS[this.viewType] || DEFAULT_COLUMNS['DEFAULT'] || []).map(c => ({ ...c }));
     }
 
     _normalizeSavedColumns(raw) {
@@ -97,7 +104,7 @@ export class BoardTable {
         // Only operate on real board views (system Project Type values)
         if (!this.isBoardView(this.viewType)) return;
 
-        const fallbackCols = this.getAvailableColumnDefs().map(c => ({ field: c.field, label: c.label }));
+        const fallbackCols = this.getDefaultColumnConfigForView().map(c => ({ field: c.field, label: c.label }));
         const view = await ViewService.getOrCreateDefaultView(this.viewType, {
             fallbackTitle: `${this.viewType} Board`,
             fallbackColumns: fallbackCols
@@ -178,6 +185,38 @@ export class BoardTable {
 
         // Virtual scroll
         this.bindScroll();
+
+        // Horizontal scroll sync (body drives, header follows)
+        this.bindHorizontalScrollSync();
+    }
+
+    bindHorizontalScrollSync() {
+        const header = this.container.querySelector('.board-table-header');
+        const body = this.container.querySelector('#boardTableBody');
+        if (!header || !body) return;
+
+        // Remove existing listener to avoid leaks on re-render
+        if (this._onBodyHScroll) {
+            body.removeEventListener('scroll', this._onBodyHScroll);
+            this._onBodyHScroll = null;
+        }
+
+        this._onBodyHScroll = () => {
+            if (this._syncingHScroll) return;
+            // If no horizontal overflow, do nothing
+            const left = body.scrollLeft || 0;
+            // Schedule in rAF to avoid layout thrash on fast scroll
+            requestAnimationFrame(() => {
+                this._syncingHScroll = true;
+                header.scrollLeft = left;
+                this._syncingHScroll = false;
+            });
+        };
+
+        // Passive for perf
+        body.addEventListener('scroll', this._onBodyHScroll, { passive: true });
+        // Initial sync
+        header.scrollLeft = body.scrollLeft || 0;
     }
     
     bindScroll() {
@@ -349,7 +388,7 @@ export class BoardTable {
             onSave: async (enabledList) => {
                 const config = enabledList.map(c => ({ field: c.field, label: c.label }));
 
-                const fallbackCols = this.getAvailableColumnDefs().map(c => ({ field: c.field, label: c.label }));
+                const fallbackCols = this.getDefaultColumnConfigForView().map(c => ({ field: c.field, label: c.label }));
                 const view = await ViewService.getOrCreateDefaultView(this.viewType, {
                     fallbackTitle: `${this.viewType} Board`,
                     fallbackColumns: fallbackCols
@@ -394,6 +433,10 @@ export class BoardTable {
         if (body && this._onScroll) {
             body.removeEventListener('scroll', this._onScroll);
             this._onScroll = null;
+        }
+        if (body && this._onBodyHScroll) {
+            body.removeEventListener('scroll', this._onBodyHScroll);
+            this._onBodyHScroll = null;
         }
 
         if (this._unsubscribe) {
