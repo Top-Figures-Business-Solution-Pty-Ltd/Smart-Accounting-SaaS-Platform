@@ -20,6 +20,7 @@ export class ColumnManagerModal {
 
     this._overlay = null;
     this._dragIndex = null;
+    this._dropIndex = null;
     this._onKeyDown = null;
     this._modal = null;
   }
@@ -52,6 +53,8 @@ export class ColumnManagerModal {
     });
 
     this._modal.open();
+    // Keep a reference for rerender
+    this._overlay = content;
 
     footer.querySelector('#sbColMgrCancel')?.addEventListener('click', () => this.close());
     footer.querySelector('#sbColMgrSave')?.addEventListener('click', () => this._handleSave());
@@ -87,14 +90,22 @@ export class ColumnManagerModal {
       const row = e.target?.closest?.('.sb-colmgr__row');
       if (!row) return;
       this._dragIndex = Number(row.dataset.index);
+      this._dropIndex = this._dragIndex;
       row.classList.add('is-dragging');
-      try { e.dataTransfer.effectAllowed = 'move'; } catch (err) {}
+      try {
+        e.dataTransfer.effectAllowed = 'move';
+        // Required by some browsers to initiate drag
+        e.dataTransfer.setData('text/plain', '');
+      } catch (err) {}
     });
 
     listEl.addEventListener('dragend', (e) => {
-      const row = e.target?.closest?.('.sb-colmgr__row');
-      row?.classList.remove('is-dragging');
+      listEl.querySelectorAll('.sb-colmgr__row').forEach((r) => {
+        r.classList.remove('is-dragging');
+        r.classList.remove('is-drop-target');
+      });
       this._dragIndex = null;
+      this._dropIndex = null;
       // re-render to normalize indices after drag
       this._rerenderList();
     });
@@ -105,11 +116,21 @@ export class ColumnManagerModal {
       if (!overRow) return;
       const overIndex = Number(overRow.dataset.index);
       if (this._dragIndex == null || overIndex === this._dragIndex) return;
+      this._dropIndex = overIndex;
+      // highlight drop target (no reordering during drag for stability/perf)
+      listEl.querySelectorAll('.sb-colmgr__row').forEach((r) => r.classList.remove('is-drop-target'));
+      overRow.classList.add('is-drop-target');
+    });
 
-      // Move item in array
-      const moved = this.columns.splice(this._dragIndex, 1)[0];
-      this.columns.splice(overIndex, 0, moved);
-      this._dragIndex = overIndex;
+    listEl.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const from = this._dragIndex;
+      const to = this._dropIndex;
+      if (from == null || to == null || from === to) return;
+      const moved = this.columns.splice(from, 1)[0];
+      this.columns.splice(to, 0, moved);
+      this._dragIndex = to;
+      // finalize
       this._rerenderList();
     });
   }
@@ -133,6 +154,9 @@ export class ColumnManagerModal {
   close() {
     this._modal?.close?.();
     this._modal = null;
+    this._overlay = null;
+    this._dragIndex = null;
+    this._dropIndex = null;
   }
 }
 

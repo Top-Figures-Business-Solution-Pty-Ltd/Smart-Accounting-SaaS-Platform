@@ -306,6 +306,12 @@
     background: #f8f9fa;
 }
 
+.sb-colmgr__row.is-drop-target {
+    outline: 2px solid rgba(13, 110, 253, 0.35);
+    outline-offset: -2px;
+    background: #f3f8ff;
+}
+
 .sb-colmgr__drag {
     width: 22px;
     text-align: center;

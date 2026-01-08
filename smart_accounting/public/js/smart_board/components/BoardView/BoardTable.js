@@ -10,6 +10,7 @@ import { loadColumnWidths, saveColumnWidths } from './boardTableStorage.js';
 import { shouldVirtualize, computeWindow, spacerRow } from './boardTableVirtualization.js';
 import { ViewService } from '../../services/viewService.js';
 import { ColumnManagerModal } from './ColumnManagerModal.js';
+import { TeamRoleService } from '../../services/teamRoleService.js';
 
 export class BoardTable {
     constructor(container, options = {}) {
@@ -26,6 +27,8 @@ export class BoardTable {
         this.rows = [];
         this._savedView = null; // Saved View doc (team shared default)
         this._colMgr = null;
+        this._teamRoles = null;
+        this._openingColMgr = false;
 
         // Virtualization / performance
         this._raf = null;
@@ -54,7 +57,18 @@ export class BoardTable {
 
     getAvailableColumnDefs() {
         // Available columns = global Project column catalog (not tied to project_type)
-        return (PROJECT_COLUMN_CATALOG || []).map(c => ({ ...c }));
+        const base = (PROJECT_COLUMN_CATALOG || []).map(c => ({ ...c }));
+
+        // Derived role-based team columns: team:<Role>
+        const roles = this._teamRoles || TeamRoleService.peekRoles() || [];
+        const derived = roles.map((role) => ({
+            field: `team:${role}`,
+            // UI label: show role name directly (no "team" prefix)
+            label: `${role}`,
+            width: 180
+        }));
+
+        return base.concat(derived);
     }
 
     getDefaultColumnConfigForView() {
@@ -103,6 +117,11 @@ export class BoardTable {
         if (!this.viewType) return;
         // Only operate on real board views (system Project Type values)
         if (!this.isBoardView(this.viewType)) return;
+
+        // Warm roles cache (cached) so derived columns have correct labels
+        try {
+            this._teamRoles = await TeamRoleService.getRoles();
+        } catch (e) {}
 
         const fallbackCols = this.getDefaultColumnConfigForView().map(c => ({ field: c.field, label: c.label }));
         const view = await ViewService.getOrCreateDefaultView(this.viewType, {
@@ -312,6 +331,8 @@ export class BoardTable {
         this.rows = [];
 
         if (!this.isVirtual()) {
+            // Precompute team role map once per row for derived columns
+            (this.projects || []).forEach((p) => this._prepareProjectDerivedCaches(p));
             tbody.innerHTML = this.renderRows();
             this._maybeUpdateRowHeight();
             return;
@@ -331,9 +352,29 @@ export class BoardTable {
         });
 
         const slice = this.projects.slice(start, end);
+        slice.forEach((p) => this._prepareProjectDerivedCaches(p));
         const rowsHtml = renderRows(slice, this.columns, (p) => this.handleRowClick(p), this.rows);
         tbody.innerHTML = spacerRow(topPad) + rowsHtml + spacerRow(bottomPad);
         this._maybeUpdateRowHeight();
+    }
+
+    _prepareProjectDerivedCaches(project) {
+        if (!project) return;
+        const team = project.custom_team_members;
+
+        // Use reference equality as a cheap invalidation
+        if (project.__sb_team_ref === team && project.__sb_team_by_role) return;
+
+        const byRole = {};
+        if (Array.isArray(team)) {
+            for (const m of team) {
+                const role = (m?.role || 'Preparer');
+                if (!byRole[role]) byRole[role] = [];
+                byRole[role].push(m);
+            }
+        }
+        project.__sb_team_ref = team;
+        project.__sb_team_by_role = byRole;
     }
 
     _maybeUpdateRowHeight() {
@@ -360,6 +401,22 @@ export class BoardTable {
             alert('Columns 只在 Boards（Project Type）里可用。');
             return;
         }
+        if (this._openingColMgr) return;
+        this._openingColMgr = true;
+
+        TeamRoleService.getRoles()
+            .then((roles) => {
+                this._teamRoles = roles || [];
+                this._openingColMgr = false;
+                this._openColumnManagerImpl();
+            })
+            .catch(() => {
+                this._openingColMgr = false;
+                this._openColumnManagerImpl();
+            });
+    }
+
+    _openColumnManagerImpl() {
         const defs = this.getAvailableColumnDefs();
         const currentOrder = (this._normalizeSavedColumns(this._savedView?.columns) || [])
             .map(c => c?.field)

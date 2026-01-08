@@ -31,6 +31,12 @@ export class BoardCell {
     
     formatValue(value) {
         const field = this.column.field;
+
+        // Derived column: team:<Role>
+        if (typeof field === 'string' && field.startsWith('team:')) {
+            const role = field.slice('team:'.length);
+            return this.formatTeamByRole(role);
+        }
         
         // 空值处理
         if (value === null || value === undefined || value === '') {
@@ -110,6 +116,14 @@ export class BoardCell {
         const moreText = moreCount > 0 ? `<span class="more-count">+${moreCount}</span>` : '';
         
         return `<div class="team-avatars">${avatars}${moreText}</div>`;
+    }
+
+    formatTeamByRole(role) {
+        const all = this.project?.custom_team_members || [];
+        // Prefer pre-aggregated cache from BoardTable (performance)
+        const byRole = this.project?.__sb_team_by_role;
+        const members = (byRole && byRole[role]) ? byRole[role] : all.filter((m) => (m?.role || '') === role);
+        return this.formatTeam(members);
     }
     
     formatDate(date) {

@@ -114,7 +114,6 @@ export const PROJECT_COLUMN_CATALOG = [
     { field: 'priority', label: 'Priority', width: 120 },
 
     // Team & tools
-    { field: 'custom_team_members', label: 'Team', width: 200 },
     { field: 'custom_softwares', label: 'Software', width: 160 },
 
     // Dates / planning
@@ -147,7 +146,6 @@ export const DEFAULT_COLUMNS = {
         { field: 'company', label: 'TF/TG', width: 80 },
         { field: 'custom_softwares', label: 'Software', width: 120 },
         { field: 'status', label: 'Status', width: 150 },
-        { field: 'custom_team_members', label: 'Team', width: 200 },
         { field: 'custom_lodgement_due_date', label: 'Due Date', width: 120 },
         { field: 'notes', label: 'Notes', width: 250 }
     ],
@@ -159,7 +157,6 @@ export const DEFAULT_COLUMNS = {
         { field: 'status', label: 'Status', width: 150 },
         { field: 'custom_project_frequency', label: 'Frequency', width: 100 },
         { field: 'custom_target_month', label: 'Target Month', width: 120 },
-        { field: 'custom_team_members', label: 'Team', width: 200 },
         { field: 'custom_lodgement_due_date', label: 'Due Date', width: 120 },
         { field: 'notes', label: 'Notes', width: 250 }
     ],
@@ -170,7 +167,6 @@ export const DEFAULT_COLUMNS = {
         { field: 'status', label: 'Status', width: 150 },
         { field: 'custom_project_frequency', label: 'Frequency', width: 100 },
         { field: 'expected_end_date', label: 'Process Date', width: 120 },
-        { field: 'custom_team_members', label: 'Team', width: 200 },
         { field: 'notes', label: 'Notes', width: 250 }
     ],
     'Bookkeeping': [
@@ -179,14 +175,12 @@ export const DEFAULT_COLUMNS = {
         { field: 'custom_softwares', label: 'Software', width: 120 },
         { field: 'status', label: 'Status', width: 150 },
         { field: 'custom_project_frequency', label: 'Frequency', width: 100 },
-        { field: 'custom_team_members', label: 'Team', width: 200 },
         { field: 'notes', label: 'Notes', width: 250 }
     ],
     'DEFAULT': [
         { field: 'customer', label: 'Client Name', width: 200, frozen: true },
         { field: 'project_name', label: 'Project Name', width: 250 },
         { field: 'status', label: 'Status', width: 150 },
-        { field: 'custom_team_members', label: 'Team', width: 200 },
         { field: 'expected_end_date', label: 'Due Date', width: 120 },
         { field: 'notes', label: 'Notes', width: 250 }
     ]
