@@ -11,6 +11,7 @@ import { shouldVirtualize, computeWindow, spacerRow } from './boardTableVirtuali
 import { ViewService } from '../../services/viewService.js';
 import { ColumnManagerModal } from './ColumnManagerModal.js';
 import { TeamRoleService } from '../../services/teamRoleService.js';
+import { EditingManager } from './boardTableEditingManager.js';
 
 export class BoardTable {
     constructor(container, options = {}) {
@@ -29,6 +30,7 @@ export class BoardTable {
         this._colMgr = null;
         this._teamRoles = null;
         this._openingColMgr = false;
+        this._editing = null;
 
         // Virtualization / performance
         this._raf = null;
@@ -191,6 +193,8 @@ export class BoardTable {
             tbody.addEventListener('click', (e) => {
                 const row = e.target.closest('tr');
                 if (row && row.dataset.projectName) {
+                    // If user is clicking inside an editor, ignore row click.
+                    if (e.target?.closest?.('.sb-inline-editor')) return;
                     const project = this.projects.find(p => p.name === row.dataset.projectName);
                     if (project) {
                         this.handleRowClick(project);
@@ -249,6 +253,11 @@ export class BoardTable {
 
         this._onScroll = () => {
             if (!this.isVirtual()) return;
+            // Requirement: click elsewhere saves; scrolling is a "leave cell" action too.
+            // Commit and close to avoid editor being destroyed by virtualization rerender.
+            if (this._editing?.isEditing?.()) {
+                this._editing.commitAndClose?.('scroll');
+            }
             this.scheduleRowsUpdate();
         };
         body.addEventListener('scroll', this._onScroll, { passive: true });
@@ -261,16 +270,18 @@ export class BoardTable {
     }
     
     initCellEditing() {
-        // 实现单元格行内编辑
+        // 实现单元格行内编辑（click -> edit）
         const tbody = this.container.querySelector('#tableBody');
         if (!tbody) return;
-        
-        tbody.addEventListener('dblclick', (e) => {
-            const cell = e.target.closest('td[data-field]');
-            if (cell && cell.classList.contains('editable')) {
-                this.editCell(cell);
-            }
-        });
+
+        if (!this._editing) {
+            this._editing = new EditingManager({
+                rootEl: this.container,
+                store: this.store,
+                getProjectByName: (name) => (this.projects || []).find((p) => p.name === name) || null
+            });
+        }
+        this._editing.bindToTbody(tbody);
     }
     
     editCell(cell) {
@@ -312,6 +323,9 @@ export class BoardTable {
     }
     
     scheduleRowsUpdate() {
+        // Do not rerender rows while editing; it would destroy the editor DOM.
+        // EditingManager will commit+close on scroll/outside click.
+        if (this._editing?.isEditing?.()) return;
         if (this._raf) return;
         this._raf = requestAnimationFrame(() => {
             this._raf = null;
@@ -500,6 +514,8 @@ export class BoardTable {
             try { this._unsubscribe(); } catch (e) {}
             this._unsubscribe = null;
         }
+        this._editing?.destroy?.();
+        this._editing = null;
         this._colMgr?.close?.();
         this._colMgr = null;
         this.rows.forEach(row => row.destroy && row.destroy());

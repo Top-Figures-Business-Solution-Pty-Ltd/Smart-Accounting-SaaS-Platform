@@ -1,0 +1,224 @@
+/**
+ * EditingManager (Step 2)
+ * - Centralizes inline editing lifecycle:
+ *   - click -> edit
+ *   - Enter -> commit
+ *   - blur / click outside -> commit
+ *   - Esc -> cancel
+ *
+ * Notes:
+ * - Works with current table implementation (tbody innerHTML replaces).
+ * - BoardTable should avoid re-rendering rows while editing; on scroll it can force commit+close.
+ */
+import { columnRegistry } from '../../columns/registry.js';
+
+export class EditingManager {
+  constructor({ rootEl, store, getProjectByName } = {}) {
+    this.rootEl = rootEl;
+    this.store = store;
+    this.getProjectByName = getProjectByName || (() => null);
+
+    this._active = null; // { cellEl, projectName, field, originalHTML, originalValue }
+    this._committing = false;
+    this._onDocMouseDown = null;
+  }
+
+  isEditing() {
+    return !!this._active;
+  }
+
+  /**
+   * Bind event delegation on tbody for click-to-edit.
+   * Caller should call this after each table render (since tbody is re-created).
+   */
+  bindToTbody(tbodyEl) {
+    if (!tbodyEl) return;
+
+    // Click to edit (per requirement)
+    tbodyEl.addEventListener('click', (e) => {
+      const cell = e.target?.closest?.('td[data-field]');
+      if (!cell) return;
+      if (!cell.classList.contains('editable')) return;
+      // avoid entering edit when clicking inside an existing editor
+      if (cell.querySelector('.sb-inline-editor')) return;
+      this.startEdit(cell);
+    });
+  }
+
+  /**
+   * Force commit+close when table is about to change DOM (e.g. scroll virtualization).
+   * This keeps the system stable and avoids "editor disappears without saving".
+   */
+  async commitAndClose(reason = 'unknown') {
+    if (!this._active) return;
+    try {
+      await this.commit(reason);
+    } finally {
+      this.closeEditor();
+    }
+  }
+
+  startEdit(cellEl) {
+    if (!cellEl) return;
+
+    // If editing another cell, commit first (requirement: click elsewhere saves)
+    if (this._active && this._active.cellEl !== cellEl) {
+      this.commitAndClose('switch-cell');
+    }
+
+    const row = cellEl.closest('tr');
+    const field = cellEl.dataset.field;
+    const projectName = row?.dataset?.projectName;
+    if (!field || !projectName) return;
+
+    const project = this.getProjectByName(projectName);
+    if (!project) return;
+
+    // Save original cell HTML so Esc can revert without needing full rerender.
+    const content = cellEl.querySelector('.cell-content') || cellEl;
+    const originalHTML = content.innerHTML;
+    const originalValue = project[field];
+
+    this._active = { cellEl, projectName, field, originalHTML, originalValue };
+
+    // Install doc listener to detect click-outside -> commit
+    this._installDocOutsideHandler();
+
+    // Try registry-provided editor; else use default editor.
+    const spec = columnRegistry.getSpec(field);
+    const editor = spec?.renderEditor;
+    if (typeof editor === 'function') {
+      // editor should mount itself and call manager.commit/cancel accordingly in future steps.
+      // For now, if a custom editor exists, we still mount it but provide minimal ctx.
+      try {
+        editor({ cellEl, project, column: { field }, manager: this });
+        return;
+      } catch (e) {
+        // fall back to default editor
+      }
+    }
+
+    this._mountDefaultEditor({ cellEl, field, project });
+  }
+
+  _mountDefaultEditor({ cellEl, field, project }) {
+    const content = cellEl.querySelector('.cell-content') || cellEl;
+    const val = project?.[field];
+
+    // Replace content with a simple text input (generic skeleton).
+    content.innerHTML = `
+      <input class="form-control sb-inline-editor" type="text" />
+    `;
+    const input = content.querySelector('input.sb-inline-editor');
+    if (!input) return;
+
+    input.value = (val == null) ? '' : String(val);
+    // Focus next tick to ensure it's in DOM.
+    setTimeout(() => {
+      try { input.focus(); input.select?.(); } catch (e) {}
+    }, 0);
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.commitAndClose('enter');
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        this.cancel();
+      }
+    });
+
+    // blur saves (per requirement)
+    input.addEventListener('blur', () => {
+      // If user pressed Esc, _active may be cleared; guard.
+      if (!this._active) return;
+      this.commitAndClose('blur');
+    });
+  }
+
+  async commit(reason = 'unknown') {
+    if (!this._active) return;
+    if (this._committing) return;
+    this._committing = true;
+
+    try {
+      const { cellEl, projectName, field } = this._active;
+      const project = this.getProjectByName(projectName);
+      if (!project) return;
+
+      const content = cellEl.querySelector('.cell-content') || cellEl;
+      const input = content.querySelector('.sb-inline-editor');
+
+      // If no input (custom editor), do nothing in this step.
+      if (!input) return;
+
+      const value = input.value;
+      // No-op: if unchanged, just restore (avoid extra store churn)
+      const oldVal = project?.[field];
+      if ((oldVal == null ? '' : String(oldVal)) === (value == null ? '' : String(value))) {
+        return;
+      }
+
+      // Default commit path: projects/updateProjectField (uses frappe.client.set_value)
+      if (this.store?.dispatch) {
+        await this.store.dispatch('projects/updateProjectField', { name: projectName, field, value });
+      }
+    } finally {
+      this._committing = false;
+    }
+  }
+
+  cancel() {
+    if (!this._active) return;
+    const { cellEl, originalHTML } = this._active;
+    const content = cellEl.querySelector('.cell-content') || cellEl;
+    content.innerHTML = originalHTML;
+    this._active = null;
+    this._removeDocOutsideHandler();
+  }
+
+  closeEditor() {
+    // After commit we rely on store update + renderRows to refresh UI;
+    // but in case store isn't available, restore original HTML.
+    if (!this._active) return;
+    const { cellEl, originalHTML } = this._active;
+    const content = cellEl.querySelector('.cell-content') || cellEl;
+    // If still showing editor, restore to original. The next store-driven render will update anyway.
+    if (content.querySelector('.sb-inline-editor')) {
+      content.innerHTML = originalHTML;
+    }
+    this._active = null;
+    this._removeDocOutsideHandler();
+  }
+
+  _installDocOutsideHandler() {
+    if (this._onDocMouseDown) return;
+    this._onDocMouseDown = (e) => {
+      if (!this._active) return;
+      const cell = this._active.cellEl;
+      // Click inside current cell/editor: ignore
+      if (cell && cell.contains(e.target)) return;
+      // Otherwise commit+close
+      this.commitAndClose('outside-click');
+    };
+    document.addEventListener('mousedown', this._onDocMouseDown, true);
+  }
+
+  _removeDocOutsideHandler() {
+    if (!this._onDocMouseDown) return;
+    document.removeEventListener('mousedown', this._onDocMouseDown, true);
+    this._onDocMouseDown = null;
+  }
+
+  destroy() {
+    try {
+      this.cancel();
+    } catch (e) {}
+    this._removeDocOutsideHandler();
+    this.rootEl = null;
+    this.store = null;
+    this.getProjectByName = null;
+  }
+}
+
+
