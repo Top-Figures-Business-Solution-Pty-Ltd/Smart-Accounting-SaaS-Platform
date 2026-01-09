@@ -13,6 +13,7 @@ import { isBoardView as isBoardViewFn } from './utils/viewTypes.js';
 import { handleHeaderAction } from './controllers/headerActionHandler.js';
 import { openProject, createProject } from './services/navigationService.js';
 import { msgprint } from './services/uiAdapter.js';
+import './columns/registerDefaultSpecs.js';
 
 export class SmartBoardApp {
     constructor(container) {

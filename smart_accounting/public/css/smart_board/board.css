@@ -167,6 +167,15 @@
     padding-bottom: 6px;
 }
 
+.sb-inline-editor--link {
+    padding: 0;
+}
+
+/* Notes hover hint (lightweight; can be redesigned per your style spec later) */
+.board-table tbody td.sb-col-notes.editable:hover {
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+}
+
 /* ============================================
    Table Cell 内容样式
    ============================================ */

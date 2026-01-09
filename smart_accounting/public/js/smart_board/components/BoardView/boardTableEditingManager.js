@@ -21,6 +21,7 @@ export class EditingManager {
     this._active = null; // { cellEl, projectName, field, originalHTML, originalValue }
     this._committing = false;
     this._onDocMouseDown = null;
+    this._editorInstance = null;
   }
 
   isEditing() {
@@ -80,6 +81,7 @@ export class EditingManager {
     const originalValue = project[field];
 
     this._active = { cellEl, projectName, field, originalHTML, originalValue };
+    this._editorInstance = null;
 
     // Install doc listener to detect click-outside -> commit
     this._installDocOutsideHandler();
@@ -91,14 +93,54 @@ export class EditingManager {
       // editor should mount itself and call manager.commit/cancel accordingly in future steps.
       // For now, if a custom editor exists, we still mount it but provide minimal ctx.
       try {
-        editor({ cellEl, project, column: { field }, manager: this });
-        return;
+        const out = editor({ cellEl, project, column: { field }, manager: this, field });
+        // If the editor did not call bindActiveEditor, bind by searching a standard input.
+        if (!this._editorInstance) {
+          const contentEl2 = cellEl.querySelector('.cell-content') || cellEl;
+          const input2 = contentEl2.querySelector('.sb-inline-editor');
+          if (input2) this.bindActiveEditor(input2, null);
+        }
+        return out;
       } catch (e) {
         // fall back to default editor
       }
     }
 
     this._mountDefaultEditor({ cellEl, field, project });
+  }
+
+  /**
+   * Allow custom editors to register their primary input element so manager can bind lifecycle.
+   * @param {HTMLElement|null} inputEl
+   * @param {any|null} editorInstance
+   */
+  bindActiveEditor(inputEl, editorInstance = null) {
+    if (!this._active) return;
+    this._editorInstance = editorInstance || null;
+    if (!inputEl) return;
+
+    // Prevent duplicate binding on the same element.
+    if (inputEl.__sbBound) return;
+    inputEl.__sbBound = true;
+
+    // Keydown
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        // For textarea, allow Shift+Enter to insert newline.
+        if (inputEl.tagName === 'TEXTAREA' && e.shiftKey) return;
+        e.preventDefault();
+        this.commitAndClose('enter');
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        this.cancel();
+      }
+    });
+
+    // blur saves (per requirement)
+    inputEl.addEventListener('blur', () => {
+      if (!this._active) return;
+      this.commitAndClose('blur');
+    });
   }
 
   _mountDefaultEditor({ cellEl, field, project }) {
@@ -118,22 +160,7 @@ export class EditingManager {
       try { input.focus(); input.select?.(); } catch (e) {}
     }, 0);
 
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        this.commitAndClose('enter');
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        this.cancel();
-      }
-    });
-
-    // blur saves (per requirement)
-    input.addEventListener('blur', () => {
-      // If user pressed Esc, _active may be cleared; guard.
-      if (!this._active) return;
-      this.commitAndClose('blur');
-    });
+    this.bindActiveEditor(input, null);
   }
 
   async commit(reason = 'unknown') {
@@ -160,6 +187,16 @@ export class EditingManager {
       }
 
       // Default commit path: projects/updateProjectField (uses frappe.client.set_value)
+      // Optional confirm hook for some columns (e.g. Lodgement Due)
+      try {
+        const spec = columnRegistry.getSpec(field);
+        const confirmFn = spec?.confirmCommit;
+        if (typeof confirmFn === 'function') {
+          const ok = await confirmFn({ project, field, value, reason });
+          if (!ok) return;
+        }
+      } catch (e) {}
+
       if (this.store?.dispatch) {
         await this.store.dispatch('projects/updateProjectField', { name: projectName, field, value });
       }
@@ -174,6 +211,7 @@ export class EditingManager {
     const content = cellEl.querySelector('.cell-content') || cellEl;
     content.innerHTML = originalHTML;
     this._active = null;
+    this._editorInstance = null;
     this._removeDocOutsideHandler();
   }
 
@@ -188,6 +226,7 @@ export class EditingManager {
       content.innerHTML = originalHTML;
     }
     this._active = null;
+    this._editorInstance = null;
     this._removeDocOutsideHandler();
   }
 
@@ -218,6 +257,7 @@ export class EditingManager {
     this.rootEl = null;
     this.store = null;
     this.getProjectByName = null;
+    this._editorInstance = null;
   }
 }
 

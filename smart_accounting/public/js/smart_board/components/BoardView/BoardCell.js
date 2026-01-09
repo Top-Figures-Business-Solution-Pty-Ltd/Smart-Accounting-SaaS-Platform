@@ -219,8 +219,20 @@ export class BoardCell {
     }
     
     isEditableField() {
+        const field = this.column?.field;
+        const spec = columnRegistry.getSpec(field);
+
+        // Spec-driven editable flag (preferred)
+        if (spec && spec.isEditable !== undefined) {
+            if (typeof spec.isEditable === 'function') {
+                try { return !!spec.isEditable({ project: this.project, column: this.column }); } catch (e) { return false; }
+            }
+            return !!spec.isEditable;
+        }
+
+        // Legacy fallback (keep current behavior unless spec overrides)
         const nonEditableFields = ['customer', 'project_name', 'company'];
-        return !nonEditableFields.includes(this.column.field);
+        return !nonEditableFields.includes(field);
     }
 }
 
