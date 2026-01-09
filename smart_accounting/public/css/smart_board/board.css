@@ -167,6 +167,37 @@
 }
 
 /* ============================================
+   Primary column: Updates entrypoint (Step 7)
+   ============================================ */
+.sb-primary-col .sb-update-btn {
+    border: 1px solid var(--smart-board-border);
+    background: #fff;
+    border-radius: 8px;
+    width: 28px;
+    height: 28px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease, background 0.15s ease;
+    flex: 0 0 auto;
+    margin-left: 8px;
+}
+
+.board-table tbody td.sb-primary-col:hover .sb-update-btn {
+    opacity: 1;
+}
+
+.sb-primary-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sb-primary-col .sb-update-btn:hover {
+    background: #f8f9fa;
+}
+
+/* ============================================
    Inline editors (Step 4: Editor Kit)
    ============================================ */
 .sb-inline-editor {

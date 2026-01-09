@@ -13,6 +13,7 @@ import { ColumnManagerModal } from './ColumnManagerModal.js';
 import { TeamRoleService } from '../../services/teamRoleService.js';
 import { EditingManager } from './boardTableEditingManager.js';
 import { columnRegistry } from '../../columns/registry.js';
+import { UpdatesModal } from './UpdatesModal.js';
 
 export class BoardTable {
     constructor(container, options = {}) {
@@ -204,6 +205,18 @@ export class BoardTable {
         const tbody = this.container.querySelector('#tableBody');
         if (tbody) {
             tbody.addEventListener('click', (e) => {
+                // Updates entrypoint (primary column)
+                const updBtn = e.target?.closest?.('.sb-update-btn');
+                if (updBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const projectName = updBtn.dataset.projectName;
+                    const project = this.projects.find(p => p.name === projectName);
+                    if (project) {
+                        this.openUpdates(project);
+                    }
+                    return;
+                }
                 const row = e.target.closest('tr');
                 if (row && row.dataset.projectName) {
                     // If user is clicking inside an editor, ignore row click.
@@ -400,6 +413,16 @@ export class BoardTable {
     handleRowClick(project) {
         console.log('Row clicked:', project);
         this.onRowClick(project);
+    }
+
+    openUpdates(project) {
+        // Step 7: website-safe modal placeholder (no persistence yet)
+        this._updatesModal?.close?.();
+        this._updatesModal = new UpdatesModal({
+            project,
+            onClose: () => { this._updatesModal = null; }
+        });
+        this._updatesModal.open();
     }
     
     subscribeToStore() {
@@ -620,6 +643,8 @@ export class BoardTable {
         }
         this._editing?.destroy?.();
         this._editing = null;
+        this._updatesModal?.close?.();
+        this._updatesModal = null;
         this._colMgr?.close?.();
         this._colMgr = null;
         this.rows.forEach(row => row.destroy && row.destroy());

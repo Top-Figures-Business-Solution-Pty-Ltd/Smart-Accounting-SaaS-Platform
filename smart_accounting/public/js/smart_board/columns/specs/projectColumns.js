@@ -7,6 +7,7 @@ import { STATUS_OPTIONS } from '../../utils/constants.js';
 import { InlineTextEditor, InlineTextareaEditor, InlineSelectEditor, InlineDateEditor, InlineMoneyEditor } from '../../components/Common/editors/index.js';
 import { LinkInput } from '../../components/Common/LinkInput.js';
 import { confirmDialog } from '../../services/uiAdapter.js';
+import { escapeHtml } from '../../utils/dom.js';
 
 function monthOptions() {
   return [
@@ -62,7 +63,21 @@ function linkEditor({ cellEl, project, field, manager, doctype, placeholder }) {
 export function makeProjectColumnSpecs() {
   return [
     // (1) Client Name - read-only for now, but keep interface (spec exists).
-    { field: 'customer', isEditable: false },
+    {
+      field: 'customer',
+      isEditable: false,
+      cellClass: 'sb-primary-col',
+      renderCell: ({ project }) => {
+        const text = escapeHtml(project?.customer || '—');
+        const pn = escapeHtml(project?.name || '');
+        return `
+          <span class="sb-primary-text">${text}</span>
+          <button type="button" class="sb-update-btn" data-project-name="${pn}" aria-label="Open updates" title="Updates">
+            💬
+          </button>
+        `;
+      }
+    },
 
     // (2) Project Name - editable text
     {
