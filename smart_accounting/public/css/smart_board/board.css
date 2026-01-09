@@ -145,6 +145,29 @@
 }
 
 /* ============================================
+   Inline editors (Step 4: Editor Kit)
+   ============================================ */
+.sb-inline-editor {
+    width: 100%;
+    min-width: 100%;
+    box-sizing: border-box;
+}
+
+.sb-inline-editor--textarea {
+    min-height: 96px;
+    resize: vertical;
+}
+
+.sb-inline-editor--select,
+.sb-inline-editor--date,
+.sb-inline-editor--money,
+.sb-inline-editor--text {
+    height: 34px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+
+/* ============================================
    Table Cell 内容样式
    ============================================ */
 .status-badge {
