@@ -4,6 +4,7 @@
  */
 
 import { formatDate, formatTeamMembers, getStatusColor } from '../../utils/helpers.js';
+import { columnRegistry } from '../../columns/registry.js';
 
 export class BoardCell {
     constructor(project, column) {
@@ -13,12 +14,15 @@ export class BoardCell {
     
     getHTML() {
         const value = this.project[this.column.field];
-        const formattedValue = this.formatValue(value);
+        // Column Registry override (non-invasive): if no override, fall back to legacy formatter.
+        const override = columnRegistry.renderCell({ project: this.project, column: this.column });
+        const formattedValue = override != null ? override : this.formatValue(value);
         const isEditable = this.isEditableField();
+        const extraClass = columnRegistry.getCellClass({ project: this.project, column: this.column });
         
         return `
             <td 
-                class="board-table-cell ${this.column.frozen ? 'frozen' : ''} ${isEditable ? 'editable' : ''}"
+                class="board-table-cell ${this.column.frozen ? 'frozen' : ''} ${isEditable ? 'editable' : ''} ${extraClass}"
                 data-field="${this.column.field}"
                 style="width: ${this.column.width}px;"
             >
