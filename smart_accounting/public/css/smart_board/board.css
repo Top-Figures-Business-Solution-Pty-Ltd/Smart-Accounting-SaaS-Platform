@@ -52,9 +52,31 @@
 
 .board-table thead th.frozen {
     position: sticky;
-    left: 0;
+    left: 0; /* inline style may override for multi-frozen columns */
     z-index: 10;
     background: #ffffff;
+}
+
+/* ============================================
+   Bulk select system column
+   ============================================ */
+.sb-select-col {
+    width: 44px;
+    text-align: center;
+}
+
+.sb-select-row-wrap,
+.sb-select-all-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sb-row-select,
+.sb-select-all {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
 }
 
 .cell-content {
@@ -127,7 +149,7 @@
 
 .board-table tbody td.frozen {
     position: sticky;
-    left: 0;
+    left: 0; /* inline style may override for multi-frozen columns */
     background: #ffffff;
     z-index: 1;
 }

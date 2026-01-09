@@ -12,6 +12,7 @@ import { ViewService } from '../../services/viewService.js';
 import { ColumnManagerModal } from './ColumnManagerModal.js';
 import { TeamRoleService } from '../../services/teamRoleService.js';
 import { EditingManager } from './boardTableEditingManager.js';
+import { columnRegistry } from '../../columns/registry.js';
 
 export class BoardTable {
     constructor(container, options = {}) {
@@ -31,6 +32,9 @@ export class BoardTable {
         this._teamRoles = null;
         this._openingColMgr = false;
         this._editing = null;
+
+        // Bulk selection (system column)
+        this._selected = new Set(); // project.name
 
         // Virtualization / performance
         this._raf = null;
@@ -142,6 +146,9 @@ export class BoardTable {
     }
     
     render() {
+        // Build render columns (inject system columns, compute sticky offsets, apply header classes)
+        this._renderColumns = this.buildRenderColumns();
+
         this.container.innerHTML = `
             <div class="board-table-wrapper">
                 <!-- Table Header -->
@@ -149,7 +156,7 @@ export class BoardTable {
                     <table class="board-table">
                         <thead>
                             <tr>
-                                ${renderHeaderCells(this.columns)}
+                                ${renderHeaderCells(this._renderColumns)}
                             </tr>
                         </thead>
                     </table>
@@ -170,7 +177,13 @@ export class BoardTable {
     }
     
     renderRows() {
-        return renderRows(this.projects, this.columns, (p) => this.handleRowClick(p), this.rows);
+        return renderRows(
+            this.projects,
+            this._renderColumns || this.columns,
+            (p) => this.handleRowClick(p),
+            this.rows,
+            { isSelected: (p) => this._selected?.has?.(p?.name) }
+        );
     }
     
     bindEvents() {
@@ -195,6 +208,8 @@ export class BoardTable {
                 if (row && row.dataset.projectName) {
                     // If user is clicking inside an editor, ignore row click.
                     if (e.target?.closest?.('.sb-inline-editor')) return;
+                    // Clicking selection checkbox should not trigger row open.
+                    if (e.target?.closest?.('.sb-row-select') || e.target?.closest?.('.sb-select-col')) return;
                     const project = this.projects.find(p => p.name === row.dataset.projectName);
                     if (project) {
                         this.handleRowClick(project);
@@ -205,6 +220,9 @@ export class BoardTable {
         
         // 单元格编辑
         this.initCellEditing();
+
+        // Bulk select events
+        this.bindBulkSelect();
 
         // Virtual scroll
         this.bindScroll();
@@ -283,6 +301,84 @@ export class BoardTable {
         }
         this._editing.bindToTbody(tbody);
     }
+
+    buildRenderColumns() {
+        // Inject system select column at the very left (not persisted in Saved View)
+        const selectCol = {
+            field: '__sb_select',
+            label: '',
+            width: 44,
+            frozen: true,
+            sortable: false
+        };
+
+        // Clone columns to avoid mutating Saved View config objects
+        const cols = [selectCol].concat((this.columns || []).map((c) => ({ ...c })));
+
+        // Apply header class hooks + compute sticky left offsets for frozen columns
+        let left = 0;
+        for (const col of cols) {
+            col.__headerClass = columnRegistry.getHeaderClass({ column: col }) || '';
+            if (col.frozen) {
+                col._stickyLeft = left;
+                left += Number(col.width || 0);
+            } else {
+                col._stickyLeft = null;
+            }
+        }
+        return cols;
+    }
+
+    bindBulkSelect() {
+        const headerCb = this.container.querySelector('.sb-select-all');
+        const tbody = this.container.querySelector('#tableBody');
+
+        if (headerCb) {
+            headerCb.addEventListener('change', (e) => {
+                const checked = !!e.target.checked;
+                this._setAllSelected(checked);
+                this.updateSelectAllCheckbox();
+                this.scheduleRowsUpdate();
+            });
+        }
+
+        if (tbody) {
+            tbody.addEventListener('change', (e) => {
+                const cb = e.target?.closest?.('.sb-row-select');
+                if (!cb) return;
+                const name = cb.dataset.projectName;
+                if (!name) return;
+                if (cb.checked) this._selected.add(name);
+                else this._selected.delete(name);
+                this.updateSelectAllCheckbox();
+                // Update row highlight without full rerender
+                const row = cb.closest('tr');
+                if (row) row.classList.toggle('selected', cb.checked);
+            });
+        }
+
+        // Initial state
+        this.updateSelectAllCheckbox();
+    }
+
+    _setAllSelected(checked) {
+        if (!checked) {
+            this._selected.clear();
+            return;
+        }
+        (this.projects || []).forEach((p) => {
+            if (p?.name) this._selected.add(p.name);
+        });
+    }
+
+    updateSelectAllCheckbox() {
+        const headerCb = this.container.querySelector('.sb-select-all');
+        if (!headerCb) return;
+        const total = (this.projects || []).length;
+        const selectedCount = (this.projects || []).reduce((acc, p) => acc + (this._selected.has(p?.name) ? 1 : 0), 0);
+        headerCb.indeterminate = selectedCount > 0 && selectedCount < total;
+        headerCb.checked = total > 0 && selectedCount === total;
+    }
     
     editCell(cell) {
         const field = cell.dataset.field;
@@ -348,6 +444,7 @@ export class BoardTable {
             // Precompute team role map once per row for derived columns
             (this.projects || []).forEach((p) => this._prepareProjectDerivedCaches(p));
             tbody.innerHTML = this.renderRows();
+            this.updateSelectAllCheckbox();
             this._maybeUpdateRowHeight();
             return;
         }
@@ -367,8 +464,15 @@ export class BoardTable {
 
         const slice = this.projects.slice(start, end);
         slice.forEach((p) => this._prepareProjectDerivedCaches(p));
-        const rowsHtml = renderRows(slice, this.columns, (p) => this.handleRowClick(p), this.rows);
+        const rowsHtml = renderRows(
+            slice,
+            this._renderColumns || this.columns,
+            (p) => this.handleRowClick(p),
+            this.rows,
+            { isSelected: (p) => this._selected?.has?.(p?.name) }
+        );
         tbody.innerHTML = spacerRow(topPad) + rowsHtml + spacerRow(bottomPad);
+        this.updateSelectAllCheckbox();
         this._maybeUpdateRowHeight();
     }
 

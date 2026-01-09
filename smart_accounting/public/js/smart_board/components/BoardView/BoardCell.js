@@ -19,12 +19,13 @@ export class BoardCell {
         const formattedValue = override != null ? override : this.formatValue(value);
         const isEditable = this.isEditableField();
         const extraClass = columnRegistry.getCellClass({ project: this.project, column: this.column });
+        const left = (this.column.frozen && this.column._stickyLeft != null) ? ` left: ${this.column._stickyLeft}px;` : '';
         
         return `
             <td 
                 class="board-table-cell ${this.column.frozen ? 'frozen' : ''} ${isEditable ? 'editable' : ''} ${extraClass}"
                 data-field="${this.column.field}"
-                style="width: ${this.column.width}px;"
+                style="width: ${this.column.width}px;${left}"
             >
                 <div class="cell-content">
                     ${formattedValue}
