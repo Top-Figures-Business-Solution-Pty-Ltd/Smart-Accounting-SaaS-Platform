@@ -6,7 +6,7 @@
 import { STATUS_OPTIONS } from '../../utils/constants.js';
 import { renderHeaderActions, bindHeaderActions } from './headerToolbars.js';
 import { isProductView } from '../../utils/viewTypes.js';
-import { FilterModal } from '../BoardView/FilterModal.js';
+import { AdvancedFilterModal } from '../BoardView/AdvancedFilterModal.js';
 
 export class Header {
     constructor(container, options = {}) {
@@ -79,12 +79,25 @@ export class Header {
     }
     
     showFilterDialog() {
-        // Website-safe modal (Desk Dialog can crash in /smart due to partial frappe.ui)
-        const options = STATUS_OPTIONS[this.currentView] || STATUS_OPTIONS['DEFAULT'] || [];
+        // Website-safe modal (Monday-like)
         const initial = this.options?.store?.getState?.()?.filters || {};
-        const modal = new FilterModal({
+        const statusOptions = STATUS_OPTIONS[this.currentView] || STATUS_OPTIONS['DEFAULT'] || [];
+        const columns = [
+            { field: 'customer', label: 'Client Name', type: 'link', doctype: 'Customer', placeholder: 'Search Customer...' },
+            { field: 'project_name', label: 'Project Name', type: 'text' },
+            { field: 'status', label: 'Status', type: 'select', options: statusOptions },
+            { field: 'company', label: 'Company', type: 'link', doctype: 'Company', placeholder: 'Search Company...' },
+            { field: 'custom_target_month', label: 'Target Month', type: 'select', options: [
+                'January','February','March','April','May','June','July','August','September','October','November','December'
+            ] },
+            { field: 'custom_fiscal_year', label: 'Fiscal Year', type: 'link', doctype: 'Fiscal Year', placeholder: 'Search Fiscal Year...' },
+            { field: 'custom_lodgement_due_date', label: 'Lodgement Due', type: 'date' },
+            { field: 'expected_end_date', label: 'End Date', type: 'date' },
+        ];
+
+        const modal = new AdvancedFilterModal({
             title: `Filter · ${this.currentView}`,
-            statusOptions: options,
+            columns,
             initial,
             onApply: (values) => this.onAction('filter', values),
         });

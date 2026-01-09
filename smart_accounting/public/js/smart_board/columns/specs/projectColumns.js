@@ -3,8 +3,8 @@
  * - Focus: editable flags + editor selection + special hooks (e.g. confirm).
  * - Rendering override is optional; by default we keep existing BoardCell.formatValue output.
  */
-import { STATUS_OPTIONS } from '../../utils/constants.js';
-import { InlineTextEditor, InlineTextareaEditor, InlineSelectEditor, InlineDateEditor, InlineMoneyEditor } from '../../components/Common/editors/index.js';
+import { STATUS_OPTIONS, STATUS_COLORS } from '../../utils/constants.js';
+import { InlineTextEditor, InlineTextareaEditor, InlineSelectEditor, InlineMenuSelectEditor, InlineDateEditor, InlineMoneyEditor } from '../../components/Common/editors/index.js';
 import { LinkInput } from '../../components/Common/LinkInput.js';
 import { confirmDialog } from '../../services/uiAdapter.js';
 import { escapeHtml } from '../../utils/dom.js';
@@ -23,7 +23,12 @@ function priorityOptions() {
 
 function statusOptionsForProject(project) {
   const t = project?.project_type || 'DEFAULT';
-  return STATUS_OPTIONS[t] || STATUS_OPTIONS.DEFAULT || [];
+  const base = STATUS_OPTIONS[t] || STATUS_OPTIONS.DEFAULT || [];
+  // Compatibility: if current value isn't in options (e.g. ERPNext default "Open"),
+  // include it to avoid rendering an empty editor and accidental blank commit.
+  const cur = (project?.status || '').trim();
+  if (cur && !base.includes(cur)) return [cur].concat(base);
+  return base;
 }
 
 function mountEditorHelpers(manager, mountEl, editorInstance) {
@@ -95,12 +100,31 @@ export function makeProjectColumnSpecs() {
     {
       field: 'status',
       isEditable: true,
+      renderCell: ({ project }) => {
+        const v = project?.status;
+        if (!v) return '<span class="text-muted">—</span><span class="sb-afford sb-afford--select">▾</span>';
+        const color = STATUS_COLORS[v] || '#6c757d';
+        return `
+          <span class="status-badge" style="background-color:${escapeHtml(color)};">${escapeHtml(v)}</span>
+          <span class="sb-afford sb-afford--select">▾</span>
+        `;
+      },
       renderEditor: ({ cellEl, project, manager, field }) => {
         const contentEl = cellEl.querySelector('.cell-content') || cellEl;
-        const ed = new InlineSelectEditor(contentEl, {
-          options: statusOptionsForProject(project),
+        const opts = statusOptionsForProject(project).map((s) => ({
+          value: s,
+          label: s,
+          color: STATUS_COLORS[s] || ''
+        }));
+        const ed = new InlineMenuSelectEditor(contentEl, {
+          options: opts,
           initialValue: project?.[field] || ''
         });
+        // When user selects, commit immediately (still consistent with click-elsewhere save)
+        contentEl.addEventListener('sb:menu-select', (e) => {
+          e.stopPropagation?.();
+          manager?.commitAndClose?.('menu-select');
+        }, { once: true });
         mountEditorHelpers(manager, contentEl, ed);
         return ed;
       }

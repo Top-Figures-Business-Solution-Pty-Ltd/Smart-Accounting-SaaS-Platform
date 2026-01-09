@@ -235,6 +235,8 @@ export class BoardTable {
                 if (row && row.dataset.projectName) {
                     // If user is clicking inside an editor, ignore row click.
                     if (e.target?.closest?.('.sb-inline-editor')) return;
+                    // If user is clicking an editable cell, it should enter edit, not open details.
+                    if (e.target?.closest?.('td.editable')) return;
                     // Clicking selection checkbox should not trigger row open.
                     if (e.target?.closest?.('.sb-row-select') || e.target?.closest?.('.sb-select-col')) return;
                     const project = this.projects.find(p => p.name === row.dataset.projectName);

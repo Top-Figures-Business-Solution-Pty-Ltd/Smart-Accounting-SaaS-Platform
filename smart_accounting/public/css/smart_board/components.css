@@ -366,6 +366,47 @@
 }
 
 /* ============================================
+   Advanced Filter (Monday-like)
+   ============================================ */
+.sb-advfilter__hint {
+    font-size: 12px;
+    margin-bottom: 10px;
+}
+
+.sb-advfilter__row {
+    display: grid;
+    grid-template-columns: 110px 200px 160px 1fr 44px;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 0;
+}
+
+.sb-advfilter__join--where {
+    font-weight: 700;
+    color: var(--smart-board-text-muted);
+    padding-left: 6px;
+}
+
+.sb-advfilter__del {
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+}
+
+.sb-advfilter__value--na {
+    padding: 8px 10px;
+}
+
+@media (max-width: 900px) {
+    .sb-advfilter__row {
+        grid-template-columns: 90px 1fr 1fr 1fr 44px;
+    }
+}
+
+/* ============================================
    LinkInput (dropdown search)
    ============================================ */
 .sb-linkinput {

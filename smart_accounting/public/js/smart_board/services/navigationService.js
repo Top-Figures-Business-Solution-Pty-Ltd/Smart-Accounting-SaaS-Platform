@@ -11,7 +11,9 @@ export function openProject(projectName) {
     frappe.set_route('Form', 'Project', projectName);
     return;
   }
-  msgprint('Project details - coming soon.');
+  // Website shell: do nothing for now.
+  // (Details/side panel will be implemented later; avoid noisy placeholder popups.)
+  return;
 }
 
 export function createProject(projectType) {

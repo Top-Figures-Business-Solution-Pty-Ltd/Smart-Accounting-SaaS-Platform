@@ -42,6 +42,9 @@ export class EditingManager {
       if (!cell.classList.contains('editable')) return;
       // avoid entering edit when clicking inside an existing editor
       if (cell.querySelector('.sb-inline-editor')) return;
+      // IMPORTANT: editable click should not also trigger row click (open details mock).
+      e.preventDefault();
+      e.stopPropagation();
       this.startEdit(cell);
     });
   }
@@ -55,7 +58,7 @@ export class EditingManager {
     try {
       await this.commit(reason);
     } finally {
-      this.closeEditor();
+      this.closeEditor({ restore: false });
       // Notify host that editing finished so it can safely rerender.
       try {
         this.rootEl?.dispatchEvent?.(new CustomEvent('sb:edit-finished', { detail: { reason } }));
@@ -180,10 +183,21 @@ export class EditingManager {
       const content = cellEl.querySelector('.cell-content') || cellEl;
       const input = content.querySelector('.sb-inline-editor');
 
-      // If no input (custom editor), do nothing in this step.
-      if (!input) return;
+      // Resolve value:
+      // - Prefer editorInstance.getValue() for complex editors (LinkInput, multi-select, etc.)
+      // - Fallback to native input/select/textarea `.value`
+      let value = null;
+      if (this._editorInstance && typeof this._editorInstance.getValue === 'function') {
+        value = this._editorInstance.getValue();
+      } else if (input && 'value' in input) {
+        value = input.value;
+      } else {
+        // If no value can be extracted, do nothing (custom editor not wired yet).
+        return;
+      }
 
-      const value = input.value;
+      // Store for closeEditor optimistic paint
+      this._active._committedValue = value;
       // No-op: if unchanged, just restore (avoid extra store churn)
       const oldVal = project?.[field];
       if ((oldVal == null ? '' : String(oldVal)) === (value == null ? '' : String(value))) {
@@ -222,15 +236,19 @@ export class EditingManager {
     } catch (e) {}
   }
 
-  closeEditor() {
-    // After commit we rely on store update + renderRows to refresh UI;
-    // but in case store isn't available, restore original HTML.
+  closeEditor({ restore = true } = {}) {
+    // After commit we rely on store update + renderRows to refresh UI.
     if (!this._active) return;
     const { cellEl, originalHTML } = this._active;
     const content = cellEl.querySelector('.cell-content') || cellEl;
-    // If still showing editor, restore to original. The next store-driven render will update anyway.
     if (content.querySelector('.sb-inline-editor')) {
-      content.innerHTML = originalHTML;
+      if (restore) {
+        content.innerHTML = originalHTML;
+      } else {
+        // Optimistic paint: show committed value quickly (real formatted UI will appear on rerender)
+        const v = this._active?._committedValue;
+        content.textContent = v == null ? '' : String(v);
+      }
     }
     this._active = null;
     this._editorInstance = null;
