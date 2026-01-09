@@ -14,6 +14,7 @@ import { TeamRoleService } from '../../services/teamRoleService.js';
 import { EditingManager } from './boardTableEditingManager.js';
 import { columnRegistry } from '../../columns/registry.js';
 import { UpdatesModal } from './UpdatesModal.js';
+import { buildRowModel } from './rowModel.js';
 
 export class BoardTable {
     constructor(container, options = {}) {
@@ -36,6 +37,13 @@ export class BoardTable {
 
         // Bulk selection (system column)
         this._selected = new Set(); // project.name
+        this._projectByName = new Map();
+        this._rowModel = buildRowModel([]);
+        this._groupBy = null; // reserved for future group-by
+
+        // Editing finished hook: while editing we freeze row rerenders; once done we schedule a safe refresh.
+        this._onEditFinished = () => this.scheduleRowsUpdate();
+        this.container?.addEventListener?.('sb:edit-finished', this._onEditFinished);
 
         // Virtualization / performance
         this._raf = null;
@@ -179,7 +187,7 @@ export class BoardTable {
     
     renderRows() {
         return renderRows(
-            this.projects,
+            this._rowModel?.all?.() || this.projects,
             this._renderColumns || this.columns,
             (p) => this.handleRowClick(p),
             this.rows,
@@ -309,7 +317,7 @@ export class BoardTable {
             this._editing = new EditingManager({
                 rootEl: this.container,
                 store: this.store,
-                getProjectByName: (name) => (this.projects || []).find((p) => p.name === name) || null
+                getProjectByName: (name) => this._projectByName.get(name) || null
             });
         }
         this._editing.bindToTbody(tbody);
@@ -437,6 +445,10 @@ export class BoardTable {
 
         this._unsubscribe = this.store.subscribe((state) => {
             this.projects = state.projects.items || [];
+            // Fast lookup map for editors & actions
+            this._projectByName = new Map((this.projects || []).map((p) => [p?.name, p]));
+            // Row model (future group-by extension point)
+            this._rowModel = buildRowModel(this.projects || [], { groupBy: this._groupBy });
             this.scheduleRowsUpdate();
         });
     }
@@ -453,7 +465,8 @@ export class BoardTable {
     }
 
     isVirtual() {
-        return shouldVirtualize((this.projects || []).length, this._virtualThreshold);
+        const total = this._rowModel?.count?.() ?? (this.projects || []).length;
+        return shouldVirtualize(total, this._virtualThreshold);
     }
 
     updateRows() {
@@ -465,7 +478,7 @@ export class BoardTable {
 
         if (!this.isVirtual()) {
             // Precompute team role map once per row for derived columns
-            (this.projects || []).forEach((p) => this._prepareProjectDerivedCaches(p));
+            (this._rowModel?.all?.() || this.projects || []).forEach((p) => this._prepareProjectDerivedCaches(p));
             tbody.innerHTML = this.renderRows();
             this.updateSelectAllCheckbox();
             this._maybeUpdateRowHeight();
@@ -475,7 +488,7 @@ export class BoardTable {
         const viewport = this.container.querySelector('#boardTableBody');
         const viewportHeight = viewport?.clientHeight || 600;
         const scrollTop = viewport?.scrollTop || 0;
-        const total = (this.projects || []).length;
+        const total = this._rowModel?.count?.() ?? (this.projects || []).length;
 
         const { start, end, topPad, bottomPad } = computeWindow({
             scrollTop,
@@ -485,7 +498,7 @@ export class BoardTable {
             overscan: this._overscan
         });
 
-        const slice = this.projects.slice(start, end);
+        const slice = this._rowModel?.slice?.(start, end) || this.projects.slice(start, end);
         slice.forEach((p) => this._prepareProjectDerivedCaches(p));
         const rowsHtml = renderRows(
             slice,
@@ -643,6 +656,10 @@ export class BoardTable {
         }
         this._editing?.destroy?.();
         this._editing = null;
+        if (this._onEditFinished) {
+            try { this.container?.removeEventListener?.('sb:edit-finished', this._onEditFinished); } catch (e) {}
+            this._onEditFinished = null;
+        }
         this._updatesModal?.close?.();
         this._updatesModal = null;
         this._colMgr?.close?.();

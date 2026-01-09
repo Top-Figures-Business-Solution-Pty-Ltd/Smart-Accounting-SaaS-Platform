@@ -56,6 +56,10 @@ export class EditingManager {
       await this.commit(reason);
     } finally {
       this.closeEditor();
+      // Notify host that editing finished so it can safely rerender.
+      try {
+        this.rootEl?.dispatchEvent?.(new CustomEvent('sb:edit-finished', { detail: { reason } }));
+      } catch (e) {}
     }
   }
 
@@ -213,6 +217,9 @@ export class EditingManager {
     this._active = null;
     this._editorInstance = null;
     this._removeDocOutsideHandler();
+    try {
+      this.rootEl?.dispatchEvent?.(new CustomEvent('sb:edit-finished', { detail: { reason: 'cancel' } }));
+    } catch (e) {}
   }
 
   closeEditor() {
