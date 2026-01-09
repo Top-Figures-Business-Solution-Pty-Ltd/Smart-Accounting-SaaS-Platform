@@ -70,9 +70,14 @@ export class BoardTable {
         return base;
     }
 
-    getAvailableColumnDefs() {
+    getAvailableColumnDefs(includeHidden = true) {
         // Available columns = global Project column catalog (not tied to project_type)
-        const base = (PROJECT_COLUMN_CATALOG || []).map(c => ({ ...c }));
+        // includeHidden:
+        // - true: include defs that are not shown in Columns Manager (for Saved View compatibility)
+        // - false: exclude hidden defs from selection UI
+        const base = (PROJECT_COLUMN_CATALOG || [])
+            .filter((c) => includeHidden ? true : !c?.hidden)
+            .map(c => ({ ...c }));
 
         // Derived role-based team columns: team:<Role>
         const roles = this._teamRoles || TeamRoleService.peekRoles() || [];
@@ -108,7 +113,8 @@ export class BoardTable {
 
     buildColumnsFromConfig(columnsConfig) {
         const widths = loadColumnWidths(this.viewType) || {};
-        const defs = this.getAvailableColumnDefs();
+        // Include hidden defs so Saved View columns still render with proper labels.
+        const defs = this.getAvailableColumnDefs(true);
         const map = new Map(defs.map(d => [d.field, d]));
 
         const cols = (columnsConfig || [])
@@ -571,7 +577,8 @@ export class BoardTable {
     }
 
     _openColumnManagerImpl() {
-        const defs = this.getAvailableColumnDefs();
+        // Exclude hidden defs from Columns Manager UI
+        const defs = this.getAvailableColumnDefs(false);
         const currentOrder = (this._normalizeSavedColumns(this._savedView?.columns) || [])
             .map(c => c?.field)
             .filter(Boolean);

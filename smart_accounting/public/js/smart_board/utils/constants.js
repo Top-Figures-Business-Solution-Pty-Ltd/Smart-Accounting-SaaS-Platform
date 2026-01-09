@@ -129,7 +129,9 @@ export const PROJECT_COLUMN_CATALOG = [
     // Money / notes / archive
     { field: 'estimated_costing', label: 'Budget', width: 120 },
     { field: 'notes', label: 'Notes', width: 260 },
-    { field: 'is_active', label: 'Active', width: 90 },
+    // "Active" is primarily a filter dimension; hide it from Columns Manager by default.
+    // Keep it here for backward compatibility with Saved Views that may already reference it.
+    { field: 'is_active', label: 'Active', width: 90, hidden: true },
     { field: 'percent_complete', label: '% Complete', width: 110 },
 
     // Meta

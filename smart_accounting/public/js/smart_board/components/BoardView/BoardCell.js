@@ -3,7 +3,7 @@
  * 表格单元格组件
  */
 
-import { formatDate, formatTeamMembers, getStatusColor } from '../../utils/helpers.js';
+import { formatDate, getStatusColor } from '../../utils/helpers.js';
 import { columnRegistry } from '../../columns/registry.js';
 
 export class BoardCell {
