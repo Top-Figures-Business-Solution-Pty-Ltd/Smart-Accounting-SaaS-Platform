@@ -15,7 +15,11 @@ export const FiltersModule = {
             fiscal_year: null,
             date_from: null,
             date_to: null,
-            search: ''
+            search: '',
+            // Monday-like advanced filter builder rules
+            advanced_rules: [],
+            // Monday-like groups: [{ join, rules: [{field, condition, value}] }]
+            advanced_groups: []
         };
     },
     
@@ -60,6 +64,8 @@ export const FiltersModule = {
             state.date_from = null;
             state.date_to = null;
             state.search = '';
+            state.advanced_rules = [];
+            state.advanced_groups = [];
         }
     },
     

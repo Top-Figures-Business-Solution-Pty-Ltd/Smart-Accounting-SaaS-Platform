@@ -49,6 +49,10 @@ function needsValue(condition) {
   return !['is_empty', 'is_not_empty'].includes(condition);
 }
 
+function _isNonEmptyString(v) {
+  return v != null && String(v).trim().length > 0;
+}
+
 export class AdvancedFilterModal {
   constructor({ title = 'Filter', columns = [], initial = {}, onApply, onClose } = {}) {
     this.title = title;
@@ -59,28 +63,49 @@ export class AdvancedFilterModal {
 
     this._modal = null;
     this._root = null;
-    this._rules = this._normalizeInitialRules(initial);
+    this._groups = this._normalizeInitialGroups(initial);
     this._linkInputs = new Map(); // key: rowId -> LinkInput
   }
 
-  _normalizeInitialRules(initial) {
-    const rules = Array.isArray(initial?.advanced_rules) ? initial.advanced_rules : null;
-    if (rules && rules.length) {
-      return rules.map((r, idx) => ({
-        id: r.id || `${Date.now()}_${idx}`,
-        join: r.join || (idx === 0 ? 'where' : 'and'),
-        field: r.field || '',
-        condition: r.condition || 'equals',
-        value: r.value ?? '',
+  _normalizeInitialGroups(initial) {
+    const groups = Array.isArray(initial?.advanced_groups) ? initial.advanced_groups : null;
+    if (groups && groups.length) {
+      return groups.map((g, gi) => ({
+        id: g.id || `${Date.now()}_g${gi}`,
+        join: gi === 0 ? 'where' : (g.join || 'and'),
+        rules: (g.rules || []).map((r, ri) => ({
+          id: r.id || `${Date.now()}_${gi}_${ri}`,
+          field: r.field || '',
+          condition: r.condition || 'equals',
+          value: r.value ?? '',
+        }))
       }));
     }
-    // default single empty row
+
+    // Backward compatibility: old flat advanced_rules -> one group
+    const rules = Array.isArray(initial?.advanced_rules) ? initial.advanced_rules : null;
+    if (rules && rules.length) {
+      return [{
+        id: `${Date.now()}_g0`,
+        join: 'where',
+        rules: rules.map((r, idx) => ({
+          id: r.id || `${Date.now()}_0_${idx}`,
+          field: r.field || '',
+          condition: r.condition || 'equals',
+          value: r.value ?? '',
+        }))
+      }];
+    }
+
     return [{
-      id: `${Date.now()}_0`,
+      id: `${Date.now()}_g0`,
       join: 'where',
-      field: '',
-      condition: 'equals',
-      value: '',
+      rules: [{
+        id: `${Date.now()}_0_0`,
+        field: '',
+        condition: 'equals',
+        value: '',
+      }]
     }];
   }
 
@@ -93,6 +118,7 @@ export class AdvancedFilterModal {
         <div class="sb-advfilter__rows" id="sbAdvFilterRows"></div>
         <div style="margin-top:10px;">
           <button class="btn btn-default" type="button" id="sbAdvAddRow">+ New filter</button>
+          <button class="btn btn-default" type="button" id="sbAdvAddGroup" style="margin-left:8px;">+ New group</button>
         </div>
       </div>
     `;
@@ -125,6 +151,7 @@ export class AdvancedFilterModal {
     footer.querySelector('#sbAdvApply')?.addEventListener('click', () => this._apply());
     footer.querySelector('#sbAdvClear')?.addEventListener('click', () => this._clear());
     content.querySelector('#sbAdvAddRow')?.addEventListener('click', () => this._addRow());
+    content.querySelector('#sbAdvAddGroup')?.addEventListener('click', () => this._addGroup());
   }
 
   close() {
@@ -147,25 +174,20 @@ export class AdvancedFilterModal {
     return CONDITIONS[type] || CONDITIONS.text;
   }
 
-  _rowHTML(r, idx) {
+  _ruleRowHTML(group, r, ruleIndex, groupIndex) {
     const colOpts = this._columnsOptionsHTML();
     const conds = this._conditionsForField(r.field);
     const condOpts = conds.map((c) => `<option value="${escapeHtml(c.value)}">${escapeHtml(c.label)}</option>`).join('');
 
-    const joiner = idx === 0
+    const joiner = (groupIndex === 0 && ruleIndex === 0)
       ? `<div class="sb-advfilter__join sb-advfilter__join--where">Where</div>`
-      : `
-        <select class="form-control sb-advfilter__join sb-advfilter__join--select" data-role="join" data-id="${escapeHtml(r.id)}">
-          <option value="and" ${r.join === 'and' ? 'selected' : ''}>And</option>
-          <option value="or" ${r.join === 'or' ? 'selected' : ''}>Or</option>
-        </select>
-      `;
+      : `<div class="sb-advfilter__join sb-advfilter__join--and text-muted">And</div>`;
 
     const needs = needsValue(r.condition);
     const valueCell = `<div class="sb-advfilter__value" data-role="value" data-id="${escapeHtml(r.id)}"></div>`;
 
     return `
-      <div class="sb-advfilter__row" data-id="${escapeHtml(r.id)}">
+      <div class="sb-advfilter__row" data-group-id="${escapeHtml(group.id)}" data-id="${escapeHtml(r.id)}">
         ${joiner}
         <select class="form-control sb-advfilter__col" data-role="field" data-id="${escapeHtml(r.id)}">
           <option value="" ${!r.field ? 'selected' : ''} disabled>Select column</option>
@@ -180,6 +202,19 @@ export class AdvancedFilterModal {
     `;
   }
 
+  _groupHeaderHTML(group, groupIndex) {
+    if (groupIndex === 0) return '';
+    const join = group.join || 'and';
+    return `
+      <div class="sb-advfilter__groupjoin">
+        <select class="form-control sb-advfilter__groupjoin__select" data-role="group-join" data-group-id="${escapeHtml(group.id)}">
+          <option value="and" ${join === 'and' ? 'selected' : ''}>And</option>
+          <option value="or" ${join === 'or' ? 'selected' : ''}>Or</option>
+        </select>
+      </div>
+    `;
+  }
+
   _renderRows() {
     if (!this._root) return;
     const wrap = this._root.querySelector('#sbAdvFilterRows');
@@ -188,23 +223,29 @@ export class AdvancedFilterModal {
     // Re-render rows; destroy link inputs first (will be re-mounted)
     this._destroyLinkInputs();
 
-    wrap.innerHTML = this._rules.map((r, idx) => this._rowHTML(r, idx)).join('');
+    wrap.innerHTML = this._groups.map((g, gi) => {
+      const header = this._groupHeaderHTML(g, gi);
+      const rows = (g.rules || []).map((r, ri) => this._ruleRowHTML(g, r, ri, gi)).join('');
+      return `${header}${rows}`;
+    }).join('');
 
     // Set current values and mount value editors
-    this._rules.forEach((r, idx) => {
-      const rowEl = wrap.querySelector(`.sb-advfilter__row[data-id="${CSS.escape(r.id)}"]`);
-      if (!rowEl) return;
+    const totalRules = this._groups.reduce((acc, g) => acc + ((g.rules || []).length), 0);
+    this._groups.forEach((g) => {
+      (g.rules || []).forEach((r) => {
+        const rowEl = wrap.querySelector(`.sb-advfilter__row[data-id="${CSS.escape(r.id)}"]`);
+        if (!rowEl) return;
 
-      const fieldSel = rowEl.querySelector('select[data-role="field"]');
-      const condSel = rowEl.querySelector('select[data-role="condition"]');
-      if (fieldSel && r.field) fieldSel.value = r.field;
-      if (condSel && r.condition) condSel.value = r.condition;
+        const fieldSel = rowEl.querySelector('select[data-role="field"]');
+        const condSel = rowEl.querySelector('select[data-role="condition"]');
+        if (fieldSel && r.field) fieldSel.value = r.field;
+        if (condSel && r.condition) condSel.value = r.condition;
 
-      this._mountValueEditor(r);
+        this._mountValueEditor(r);
 
-      // Hide delete on first row if it is the only row
-      const delBtn = rowEl.querySelector('button[data-role="delete"]');
-      if (delBtn) delBtn.style.visibility = (this._rules.length === 1) ? 'hidden' : 'visible';
+        const delBtn = rowEl.querySelector('button[data-role="delete"]');
+        if (delBtn) delBtn.style.visibility = (totalRules === 1) ? 'hidden' : 'visible';
+      });
     });
 
     // Bind events (delegated)
@@ -216,14 +257,20 @@ export class AdvancedFilterModal {
     const el = e.target;
     const role = el?.dataset?.role;
     const id = el?.dataset?.id;
-    if (!role || !id) return;
-    const r = this._rules.find((x) => x.id === id);
-    if (!r) return;
+    if (!role) return;
 
-    if (role === 'join') {
-      r.join = el.value;
+    if (role === 'group-join') {
+      const gid = el.dataset.groupId;
+      const g = this._groups.find((x) => x.id === gid);
+      if (!g) return;
+      g.join = el.value;
       return;
     }
+
+    if (!id) return;
+    const r = this._findRuleById(id);
+    if (!r) return;
+
     if (role === 'field') {
       r.field = el.value;
       // Reset condition/value on field change
@@ -247,11 +294,25 @@ export class AdvancedFilterModal {
     if (!btn) return;
     const id = btn.dataset.id;
     if (!id) return;
-    this._rules = this._rules.filter((r) => r.id !== id);
-    if (!this._rules.length) this._rules = this._normalizeInitialRules({});
-    // First row always treated as where
-    if (this._rules[0]) this._rules[0].join = 'where';
+    this._deleteRule(id);
     this._renderRows();
+  }
+
+  _findRuleById(id) {
+    for (const g of this._groups) {
+      const r = (g.rules || []).find((x) => x.id === id);
+      if (r) return r;
+    }
+    return null;
+  }
+
+  _deleteRule(id) {
+    for (const g of this._groups) {
+      g.rules = (g.rules || []).filter((r) => r.id !== id);
+    }
+    this._groups = this._groups.filter((g) => (g.rules || []).length > 0);
+    if (!this._groups.length) this._groups = this._normalizeInitialGroups({});
+    if (this._groups[0]) this._groups[0].join = 'where';
   }
 
   _mountValueEditor(rule) {
@@ -318,33 +379,66 @@ export class AdvancedFilterModal {
   }
 
   _addRow() {
-    this._rules.push({
+    const g = this._groups[this._groups.length - 1] || null;
+    if (!g) return;
+    g.rules = g.rules || [];
+    g.rules.push({
       id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
-      join: this._rules.length ? 'and' : 'where',
       field: '',
       condition: 'equals',
       value: '',
     });
-    if (this._rules[0]) this._rules[0].join = 'where';
+    this._renderRows();
+  }
+
+  _addGroup() {
+    const gi = this._groups.length;
+    this._groups.push({
+      id: `${Date.now()}_g${gi}`,
+      join: 'and',
+      rules: [{
+        id: `${Date.now()}_${gi}_0`,
+        field: '',
+        condition: 'equals',
+        value: '',
+      }]
+    });
+    if (this._groups[0]) this._groups[0].join = 'where';
     this._renderRows();
   }
 
   _clear() {
-    this._rules = this._normalizeInitialRules({});
+    this._groups = this._normalizeInitialGroups({});
     this._renderRows();
   }
 
   _apply() {
     // Persist UI rules back to store so it can be reopened with same configuration
-    const payload = {
-      advanced_rules: this._rules.map((r, idx) => ({
-        id: r.id,
-        join: idx === 0 ? 'where' : (r.join || 'and'),
-        field: r.field,
-        condition: r.condition,
-        value: r.value,
-      }))
-    };
+    const cleanedGroups = (this._groups || [])
+      .map((g, gi) => {
+        const rules = (g.rules || [])
+          .filter((r) => {
+            if (!_isNonEmptyString(r?.field)) return false;
+            if (!_isNonEmptyString(r?.condition)) return false;
+            if (needsValue(r.condition) && !_isNonEmptyString(r?.value)) return false;
+            return true;
+          })
+          .map((r) => ({
+            id: r.id,
+            field: r.field,
+            condition: r.condition,
+            value: r.value,
+          }));
+
+        return {
+          id: g.id,
+          join: gi === 0 ? 'where' : (g.join || 'and'),
+          rules,
+        };
+      })
+      .filter((g) => (g.rules || []).length > 0);
+
+    const payload = { advanced_groups: cleanedGroups };
     this.onApply(payload);
     this.close();
   }
@@ -356,5 +450,6 @@ export class AdvancedFilterModal {
     this._linkInputs.clear();
   }
 }
+
 
 

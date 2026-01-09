@@ -145,3 +145,104 @@ def set_project_softwares(project: str, softwares: Any) -> dict:
 	}
 
 
+@frappe.whitelist()
+def query_project_names_advanced(project_type: str | None = None, groups: Any = None, limit: int = 2000, is_active_only: int = 1, search: str | None = None) -> dict:
+	"""
+	Resolve advanced filter groups to a list of Project names.
+
+	groups payload:
+	- list of { join: "where"|"and"|"or", rules: [{ field, condition, value }] }
+
+	We evaluate by running one DB query per group (AND inside group),
+	then combine group result sets by group.join (AND => intersect, OR => union).
+	This supports expressions like: (A AND B) OR (C AND D) safely.
+	"""
+	limit = int(limit or 2000)
+	limit = max(1, min(limit, 10000))
+
+	parsed_groups = _normalize_list(groups)
+	if not parsed_groups:
+		# No groups => no restriction
+		return {"no_restriction": 1, "names": []}
+
+	def rule_to_triple(r: dict) -> list | None:
+		field = (r.get("field") or "").strip()
+		cond = (r.get("condition") or "").strip()
+		val = r.get("value")
+		if not field or not cond:
+			return None
+		needs = cond not in ("is_empty", "is_not_empty")
+		v = "" if val is None else str(val)
+		if needs and not v:
+			return None
+		if cond == "equals":
+			return [field, "=", v]
+		if cond == "not_equals":
+			return [field, "!=", v]
+		if cond == "contains":
+			return [field, "like", f"%{v}%"]
+		if cond == "not_contains":
+			return [field, "not like", f"%{v}%"]
+		if cond == "starts_with":
+			return [field, "like", f"{v}%"]
+		if cond == "before":
+			return [field, "<", v]
+		if cond == "after":
+			return [field, ">", v]
+		if cond == "on_or_before":
+			return [field, "<=", v]
+		if cond == "on_or_after":
+			return [field, ">=", v]
+		if cond == "is_empty":
+			return [field, "=", ""]
+		if cond == "is_not_empty":
+			return [field, "!=", ""]
+		return None
+
+	def base_filters() -> list:
+		f = []
+		if project_type:
+			f.append(["project_type", "=", project_type])
+		if is_active_only:
+			f.append(["is_active", "=", "Yes"])
+		if search:
+			f.append(["project_name", "like", f"%{search}%"])
+		return f
+
+	combined: set[str] | None = None
+	for idx, g in enumerate(parsed_groups):
+		if not isinstance(g, dict):
+			continue
+		join = (g.get("join") or ("where" if idx == 0 else "and")).lower()
+		rules = _normalize_list(g.get("rules"))
+		group_filters = base_filters()
+		for r in rules:
+			if not isinstance(r, dict):
+				continue
+			t = rule_to_triple(r)
+			if t:
+				group_filters.append(t)
+
+		# If group has no valid rules beyond base, skip it.
+		if len(group_filters) == len(base_filters()):
+			continue
+
+		rows = frappe.get_all("Project", filters=group_filters, pluck="name", limit_page_length=limit)
+		names = set(rows or [])
+
+		if combined is None:
+			combined = names
+			continue
+		if join == "or":
+			combined |= names
+		else:
+			combined &= names
+
+	final = list(combined or [])
+	final.sort()
+	# If no group had any effective rule, treat as "no restriction" (do not filter everything out).
+	if combined is None:
+		return {"no_restriction": 1, "names": []}
+	return {"names": final[:limit]}
+
+

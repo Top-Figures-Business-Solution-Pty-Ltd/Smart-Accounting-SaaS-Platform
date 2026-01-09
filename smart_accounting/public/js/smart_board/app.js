@@ -126,15 +126,19 @@ export class SmartBoardApp {
     }
     
     async loadViewData(viewType) {
-        // 从store加载数据
+        // 从store加载数据：合并 filters（含 advanced filter rules/groups + search）
         const projectTypeValues = new Set(this.projectTypes.map(t => t.value));
 
-        // 如果是系统存在的 project_type，则按类型过滤；否则默认拉全部（如 Dashboard 可用）
-        const filters = projectTypeValues.has(viewType)
+        // board view 强制带 project_type；dashboard/其他视图允许空（用于 future）
+        const base = projectTypeValues.has(viewType)
             ? { project_type: viewType }
             : {};
 
-        await this.store.dispatch('projects/fetchProjects', filters);
+        const stateFilters = this.store?.getState?.()?.filters || {};
+        // base 需要覆盖 stateFilters 里的 project_type（避免旧视图残留）
+        const merged = { ...stateFilters, ...base };
+
+        await this.store.dispatch('projects/fetchProjects', merged);
     }
 
     isBoardView(viewType) {

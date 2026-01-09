@@ -99,7 +99,16 @@ export class Header {
             title: `Filter · ${this.currentView}`,
             columns,
             initial,
-            onApply: (values) => this.onAction('filter', values),
+            onApply: (values) => this.onAction('filter', {
+                // Clear legacy simple filters to avoid confusing double-filtering.
+                status: [],
+                company: null,
+                customer: null,
+                fiscal_year: null,
+                date_from: null,
+                date_to: null,
+                ...values
+            }),
         });
         modal.open();
     }

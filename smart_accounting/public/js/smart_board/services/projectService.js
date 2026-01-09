@@ -51,10 +51,43 @@ export class ProjectService {
         ];
 
         const fetchWithFields = async (fields) => {
+            // Advanced groups (supports nested AND/OR across groups).
+            const hasGroups = Array.isArray(filters?.advanced_groups) && filters.advanced_groups.length > 0;
+            let nameIn = null;
+            if (hasGroups) {
+                try {
+                    const r = await frappe.call({
+                        method: 'smart_accounting.api.project_board.query_project_names_advanced',
+                        args: {
+                            project_type: filters.project_type || null,
+                            groups: filters.advanced_groups,
+                            limit: filters.limit || 2000,
+                            is_active_only: filters.is_active !== false ? 1 : 0,
+                            search: filters.search || null,
+                        }
+                    });
+                    const msg = r?.message || {};
+                    const noRestriction = !!msg?.no_restriction;
+                    const names = msg?.names ?? msg;
+
+                    if (noRestriction) {
+                        nameIn = null;
+                    } else if (Array.isArray(names) && names.length) {
+                        nameIn = names;
+                    } else {
+                        return [];
+                    }
+                } catch (e) {
+                    // fall back to old path
+                }
+            }
+
+            const or_filters = this.buildOrFilters(filters);
             const args = {
                 doctype: 'Project',
                 fields,
-                filters: this.buildFilters(filters),
+                filters: this.buildFilters({ ...filters, ...(nameIn ? { name_in: nameIn } : {}) }),
+                ...(or_filters && or_filters.length ? { or_filters } : {}),
                 order_by: 'modified desc',
                 limit_page_length: filters.limit || 100
             };
@@ -128,32 +161,33 @@ export class ProjectService {
         // status筛选（支持多选）
         if (filters.status) {
             if (Array.isArray(filters.status)) {
-                result.push(['status', 'in', filters.status]);
-            } else {
+                // IMPORTANT: empty array should mean "no status filter"
+                if (filters.status.length) result.push(['status', 'in', filters.status]);
+            } else if (String(filters.status).trim()) {
                 result.push(['status', '=', filters.status]);
             }
         }
         
         // company筛选
-        if (filters.company) {
+        if (filters.company && String(filters.company).trim()) {
             result.push(['company', '=', filters.company]);
         }
         
         // customer筛选
-        if (filters.customer) {
+        if (filters.customer && String(filters.customer).trim()) {
             result.push(['customer', '=', filters.customer]);
         }
         
         // fiscal_year筛选
-        if (filters.fiscal_year) {
+        if (filters.fiscal_year && String(filters.fiscal_year).trim()) {
             result.push(['custom_fiscal_year', '=', filters.fiscal_year]);
         }
         
         // 日期范围筛选
-        if (filters.date_from) {
+        if (filters.date_from && String(filters.date_from).trim()) {
             result.push(['custom_lodgement_due_date', '>=', filters.date_from]);
         }
-        if (filters.date_to) {
+        if (filters.date_to && String(filters.date_to).trim()) {
             result.push(['custom_lodgement_due_date', '<=', filters.date_to]);
         }
         
@@ -166,8 +200,78 @@ export class ProjectService {
         if (filters.is_active !== false) {
             result.push(['is_active', '=', 'Yes']);
         }
+
+        // name IN (from advanced groups resolution)
+        if (Array.isArray(filters.name_in) && filters.name_in.length) {
+            result.push(['name', 'in', filters.name_in]);
+        }
+
+        // Advanced rules (AND rules)
+        const rules = Array.isArray(filters?.advanced_rules) ? filters.advanced_rules : [];
+        for (const r of rules) {
+            const join = (r?.join || '').toLowerCase();
+            if (join === 'or') continue; // OR rules handled by buildOrFilters
+            const triple = this._ruleToFilterTriple(r);
+            if (triple) result.push(triple);
+        }
         
         return result;
+    }
+
+    /**
+     * Build OR filters from advanced_rules.
+     * Semantics in frappe.get_list:
+     * - filters are ANDed
+     * - or_filters are ORed (then ANDed with filters)
+     */
+    static buildOrFilters(filters) {
+        const out = [];
+        const rules = Array.isArray(filters?.advanced_rules) ? filters.advanced_rules : [];
+        for (const r of rules) {
+            const join = (r?.join || '').toLowerCase();
+            if (join !== 'or') continue;
+            const triple = this._ruleToFilterTriple(r);
+            if (triple) out.push(triple);
+        }
+        return out;
+    }
+
+    static _ruleToFilterTriple(rule) {
+        const field = (rule?.field || '').trim();
+        const cond = (rule?.condition || '').trim();
+        const value = rule?.value;
+        if (!field || !cond) return null;
+
+        const needsValue = !['is_empty', 'is_not_empty'].includes(cond);
+        const v = (value == null) ? '' : String(value);
+        if (needsValue && !v) return null;
+
+        switch (cond) {
+            case 'equals':
+                return [field, '=', v];
+            case 'not_equals':
+                return [field, '!=', v];
+            case 'contains':
+                return [field, 'like', `%${v}%`];
+            case 'not_contains':
+                return [field, 'not like', `%${v}%`];
+            case 'starts_with':
+                return [field, 'like', `${v}%`];
+            case 'before':
+                return [field, '<', v];
+            case 'after':
+                return [field, '>', v];
+            case 'on_or_before':
+                return [field, '<=', v];
+            case 'on_or_after':
+                return [field, '>=', v];
+            case 'is_empty':
+                return [field, '=', ''];
+            case 'is_not_empty':
+                return [field, '!=', ''];
+            default:
+                return null;
+        }
     }
     
     /**
