@@ -18,8 +18,12 @@ export class LinkInput {
     this._seq = 0;
     this._open = false;
     this._onDocClick = null;
+    this._onDocScroll = null;
+    this._onWinResize = null;
+    this._menuPortal = null;
 
     this._render();
+    this._createPortalMenu();
     this._bind();
     this.setValue(this.value);
   }
@@ -28,12 +32,21 @@ export class LinkInput {
     this.mountEl.innerHTML = `
       <div class="sb-linkinput">
         <input class="form-control sb-linkinput__input" type="text" placeholder="${escapeHtml(this.placeholder)}" />
-        <div class="sb-linkinput__menu" style="display:none;"></div>
       </div>
     `;
     this._root = this.mountEl.querySelector('.sb-linkinput');
     this._input = this.mountEl.querySelector('.sb-linkinput__input');
-    this._menu = this.mountEl.querySelector('.sb-linkinput__menu');
+    this._menu = null; // portal
+  }
+
+  _createPortalMenu() {
+    const el = document.createElement('div');
+    el.className = 'sb-linkinput__menu sb-linkinput__menu--portal';
+    el.style.display = 'none';
+    el.dataset.sbEditorPortal = '1';
+    document.body.appendChild(el);
+    this._menu = el;
+    this._menuPortal = el;
   }
 
   _bind() {
@@ -61,9 +74,22 @@ export class LinkInput {
 
     this._onDocClick = (e) => {
       if (!this._root) return;
-      if (!this._root.contains(e.target)) this.closeMenu();
+      const inRoot = this._root.contains(e.target);
+      const inMenu = this._menu?.contains?.(e.target);
+      if (!inRoot && !inMenu) this.closeMenu();
     };
     document.addEventListener('click', this._onDocClick);
+
+    // Reposition menu on scroll/resize so it always stays aligned
+    this._onDocScroll = () => {
+      if (this._open) this._repositionMenu();
+    };
+    document.addEventListener('scroll', this._onDocScroll, true);
+
+    this._onWinResize = () => {
+      if (this._open) this._repositionMenu();
+    };
+    window.addEventListener('resize', this._onWinResize);
   }
 
   async _search(txt) {
@@ -112,8 +138,27 @@ export class LinkInput {
     this.openMenu();
   }
 
+  _repositionMenu() {
+    if (!this._menu || !this._input) return;
+    const rect = this._input.getBoundingClientRect();
+    const gap = 6;
+    const top = rect.bottom + gap;
+    const left = rect.left;
+    const width = rect.width;
+
+    this._menu.style.position = 'fixed';
+    this._menu.style.left = `${Math.max(8, left)}px`;
+    this._menu.style.top = `${Math.max(8, top)}px`;
+    this._menu.style.width = `${Math.max(220, width)}px`;
+    this._menu.style.zIndex = '30000';
+
+    const maxH = Math.max(160, Math.min(320, window.innerHeight - top - 12));
+    this._menu.style.maxHeight = `${maxH}px`;
+  }
+
   openMenu() {
     if (!this._menu) return;
+    this._repositionMenu();
     this._menu.style.display = 'block';
     this._open = true;
   }
@@ -138,6 +183,18 @@ export class LinkInput {
       document.removeEventListener('click', this._onDocClick);
       this._onDocClick = null;
     }
+    if (this._onDocScroll) {
+      document.removeEventListener('scroll', this._onDocScroll, true);
+      this._onDocScroll = null;
+    }
+    if (this._onWinResize) {
+      window.removeEventListener('resize', this._onWinResize);
+      this._onWinResize = null;
+    }
+    if (this._menuPortal?.parentNode) {
+      try { this._menuPortal.parentNode.removeChild(this._menuPortal); } catch (e) {}
+    }
+    this._menuPortal = null;
     this.mountEl.innerHTML = '';
   }
 }

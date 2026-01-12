@@ -236,6 +236,8 @@ export class EditingManager {
     const { cellEl, originalHTML } = this._active;
     const content = cellEl.querySelector('.cell-content') || cellEl;
     content.innerHTML = originalHTML;
+    // Destroy any active editor instance (portal/listeners cleanup)
+    try { this._editorInstance?.destroy?.(); } catch (e) {}
     this._active = null;
     this._editorInstance = null;
     this._removeDocOutsideHandler();
@@ -258,6 +260,8 @@ export class EditingManager {
         content.textContent = v == null ? '' : String(v);
       }
     }
+    // Always destroy editor instance (portal/listeners cleanup)
+    try { this._editorInstance?.destroy?.(); } catch (e) {}
     this._active = null;
     this._editorInstance = null;
     this._removeDocOutsideHandler();

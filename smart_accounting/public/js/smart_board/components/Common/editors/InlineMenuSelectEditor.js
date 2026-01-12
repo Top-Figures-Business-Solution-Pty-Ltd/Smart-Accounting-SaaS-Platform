@@ -15,25 +15,62 @@ export class InlineMenuSelectEditor {
     this.initialValue = initialValue ?? '';
     this.placeholder = placeholder;
     this._root = null;
+    this._portal = null;
+    this._onDocScroll = null;
+    this._onWinResize = null;
+    this._onDocClick = null;
     this._value = null; // selected value during edit; null means unchanged
     this.render();
   }
 
+  _cleanupPortal() {
+    if (this._onDocScroll) {
+      document.removeEventListener('scroll', this._onDocScroll, true);
+      this._onDocScroll = null;
+    }
+    if (this._onWinResize) {
+      window.removeEventListener('resize', this._onWinResize);
+      this._onWinResize = null;
+    }
+    if (this._onDocClick) {
+      document.removeEventListener('mousedown', this._onDocClick, true);
+      this._onDocClick = null;
+    }
+    if (this._portal?.parentNode) {
+      try { this._portal.parentNode.removeChild(this._portal); } catch (e) {}
+    }
+    this._portal = null;
+  }
+
   render() {
     if (!this.mountEl) return;
+    // IMPORTANT: render() may be called multiple times (e.g. async options load).
+    // Ensure we don't leak portals or global listeners.
+    this._cleanupPortal();
+
     const items = this._normalizeOptions(this.options);
 
     this.mountEl.innerHTML = `
-      <div class="sb-inline-editor sb-inline-editor--menu" tabindex="0">
-        <div class="sb-menu">
-          ${items.map((it) => this._itemHTML(it)).join('')}
-        </div>
-      </div>
+      <div class="sb-inline-editor sb-inline-editor--menu sb-inline-editor--menu-anchor" tabindex="0"></div>
     `;
-    this._root = this.mountEl.querySelector('.sb-inline-editor--menu');
+    this._root = this.mountEl.querySelector('.sb-inline-editor--menu-anchor');
+
+    // Build portal menu to avoid being clipped by table overflow.
+    this._portal = document.createElement('div');
+    this._portal.className = 'sb-menu sb-menu--portal';
+    this._portal.dataset.sbEditorPortal = '1';
+    this._portal.style.display = 'block';
+    this._portal.innerHTML = items.map((it) => this._itemHTML(it)).join('');
+    document.body.appendChild(this._portal);
+    this._reposition();
 
     // Click to choose
-    this._root?.addEventListener('click', (e) => {
+    this._portal?.addEventListener('mousedown', (e) => {
+      // prevent blur/selection issues while clicking menu
+      e.preventDefault();
+    }, true);
+
+    this._portal?.addEventListener('click', (e) => {
       const btn = e.target?.closest?.('button[data-value]');
       if (!btn) return;
       e.preventDefault();
@@ -41,8 +78,45 @@ export class InlineMenuSelectEditor {
       const v = btn.dataset.value ?? '';
       this._value = v;
       // host manager decides commit timing; we just store value
-      this._root?.dispatchEvent?.(new CustomEvent('sb:menu-select', { bubbles: true, detail: { value: v } }));
+      // IMPORTANT: dispatch on mountEl so Board's listener (on cell-content) can catch it.
+      this.mountEl?.dispatchEvent?.(new CustomEvent('sb:menu-select', { bubbles: true, detail: { value: v } }));
     });
+
+    // Keep portal aligned on scroll/resize
+    this._onDocScroll = () => this._reposition();
+    document.addEventListener('scroll', this._onDocScroll, true);
+    this._onWinResize = () => this._reposition();
+    window.addEventListener('resize', this._onWinResize);
+
+    // Close on outside click (so blur/close behavior is consistent for portal menus)
+    this._onDocClick = (e) => {
+      const inAnchor = this._root?.contains?.(e.target);
+      const inMenu = this._portal?.contains?.(e.target);
+      if (inAnchor || inMenu) return;
+      // Let EditingManager do commit+close; we just request close.
+      this.mountEl?.dispatchEvent?.(new CustomEvent('sb:menu-close', { bubbles: true }));
+    };
+    document.addEventListener('mousedown', this._onDocClick, true);
+  }
+
+  _reposition() {
+    if (!this._portal || !this._root) return;
+    const rect = this._root.getBoundingClientRect();
+    const gap = 6;
+    const top = rect.top - gap; // align to top of cell; looks like "expanded in-place"
+    const left = rect.left;
+    const width = Math.max(220, rect.width);
+
+    this._portal.style.position = 'fixed';
+    this._portal.style.left = `${Math.max(8, left)}px`;
+    this._portal.style.top = `${Math.max(8, top)}px`;
+    this._portal.style.width = `${width}px`;
+    this._portal.style.zIndex = '30000';
+
+    // Do NOT hardcode fixed height; only constrain by viewport to avoid off-screen.
+    const maxH = Math.max(200, Math.min(window.innerHeight - Math.max(8, top) - 12, 520));
+    this._portal.style.maxHeight = `${maxH}px`;
+    this._portal.style.overflow = 'auto';
   }
 
   focus() {
@@ -64,6 +138,7 @@ export class InlineMenuSelectEditor {
 
   destroy() {
     if (this.mountEl) this.mountEl.innerHTML = '';
+    this._cleanupPortal();
     this._root = null;
     this.mountEl = null;
   }

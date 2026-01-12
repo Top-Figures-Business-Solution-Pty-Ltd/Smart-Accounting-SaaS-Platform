@@ -103,6 +103,7 @@ export class ProjectService {
             
             const response = await frappe.call({
                 method: 'frappe.client.get_list',
+                type: 'POST',
                 args
             });
             

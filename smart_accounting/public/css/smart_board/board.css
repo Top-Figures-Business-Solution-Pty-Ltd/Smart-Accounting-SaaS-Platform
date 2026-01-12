@@ -240,6 +240,26 @@
     box-shadow: 0 12px 30px rgba(0,0,0,0.12);
 }
 
+/* Portal variant: positioned by JS; should overlay table without being clipped */
+.sb-menu--portal {
+    z-index: 30000;
+}
+
+/* Status menu should be neat and aligned: single column list */
+.sb-menu--portal .sb-menu__item {
+    width: 100%;
+    text-align: left;
+}
+
+@media (min-width: 1px) {
+    /* override grid for portal to avoid ragged layout */
+    .sb-menu--portal {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+}
+
 .sb-menu__item {
     border: 1px solid var(--smart-board-border);
     background: #f8f9fa;

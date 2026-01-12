@@ -3,11 +3,12 @@
  * - Focus: editable flags + editor selection + special hooks (e.g. confirm).
  * - Rendering override is optional; by default we keep existing BoardCell.formatValue output.
  */
-import { STATUS_OPTIONS, STATUS_COLORS } from '../../utils/constants.js';
+import { STATUS_COLORS } from '../../utils/constants.js';
 import { InlineTextEditor, InlineTextareaEditor, InlineSelectEditor, InlineMenuSelectEditor, InlineDateEditor, InlineMoneyEditor } from '../../components/Common/editors/index.js';
 import { LinkInput } from '../../components/Common/LinkInput.js';
 import { MultiLinkPicker } from '../../components/Common/MultiLinkPicker.js';
 import { uploadAttachmentToField } from '../../services/fileUploadService.js';
+import { DoctypeMetaService } from '../../services/doctypeMetaService.js';
 import { confirmDialog } from '../../services/uiAdapter.js';
 import { escapeHtml } from '../../utils/dom.js';
 
@@ -23,14 +24,50 @@ function priorityOptions() {
   return ['Low', 'Medium', 'High', 'Urgent'];
 }
 
-function statusOptionsForProject(project) {
-  const t = project?.project_type || 'DEFAULT';
-  const base = STATUS_OPTIONS[t] || STATUS_OPTIONS.DEFAULT || [];
-  // Compatibility: if current value isn't in options (e.g. ERPNext default "Open"),
-  // include it to avoid rendering an empty editor and accidental blank commit.
+async function statusOptionsForProject(project) {
+  // Source of truth: Project.status options from DocType meta (Customize Form / Property Setter)
+  const base = await DoctypeMetaService.getSelectOptions('Project', 'status');
   const cur = (project?.status || '').trim();
-  if (cur && !base.includes(cur)) return [cur].concat(base);
-  return base;
+  if (cur && Array.isArray(base) && !base.includes(cur)) return [cur].concat(base);
+  return Array.isArray(base) ? base : (cur ? [cur] : []);
+}
+
+function statusMenuEditor({ cellEl, project, manager, field }) {
+  const contentEl = cellEl.querySelector('.cell-content') || cellEl;
+  const current = project?.[field] || '';
+
+  // Render immediately with current value only (so UI responds instantly),
+  // then replace options once meta is loaded.
+  const ed = new InlineMenuSelectEditor(contentEl, {
+    options: current ? [{ value: current, label: current, color: STATUS_COLORS[current] || '' }] : [],
+    initialValue: current
+  });
+
+  // Commit on selection
+  contentEl.addEventListener('sb:menu-select', (e) => {
+    e.stopPropagation?.();
+    manager?.commitAndClose?.('menu-select');
+  }, { once: true });
+  // Close on outside click
+  contentEl.addEventListener('sb:menu-close', () => {
+    manager?.commitAndClose?.('menu-close');
+  }, { once: true });
+
+  // Load true options from backend meta and re-render editor once.
+  statusOptionsForProject(project).then((opts) => {
+    if (!contentEl?.isConnected) return;
+    const items = (opts || []).map((s) => ({
+      value: s,
+      label: s,
+      color: STATUS_COLORS[s] || ''
+    }));
+    ed.options = items;
+    ed.render();
+    mountEditorHelpers(manager, contentEl, ed);
+  });
+
+  mountEditorHelpers(manager, contentEl, ed);
+  return ed;
 }
 
 function mountEditorHelpers(manager, mountEl, editorInstance) {
@@ -65,6 +102,77 @@ function linkEditor({ cellEl, project, field, manager, doctype, placeholder }) {
   setTimeout(() => {
     try { mountEl.querySelector('.sb-linkinput__input')?.focus?.(); } catch (e) {}
   }, 0);
+}
+
+let _companyOptionsCache = null;
+let _companyOptionsLoading = null;
+async function getCompanyOptions() {
+  if (Array.isArray(_companyOptionsCache)) return _companyOptionsCache;
+  if (_companyOptionsLoading) return _companyOptionsLoading;
+  _companyOptionsLoading = (async () => {
+    try {
+      const r = await frappe.call({
+        method: 'frappe.client.get_list',
+        type: 'POST',
+        args: {
+          doctype: 'Company',
+          fields: ['name'],
+          order_by: 'name asc',
+          limit_page_length: 200
+        }
+      });
+      const list = (r?.message || []).map((x) => x?.name).filter(Boolean);
+      _companyOptionsCache = list;
+      return list;
+    } catch (e) {
+      _companyOptionsCache = [];
+      return [];
+    } finally {
+      _companyOptionsLoading = null;
+    }
+  })();
+  return _companyOptionsLoading;
+}
+
+function companyMenuEditor({ cellEl, project, manager, field }) {
+  const contentEl = cellEl.querySelector('.cell-content') || cellEl;
+
+  // Create editor immediately (so manager lifecycle works), then populate options async.
+  const ed = new InlineMenuSelectEditor(contentEl, {
+    options: [{ value: project?.[field] || '', label: project?.[field] || '—' }].filter((x) => x.value),
+    initialValue: project?.[field] || ''
+  });
+
+  // Commit on selection (menu-select is emitted by editor)
+  contentEl.addEventListener('sb:menu-select', (e) => {
+    e.stopPropagation?.();
+    manager?.commitAndClose?.('menu-select');
+  }, { once: true });
+
+  // Close on outside click (portal menu emits sb:menu-close)
+  contentEl.addEventListener('sb:menu-close', () => {
+    manager?.commitAndClose?.('menu-close');
+  }, { once: true });
+
+  // Populate options from system (best-effort); if permission blocks, fall back to search-based LinkInput
+  getCompanyOptions().then((opts) => {
+    if (!contentEl?.isConnected) return;
+    if (Array.isArray(opts) && opts.length) {
+      ed.options = opts.map((c) => ({ value: c, label: c }));
+      ed.render();
+      // Re-bind lifecycle after re-render
+      mountEditorHelpers(manager, contentEl, ed);
+    } else {
+      // fallback to old search input if company list can't be read
+      try {
+        ed.destroy?.();
+      } catch (e2) {}
+      linkEditor({ cellEl, project, field, manager, doctype: 'Company', placeholder: 'Search Company...' });
+    }
+  });
+
+  mountEditorHelpers(manager, contentEl, ed);
+  return ed;
 }
 
 function multiLinkEditor({ cellEl, project, manager, doctype, placeholder, initialValues, defaultList, resolveMeta }) {
@@ -271,25 +379,7 @@ export function makeProjectColumnSpecs() {
           <span class="sb-afford sb-afford--select">▾</span>
         `;
       },
-      renderEditor: ({ cellEl, project, manager, field }) => {
-        const contentEl = cellEl.querySelector('.cell-content') || cellEl;
-        const opts = statusOptionsForProject(project).map((s) => ({
-          value: s,
-          label: s,
-          color: STATUS_COLORS[s] || ''
-        }));
-        const ed = new InlineMenuSelectEditor(contentEl, {
-          options: opts,
-          initialValue: project?.[field] || ''
-        });
-        // When user selects, commit immediately (still consistent with click-elsewhere save)
-        contentEl.addEventListener('sb:menu-select', (e) => {
-          e.stopPropagation?.();
-          manager?.commitAndClose?.('menu-select');
-        }, { once: true });
-        mountEditorHelpers(manager, contentEl, ed);
-        return ed;
-      }
+      renderEditor: ({ cellEl, project, manager, field }) => statusMenuEditor({ cellEl, project, manager, field })
     },
 
     // (4) End Date - date
@@ -333,14 +423,8 @@ export function makeProjectColumnSpecs() {
     {
       field: 'company',
       isEditable: true,
-      renderEditor: ({ cellEl, project, manager, field }) => linkEditor({
-        cellEl,
-        project,
-        field,
-        manager,
-        doctype: 'Company',
-        placeholder: 'Search Company...'
-      })
+      // Company should behave like a simple selector (monday-style labels), not a search box.
+      renderEditor: ({ cellEl, project, manager, field }) => companyMenuEditor({ cellEl, project, manager, field })
     },
 
     // (8) Lodgement Due - date + confirm on save
