@@ -7,6 +7,7 @@ import { ApiService } from './api.js';
 
 export class ProjectService {
     static _warnedMissingFields = false;
+    static _extraFields = null;
 
     /**
      * 获取Projects列表
@@ -49,6 +50,14 @@ export class ProjectService {
             'notes',
             'is_active'
         ];
+
+        // Include optional extra fields (website-safe, best-effort)
+        const extra = await this._getExtraFields();
+        if (Array.isArray(extra) && extra.length) {
+            for (const f of extra) {
+                if (f && !fullFields.includes(f)) fullFields.push(f);
+            }
+        }
 
         const fetchWithFields = async (fields) => {
             // Advanced groups (supports nested AND/OR across groups).
@@ -97,7 +106,12 @@ export class ProjectService {
                 args
             });
             
-            return response.message || [];
+            const rows = response.message || [];
+            // Hydrate child tables (get_list doesn't include Table/child rows)
+            try {
+                await this._hydrateChildTables(rows);
+            } catch (e) {}
+            return rows;
         };
 
         try {
@@ -124,6 +138,52 @@ export class ProjectService {
             return [];
             }
         }
+    }
+
+    static async _hydrateChildTables(projects) {
+        const list = Array.isArray(projects) ? projects : [];
+        const names = list.map((p) => p?.name).filter(Boolean);
+        if (!names.length) return;
+
+        // Use website-safe backend API to avoid PermissionError on child tables
+        try {
+            const r = await frappe.call({
+                method: 'smart_accounting.api.project_board.hydrate_project_children',
+                args: { projects: names }
+            });
+            const msg = r?.message || {};
+            const team = msg?.team || {};
+            const softwares = msg?.softwares || {};
+            for (const p of list) {
+                if (!p?.name) continue;
+                p.custom_team_members = team[p.name] || [];
+                p.custom_softwares = softwares[p.name] || [];
+            }
+        } catch (e) {
+            // Fail-safe: keep UI functional even if child hydration is unavailable
+        }
+    }
+
+    static async _getExtraFields() {
+        // Cache per page load
+        if (Array.isArray(this._extraFields)) return this._extraFields;
+        this._extraFields = [];
+
+        // Engagement Letter attach field (if present on site meta)
+        try {
+            const r = await frappe.call({
+                method: 'frappe.desk.form.load.getdoctype',
+                type: 'GET',
+                args: { doctype: 'Project' }
+            });
+            const docs = r?.docs || [];
+            const meta = docs.find((d) => d?.name === 'Project') || docs[0];
+            const fields = meta?.fields || [];
+            const f = fields.find((x) => (x?.fieldtype === 'Attach' || x?.fieldtype === 'Attach Image') && String(x?.label || '').trim() === 'Engagement Letter');
+            if (f?.fieldname) this._extraFields.push(String(f.fieldname));
+        } catch (e) {}
+
+        return this._extraFields;
     }
     
     /**

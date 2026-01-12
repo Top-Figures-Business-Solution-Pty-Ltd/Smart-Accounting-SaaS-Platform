@@ -302,6 +302,12 @@
     font-size: 12px;
 }
 
+.team-avatars .user-avatar.user-avatar--img {
+    object-fit: cover;
+    background: #f1f3f5;
+    display: inline-block;
+}
+
 .team-avatars .more-count {
     margin-left: 4px;
     font-size: 12px;

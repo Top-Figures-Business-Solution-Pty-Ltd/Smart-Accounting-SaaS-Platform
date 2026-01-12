@@ -215,6 +215,14 @@ export class EditingManager {
         }
       } catch (e) {}
 
+      // Allow per-column custom commit (complex fields / derived columns).
+      // If not provided, fall back to store action (frappe.client.set_value).
+      const spec = columnRegistry.getSpec(field);
+      if (spec && typeof spec.commit === 'function') {
+        await spec.commit({ project, projectName, field, value, reason, store: this.store });
+        return;
+      }
+
       if (this.store?.dispatch) {
         await this.store.dispatch('projects/updateProjectField', { name: projectName, field, value });
       }
@@ -260,6 +268,8 @@ export class EditingManager {
     this._onDocMouseDown = (e) => {
       if (!this._active) return;
       const cell = this._active.cellEl;
+      // Click inside editor portal (dropdowns rendered to body) should NOT trigger outside-click commit.
+      if (e?.target?.closest?.('[data-sb-editor-portal=\"1\"]')) return;
       // Click inside current cell/editor: ignore
       if (cell && cell.contains(e.target)) return;
       // Otherwise commit+close

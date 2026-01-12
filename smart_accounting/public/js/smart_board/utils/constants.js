@@ -115,6 +115,7 @@ export const PROJECT_COLUMN_CATALOG = [
 
     // Team & tools
     { field: 'custom_softwares', label: 'Software', width: 160 },
+    { field: 'custom_engagement_letter', label: 'Engagement Letter', width: 200 },
 
     // Dates / planning
     { field: 'expected_start_date', label: 'Start Date', width: 130 },

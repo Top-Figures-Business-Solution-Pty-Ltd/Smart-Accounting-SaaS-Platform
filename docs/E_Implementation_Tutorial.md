@@ -135,7 +135,7 @@
 | `Text` | 多行纯文本 | custom_notes |
 | `Text Editor` | 多行富文本 | notes（原生）|
 | `JSON` | JSON 数据 | custom_team |
-| `Table MultiSelect` | 多选 | custom_softwares → Software |
+| `Table MultiSelect` | 多选 | custom_softwares → Project Software → Software |
 
 ### 2.4 字段属性说明
 
@@ -401,7 +401,7 @@ Partner
 | Target Month | `custom_target_month` | Select | January<br/>February<br/>March<br/>April<br/>May<br/>June<br/>July<br/>August<br/>September<br/>October<br/>November<br/>December | 目标月份 |
 | Lodgement Due Date | `custom_lodgement_due_date` | Date | | ATO 法定截止日期 |
 | Project Frequency | `custom_project_frequency` | Select | Annually<br/>Quarterly<br/>Monthly<br/>One-off | **会自动创建Auto Repeat**（非One-off时）|
-| Softwares | `custom_softwares` | Table MultiSelect | Software | 链接到 Software DocType（需先创建）|
+| Softwares | `custom_softwares` | Table MultiSelect | Project Software | Table MultiSelect 的子表为 `Project Software`；子表字段 `software` Link → `Software` |
 
 > **custom_team_members 说明**：子表字段，可以添加多个团队成员，每个成员有角色（Preparer/Reviewer/Partner）。支持高效的数据库查询和统计。
 

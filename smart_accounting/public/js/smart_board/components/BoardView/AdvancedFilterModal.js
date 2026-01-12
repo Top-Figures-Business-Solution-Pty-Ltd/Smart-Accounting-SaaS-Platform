@@ -65,6 +65,8 @@ export class AdvancedFilterModal {
     this._root = null;
     this._groups = this._normalizeInitialGroups(initial);
     this._linkInputs = new Map(); // key: rowId -> LinkInput
+    this._rowsEl = null;
+    this._boundRowsEvents = false;
   }
 
   _normalizeInitialGroups(initial) {
@@ -145,6 +147,7 @@ export class AdvancedFilterModal {
     this._modal.open();
 
     this._root = content;
+    this._rowsEl = content.querySelector('#sbAdvFilterRows');
     this._renderRows();
 
     footer.querySelector('#sbAdvCancel')?.addEventListener('click', () => this.close());
@@ -152,12 +155,17 @@ export class AdvancedFilterModal {
     footer.querySelector('#sbAdvClear')?.addEventListener('click', () => this._clear());
     content.querySelector('#sbAdvAddRow')?.addEventListener('click', () => this._addRow());
     content.querySelector('#sbAdvAddGroup')?.addEventListener('click', () => this._addGroup());
+
+    // Bind delegated events ONCE (avoid duplicated handlers on re-render)
+    this._bindRowsEventsOnce();
   }
 
   close() {
     this._modal?.close?.();
     this._modal = null;
     this._root = null;
+    this._rowsEl = null;
+    this._boundRowsEvents = false;
   }
 
   _columnsOptionsHTML() {
@@ -217,7 +225,7 @@ export class AdvancedFilterModal {
 
   _renderRows() {
     if (!this._root) return;
-    const wrap = this._root.querySelector('#sbAdvFilterRows');
+    const wrap = this._rowsEl || this._root.querySelector('#sbAdvFilterRows');
     if (!wrap) return;
 
     // Re-render rows; destroy link inputs first (will be re-mounted)
@@ -248,7 +256,14 @@ export class AdvancedFilterModal {
       });
     });
 
-    // Bind events (delegated)
+    // Events are bound once in _bindRowsEventsOnce().
+  }
+
+  _bindRowsEventsOnce() {
+    const wrap = this._rowsEl;
+    if (!wrap || this._boundRowsEvents) return;
+    this._boundRowsEvents = true;
+
     wrap.addEventListener('change', (e) => this._onChange(e));
     wrap.addEventListener('click', (e) => this._onClick(e));
   }

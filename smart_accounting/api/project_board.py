@@ -23,6 +23,10 @@ def _ensure_write_permission(doc) -> None:
 	if not doc.has_permission("write"):
 		frappe.throw("Not permitted", frappe.PermissionError)
 
+def _ensure_logged_in() -> None:
+	if frappe.session.user in (None, "", "Guest"):
+		frappe.throw("Not permitted", frappe.PermissionError)
+
 
 def _normalize_list(value: Any) -> list:
 	if value is None:
@@ -143,6 +147,105 @@ def set_project_softwares(project: str, softwares: Any) -> dict:
 		"project": doc.name,
 		"custom_softwares": doc.get("custom_softwares") or [],
 	}
+
+@frappe.whitelist()
+def hydrate_project_children(projects: Any) -> dict:
+	"""
+	Website-safe bulk fetch for Project child tables needed by Smart Board.
+
+	Why:
+	- frappe.client.get_list on child tables may raise PermissionError due to parent permission checks.
+	- We first compute the list of Projects the current user can read (permission-aware),
+	  then query child tables with ignore_permissions=True but only for those allowed parents.
+	"""
+	_ensure_logged_in()
+
+	names = _normalize_list(projects)
+	names = [str(x).strip() for x in names if str(x).strip()]
+	if not names:
+		return {"team": {}, "softwares": {}}
+
+	# Respect Project permissions
+	allowed = frappe.get_all("Project", filters=[["name", "in", names]], pluck="name")
+	allowed = [str(x) for x in (allowed or [])]
+	if not allowed:
+		return {"team": {}, "softwares": {}}
+
+	team_rows = frappe.get_all(
+		"Project Team Member",
+		filters=[["parent", "in", allowed]],
+		fields=["parent", "user", "role", "assigned_date"],
+		limit_page_length=10000,
+		ignore_permissions=True,
+	)
+	soft_rows = frappe.get_all(
+		"Project Software",
+		filters=[["parent", "in", allowed]],
+		fields=["parent", "software"],
+		limit_page_length=10000,
+		ignore_permissions=True,
+	)
+
+	team = {}
+	for r in (team_rows or []):
+		p = r.get("parent")
+		if not p:
+			continue
+		team.setdefault(p, []).append(r)
+
+	softwares = {}
+	for r in (soft_rows or []):
+		p = r.get("parent")
+		if not p:
+			continue
+		softwares.setdefault(p, []).append(r)
+
+	return {"team": team, "softwares": softwares}
+
+
+@frappe.whitelist()
+def get_user_meta(users: Any) -> dict:
+	"""
+	Return lightweight user metadata for UI display (full_name + user_image).
+	Website-safe for /smart, avoids frappe.client.get_list('User') permission issues.
+
+	Only returns:
+	- name
+	- full_name (fallback to name)
+	- user_image
+	"""
+	_ensure_logged_in()
+
+	names = _normalize_list(users)
+	names = [str(x).strip() for x in names if str(x).strip()]
+	if not names:
+		return {}
+
+	try:
+		# IMPORTANT: do NOT bypass permissions on User.
+		# If the current role cannot read User, we safely fall back to label=name with no image.
+		rows = frappe.get_all(
+			"User",
+			filters=[["name", "in", names], ["enabled", "=", 1]],
+			fields=["name", "full_name", "user_image"],
+			limit_page_length=min(500, len(names)),
+		)
+	except frappe.PermissionError:
+		rows = []
+
+	out = {}
+	for u in (rows or []):
+		key = u.get("name")
+		if not key:
+			continue
+		out[key] = {
+			"label": u.get("full_name") or key,
+			"image": u.get("user_image") or "",
+		}
+	# Ensure deterministic fallback for any missing
+	for n in names:
+		out.setdefault(n, {"label": n, "image": ""})
+	return out
 
 
 @frappe.whitelist()

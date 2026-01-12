@@ -284,7 +284,7 @@ flowchart TB
     end
     
     subgraph 业务数据
-        PROJ["<b>Project</b><br/>──────────<br/>⚫ project_name<br/>⚫ customer<br/>⚫ company (区分 TF/TG)<br/>⚫ project_type → Project Type<br/>⚫ status (可配置)<br/>⚫ priority<br/>⚫ estimated_costing<br/>⚫ notes<br/>⚫ is_active<br/>⚫ auto_repeat → Auto Repeat<br/>✅ custom_entity_type<br/>✅ custom_fiscal_year<br/>✅ custom_team_members → Project Team Member<br/>✅ custom_target_month<br/>✅ custom_lodgement_due_date<br/>✅ custom_project_frequency<br/>✅ custom_softwares → Software"]
+        PROJ["<b>Project</b><br/>──────────<br/>⚫ project_name<br/>⚫ customer<br/>⚫ company (区分 TF/TG)<br/>⚫ project_type → Project Type<br/>⚫ status (可配置)<br/>⚫ priority<br/>⚫ estimated_costing<br/>⚫ notes<br/>⚫ is_active<br/>⚫ auto_repeat → Auto Repeat<br/>✅ custom_entity_type<br/>✅ custom_fiscal_year<br/>✅ custom_team_members → Project Team Member<br/>✅ custom_target_month<br/>✅ custom_lodgement_due_date<br/>✅ custom_project_frequency<br/>✅ custom_softwares → Project Software → Software"]
         
         TASK["<b>Task</b><br/>──────────<br/>⚫ subject<br/>⚫ project<br/>⚫ status (可配置)<br/>⚫ priority<br/>⚫ exp_start_date / exp_end_date<br/>⚫ expected_time / actual_time<br/>⚫ description / progress<br/>✅ custom_fiscal_year<br/>✅ custom_period"]
     end

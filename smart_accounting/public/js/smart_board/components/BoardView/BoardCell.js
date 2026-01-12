@@ -114,6 +114,10 @@ export class BoardCell {
         const avatars = teamMembers.slice(0, 3).map(member => {
             const name = this.extractName(member.user);
             const initial = name.charAt(0).toUpperCase();
+            const img = member?.user_image || '';
+            if (img) {
+                return `<img class="user-avatar user-avatar--img" src="${this.escapeHtml(img)}" title="${name}" alt="" />`;
+            }
             return `<span class="user-avatar" title="${name}">${initial}</span>`;
         }).join('');
         
@@ -141,7 +145,7 @@ export class BoardCell {
         }
         
         if (Array.isArray(softwares)) {
-            return softwares.map(s => s.software_name || s).join(', ');
+            return softwares.map(s => s?.software_name || s?.software || s).join(', ');
         }
         
         return this.escapeHtml(softwares);
