@@ -14,8 +14,21 @@ export class MainContent {
         this.store = options.store;
         this.isBoardView = options.isBoardView || (() => false);
         this.onProjectClick = options.onProjectClick || (() => {});
+        this._unsub = null;
         
         this.render();
+
+        // Keep placeholder pages (Dashboard / Clients / Settings) reactive to store updates
+        if (this.store?.subscribe) {
+            this._unsub = this.store.subscribe(() => {
+                if (isPlaceholderView(this.currentView)) {
+                    const placeholder = this.container.querySelector('#pagePlaceholder');
+                    if (placeholder && placeholder.style.display !== 'none') {
+                        placeholder.innerHTML = renderPlaceholderHTML(this.currentView, this.store);
+                    }
+                }
+            });
+        }
     }
     
     render() {
@@ -171,6 +184,8 @@ export class MainContent {
         if (this.boardTable) {
             this.boardTable.destroy();
         }
+        try { this._unsub?.(); } catch (e) {}
+        this._unsub = null;
         this.container.innerHTML = '';
     }
 }

@@ -6,6 +6,7 @@
 import { ProjectsModule } from './modules/projects.js';
 import { FiltersModule } from './modules/filters.js';
 import { ViewsModule } from './modules/views.js';
+import { DashboardModule } from './modules/dashboard.js';
 
 export class Store {
     constructor() {
@@ -13,7 +14,8 @@ export class Store {
         this.state = {
             projects: ProjectsModule.state(),
             filters: FiltersModule.state(),
-            views: ViewsModule.state()
+            views: ViewsModule.state(),
+            dashboard: DashboardModule.state()
         };
         
         // 订阅者列表
@@ -23,7 +25,8 @@ export class Store {
         this.modules = {
             projects: ProjectsModule,
             filters: FiltersModule,
-            views: ViewsModule
+            views: ViewsModule,
+            dashboard: DashboardModule
         };
     }
     

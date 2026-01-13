@@ -259,6 +259,14 @@ export class ProjectService {
         });
         return r?.message?.task || r?.message;
     }
+
+    static async getMyProjectsWithRoles() {
+        const r = await frappe.call({
+            method: 'smart_accounting.api.project_board.get_my_projects_with_roles',
+            args: {}
+        });
+        return r?.message?.projects || [];
+    }
     
     /**
      * 构建筛选条件

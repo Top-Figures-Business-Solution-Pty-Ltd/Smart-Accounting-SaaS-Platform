@@ -131,6 +131,68 @@
     color: var(--smart-board-text);
 }
 
+/* Dashboard: My Projects list */
+.sb-dash__list {
+    margin-top: 14px;
+    background: #fff;
+    border: 1px solid var(--smart-board-border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.sb-dash__list-title {
+    padding: 12px 14px;
+    font-weight: 700;
+    font-size: 14px;
+    border-bottom: 1px solid var(--smart-board-border);
+    color: var(--smart-board-text);
+}
+
+.sb-dash__table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.sb-dash__table th,
+.sb-dash__table td {
+    padding: 10px 14px;
+    font-size: 13px;
+    border-bottom: 1px solid #f1f3f5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sb-dash__table th {
+    background: #f8f9fa;
+    color: var(--smart-board-text-muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.sb-dash__proj { width: 52%; font-weight: 600; }
+.sb-dash__type { width: 24%; color: var(--smart-board-text-muted); }
+.sb-dash__role { width: 24%; }
+
+.sb-dash__loading,
+.sb-dash__error,
+.sb-dash__empty {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--smart-board-border);
+    background: #fff;
+    border-radius: 12px;
+    color: var(--smart-board-text-muted);
+}
+
+.sb-dash__error {
+    color: #b02a37;
+    border-color: #f1aeb5;
+    background: #fff5f5;
+}
+
 @media (max-width: 1100px) {
     .sb-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

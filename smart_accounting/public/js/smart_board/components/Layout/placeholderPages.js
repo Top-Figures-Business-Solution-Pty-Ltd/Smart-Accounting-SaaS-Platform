@@ -6,7 +6,9 @@ export function isPlaceholderView(view) {
 
 export function renderPlaceholderHTML(view, store) {
     const state = store?.getState?.() || {};
-    const projects = state.projects?.items || [];
+    const dashboard = state.dashboard || {};
+    const myProjects = dashboard?.myProjects || [];
+    const projects = view === 'dashboard' ? myProjects : (state.projects?.items || []);
 
     const total = projects.length;
     const byStatus = projects.reduce((acc, p) => {
@@ -16,22 +18,55 @@ export function renderPlaceholderHTML(view, store) {
     }, {});
 
     if (view === 'dashboard') {
+        const loading = !!dashboard?.loading;
+        const err = dashboard?.error;
         const topStatuses = Object.entries(byStatus)
             .sort((a, b) => b[1] - a[1])
             .slice(0, 4)
             .map(([k, v]) => `<div class="sb-card"><div class="sb-card__label">${k}</div><div class="sb-card__value">${v}</div></div>`)
             .join('');
 
+        const list = (() => {
+            if (loading) return `<div class="sb-dash__loading">Loading your projects…</div>`;
+            if (err) return `<div class="sb-dash__error">Failed to load: ${String(err)}</div>`;
+            if (!myProjects.length) return `<div class="sb-dash__empty">No related projects yet.</div>`;
+            const rows = myProjects.map((p) => `
+              <tr>
+                <td class="sb-dash__proj">${p.project_name || p.name}</td>
+                <td class="sb-dash__type">${p.project_type || '—'}</td>
+                <td class="sb-dash__role">${p.role_text || '—'}</td>
+              </tr>
+            `).join('');
+            return `
+              <div class="sb-dash__list">
+                <div class="sb-dash__list-title">My Projects</div>
+                <table class="sb-dash__table">
+                  <thead>
+                    <tr>
+                      <th>Project</th>
+                      <th>Type</th>
+                      <th>My Role</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${rows}
+                  </tbody>
+                </table>
+              </div>
+            `;
+        })();
+
         return `
             <div class="sb-page">
                 <div class="sb-page__subtitle">Quick overview of your work</div>
                 <div class="sb-cards">
                     <div class="sb-card">
-                        <div class="sb-card__label">Projects Loaded</div>
+                        <div class="sb-card__label">My Projects</div>
                         <div class="sb-card__value">${total}</div>
                     </div>
                     ${topStatuses || '<div class="text-muted" style="padding:12px;">No projects loaded yet. Open a board to load data.</div>'}
                 </div>
+                ${list}
                 <div class="sb-page__hint">Tip: choose a Board on the left to view projects.</div>
             </div>
         `;

@@ -429,6 +429,82 @@ def create_task_for_project(project: str, subject: str | None = None) -> dict:
 
 	return {"task": {"name": doc.name, "project": doc.project, "subject": doc.subject}}
 
+
+@frappe.whitelist()
+def get_my_projects_with_roles() -> dict:
+	"""
+	Dashboard: list Projects related to current user via Project.custom_team_members.
+
+	Returns:
+	- projects: [
+		{ name, project_name, project_type, status, roles: [..], role_text: "..." }
+	  ]
+	"""
+	_ensure_logged_in()
+	user = frappe.session.user
+	user = str(user or "").strip()
+	if not user or user == "Guest":
+		return {"projects": []}
+
+	# Child table may be permission-guarded by parent; read only rows for current user.
+	try:
+		team_rows = frappe.get_all(
+			"Project Team Member",
+			filters={"user": user},
+			fields=["parent", "role"],
+			ignore_permissions=True,
+			limit_page_length=100000,
+		)
+	except Exception:
+		team_rows = []
+
+	parent_to_roles: dict[str, list[str]] = {}
+	for r in (team_rows or []):
+		p = str(r.get("parent") or "").strip()
+		role = str(r.get("role") or "").strip()
+		if not p:
+			continue
+		parent_to_roles.setdefault(p, [])
+		if role and role not in parent_to_roles[p]:
+			parent_to_roles[p].append(role)
+
+	if not parent_to_roles:
+		return {"projects": []}
+
+	# Respect Project permissions
+	allowed = _project_names_with_read_permission(list(parent_to_roles.keys()))
+	allowed = [str(x).strip() for x in (allowed or []) if str(x).strip()]
+	if not allowed:
+		return {"projects": []}
+
+	try:
+		prows = frappe.get_all(
+			"Project",
+			filters=[["name", "in", allowed]],
+			fields=["name", "project_name", "project_type", "status"],
+			limit_page_length=10000,
+		)
+	except frappe.PermissionError:
+		return {"projects": []}
+
+	by_name = {p.get("name"): p for p in (prows or []) if p.get("name")}
+	out = []
+	for name in allowed:
+		p = by_name.get(name) or {}
+		roles = parent_to_roles.get(name, [])
+		out.append(
+			{
+				"name": name,
+				"project_name": p.get("project_name") or name,
+				"project_type": p.get("project_type") or "",
+				"status": p.get("status") or "",
+				"roles": roles,
+				"role_text": " / ".join([x for x in roles if x]) if roles else "",
+			}
+		)
+
+	return {"projects": out}
+
 @frappe.whitelist()
 def hydrate_project_children(projects: Any) -> dict:
 	"""

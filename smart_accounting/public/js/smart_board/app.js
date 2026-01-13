@@ -126,6 +126,11 @@ export class SmartBoardApp {
     }
     
     async loadViewData(viewType) {
+        // Dashboard uses its own lightweight API (avoid loading all Projects)
+        if (viewType === 'dashboard') {
+            await this.store.dispatch('dashboard/fetchMyProjects');
+            return;
+        }
         // 从store加载数据：合并 filters（含 advanced filter rules/groups + search）
         const projectTypeValues = new Set(this.projectTypes.map(t => t.value));
 
