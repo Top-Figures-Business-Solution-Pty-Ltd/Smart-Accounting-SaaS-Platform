@@ -9,14 +9,15 @@ import { initResizable } from './boardTableResize.js';
 import { loadColumnWidths, saveColumnWidths } from './boardTableStorage.js';
 import { shouldVirtualize, computeWindow, spacerRow } from './boardTableVirtualization.js';
 import { ViewService } from '../../services/viewService.js';
-import { ColumnManagerModal } from './ColumnManagerModal.js';
+import { ColumnsManagerModal } from './ColumnsManagerModal.js';
 import { TeamRoleService } from '../../services/teamRoleService.js';
 import { EditingManager } from './boardTableEditingManager.js';
 import { columnRegistry } from '../../columns/registry.js';
 import { UpdatesModal } from './UpdatesModal.js';
 import { buildRowModel } from './rowModel.js';
 import { ProjectService } from '../../services/projectService.js';
-import { confirmDialog } from '../../services/uiAdapter.js';
+import { confirmDialog, notify } from '../../services/uiAdapter.js';
+import { escapeHtml } from '../../utils/dom.js';
 
 export class BoardTable {
     constructor(container, options = {}) {
@@ -44,6 +45,18 @@ export class BoardTable {
         this._projectByName = new Map();
         this._rowModel = buildRowModel([]);
         this._groupBy = null; // reserved for future group-by
+
+        // Expand -> Tasks
+        this._expanded = new Set(); // project.name
+        this._taskCounts = new Map(); // project.name -> count
+        this._tasksByProject = new Map(); // project.name -> tasks[]
+        this._tasksLoading = new Set(); // project.name
+        this._taskCols = [
+            { field: 'subject', label: 'Task', width: 320 },
+            { field: 'status', label: 'Status', width: 140 },
+            { field: 'exp_end_date', label: 'Due', width: 140 },
+            { field: 'priority', label: 'Priority', width: 120 },
+        ];
 
         // Editing finished hook: while editing we freeze row rerenders; once done we schedule a safe refresh.
         this._onEditFinished = () => this.scheduleRowsUpdate();
@@ -115,6 +128,29 @@ export class BoardTable {
         return [];
     }
 
+    _normalizeSavedViewColumns(raw) {
+        // Backward compat:
+        // - legacy: columns = array (project columns)
+        // - new: columns = { project: [...], tasks: [...] }
+        if (!raw) return { project: [], tasks: [] };
+        let v = raw;
+        if (typeof v === 'string') {
+            try { v = JSON.parse(v); } catch (e) { v = null; }
+        }
+        if (Array.isArray(v)) return { project: v, tasks: [] };
+        if (v && typeof v === 'object') {
+            const project = Array.isArray(v.project) ? v.project : (Array.isArray(v.projectColumns) ? v.projectColumns : []);
+            const tasks = Array.isArray(v.tasks) ? v.tasks : (Array.isArray(v.taskColumns) ? v.taskColumns : []);
+            return { project, tasks };
+        }
+        return { project: [], tasks: [] };
+    }
+
+    _setSavedViewColumnsInMemory(next) {
+        if (!this._savedView) return;
+        this._savedView = { ...this._savedView, columns: next };
+    }
+
     buildColumnsFromConfig(columnsConfig) {
         const widths = loadColumnWidths(this.viewType) || {};
         // Include hidden defs so Saved View columns still render with proper labels.
@@ -157,7 +193,12 @@ export class BoardTable {
         if (!view) return;
         this._savedView = view;
 
-        const cfg = this._normalizeSavedColumns(view.columns);
+        const both = this._normalizeSavedViewColumns(view.columns);
+        const cfg = both.project || [];
+        const taskCfg = both.tasks || [];
+        if (Array.isArray(taskCfg) && taskCfg.length) {
+            this._taskCols = taskCfg.map((c) => ({ field: c.field, label: c.label || c.field, width: c.width || 140 }));
+        }
         if (!cfg || cfg.length === 0) return;
 
         this.columns = this.buildColumnsFromConfig(cfg);
@@ -167,12 +208,19 @@ export class BoardTable {
     render() {
         // Build render columns (inject system columns, compute sticky offsets, apply header classes)
         this._renderColumns = this.buildRenderColumns();
+        const colWidth = (c) => {
+            const n = Number(c?.width || 0);
+            if (Number.isFinite(n) && n > 0) return n;
+            if (c?.field === '__sb_select') return 52;
+            return 140;
+        };
+        const tableWidth = (this._renderColumns || []).reduce((sum, c) => sum + colWidth(c), 0);
 
         this.container.innerHTML = `
             <div class="board-table-wrapper">
                 <!-- Table Header -->
                 <div class="board-table-header">
-                    <table class="board-table">
+                    <table class="board-table" style="width:${tableWidth}px">
                         ${renderColGroup(this._renderColumns)}
                         <thead>
                             <tr>
@@ -184,7 +232,7 @@ export class BoardTable {
                 
                 <!-- Table Body (Scrollable) -->
                 <div class="board-table-body" id="boardTableBody">
-                    <table class="board-table">
+                    <table class="board-table" style="width:${tableWidth}px">
                         ${renderColGroup(this._renderColumns)}
                         <tbody id="tableBody">
                             ${this.renderRows()}
@@ -215,7 +263,11 @@ export class BoardTable {
             this._renderColumns || this.columns,
             (p) => this.handleRowClick(p),
             this.rows,
-            { isSelected: (p) => this._selected?.has?.(p?.name) }
+            {
+                isSelected: (p) => this._selected?.has?.(p?.name),
+                isExpanded: (p) => this._expanded?.has?.(p?.name),
+                expandedRowHTML: (p, cols) => this._renderExpandedTasksRow(p, cols),
+            }
         );
     }
     
@@ -237,6 +289,29 @@ export class BoardTable {
         const tbody = this.container.querySelector('#tableBody');
         if (tbody) {
             tbody.addEventListener('click', (e) => {
+                const addTaskBtn = e.target?.closest?.('.sb-add-task-btn');
+                if (addTaskBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const projectName = addTaskBtn.dataset.projectName;
+                    if (projectName) this._handleAddTask(projectName);
+                    return;
+                }
+                const taskColsBtn = e.target?.closest?.('button[data-action="task-columns"]');
+                if (taskColsBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.openTaskColumnManager();
+                    return;
+                }
+                const expBtn = e.target?.closest?.('.sb-expand-btn');
+                if (expBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const projectName = expBtn.dataset.projectName;
+                    if (projectName) this.toggleExpand(projectName);
+                    return;
+                }
                 // Updates entrypoint (primary column)
                 const updBtn = e.target?.closest?.('.sb-update-btn');
                 if (updBtn) {
@@ -380,10 +455,16 @@ export class BoardTable {
         // Clone columns to avoid mutating Saved View config objects
         const cols = [selectCol].concat((this.columns || []).map((c) => ({ ...c })));
 
+        // Primary column = first user-selected project column (like Monday's "Name" column)
+        const primaryField = cols.find((c) => c?.field && c.field !== '__sb_select')?.field || null;
+
         // Apply header class hooks + compute sticky left offsets for frozen columns
         let left = 0;
         for (const col of cols) {
-            col.__headerClass = columnRegistry.getHeaderClass({ column: col }) || '';
+            col.__isPrimary = !!(primaryField && col.field === primaryField);
+            const baseHeaderClass = columnRegistry.getHeaderClass({ column: col }) || '';
+            col.__headerClass = `${baseHeaderClass} ${col.__isPrimary ? 'sb-primary-col' : ''}`.trim();
+            col.__cellClass = col.__isPrimary ? 'sb-primary-col' : '';
             if (col.frozen) {
                 col._stickyLeft = left;
                 left += Number(col.width || 0);
@@ -623,6 +704,8 @@ export class BoardTable {
             this._projectByName = new Map((this.projects || []).map((p) => [p?.name, p]));
             // Row model (future group-by extension point)
             this._rowModel = buildRowModel(this.projects || [], { groupBy: this._groupBy });
+            // Task counts are used to render expand toggles (async best-effort).
+            this._prefetchTaskCounts?.();
             this.scheduleRowsUpdate();
         });
     }
@@ -639,6 +722,8 @@ export class BoardTable {
     }
 
     isVirtual() {
+        // Expanded rows break fixed row height assumptions; disable virtualization while expanded.
+        if (this._expanded && this._expanded.size > 0) return false;
         const total = this._rowModel?.count?.() ?? (this.projects || []).length;
         return shouldVirtualize(total, this._virtualThreshold);
     }
@@ -680,7 +765,11 @@ export class BoardTable {
             this._renderColumns || this.columns,
             (p) => this.handleRowClick(p),
             this.rows,
-            { isSelected: (p) => this._selected?.has?.(p?.name) }
+            {
+                isSelected: (p) => this._selected?.has?.(p?.name),
+                isExpanded: (p) => this._expanded?.has?.(p?.name),
+                expandedRowHTML: (p, cols) => this._renderExpandedTasksRow(p, cols),
+            }
         );
         tbody.innerHTML = spacerRow(topPad) + rowsHtml + spacerRow(bottomPad);
         this.updateSelectAllCheckbox();
@@ -705,6 +794,141 @@ export class BoardTable {
         }
         project.__sb_team_ref = team;
         project.__sb_team_by_role = byRole;
+    }
+
+    async _prefetchTaskCounts() {
+        const names = (this.projects || []).map((p) => p?.name).filter(Boolean);
+        const missing = names.filter((n) => !this._taskCounts.has(n));
+        if (!missing.length) {
+            // still keep expanded flag in sync for rendering
+            for (const p of (this.projects || [])) {
+                if (!p?.name) continue;
+                p.__sb_expanded = this._expanded.has(p.name);
+            }
+            return;
+        }
+        try {
+            const counts = await ProjectService.getTaskCounts(missing);
+            for (const n of missing) {
+                const c = Number(counts?.[n] || 0);
+                this._taskCounts.set(n, c);
+            }
+            // annotate project objects (used by BoardRow)
+            for (const p of (this.projects || [])) {
+                if (!p?.name) continue;
+                const c = this._taskCounts.get(p.name);
+                if (c != null) p.__sb_task_count = c;
+                p.__sb_expanded = this._expanded.has(p.name);
+            }
+        } catch (e) {
+            // ignore
+        } finally {
+            this.scheduleRowsUpdate();
+        }
+    }
+
+    async ensureTasksLoaded(projectName) {
+        if (!projectName) return;
+        if (this._tasksByProject.has(projectName)) return;
+        if (this._tasksLoading.has(projectName)) return;
+        this._tasksLoading.add(projectName);
+        this.scheduleRowsUpdate();
+        try {
+            const fields = this._taskCols.map((c) => c.field);
+            const map = await ProjectService.getTasksForProjects([projectName], fields, 200);
+            const tasks = map?.[projectName] || [];
+            this._tasksByProject.set(projectName, tasks);
+        } finally {
+            this._tasksLoading.delete(projectName);
+            this.scheduleRowsUpdate();
+        }
+    }
+
+    async toggleExpand(projectName) {
+        if (this._expanded.has(projectName)) {
+            this._expanded.delete(projectName);
+        } else {
+            this._expanded.add(projectName);
+            await this.ensureTasksLoaded(projectName);
+        }
+        const p = this._projectByName.get(projectName);
+        if (p) p.__sb_expanded = this._expanded.has(projectName);
+        this.scheduleRowsUpdate();
+    }
+
+    _renderExpandedTasksRow(project, columns) {
+        const cols = Array.isArray(columns) ? columns : [];
+        const colspan = cols.length || 1;
+        const name = project?.name || '';
+        const loading = name && this._tasksLoading.has(name);
+        const tasks = name ? (this._tasksByProject.get(name) || []) : [];
+        const taskCols = (this._taskCols || []).slice();
+
+        const head = `
+          <div class="sb-task-head">
+            <div class="sb-task-title">Tasks</div>
+            <button type="button" class="btn btn-default btn-sm" data-action="task-columns">Task Columns</button>
+          </div>
+        `;
+
+        const table = (() => {
+            const widths = taskCols.map((c) => Math.max(60, Number(c.width) || 120));
+            const totalWidth = widths.reduce((a, b) => a + b, 0);
+            const colgroup = `<colgroup>${widths.map((w) => `<col style="width:${w}px" />`).join('')}</colgroup>`;
+            const ths = taskCols.map((c) => `<th>${escapeHtml(c.label || c.field)}</th>`).join('');
+            const rows = [];
+
+            if (loading) {
+                const tds = taskCols.map((c, idx) => idx === 0
+                    ? `<td><span class="sb-task-muted">Loading…</span></td>`
+                    : `<td></td>`
+                ).join('');
+                rows.push(`<tr>${tds}</tr>`);
+            } else if (tasks && tasks.length) {
+                for (const t of tasks) {
+                    const tds = taskCols.map((c) => `<td>${escapeHtml(t?.[c.field] ?? '—')}</td>`).join('');
+                    rows.push(`<tr>${tds}</tr>`);
+                }
+            } else {
+                const tds = taskCols.map((c, idx) => idx === 0
+                    ? `<td><span class="sb-task-muted">No tasks yet</span></td>`
+                    : `<td></td>`
+                ).join('');
+                rows.push(`<tr>${tds}</tr>`);
+            }
+
+            // Always show an add row (Monday-like)
+            const addTds = taskCols.map((c, idx) => {
+                if (idx === 0) {
+                    return `<td>
+                      <button type="button" class="sb-add-task-btn" data-project-name="${escapeHtml(name)}">＋ Add New Task</button>
+                    </td>`;
+                }
+                return `<td></td>`;
+            }).join('');
+            rows.push(`<tr class="sb-task-add-row">${addTds}</tr>`);
+
+            return `
+              <div class="sb-task-grid">
+                <table class="sb-task-table" style="width:${totalWidth}px">
+                  ${colgroup}
+                  <thead><tr>${ths}</tr></thead>
+                  <tbody>${rows.join('')}</tbody>
+                </table>
+              </div>
+            `;
+        })();
+
+        return `
+          <tr class="sb-task-row" data-project-name="${escapeHtml(name)}">
+            <td colspan="${colspan}">
+              <div class="sb-task-wrap">
+                ${head}
+                ${table}
+              </div>
+            </td>
+          </tr>
+        `;
     }
 
     _maybeUpdateRowHeight() {
@@ -769,22 +993,97 @@ export class BoardTable {
             };
         });
 
-        this._colMgr?.close?.();
-        this._colMgr = new ColumnManagerModal({
-            title: `Columns · ${this.viewType}`,
-            columns: list,
-            onSave: async (enabledList) => {
-                const config = enabledList.map(c => ({ field: c.field, label: c.label }));
+        const taskData = this._buildTaskColumnManagerData();
+        this._openUnifiedColumnsManager({
+            initialTab: 'project',
+            projectDefs: defs,
+            projectList: list,
+            projectByField: byField,
+            taskDefs: taskData.defs,
+            taskList: taskData.list,
+            taskByField: taskData.byField,
+        });
+    }
 
-                const fallbackCols = this.getDefaultColumnConfigForView().map(c => ({ field: c.field, label: c.label }));
+    openTaskColumnManager() {
+        if (!this.isBoardView(this.viewType)) return;
+
+        const taskData = this._buildTaskColumnManagerData();
+        this._openUnifiedColumnsManager({
+            initialTab: 'tasks',
+            taskDefs: taskData.defs,
+            taskList: taskData.list,
+            taskByField: taskData.byField,
+        });
+    }
+
+    _buildTaskColumnManagerData() {
+        const defs = [
+            { field: 'subject', label: 'Task', width: 320 },
+            { field: 'status', label: 'Status', width: 140 },
+            { field: 'exp_end_date', label: 'Due', width: 140 },
+            { field: 'priority', label: 'Priority', width: 120 },
+            { field: 'exp_start_date', label: 'Start', width: 140 },
+            { field: 'owner', label: 'Owner', width: 160 },
+            { field: 'modified', label: 'Updated', width: 160 },
+        ];
+
+        const currentSet = new Set((this._taskCols || []).map((c) => c.field));
+        const baseOrder = (this._taskCols || []).map((c) => c.field);
+        const rest = defs.map((d) => d.field).filter((f) => !baseOrder.includes(f));
+        const allOrder = baseOrder.concat(rest);
+        const byField = new Map(defs.map((d) => [d.field, d]));
+        const list = allOrder.map((field) => {
+            const def = byField.get(field) || { field, label: field, width: 140 };
+            return { field, label: def.label || field, enabled: currentSet.has(field) };
+        });
+        return { defs, byField, list };
+    }
+
+    _openUnifiedColumnsManager({ initialTab = 'project', projectList, projectByField, taskList, taskByField } = {}) {
+        const projList = Array.isArray(projectList) ? projectList : [];
+        const tList = Array.isArray(taskList) ? taskList : [];
+        const byT = taskByField instanceof Map ? taskByField : new Map();
+
+        this._colMgr?.close?.();
+        this._colMgr = new ColumnsManagerModal({
+            title: `Columns · ${this.viewType}`,
+            activeKey: initialTab,
+            sections: [
+                {
+                    key: 'project',
+                    label: 'Project Columns',
+                    hint: '默认在 Project Columns。勾选显示列，拖拽改变顺序（团队共享默认列）。',
+                    columns: projList,
+                },
+                {
+                    key: 'tasks',
+                    label: 'Task Columns',
+                    hint: 'Task Columns 仅影响展开后的 Tasks 子表。',
+                    columns: tList,
+                },
+            ],
+            onSave: async (out) => {
+                const enabledProject = (out?.project || []);
+                const enabledTasks = (out?.tasks || []);
+
+                const config = enabledProject.map((c) => ({ field: c.field, label: c.label }));
+                const nextTask = enabledTasks.map((c) => {
+                    const d = byT.get(c.field) || { width: 140 };
+                    return { field: c.field, label: c.label, width: d.width || 140 };
+                });
+                this._taskCols = nextTask;
+
+                const fallbackCols = this.getDefaultColumnConfigForView().map((c) => ({ field: c.field, label: c.label }));
                 const view = await ViewService.getOrCreateDefaultView(this.viewType, {
                     fallbackTitle: `${this.viewType} Board`,
                     fallbackColumns: fallbackCols
                 });
 
                 if (view?.name) {
-                    await ViewService.updateView(view.name, { columns: config });
-                    this._savedView = { ...view, columns: config };
+                    const next = { project: config, tasks: nextTask };
+                    await ViewService.updateView(view.name, { columns: next });
+                    this._setSavedViewColumnsInMemory(next);
                 }
 
                 this.columns = this.buildColumnsFromConfig(config);
@@ -793,6 +1092,26 @@ export class BoardTable {
             onClose: () => {}
         });
         this._colMgr.open();
+    }
+
+    async _handleAddTask(projectName) {
+        const name = String(projectName || '').trim();
+        if (!name) return;
+        const ok = await confirmDialog(`Add a new task to ${name}?`);
+        if (!ok) return;
+        try {
+            await ProjectService.createTask(name, { subject: 'New Task' });
+            const next = Number(this._taskCounts.get(name) || 0) + 1;
+            this._taskCounts.set(name, next);
+            const p = this._projectByName.get(name);
+            if (p) p.__sb_task_count = next;
+            this._tasksByProject.delete(name);
+            await this.ensureTasksLoaded(name);
+            notify('Task created', 'green');
+        } catch (e) {
+            console.error(e);
+            notify('Failed to create task', 'red');
+        }
     }
     
     saveColumnWidths() {

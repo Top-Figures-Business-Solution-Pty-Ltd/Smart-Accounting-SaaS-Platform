@@ -29,7 +29,7 @@
 }
 
 .board-table {
-    width: 100%;
+    width: auto; /* avoid stretching columns when total width is small */
     border-collapse: collapse;
     table-layout: fixed;
 }
@@ -72,6 +72,98 @@
     justify-content: center;
 }
 
+.sb-expand-spacer {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    text-align: center;
+    margin-right: 8px;
+    opacity: 0.28;
+    color: var(--smart-board-text-muted);
+}
+
+.sb-expand-btn {
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #111;
+    margin-right: 6px;
+    padding: 0;
+    cursor: pointer;
+    border-radius: 4px;
+    user-select: none;
+    flex: 0 0 auto;
+}
+
+.sb-expand-btn:hover {
+    background: #f1f3f5;
+    border-color: #e9ecef;
+}
+
+.sb-expand-btn--open {
+    transform: rotate(90deg);
+}
+
+.sb-expand-btn--disabled {
+    opacity: 0.35;
+    color: var(--smart-board-text-muted);
+    cursor: not-allowed;
+}
+
+.sb-expand-btn--empty {
+    opacity: 0.55;
+    color: var(--smart-board-text-muted);
+}
+
+.sb-add-task-btn {
+    border: 1px dashed var(--smart-board-border);
+    background: #ffffff;
+    color: var(--smart-board-text-muted);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.sb-add-task-btn:hover {
+    background: #f8f9fa;
+    color: var(--smart-board-text);
+}
+
+.sb-task-add-row td {
+    background: #fbfcfe;
+}
+
+.sb-task-muted {
+    color: var(--smart-board-text-muted);
+}
+
+/* Tabs for Columns modal */
+.sb-coltabs {
+    display: inline-flex;
+    gap: 6px;
+    padding: 6px 0 10px 0;
+}
+
+.sb-coltabs__tab {
+    border: 1px solid var(--smart-board-border);
+    background: #fff;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--smart-board-text-muted);
+}
+
+.sb-coltabs__tab.is-active {
+    background: #f1f4f9;
+    color: var(--smart-board-text);
+    border-color: #dbe3ef;
+}
+
 .cell-content.sb-select-row-wrap,
 .cell-content.sb-select-all-wrap {
     /* Override generic .cell-content layout for checkbox column */
@@ -89,6 +181,72 @@
     width: 18px;
     height: 18px;
     cursor: pointer;
+}
+
+/* ============================================
+   Task subtable (expand under Project row)
+   ============================================ */
+.sb-task-wrap {
+    padding: 10px 12px 14px 12px;
+    background: #fafbfc;
+    border-top: 1px solid #eef1f4;
+    /* Indent under the first data column (skip checkbox col) */
+    padding-left: calc(12px + 52px);
+}
+
+.sb-task-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.sb-task-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--smart-board-text);
+}
+
+.sb-task-grid {
+    background: #fff;
+    border: 1px solid #eef1f4;
+    border-radius: 10px;
+    overflow: hidden; /* clip table header bg + rows */
+    /* Follow main table horizontal scroll; no inner scrollbars */
+}
+
+.sb-task-table {
+    border-collapse: collapse;
+    table-layout: fixed;
+    background: #fff;
+    width: auto; /* avoid stretching when task has few columns */
+}
+
+.sb-task-table th,
+.sb-task-table td {
+    padding: 8px 10px;
+    font-size: 13px;
+    border-bottom: 1px solid #f1f3f5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-sizing: border-box;
+}
+
+.sb-task-table th {
+    background: #f8f9fa;
+    color: var(--smart-board-text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    border-bottom: 1px solid #eef1f4;
+}
+
+.sb-task-empty {
+    padding: 10px 0;
+    color: var(--smart-board-text-muted);
+    font-size: 13px;
 }
 
 .cell-content {
@@ -240,6 +398,43 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.sb-primary-cell {
+    justify-content: flex-start; /* override space-between for primary column */
+}
+
+.sb-primary-left {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    width: 100%;
+    gap: 6px;
+}
+
+.sb-primary-left .sb-primary-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.sb-primary-left .sb-update-btn {
+    margin-left: auto; /* keep updates button to the far right in primary col */
+}
+
+/* ============================================
+   Primary column highlight (dynamic first column)
+   ============================================ */
+.board-table thead th.sb-primary-col,
+.board-table tbody td.sb-primary-col {
+    background: #f7f9fc;
+}
+
+.board-table tbody tr:hover td.sb-primary-col {
+    background: #f1f4f9;
+}
+
+.board-table thead th.sb-primary-col {
+    box-shadow: inset -1px 0 0 #eef1f4; /* subtle separator like monday */
 }
 
 .sb-primary-col .sb-update-btn:hover {

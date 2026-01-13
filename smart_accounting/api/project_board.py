@@ -54,6 +54,12 @@ def _uniq_preserve_order(items: Iterable[tuple]) -> list[tuple]:
 	return out
 
 
+def _project_names_with_read_permission(names: list[str]) -> list[str]:
+	# Respect Project permissions first; this bounds all downstream queries.
+	allowed = frappe.get_all("Project", filters=[["name", "in", names]], pluck="name")
+	return [str(x) for x in (allowed or [])]
+
+
 @frappe.whitelist()
 def set_project_team_members(project: str, members: Any) -> dict:
 	"""
@@ -271,6 +277,157 @@ def bulk_set_project_team_role(projects: Any, role: str, users: Any) -> dict:
 		out[doc.name] = doc.get("custom_team_members") or []
 
 	return {"team": out}
+
+
+@frappe.whitelist()
+def get_task_counts(projects: Any) -> dict:
+	"""
+	Return Task counts per Project for Smart Board expand button.
+
+	Permission model:
+	- Only considers Projects the current user can READ.
+	- Task query uses standard permissions (no ignore_permissions).
+
+	Returns:
+	- counts: { project_name: int }
+	"""
+	_ensure_logged_in()
+	names = _normalize_list(projects)
+	names = [str(x).strip() for x in names if str(x).strip()]
+	if not names:
+		return {"counts": {}}
+
+	allowed = _project_names_with_read_permission(names)
+	if not allowed:
+		return {"counts": {}}
+
+	try:
+		rows = frappe.get_all(
+			"Task",
+			filters=[["project", "in", allowed]],
+			fields=["project"],
+			limit_page_length=100000,
+		)
+	except frappe.PermissionError:
+		return {"counts": {}}
+
+	counts = {}
+	for r in (rows or []):
+		p = r.get("project")
+		if not p:
+			continue
+		counts[p] = int(counts.get(p, 0)) + 1
+	return {"counts": counts}
+
+
+@frappe.whitelist()
+def get_tasks_for_projects(projects: Any, fields: Any = None, limit_per_project: int = 200) -> dict:
+	"""
+	Bulk fetch Tasks for a list of Projects.
+
+	- Website-safe
+	- Permission-aware:
+	  - only Projects user can read are considered
+	  - Task query uses standard permission checks (no ignore_permissions)
+
+	Args:
+	- projects: list of Project names (or JSON string)
+	- fields: list of Task fields (or JSON string). Will be filtered by allowlist.
+	- limit_per_project: max tasks returned per project (best-effort)
+
+	Returns:
+	- tasks: { project_name: [ {field: value, ...}, ... ] }
+	"""
+	_ensure_logged_in()
+	names = _normalize_list(projects)
+	names = [str(x).strip() for x in names if str(x).strip()]
+	if not names:
+		return {"tasks": {}}
+
+	allowed_projects = _project_names_with_read_permission(names)
+	if not allowed_projects:
+		return {"tasks": {}}
+
+	allowed_fields = {
+		"name",
+		"subject",
+		"status",
+		"priority",
+		"exp_start_date",
+		"exp_end_date",
+		"modified",
+		"creation",
+		"owner",
+		"project",
+		"parent_task",
+	}
+	req_fields = _normalize_list(fields)
+	req_fields = [str(x).strip() for x in req_fields if str(x).strip()]
+	# Always include name + project so we can group reliably
+	final_fields = ["name", "project"]
+	for f in req_fields:
+		if f in allowed_fields and f not in final_fields:
+			final_fields.append(f)
+	if "subject" not in final_fields:
+		final_fields.append("subject")
+
+	limit_per_project = int(limit_per_project or 200)
+	limit_per_project = max(1, min(limit_per_project, 1000))
+
+	try:
+		rows = frappe.get_all(
+			"Task",
+			filters=[["project", "in", allowed_projects]],
+			fields=final_fields,
+			order_by="modified desc",
+			limit_page_length=min(100000, limit_per_project * max(1, len(allowed_projects))),
+		)
+	except frappe.PermissionError:
+		return {"tasks": {}}
+
+	out = {p: [] for p in allowed_projects}
+	for r in (rows or []):
+		p = r.get("project")
+		if not p or p not in out:
+			continue
+		# Best-effort per-project limit
+		if len(out[p]) >= limit_per_project:
+			continue
+		out[p].append(r)
+
+	# Only return keys requested (preserve input order)
+	result = {}
+	for p in names:
+		if p in out:
+			result[p] = out[p]
+	return {"tasks": result}
+
+
+@frappe.whitelist()
+def create_task_for_project(project: str, subject: str | None = None) -> dict:
+	"""
+	Create a new Task under a Project (Smart Board "Add New Task").
+
+	- Permission-aware (no ignore_permissions)
+	- Requires logged-in user
+	"""
+	_ensure_logged_in()
+	project = str(project or "").strip()
+	if not project:
+		frappe.throw("Missing project")
+
+	allowed = _project_names_with_read_permission([project])
+	if project not in set(allowed or []):
+		frappe.throw("Not permitted")
+
+	subject = str(subject or "").strip() or "New Task"
+
+	doc = frappe.new_doc("Task")
+	doc.project = project
+	doc.subject = subject
+	doc.insert()
+
+	return {"task": {"name": doc.name, "project": doc.project, "subject": doc.subject}}
 
 @frappe.whitelist()
 def hydrate_project_children(projects: Any) -> dict:

@@ -17,7 +17,9 @@ export function renderHeaderCells(columns) {
       data-field="${col.field}"
     >
       ${col.field === '__sb_select'
-        ? `<div class="cell-content sb-select-all-wrap"><input type="checkbox" class="sb-select-all" aria-label="Select all rows" /></div>`
+        ? `<div class="cell-content sb-select-all-wrap">
+             <input type="checkbox" class="sb-select-all" aria-label="Select all rows" />
+           </div>`
         : `<div class="cell-content">
             <span class="cell-label">${col.label}</span>
             ${col.sortable !== false ? '<span class="sort-icon"></span>' : ''}
@@ -28,7 +30,7 @@ export function renderHeaderCells(columns) {
   `).join('');
 }
 
-export function renderRows(projects, columns, onRowClick, rowsOut, { isSelected } = {}) {
+export function renderRows(projects, columns, onRowClick, rowsOut, { isSelected, isExpanded, expandedRowHTML } = {}) {
   if (!projects || projects.length === 0) {
     return '<tr><td colspan="100"><div class="no-data">No projects found</div></td></tr>';
   }
@@ -40,7 +42,12 @@ export function renderRows(projects, columns, onRowClick, rowsOut, { isSelected 
       isSelected: typeof isSelected === 'function' ? isSelected : null,
     });
     rowsOut?.push(row);
-    return row.getHTML();
+    const base = row.getHTML();
+    const exp = (typeof isExpanded === 'function' && isExpanded(project)) ? true : false;
+    if (exp && typeof expandedRowHTML === 'function') {
+      return base + expandedRowHTML(project, columns);
+    }
+    return base;
   }).join('');
 }
 

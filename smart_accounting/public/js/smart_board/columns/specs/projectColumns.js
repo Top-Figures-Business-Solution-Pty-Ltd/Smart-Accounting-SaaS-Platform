@@ -341,16 +341,9 @@ export function makeProjectColumnSpecs() {
     {
       field: 'customer',
       isEditable: false,
-      cellClass: 'sb-primary-col',
       renderCell: ({ project }) => {
         const text = escapeHtml(project?.customer || '—');
-        const pn = escapeHtml(project?.name || '');
-        return `
-          <span class="sb-primary-text">${text}</span>
-          <button type="button" class="sb-update-btn" data-project-name="${pn}" aria-label="Open updates" title="Updates">
-            💬
-          </button>
-        `;
+        return `<span class="sb-primary-text">${text}</span>`;
       }
     },
 

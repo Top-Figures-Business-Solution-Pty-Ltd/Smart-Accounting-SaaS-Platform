@@ -220,6 +220,45 @@ export class ProjectService {
         });
         return r?.message || { updated: [] };
     }
+
+    static async getTaskCounts(projects) {
+        const names = Array.isArray(projects) ? projects : [];
+        if (!names.length) return {};
+        try {
+            const r = await frappe.call({
+                method: 'smart_accounting.api.project_board.get_task_counts',
+                args: { projects: names }
+            });
+            return r?.message?.counts || {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    static async getTasksForProjects(projects, fields = [], limitPerProject = 200) {
+        const names = Array.isArray(projects) ? projects : [];
+        if (!names.length) return {};
+        try {
+            const r = await frappe.call({
+                method: 'smart_accounting.api.project_board.get_tasks_for_projects',
+                args: { projects: names, fields, limit_per_project: limitPerProject }
+            });
+            return r?.message?.tasks || {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    static async createTask(project, data = {}) {
+        const p = String(project || '').trim();
+        if (!p) throw new Error('Missing project');
+        const subject = data?.subject != null ? String(data.subject) : null;
+        const r = await frappe.call({
+            method: 'smart_accounting.api.project_board.create_task_for_project',
+            args: { project: p, subject }
+        });
+        return r?.message?.task || r?.message;
+    }
     
     /**
      * 构建筛选条件

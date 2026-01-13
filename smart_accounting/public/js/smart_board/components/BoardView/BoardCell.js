@@ -19,17 +19,53 @@ export class BoardCell {
         const formattedValue = override != null ? override : this.formatValue(value);
         const isEditable = this.isEditableField();
         const extraClass = columnRegistry.getCellClass({ project: this.project, column: this.column });
+        const staticClass = this.column.__cellClass || '';
         const left = (this.column.frozen && this.column._stickyLeft != null) ? ` left: ${this.column._stickyLeft}px;` : '';
-        
-        return `
-            <td 
-                class="board-table-cell ${this.column.frozen ? 'frozen' : ''} ${isEditable ? 'editable' : ''} ${extraClass}"
-                data-field="${this.column.field}"
-                style="${left}"
-            >
+
+        // Task expander lives in the primary (first) user-selected column, NOT in the checkbox column
+        let cellInnerHTML = `
                 <div class="cell-content">
                     ${formattedValue}
                 </div>
+        `;
+        if (this.column.__isPrimary) {
+            const taskCount = Number(this.project?.__sb_task_count || 0);
+            const expanded = !!this.project?.__sb_expanded;
+            const pn = this.escapeHtml(this.project?.name || '');
+            const isEmpty = taskCount <= 0;
+            const expandTitle = expanded ? 'Collapse tasks' : (isEmpty ? 'Show tasks (no tasks yet)' : 'Expand tasks');
+            const expander = `
+                <button
+                    type="button"
+                    class="sb-expand-btn ${isEmpty ? 'sb-expand-btn--empty' : ''} ${expanded ? 'sb-expand-btn--open' : ''}"
+                    data-project-name="${pn}"
+                    aria-label="${expandTitle}"
+                    title="${expandTitle}"
+                >▸</button>
+            `;
+            const updatesBtn = `
+                <button type="button" class="sb-update-btn" data-project-name="${pn}" aria-label="Open updates" title="Updates">
+                    💬
+                </button>
+            `;
+            cellInnerHTML = `
+                <div class="cell-content sb-primary-cell">
+                    <div class="sb-primary-left">
+                        ${expander}
+                        ${formattedValue}
+                        ${updatesBtn}
+                    </div>
+                </div>
+            `;
+        }
+        
+        return `
+            <td 
+                class="board-table-cell ${this.column.frozen ? 'frozen' : ''} ${isEditable ? 'editable' : ''} ${staticClass} ${extraClass}"
+                data-field="${this.column.field}"
+                style="${left}"
+            >
+                ${cellInnerHTML}
             </td>
         `;
     }
