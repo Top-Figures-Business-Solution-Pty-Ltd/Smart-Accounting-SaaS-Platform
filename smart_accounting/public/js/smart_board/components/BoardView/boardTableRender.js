@@ -1,10 +1,19 @@
 import { BoardRow } from './BoardRow.js';
 
+export function renderColGroup(columns) {
+  const cols = Array.isArray(columns) ? columns : [];
+  return `
+    <colgroup>
+      ${cols.map((c) => `<col data-field="${c.field}" style="width:${Number(c.width) || 0}px;" />`).join('')}
+    </colgroup>
+  `;
+}
+
 export function renderHeaderCells(columns) {
   return columns.map(col => `
     <th 
       class="board-table-cell ${col.frozen ? 'frozen' : ''} ${col.__headerClass || ''} ${col.field === '__sb_select' ? 'sb-select-col' : ''}"
-      style="width: ${col.width}px;${col.frozen && col._stickyLeft != null ? ` left:${col._stickyLeft}px;` : ''}"
+      style="${col.frozen && col._stickyLeft != null ? ` left:${col._stickyLeft}px;` : ''}"
       data-field="${col.field}"
     >
       ${col.field === '__sb_select'

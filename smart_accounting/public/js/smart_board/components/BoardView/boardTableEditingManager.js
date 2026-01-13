@@ -11,12 +11,16 @@
  * - BoardTable should avoid re-rendering rows while editing; on scroll it can force commit+close.
  */
 import { columnRegistry } from '../../columns/registry.js';
+import { ProjectService } from '../../services/projectService.js';
+import { notify } from '../../services/uiAdapter.js';
 
 export class EditingManager {
-  constructor({ rootEl, store, getProjectByName } = {}) {
+  constructor({ rootEl, store, getProjectByName, getSelectedProjectNames, bulkEditableFields } = {}) {
     this.rootEl = rootEl;
     this.store = store;
     this.getProjectByName = getProjectByName || (() => null);
+    this.getSelectedProjectNames = typeof getSelectedProjectNames === 'function' ? getSelectedProjectNames : (() => []);
+    this.bulkEditableFields = Array.isArray(bulkEditableFields) ? bulkEditableFields : [];
 
     this._active = null; // { cellEl, projectName, field, originalHTML, originalValue }
     this._committing = false;
@@ -206,14 +210,59 @@ export class EditingManager {
 
       // Default commit path: projects/updateProjectField (uses frappe.client.set_value)
       // Optional confirm hook for some columns (e.g. Lodgement Due)
+      const selected = (this.getSelectedProjectNames?.() || []).filter(Boolean);
+      const allowAll = !Array.isArray(this.bulkEditableFields) || this.bulkEditableFields.length === 0;
+      const isBulkField = allowAll ? true : this.bulkEditableFields.includes(field);
+      const doBulk = isBulkField && selected.length > 1 && selected.includes(projectName);
+
       try {
         const spec = columnRegistry.getSpec(field);
         const confirmFn = spec?.confirmCommit;
         if (typeof confirmFn === 'function') {
-          const ok = await confirmFn({ project, field, value, reason });
+          // Confirm once for bulk operations (avoid N dialogs).
+          const ok = await confirmFn({ project, field, value, reason, isBulk: doBulk, bulkCount: selected.length });
           if (!ok) return;
         }
       } catch (e) {}
+
+      // Bulk inline sync (Monday-like): apply same value to all selected rows.
+      // Safety gates:
+      // - if bulkEditableFields is empty => treat as "all fields"
+      // - only when the edited row is itself selected
+      // - skip explicitly opted-out fields (spec.bulkSync === false)
+      if (doBulk) {
+        const spec = columnRegistry.getSpec(field);
+        if (spec?.bulkSync === false) {
+          // Explicitly opted out (e.g. attachments / unique per-row fields)
+        } else {
+          // If the column defines a custom commit (child tables / derived fields),
+          // run it once per selected project so semantics stay correct.
+          if (spec && typeof spec.commit === 'function') {
+            // Fast-path: if spec provides commitBulk, use ONE request.
+            if (typeof spec.commitBulk === 'function') {
+              await spec.commitBulk({ projects: selected, projectName, project, field, value, reason, store: this.store });
+              notify(`Updated ${selected.length} projects`, 'green');
+              return;
+            }
+            // Fallback: call commit once per project
+            for (const name of selected) {
+              const p2 = this.getProjectByName(name);
+              if (!p2) continue;
+              await spec.commit({ project: p2, projectName: name, field, value, reason, store: this.store });
+            }
+            notify(`Updated ${selected.length} projects`, 'green');
+            return;
+          }
+
+          // Simple field: one request bulk update
+          await ProjectService.bulkSetProjectField(selected, field, value);
+          for (const name of selected) {
+            this.store?.commit?.('projects/updateProject', { name, [field]: value });
+          }
+          notify(`Updated ${selected.length} projects`, 'green');
+          return;
+        }
+      }
 
       // Allow per-column custom commit (complex fields / derived columns).
       // If not provided, fall back to store action (frappe.client.set_value).

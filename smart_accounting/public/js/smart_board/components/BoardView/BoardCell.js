@@ -25,7 +25,7 @@ export class BoardCell {
             <td 
                 class="board-table-cell ${this.column.frozen ? 'frozen' : ''} ${isEditable ? 'editable' : ''} ${extraClass}"
                 data-field="${this.column.field}"
-                style="width: ${this.column.width}px;${left}"
+                style="${left}"
             >
                 <div class="cell-content">
                     ${formattedValue}

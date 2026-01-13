@@ -358,6 +358,8 @@ export function makeProjectColumnSpecs() {
     {
       field: 'project_name',
       isEditable: true,
+      // Do NOT bulk-sync project_name; it is typically unique per row.
+      bulkSync: false,
       renderEditor: ({ cellEl, project, manager, field }) => {
         const contentEl = cellEl.querySelector('.cell-content') || cellEl;
         const ed = new InlineTextEditor(contentEl, { initialValue: project?.[field] || '' });
@@ -525,12 +527,30 @@ export function makeProjectColumnSpecs() {
         // Update store for UI refresh
         if (store?.commit) store.commit('projects/updateProject', { name: projectName, custom_softwares: updated });
       }
+      ,
+      async commitBulk({ projects, value, store }) {
+        const names = Array.isArray(projects) ? projects.filter(Boolean) : [];
+        const softwares = Array.isArray(value) ? value : [];
+        if (!names.length) return;
+        const r = await frappe.call({
+          method: 'smart_accounting.api.project_board.bulk_set_project_softwares',
+          args: { projects: names, softwares }
+        });
+        const msg = r?.message || {};
+        const map = msg?.softwares || {};
+        for (const p of names) {
+          const updated = map?.[p] || [];
+          if (store?.commit) store.commit('projects/updateProject', { name: p, custom_softwares: updated });
+        }
+      }
     },
 
     // (18) Engagement Letter - Attach (upload via Frappe builtin)
     {
       field: 'custom_engagement_letter',
       isEditable: true,
+      // Attach upload should not be bulk-synced by default (would copy the same file_url to many Projects).
+      bulkSync: false,
       renderCell: ({ project }) => {
         const v = project?.custom_engagement_letter;
         if (!v) return '<span class="text-muted">—</span><span class="sb-afford sb-afford--select">Upload</span>';
@@ -576,6 +596,23 @@ export function makeProjectColumnSpecs() {
         const msg = r?.message || {};
         const updated = msg?.custom_team_members || [];
         if (store?.commit) store.commit('projects/updateProject', { name: projectName, custom_team_members: updated });
+      }
+      ,
+      async commitBulk({ projects, field, value, store }) {
+        const role = String(field || '').slice('team:'.length);
+        const names = Array.isArray(projects) ? projects.filter(Boolean) : [];
+        const users = Array.isArray(value) ? value : [];
+        if (!role || !names.length) return;
+        const r = await frappe.call({
+          method: 'smart_accounting.api.project_board.bulk_set_project_team_role',
+          args: { projects: names, role, users }
+        });
+        const msg = r?.message || {};
+        const map = msg?.team || {};
+        for (const p of names) {
+          const updated = map?.[p] || [];
+          if (store?.commit) store.commit('projects/updateProject', { name: p, custom_team_members: updated });
+        }
       }
     },
   ];

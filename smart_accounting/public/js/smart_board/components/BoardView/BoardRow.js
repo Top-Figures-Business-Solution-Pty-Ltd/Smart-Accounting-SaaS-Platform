@@ -42,7 +42,7 @@ export class BoardRow {
                 <td
                     class="board-table-cell ${column.frozen ? 'frozen' : ''} sb-select-col"
                     data-field="__sb_select"
-                    style="width: ${column.width}px;${left}"
+                    style="${left}"
                 >
                     <div class="cell-content sb-select-row-wrap">
                         <input type="checkbox" class="sb-row-select" data-project-name="${this.project.name}" ${checked ? 'checked' : ''} aria-label="Select row" />

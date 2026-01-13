@@ -80,7 +80,7 @@ Smart Accounting 是一个专为会计事务所设计的 SaaS 项目管理平台
 - ✅ 多 Site 架构实现租户隔离
 
 **数据模型**：
-- Project: 7 个扩展字段（v8.2）
+- Project: 8 个扩展字段（v8.2+，包含 Engagement Letter）
 - Task: 2 个扩展字段（v8.0+）
 - Customer: 2 个扩展字段（v8.1+）
 - Contact: 3 个扩展字段

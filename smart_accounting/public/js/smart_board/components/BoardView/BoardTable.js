@@ -4,7 +4,7 @@
  */
 
 import { DEFAULT_COLUMNS, PROJECT_COLUMN_CATALOG } from '../../utils/constants.js';
-import { renderHeaderCells, renderRows } from './boardTableRender.js';
+import { renderColGroup, renderHeaderCells, renderRows } from './boardTableRender.js';
 import { initResizable } from './boardTableResize.js';
 import { loadColumnWidths, saveColumnWidths } from './boardTableStorage.js';
 import { shouldVirtualize, computeWindow, spacerRow } from './boardTableVirtualization.js';
@@ -15,6 +15,8 @@ import { EditingManager } from './boardTableEditingManager.js';
 import { columnRegistry } from '../../columns/registry.js';
 import { UpdatesModal } from './UpdatesModal.js';
 import { buildRowModel } from './rowModel.js';
+import { ProjectService } from '../../services/projectService.js';
+import { confirmDialog } from '../../services/uiAdapter.js';
 
 export class BoardTable {
     constructor(container, options = {}) {
@@ -34,6 +36,8 @@ export class BoardTable {
         this._teamRoles = null;
         this._openingColMgr = false;
         this._editing = null;
+        this._bulkWorking = false;
+        this._onBulkBarClick = null;
 
         // Bulk selection (system column)
         this._selected = new Set(); // project.name
@@ -169,6 +173,7 @@ export class BoardTable {
                 <!-- Table Header -->
                 <div class="board-table-header">
                     <table class="board-table">
+                        ${renderColGroup(this._renderColumns)}
                         <thead>
                             <tr>
                                 ${renderHeaderCells(this._renderColumns)}
@@ -180,11 +185,24 @@ export class BoardTable {
                 <!-- Table Body (Scrollable) -->
                 <div class="board-table-body" id="boardTableBody">
                     <table class="board-table">
+                        ${renderColGroup(this._renderColumns)}
                         <tbody id="tableBody">
                             ${this.renderRows()}
                         </tbody>
                     </table>
                 </div>
+            </div>
+            <div class="sb-bulkbar" id="sbBulkBar" style="display:none;">
+              <div class="sb-bulkbar__inner">
+                <div class="sb-bulkbar__left">
+                  <span class="sb-bulkbar__count"><span id="sbBulkCount">0</span> selected</span>
+                </div>
+                <div class="sb-bulkbar__actions">
+                  <button type="button" class="btn btn-default btn-sm" data-action="bulk-archive">Archive</button>
+                  <button type="button" class="btn btn-danger btn-sm" data-action="bulk-delete">Delete</button>
+                  <button type="button" class="btn btn-light btn-sm" data-action="bulk-clear">Clear</button>
+                </div>
+              </div>
             </div>
         `;
         
@@ -252,6 +270,7 @@ export class BoardTable {
 
         // Bulk select events
         this.bindBulkSelect();
+        this.bindBulkBar();
 
         // Virtual scroll
         this.bindScroll();
@@ -312,6 +331,20 @@ export class BoardTable {
 
     initResizable() {
         initResizable(this.container, {
+            onWidthChange: (field, width) => {
+                // Keep in-memory columns config in sync so future renders keep the new width.
+                const w = Number(width) || 0;
+                if (!field || !w) return;
+
+                const updateList = (list) => {
+                    if (!Array.isArray(list)) return;
+                    const col = list.find((c) => c?.field === field);
+                    if (col) col.width = w;
+                };
+
+                updateList(this.columns);
+                updateList(this._renderColumns);
+            },
             onWidthChangeDone: () => this.saveColumnWidths()
         });
     }
@@ -325,7 +358,10 @@ export class BoardTable {
             this._editing = new EditingManager({
                 rootEl: this.container,
                 store: this.store,
-                getProjectByName: (name) => this._projectByName.get(name) || null
+                getProjectByName: (name) => this._projectByName.get(name) || null,
+                // Inline bulk sync: default apply to ALL editable fields unless explicitly opted-out by spec.bulkSync === false
+                getSelectedProjectNames: () => Array.from(this._selected || []),
+                bulkEditableFields: [],
             });
         }
         this._editing.bindToTbody(tbody);
@@ -336,7 +372,7 @@ export class BoardTable {
         const selectCol = {
             field: '__sb_select',
             label: '',
-            width: 44,
+            width: 52,
             frozen: true,
             sortable: false
         };
@@ -367,6 +403,7 @@ export class BoardTable {
                 const checked = !!e.target.checked;
                 this._setAllSelected(checked);
                 this.updateSelectAllCheckbox();
+                this.updateBulkBar();
                 this.scheduleRowsUpdate();
             });
         }
@@ -380,6 +417,7 @@ export class BoardTable {
                 if (cb.checked) this._selected.add(name);
                 else this._selected.delete(name);
                 this.updateSelectAllCheckbox();
+                this.updateBulkBar();
                 // Update row highlight without full rerender
                 const row = cb.closest('tr');
                 if (row) row.classList.toggle('selected', cb.checked);
@@ -388,6 +426,7 @@ export class BoardTable {
 
         // Initial state
         this.updateSelectAllCheckbox();
+        this.updateBulkBar();
     }
 
     _setAllSelected(checked) {
@@ -407,6 +446,133 @@ export class BoardTable {
         const selectedCount = (this.projects || []).reduce((acc, p) => acc + (this._selected.has(p?.name) ? 1 : 0), 0);
         headerCb.indeterminate = selectedCount > 0 && selectedCount < total;
         headerCb.checked = total > 0 && selectedCount === total;
+    }
+
+    updateBulkBar() {
+        const bar = this.container.querySelector('#sbBulkBar');
+        const countEl = this.container.querySelector('#sbBulkCount');
+        if (!bar || !countEl) return;
+        const n = this._selected?.size || 0;
+        countEl.textContent = String(n);
+        bar.style.display = n > 0 ? 'block' : 'none';
+
+        // Disable buttons while a bulk action is running
+        bar.querySelectorAll('button[data-action]')?.forEach?.((btn) => {
+            btn.disabled = !!this._bulkWorking;
+        });
+    }
+
+    bindBulkBar() {
+        const bar = this.container.querySelector('#sbBulkBar');
+        if (!bar) return;
+
+        if (this._onBulkBarClick) {
+            bar.removeEventListener('click', this._onBulkBarClick);
+            this._onBulkBarClick = null;
+        }
+
+        this._onBulkBarClick = (e) => {
+            const btn = e.target?.closest?.('button[data-action]');
+            const action = btn?.dataset?.action;
+            if (!action) return;
+            e.preventDefault();
+            e.stopPropagation();
+            this._handleBulkAction(action);
+        };
+        bar.addEventListener('click', this._onBulkBarClick);
+        this.updateBulkBar();
+    }
+
+    _getSelectedNames() {
+        return Array.from(this._selected || []).filter(Boolean);
+    }
+
+    _clearSelection() {
+        this._selected.clear();
+        this.updateSelectAllCheckbox();
+        this.updateBulkBar();
+        this.scheduleRowsUpdate();
+    }
+
+    async _handleBulkAction(action) {
+        if (this._bulkWorking) return;
+        const names = this._getSelectedNames();
+        if (!names.length) return;
+
+        if (action === 'bulk-clear') {
+            this._clearSelection();
+            return;
+        }
+
+        if (action === 'bulk-archive') {
+            const ok = await confirmDialog(`Archive ${names.length} projects? (Set is_active = No)`);
+            if (!ok) return;
+            await this._bulkUpdateField({ field: 'is_active', value: 'No', removeFromListIfFiltered: true });
+            return;
+        }
+
+        if (action === 'bulk-delete') {
+            const ok = await confirmDialog(`Delete ${names.length} projects? This cannot be undone.`);
+            if (!ok) return;
+            await this._bulkDelete();
+            return;
+        }
+    }
+
+    async _bulkUpdateField({ field, value, removeFromListIfFiltered } = {}) {
+        const names = this._getSelectedNames();
+        if (!names.length) return;
+        this._bulkWorking = true;
+        this.updateBulkBar();
+        try {
+            // Update backend
+            for (const name of names) {
+                await ProjectService.updateProject(name, { [field]: value });
+            }
+
+            // Update store/UI immediately
+            const isActiveFiltered = this.store?.getState?.()?.filters?.is_active !== false;
+            for (const name of names) {
+                if (field === 'is_active' && removeFromListIfFiltered && isActiveFiltered && String(value) !== 'Yes') {
+                    this.store?.commit?.('projects/removeProject', name);
+                } else {
+                    this.store?.commit?.('projects/updateProject', { name, [field]: value });
+                }
+            }
+
+            // Keep selection for now (user may want more actions). If rows were removed, clear selection.
+            if (field === 'is_active' && removeFromListIfFiltered && this.store?.getState?.()?.filters?.is_active !== false && String(value) !== 'Yes') {
+                this._clearSelection();
+            } else {
+                this.scheduleRowsUpdate();
+            }
+        } catch (e) {
+            console.error(e);
+            notify('Bulk update failed', 'red');
+        } finally {
+            this._bulkWorking = false;
+            this.updateBulkBar();
+        }
+    }
+
+    async _bulkDelete() {
+        const names = this._getSelectedNames();
+        if (!names.length) return;
+        this._bulkWorking = true;
+        this.updateBulkBar();
+        try {
+            for (const name of names) {
+                await ProjectService.deleteProject(name);
+                this.store?.commit?.('projects/removeProject', name);
+            }
+            this._clearSelection();
+        } catch (e) {
+            console.error(e);
+            notify('Bulk delete failed', 'red');
+        } finally {
+            this._bulkWorking = false;
+            this.updateBulkBar();
+        }
     }
     
     editCell(cell) {
@@ -489,6 +655,7 @@ export class BoardTable {
             (this._rowModel?.all?.() || this.projects || []).forEach((p) => this._prepareProjectDerivedCaches(p));
             tbody.innerHTML = this.renderRows();
             this.updateSelectAllCheckbox();
+            this.updateBulkBar();
             this._maybeUpdateRowHeight();
             return;
         }
@@ -517,6 +684,7 @@ export class BoardTable {
         );
         tbody.innerHTML = spacerRow(topPad) + rowsHtml + spacerRow(bottomPad);
         this.updateSelectAllCheckbox();
+        this.updateBulkBar();
         this._maybeUpdateRowHeight();
     }
 

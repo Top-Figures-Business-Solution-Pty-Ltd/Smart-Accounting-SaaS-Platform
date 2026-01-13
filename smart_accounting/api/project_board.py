@@ -148,6 +148,130 @@ def set_project_softwares(project: str, softwares: Any) -> dict:
 		"custom_softwares": doc.get("custom_softwares") or [],
 	}
 
+
+@frappe.whitelist()
+def bulk_set_project_field(projects: Any, field: str, value: Any) -> dict:
+	"""
+	Bulk update a single field across many Projects (single request).
+
+	- Permission-aware: checks write permission per Project.
+	- Field must exist on Project; otherwise save() will raise.
+
+	Returns:
+	- updated: list of project names updated
+	"""
+	_ensure_logged_in()
+	names = _normalize_list(projects)
+	names = [str(x).strip() for x in names if str(x).strip()]
+	field = (field or "").strip()
+	if not names:
+		return {"updated": []}
+	if not field:
+		frappe.throw("Missing field")
+
+	updated: list[str] = []
+	for name in names:
+		doc = frappe.get_doc("Project", name)
+		_ensure_write_permission(doc)
+		doc.set(field, value)
+		doc.save()
+		updated.append(doc.name)
+
+	return {"updated": updated}
+
+
+@frappe.whitelist()
+def bulk_set_project_softwares(projects: Any, softwares: Any) -> dict:
+	"""
+	Bulk replace Project.custom_softwares (Table MultiSelect) for many Projects.
+	Same softwares list is applied to all selected Projects.
+
+	Returns:
+	- softwares: { project_name: [ {software: str}, ... ] }
+	"""
+	_ensure_logged_in()
+	names = _normalize_list(projects)
+	names = [str(x).strip() for x in names if str(x).strip()]
+	if not names:
+		return {"softwares": {}}
+
+	rows = _normalize_list(softwares)
+	values: list[str] = []
+	for x in rows:
+		if isinstance(x, str):
+			v = x.strip()
+		elif isinstance(x, dict):
+			v = str(x.get("software") or "").strip()
+		else:
+			v = ""
+		if v:
+			values.append(v)
+	values = [v for (v,) in _uniq_preserve_order([(v,) for v in values])]
+	# canonical child row shape for UI
+	child_rows = [{"software": v} for v in values]
+
+	out = {}
+	for name in names:
+		doc = frappe.get_doc("Project", name)
+		_ensure_write_permission(doc)
+		doc.set("custom_softwares", [])
+		for v in values:
+			doc.append("custom_softwares", {"software": v})
+		doc.save()
+		out[doc.name] = doc.get("custom_softwares") or child_rows
+
+	return {"softwares": out}
+
+
+@frappe.whitelist()
+def bulk_set_project_team_role(projects: Any, role: str, users: Any) -> dict:
+	"""
+	Bulk update ONE role column (team:<Role>) across many Projects.
+	We replace only rows where custom_team_members.role == role, and keep other roles.
+
+	Returns:
+	- team: { project_name: [ {user, role, assigned_date}, ... ] }
+	"""
+	_ensure_logged_in()
+	names = _normalize_list(projects)
+	names = [str(x).strip() for x in names if str(x).strip()]
+	role = (role or "").strip()
+	if not names:
+		return {"team": {}}
+	if not role:
+		frappe.throw("Missing role")
+
+	rows = _normalize_list(users)
+	users_clean = [str(x).strip() for x in rows if str(x).strip()]
+	users_clean = [u for (u,) in _uniq_preserve_order([(u,) for u in users_clean])]
+
+	out = {}
+	for name in names:
+		doc = frappe.get_doc("Project", name)
+		_ensure_write_permission(doc)
+
+		existing = doc.get("custom_team_members") or []
+		kept = []
+		for m in existing:
+			if str(getattr(m, "role", "") or "").strip() != role:
+				kept.append({"user": getattr(m, "user", None), "role": getattr(m, "role", None), "assigned_date": getattr(m, "assigned_date", None)})
+
+		doc.set("custom_team_members", [])
+		# re-add kept (preserve assigned_date where possible)
+		for m in kept:
+			if not m.get("user") or not m.get("role"):
+				continue
+			doc.append("custom_team_members", m)
+
+		# set role users
+		for u in users_clean:
+			doc.append("custom_team_members", {"user": u, "role": role, "assigned_date": today()})
+
+		doc.save()
+		out[doc.name] = doc.get("custom_team_members") or []
+
+	return {"team": out}
+
 @frappe.whitelist()
 def hydrate_project_children(projects: Any) -> dict:
 	"""

@@ -61,7 +61,7 @@
    Bulk select system column
    ============================================ */
 .sb-select-col {
-    width: 44px;
+    width: 52px;
     text-align: center;
 }
 
@@ -72,10 +72,22 @@
     justify-content: center;
 }
 
+.cell-content.sb-select-row-wrap,
+.cell-content.sb-select-all-wrap {
+    /* Override generic .cell-content layout for checkbox column */
+    justify-content: center;
+}
+
+.board-table thead th.sb-select-col,
+.board-table tbody td.sb-select-col {
+    /* Remove default cell padding so checkbox stays square */
+    padding: 0;
+}
+
 .sb-row-select,
 .sb-select-all {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     cursor: pointer;
 }
 
@@ -185,6 +197,43 @@
 
 .board-table tbody td.sb-primary-col:hover .sb-update-btn {
     opacity: 1;
+}
+
+/* ============================================
+   Bulk action bar (Monday-like)
+   ============================================ */
+.sb-bulkbar {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    z-index: 9999;
+    pointer-events: none; /* only inner should receive clicks */
+}
+
+.sb-bulkbar__inner {
+    pointer-events: auto;
+    background: #ffffff;
+    border: 1px solid var(--smart-board-border);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 320px;
+}
+
+.sb-bulkbar__count {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--smart-board-text);
+}
+
+.sb-bulkbar__actions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
 }
 
 .sb-primary-text {

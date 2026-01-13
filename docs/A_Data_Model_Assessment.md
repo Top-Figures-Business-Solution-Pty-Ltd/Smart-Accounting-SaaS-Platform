@@ -350,7 +350,7 @@ flowchart TB
 
 ```
 Step 1: 创建子表DocType
-        └── Customer Entity 子表（4个字段：entity_name, entity_type, abn, year_end, is_primary）
+        └── Customer Entity 子表（5个字段：entity_name, entity_type, abn, year_end, is_primary）
 
 Step 2: 基础层扩展
         ├── Customer 扩展（2个字段：custom_referred_by, custom_entities → Customer Entity）
@@ -358,7 +358,7 @@ Step 2: 基础层扩展
 
 Step 3: 核心层扩展
         ├── 创建 Project Team Member 子表（3个字段：user, role, assigned_date）
-        ├── Project 扩展（7个扩展字段：custom_entity_type, custom_team_members, custom_fiscal_year, custom_target_month, custom_lodgement_due_date, custom_project_frequency, custom_softwares）
+        ├── Project 扩展（8个扩展字段：custom_entity_type, custom_team_members, custom_fiscal_year, custom_target_month, custom_lodgement_due_date, custom_project_frequency, custom_softwares, custom_engagement_letter）
         ├── Task 扩展（2个扩展字段：custom_fiscal_year, custom_period + 利用原生时间/工时/成本字段）
         └── Project Auto Repeat 钩子（after_insert/validate方法：自动创建和同步Auto Repeat）
 
@@ -522,13 +522,14 @@ class CustomProject(Project):
 
 ## `custom_softwares` 字段现状与决策提醒（2026-01）
 
-当前 Smart Board 前端在拉取 Project 列表时会请求 `custom_softwares` 字段（用于 Software 列展示），但实施清单（Document E）提示：**fixtures / site meta 可能尚未包含该字段**。
+当前 Smart Board 前端会请求 `Project.custom_softwares` 字段（用于 Software 列展示与编辑）。
 
-建议在数据模型层明确最终方案（避免前后端长期漂移）：
-- 方案 1（推荐，最贴合 UI）：`custom_softwares` 使用 **Table MultiSelect → Software**
-- 方案 2：使用子表 DocType（如 `Project Software`）并在 Project 上挂 Table
+**已确定实现（以代码与 fixtures 为准）**：
+- `Project.custom_softwares` 使用 **Table MultiSelect**
+- Customize Form 中该字段的 **Options = `Project Software`**（子表 DocType）
+- `Project Software` 子表中有字段 `software`（Link → `Software`）
 
-> 一旦确定方案，请同步更新：Custom Field/DocType fixtures、Smart Board `ProjectService.fetchProjects()` 取数字段、以及 UI 显示/编辑逻辑。
+> 这对应 ERPNext/Frappe 的 Table MultiSelect 标准存储方式：Project 存子表行，子表行 Link 指向实际 `Software` 记录。
 
 ### 3.2 Task（任务/子任务）
 
@@ -932,7 +933,7 @@ GROUP BY tm.user
 | **Customer** | `custom_referred_by` | Link → Contact | ✅ 已确认 | 推荐人 |
 | | `custom_entities` | Table → Customer Entity | ✅ v8.1新增 | 客户的多个实体（子表）|
 | **Contact** | `custom_is_referrer` | Check | ✅ 已确认 | 标记是否为推荐人 |
-| | `custom_contact_role` | Select | ✅ 已确认 | 联系人角色（Director/Accountant/...）|
+| | `custom_contact_role` | Select | 💤 可选（当前未使用，可延后） | 联系人角色（Director/Accountant/...）|
 | | `custom_social_accounts` | JSON | ✅ 已确认 | 社交账号（灵活存储多平台）|
 | **Company** | - | - | ✅ 已确认 | 保持原生，无需扩展 |
 | **User** | - | - | ✅ 已确认 | 保持原生，无需扩展 |
@@ -952,7 +953,7 @@ GROUP BY tm.user
 
 **在Project中使用**：
 ```
-Project.custom_softwares → Table MultiSelect → Software
+Project.custom_softwares → Table MultiSelect（Options=`Project Software`）→ `Project Software.software` → Software
 ```
 
 **优势**：

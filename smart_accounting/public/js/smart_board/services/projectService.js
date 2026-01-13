@@ -207,6 +207,19 @@ export class ProjectService {
     static async deleteProject(name) {
         return ApiService.deleteDoc('Project', name);
     }
+
+    /**
+     * Bulk update a single field across many Projects (single request).
+     */
+    static async bulkSetProjectField(projects, field, value) {
+        const names = Array.isArray(projects) ? projects : [];
+        if (!names.length) return { updated: [] };
+        const r = await frappe.call({
+            method: 'smart_accounting.api.project_board.bulk_set_project_field',
+            args: { projects: names, field, value }
+        });
+        return r?.message || { updated: [] };
+    }
     
     /**
      * 构建筛选条件

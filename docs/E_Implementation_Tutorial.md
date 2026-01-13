@@ -55,7 +55,7 @@
    - Phase 2: Customer & Contact 扩展
    - Phase 2.5: 创建 Project Team Member 子表 DocType
    - Phase 3: 创建 Software DocType
-   - Phase 4: Project 扩展（7字段）
+   - Phase 4: Project 扩展（8字段）
    - Phase 5: Task 扩展（2字段）
    - Phase 6: 创建 Saved View DocType
    - Phase 7: 配置 Status 选项和动态过滤
@@ -127,14 +127,14 @@
 
 | Fieldtype | 用途 | 示例 |
 |-----------|------|------|
-| `Data` | 单行文本 | custom_team_members |
+| `Data` | 单行文本 | custom_entity_type |
 | `Select` | 下拉选择 | custom_target_month |
 | `Link` | 链接到其他 DocType | custom_referred_by → Contact |
 | `Date` | 日期 | custom_lodgement_due_date |
 | `Check` | 复选框 | custom_is_referrer |
 | `Text` | 多行纯文本 | custom_notes |
 | `Text Editor` | 多行富文本 | notes（原生）|
-| `JSON` | JSON 数据 | custom_team |
+| `JSON` | JSON 数据 | custom_social_accounts |
 | `Table MultiSelect` | 多选 | custom_softwares → Project Software → Software |
 
 ### 2.4 字段属性说明
@@ -300,6 +300,9 @@ Completed
 | Contact Role | `custom_contact_role` | Select | Director<br/>Accountant<br/>Admin<br/>Other |
 | Social Accounts | `custom_social_accounts` | JSON | |
 
+> ✅ **说明（可选）**：`custom_contact_role` 当前在 Smart Board / 核心流程中未使用，可先不加。  
+> 当你们需要在 UI 中按联系人角色筛选/展示/权限控制时，再按本节把字段补上即可。
+
 ---
 
 ### Phase 2.5: 创建 Project Team Member 子表 DocType
@@ -380,7 +383,7 @@ Partner
 
 ---
 
-### Phase 4: Project 扩展（7 个字段）
+### Phase 4: Project 扩展（8 个字段）
 
 > ⚠️ **注意**：project_type 是 ERPNext 原生字段，无需添加 custom 字段！
 
@@ -400,8 +403,9 @@ Partner
 | Fiscal Year | `custom_fiscal_year` | Link | Fiscal Year | 如 "FY24", "FY25" |
 | Target Month | `custom_target_month` | Select | January<br/>February<br/>March<br/>April<br/>May<br/>June<br/>July<br/>August<br/>September<br/>October<br/>November<br/>December | 目标月份 |
 | Lodgement Due Date | `custom_lodgement_due_date` | Date | | ATO 法定截止日期 |
-| Project Frequency | `custom_project_frequency` | Select | Annually<br/>Quarterly<br/>Monthly<br/>One-off | **会自动创建Auto Repeat**（非One-off时）|
+| Project Frequency | `custom_project_frequency` | Select | Monthly<br/>Quarterly<br/>Yearly<br/>One-off | **会自动创建Auto Repeat**（非One-off时；选项需与 Auto Repeat.frequency 一致）|
 | Softwares | `custom_softwares` | Table MultiSelect | Project Software | Table MultiSelect 的子表为 `Project Software`；子表字段 `software` Link → `Software` |
+| Engagement Letter | `custom_engagement_letter` | Attach | | 业务文件附件（Smart Board 支持上传/查看） |
 
 > **custom_team_members 说明**：子表字段，可以添加多个团队成员，每个成员有角色（Preparer/Reviewer/Partner）。支持高效的数据库查询和统计。
 
@@ -849,7 +853,7 @@ bench restart
 | **2** | Customer & Contact 扩展 | UI (Customize Form) |
 | **2.5** | 创建 Project Team Member 子表 DocType | UI (New DocType - 子表，3字段) |
 | **3** | 创建 Software DocType 和记录 | UI (New DocType + 创建记录，2字段) |
-| **4** | Project 扩展（7字段）| UI (Customize Form) |
+| **4** | Project 扩展（8字段）| UI (Customize Form) |
 | **5** | Task 扩展（2字段）| UI (Customize Form) |
 | **6** | 创建 Saved View DocType | UI (New DocType，7字段) |
 | **7** | Status动态过滤 | 代码（Client Script + hooks.py）|
@@ -869,11 +873,11 @@ bench restart
 
 #### P0：让 Smart Board 立刻能正常出数据
 
-- [ ] **补齐 Project 字段 `custom_softwares`**（Table MultiSelect → `Software`）
+- [ ] **确保 Project 字段 `custom_softwares` 已存在**（Table MultiSelect → `Project Software` → `Software`）
   - 目的：避免前端请求字段不存在导致列表空白
   - 步骤：
     - Setup → Customize → **Customize Form** → DocType 选 `Project`
-    - Add Row：Label=Softwares / Fieldname=`custom_softwares` / Fieldtype=`Table MultiSelect` / Options=`Software`
+    - Add Row：Label=Softwares / Fieldname=`custom_softwares` / Fieldtype=`Table MultiSelect` / Options=`Project Software`
     - Save
 - [ ] **创建至少 1 条 Project 记录**（`project_type=ITR`，`status` 任意）
   - 目的：验证页面“不是因为没数据才空”
@@ -888,7 +892,7 @@ bench restart
 
 #### P1：补齐文档缺项的配置
 
-- [ ] **Contact 增加字段 `custom_contact_role`**（Select，按你们需要的选项）
+- [ ] **（可选）Contact 增加字段 `custom_contact_role`**（Select；当前未用到，可延后）
   - 步骤：
     - Setup → Customize → Customize Form → DocType 选 `Contact`
     - Add Row：Label=Contact Role / Fieldname=`custom_contact_role` / Fieldtype=`Select` / Options（每行一个，如 Director/Accountant/...）
@@ -955,21 +959,22 @@ bench restart
   - [x] `custom_is_referrer`【fixtures/custom_field.json】
   - [ ] `custom_contact_role`（当前 fixtures 中未发现）
   - [x] `custom_social_accounts`【fixtures/custom_field.json】
-- [ ] Project 扩展：7 个字段（`custom_entity_type`, `custom_team_members`, `custom_fiscal_year`, `custom_target_month`, `custom_lodgement_due_date`, `custom_project_frequency`, `custom_softwares`）**v4.3更新**
+- [ ] Project 扩展：8 个字段（`custom_entity_type`, `custom_team_members`, `custom_fiscal_year`, `custom_target_month`, `custom_lodgement_due_date`, `custom_project_frequency`, `custom_softwares`, `custom_engagement_letter`）
   - [x] `custom_entity_type`【fixtures/custom_field.json】
   - [x] `custom_team_members`【fixtures/custom_field.json】
   - [x] `custom_fiscal_year`【fixtures/custom_field.json】
   - [x] `custom_target_month`【fixtures/custom_field.json】
   - [x] `custom_lodgement_due_date`【fixtures/custom_field.json】
   - [x] `custom_project_frequency`【fixtures/custom_field.json】
-  - [ ] `custom_softwares`（当前 fixtures 中未发现；且你当前 site Meta 里也缺该字段）
+  - [x] `custom_softwares`【fixtures/custom_field.json】
+  - [x] `custom_engagement_letter`【fixtures/custom_field.json】
 - [x] Task 扩展：2 个字段（`custom_fiscal_year`, `custom_period`）【fixtures/custom_field.json】
 
 ### 7.3 功能验证
 
 - [ ] Customer 可以添加多个 entities（子表）
 - [ ] Project 可以添加多个 team_members（子表）**v4.3新增**
-- [ ] 在 Project 表单中能看到所有 7 个新字段
+- [ ] 在 Project 表单中能看到所有 8 个新字段（含 Engagement Letter）
 - [ ] Project.custom_entity_type 可以从 Customer.custom_entities 选择
 - [ ] Project.custom_team_members 可以添加团队成员并选择角色（Preparer/Reviewer/Partner）**v4.3新增**
 - [ ] Project.project_type 可以正常选择（ERPNext 原生字段，无需扩展）
