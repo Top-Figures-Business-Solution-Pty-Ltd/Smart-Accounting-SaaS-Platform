@@ -46,6 +46,9 @@ export class BoardTable {
         this._rowModel = buildRowModel([]);
         this._groupBy = null; // reserved for future group-by
 
+        // Task bulk selection (inside expanded task table)
+        this._taskSelected = new Map(); // project.name -> Set(task.name)
+
         // Expand -> Tasks
         this._expanded = new Set(); // project.name
         this._taskCounts = new Map(); // project.name -> count
@@ -486,6 +489,64 @@ export class BoardTable {
                     const project = this.projects.find(p => p.name === row.dataset.projectName);
                     if (project) {
                         this.handleRowClick(project);
+                    }
+                }
+            });
+
+            // Task sub-table bulk select (checkboxes)
+            tbody.addEventListener('change', (e) => {
+                const target = e.target;
+                if (!(target instanceof HTMLInputElement)) return;
+
+                // Select all tasks within one expanded project
+                if (target.classList.contains('sb-task-select-all')) {
+                    const projectName = target.getAttribute('data-project') || '';
+                    if (!projectName) return;
+
+                    if (!this._taskSelected.has(projectName)) this._taskSelected.set(projectName, new Set());
+                    const set = this._taskSelected.get(projectName);
+
+                    const grid = target.closest('.sb-task-grid');
+                    if (!grid) return;
+                    const boxes = Array.from(grid.querySelectorAll('input.sb-task-select'));
+
+                    if (target.checked) {
+                        for (const cb of boxes) {
+                            cb.checked = true;
+                            const tn = cb.getAttribute('data-task') || '';
+                            if (tn) set.add(tn);
+                            cb.closest('tr')?.classList.add('sb-task-selected');
+                        }
+                    } else {
+                        for (const cb of boxes) {
+                            cb.checked = false;
+                            const tn = cb.getAttribute('data-task') || '';
+                            if (tn) set.delete(tn);
+                            cb.closest('tr')?.classList.remove('sb-task-selected');
+                        }
+                    }
+                    return;
+                }
+
+                // Single task checkbox
+                if (target.classList.contains('sb-task-select')) {
+                    const projectName = target.getAttribute('data-project') || '';
+                    const taskName = target.getAttribute('data-task') || '';
+                    if (!projectName || !taskName) return;
+
+                    if (!this._taskSelected.has(projectName)) this._taskSelected.set(projectName, new Set());
+                    const set = this._taskSelected.get(projectName);
+                    if (target.checked) set.add(taskName);
+                    else set.delete(taskName);
+
+                    target.closest('tr')?.classList.toggle('sb-task-selected', target.checked);
+
+                    // Keep "select all" checkbox in sync
+                    const grid = target.closest('.sb-task-grid');
+                    const all = grid?.querySelector?.('input.sb-task-select-all');
+                    if (all) {
+                        const boxes = Array.from(grid.querySelectorAll('input.sb-task-select'));
+                        all.checked = boxes.length > 0 && boxes.every((b) => b.checked);
                     }
                 }
             });
@@ -1036,12 +1097,6 @@ export class BoardTable {
         const tasks = name ? (this._tasksByProject.get(name) || []) : [];
         const taskCols = this._expandTaskColumnsForRender((this._taskCols || []).slice());
 
-        const head = `
-          <div class="sb-task-head">
-            <div class="sb-task-title">Tasks</div>
-          </div>
-        `;
-
         const table = (() => {
             const widths = taskCols.map((c) => Math.max(60, Number(c.width) || 120));
             const baseWidth = widths.reduce((a, b) => a + b, 0);
@@ -1052,15 +1107,20 @@ export class BoardTable {
             const rightPad = 12;
             const avail = Math.max(0, Number(this._tableWidthPx || 0) - leftPad - rightPad);
             const filler = Math.max(0, avail - baseWidth);
-            const allWidths = filler > 0 ? widths.concat([filler]) : widths;
+            // Task row select column (checkbox) at far-left inside task table
+            const selectW = 44;
+            const allWidths = filler > 0 ? [selectW].concat(widths).concat([filler]) : [selectW].concat(widths);
 
             const totalWidth = allWidths.reduce((a, b) => a + b, 0);
             const colgroup = `<colgroup>${allWidths.map((w) => `<col style="width:${w}px" />`).join('')}</colgroup>`;
-            const ths = taskCols.map((c) => `<th>${escapeHtml(c.label || c.field)}</th>`).join('');
+            const selectedSet = this._taskSelected?.get?.(name);
+            const allSelected = !!(tasks && tasks.length && selectedSet && tasks.every((t) => selectedSet.has(String(t?.name || '').trim())));
+            const ths = `<th class="sb-task-select-col"><input type="checkbox" class="sb-task-select-all" data-project="${escapeHtml(name)}" ${allSelected ? 'checked' : ''} aria-label="Select all tasks" /></th>`
+                + taskCols.map((c) => `<th>${escapeHtml(c.label || c.field)}</th>`).join('');
             const rows = [];
 
             if (loading) {
-                const tds = taskCols.map((c, idx) => idx === 0
+                const tds = `<td class="sb-task-select-col"></td>` + taskCols.map((c, idx) => idx === 0
                     ? `<td><span class="sb-task-muted">Loading…</span></td>`
                     : `<td></td>`
                 ).join('');
@@ -1068,6 +1128,7 @@ export class BoardTable {
             } else if (tasks && tasks.length) {
                 for (const t of tasks) {
                     const tn = String(t?.name || '').trim();
+                    const selected = !!(project?.name && this._taskSelected?.get?.(project.name)?.has?.(tn));
                     const tds = taskCols.map((c) => {
                         if (c?.__msKind === 'task_status') {
                             const mi = Number(c.__monthIndex || 0);
@@ -1080,10 +1141,11 @@ export class BoardTable {
                         const v = t?.[c.field];
                         return `<td>${escapeHtml(v ?? '—')}</td>`;
                     }).join('');
-                    rows.push(`<tr>${tds}${filler > 0 ? '<td></td>' : ''}</tr>`);
+                    const selTd = `<td class="sb-task-select-col"><input type="checkbox" class="sb-task-select" data-project="${escapeHtml(name)}" data-task="${escapeHtml(tn)}" ${selected ? 'checked' : ''} aria-label="Select task" /></td>`;
+                    rows.push(`<tr class="${selected ? 'sb-task-selected' : ''}">${selTd}${tds}${filler > 0 ? '<td></td>' : ''}</tr>`);
                 }
             } else {
-                const tds = taskCols.map((c, idx) => idx === 0
+                const tds = `<td class="sb-task-select-col"></td>` + taskCols.map((c, idx) => idx === 0
                     ? `<td><span class="sb-task-muted">No tasks yet</span></td>`
                     : `<td></td>`
                 ).join('');
@@ -1099,7 +1161,7 @@ export class BoardTable {
                 }
                 return `<td></td>`;
             }).join('');
-            rows.push(`<tr class="sb-task-add-row">${addTds}${filler > 0 ? '<td></td>' : ''}</tr>`);
+            rows.push(`<tr class="sb-task-add-row"><td class="sb-task-select-col"></td>${addTds}${filler > 0 ? '<td></td>' : ''}</tr>`);
 
             return `
               <div class="sb-task-grid">
@@ -1116,7 +1178,6 @@ export class BoardTable {
           <tr class="sb-task-row" data-project-name="${escapeHtml(name)}">
             <td colspan="${colspan}">
               <div class="sb-task-wrap">
-                ${head}
                 ${table}
               </div>
             </td>
