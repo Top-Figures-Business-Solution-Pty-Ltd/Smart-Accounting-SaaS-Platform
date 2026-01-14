@@ -60,6 +60,437 @@ def _project_names_with_read_permission(names: list[str]) -> list[str]:
 	return [str(x) for x in (allowed or [])]
 
 
+def _year_end_to_month_num(year_end: str | None) -> int | None:
+	"""
+	Map Customer Entity.year_end (Select) to month number.
+	Expected values: June/December/March/September (case-insensitive).
+	"""
+	if not year_end:
+		return None
+	s = str(year_end).strip().lower()
+	m = {
+		"june": 6,
+		"december": 12,
+		"march": 3,
+		"september": 9,
+	}.get(s)
+	return int(m) if m else None
+
+
+def _fy_start_month_from_year_end(year_end: str | None) -> int | None:
+	m = _year_end_to_month_num(year_end)
+	if not m:
+		return None
+	return (m % 12) + 1
+
+
+def _get_project_fy_start_months(project_rows: list[dict]) -> tuple[dict[str, int], dict[int, int]]:
+	"""
+	Compute fiscal start month per Project:
+	- Prefer Project.custom_customer_entity.year_end (override)
+	- Fallback to Customer primary entity year_end
+
+	Returns:
+	- by_project: { project_name: start_month_int }
+	- counts: { start_month_int: n_projects }
+	"""
+	by_project: dict[str, int] = {}
+	counts: dict[int, int] = {}
+
+	projects = [r for r in (project_rows or []) if r.get("name")]
+	if not projects:
+		return by_project, counts
+
+	# 1) Collect customers + entity links
+	customers = [str(r.get("customer") or "").strip() for r in projects if str(r.get("customer") or "").strip()]
+	entity_links = [str(r.get("custom_customer_entity") or "").strip() for r in projects if str(r.get("custom_customer_entity") or "").strip()]
+	customers = list(dict.fromkeys(customers))
+	entity_links = list(dict.fromkeys(entity_links))
+
+	# 2) Fetch year_end for linked Customer Entity rows (override path)
+	entity_year_end: dict[str, str] = {}
+	if entity_links:
+		try:
+			rows = frappe.get_all(
+				"Customer Entity",
+				filters=[["name", "in", entity_links]],
+				fields=["name", "year_end"],
+				ignore_permissions=True,
+				limit_page_length=100000,
+			)
+			for r in (rows or []):
+				n = str(r.get("name") or "").strip()
+				ye = str(r.get("year_end") or "").strip()
+				if n and ye:
+					entity_year_end[n] = ye
+		except Exception:
+			pass
+
+	# 3) Fetch primary entity year_end per customer (fallback path)
+	customer_year_end: dict[str, str] = {}
+	if customers:
+		try:
+			rows = frappe.get_all(
+				"Customer Entity",
+				filters=[["parent", "in", customers], ["is_primary", "=", 1]],
+				fields=["parent", "year_end"],
+				ignore_permissions=True,
+				limit_page_length=100000,
+			)
+			for r in (rows or []):
+				c = str(r.get("parent") or "").strip()
+				ye = str(r.get("year_end") or "").strip()
+				if c and ye and c not in customer_year_end:
+					customer_year_end[c] = ye
+		except Exception:
+			pass
+
+	# 4) Build per-project mapping
+	for r in projects:
+		pn = str(r.get("name") or "").strip()
+		if not pn:
+			continue
+		ye = None
+		el = str(r.get("custom_customer_entity") or "").strip()
+		if el and el in entity_year_end:
+			ye = entity_year_end.get(el)
+		if not ye:
+			c = str(r.get("customer") or "").strip()
+			ye = customer_year_end.get(c)
+		start = _fy_start_month_from_year_end(ye)
+		if start:
+			by_project[pn] = start
+			counts[start] = int(counts.get(start, 0)) + 1
+
+	return by_project, counts
+
+
+@frappe.whitelist()
+def get_board_fiscal_start_month(projects: Any) -> dict:
+	"""
+	Return board-level fiscal start month (1-12) based on projects' primary year_end.
+	We choose the most common start_month across the provided projects.
+
+	Returns:
+	- start_month: int | None
+	- counts: { start_month: n }
+	- by_project: { project_name: start_month }
+	"""
+	_ensure_logged_in()
+	names = _normalize_list(projects)
+	names = [str(x).strip() for x in names if str(x).strip()]
+	if not names:
+		return {"start_month": None, "counts": {}, "by_project": {}}
+
+	allowed = _project_names_with_read_permission(names)
+	if not allowed:
+		return {"start_month": None, "counts": {}, "by_project": {}}
+
+	prows = frappe.get_all(
+		"Project",
+		filters=[["name", "in", allowed]],
+		fields=["name", "customer", "custom_customer_entity"],
+		limit_page_length=100000,
+	)
+	by_project, counts = _get_project_fy_start_months(prows or [])
+	start_month = None
+	if counts:
+		start_month = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
+	return {"start_month": start_month, "counts": counts, "by_project": by_project}
+
+
+@frappe.whitelist()
+def set_monthly_status(reference_doctype: str, reference_name: str, fiscal_year: str, month_index: int, status: str) -> dict:
+	"""
+	Upsert a Monthly Status cell.
+	- reference_doctype: Task (today) or Project (future)
+	- fiscal_year: Link to Fiscal Year
+	- month_index: 1-12 (board fiscal order)
+	- status: Not Started / Working On It / Stuck / Done
+	"""
+	_ensure_logged_in()
+	reference_doctype = str(reference_doctype or "").strip()
+	reference_name = str(reference_name or "").strip()
+	fiscal_year = str(fiscal_year or "").strip()
+	status = str(status or "").strip()
+	try:
+		month_index = int(month_index or 0)
+	except Exception:
+		month_index = 0
+
+	if not reference_doctype or not reference_name:
+		frappe.throw("Missing reference")
+	if not fiscal_year:
+		frappe.throw("Missing fiscal_year")
+	if month_index < 1 or month_index > 12:
+		frappe.throw("Invalid month_index")
+	if status not in {"Not Started", "Working On It", "Stuck", "Done"}:
+		frappe.throw("Invalid status")
+
+	# Permission boundary: user must be able to WRITE the referenced doc.
+	ref = frappe.get_doc(reference_doctype, reference_name)
+	_ensure_write_permission(ref)
+
+	project = ""
+	if reference_doctype == "Task":
+		project = str(getattr(ref, "project", "") or "").strip()
+	elif reference_doctype == "Project":
+		project = reference_name
+
+	# Upsert Monthly Status (ignore perms on this helper doctype; bounded by ref permission above)
+	filters = {
+		"reference_doctype": reference_doctype,
+		"reference_name": reference_name,
+		"fiscal_year": fiscal_year,
+		"month_index": month_index,
+	}
+	existing = frappe.get_all("Monthly Status", filters=filters, pluck="name", limit_page_length=1, ignore_permissions=True)
+	if existing:
+		ms = frappe.get_doc("Monthly Status", existing[0])
+		ms.status = status
+		if project:
+			ms.project = project
+		ms.save(ignore_permissions=True)
+	else:
+		ms = frappe.new_doc("Monthly Status")
+		ms.reference_doctype = reference_doctype
+		ms.reference_name = reference_name
+		if project:
+			ms.project = project
+		ms.fiscal_year = fiscal_year
+		ms.month_index = month_index
+		ms.status = status
+		ms.insert(ignore_permissions=True)
+
+	return {"ok": True, "name": ms.name, "project": project, "reference_name": reference_name, "month_index": month_index, "status": status}
+
+
+@frappe.whitelist()
+def get_monthly_status_bundle(
+	projects: Any,
+	include_tasks: int = 1,
+	include_matrix: int = 1,
+	include_summary: int = 1,
+	limit_per_project: int = 500,
+	task_fields: Any = None,
+) -> dict:
+	"""
+	Bulk load Monthly Status for a list of Projects.
+
+	Returns:
+	- start_month: int | None (board-level, mode of projects)
+	- tasks: { project_name: [ {name, subject, project}, ... ] }  (optional)
+	- matrix: { task_name: { month_index: status } } (optional)
+	- summary: { project_name: { month_index: {done,total,percent} } } (optional)
+	- fiscal_year: { project_name: fiscal_year } (best-effort)
+	"""
+	_ensure_logged_in()
+	names = _normalize_list(projects)
+	names = [str(x).strip() for x in names if str(x).strip()]
+	if not names:
+		return {"start_month": None, "tasks": {}, "matrix": {}, "summary": {}, "fiscal_year": {}}
+
+	allowed_projects = _project_names_with_read_permission(names)
+	if not allowed_projects:
+		return {"start_month": None, "tasks": {}, "matrix": {}, "summary": {}, "fiscal_year": {}}
+
+	prows = frappe.get_all(
+		"Project",
+		filters=[["name", "in", allowed_projects]],
+		fields=["name", "customer", "custom_customer_entity", "custom_fiscal_year"],
+		limit_page_length=100000,
+	)
+	by_project_start, counts = _get_project_fy_start_months(prows or [])
+	start_month = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[0][0] if counts else None
+
+	# fiscal year per project (best-effort)
+	by_fy = {str(r.get("name")): str(r.get("custom_fiscal_year") or "").strip() for r in (prows or []) if r.get("name")}
+
+	# Task fields (allowlist). Always include name+project+subject.
+	allowed_task_fields = {
+		"name",
+		"subject",
+		"status",
+		"priority",
+		"exp_start_date",
+		"exp_end_date",
+		"modified",
+		"creation",
+		"owner",
+		"project",
+		"parent_task",
+	}
+	req_task_fields = _normalize_list(task_fields)
+	req_task_fields = [str(x).strip() for x in req_task_fields if str(x).strip()]
+	final_task_fields = ["name", "project"]
+	for f in req_task_fields:
+		if f in allowed_task_fields and f not in final_task_fields:
+			final_task_fields.append(f)
+	if "subject" not in final_task_fields:
+		final_task_fields.append("subject")
+
+	# Load tasks in one query; cut per-project to limit_per_project.
+	limit_per_project = int(limit_per_project or 500)
+	limit_per_project = max(1, min(limit_per_project, 2000))
+
+	# Total tasks per project (for summary). Prefer an aggregated query so summary isn't affected by per-project limits.
+	task_total_by_project: dict[str, int] = {p: 0 for p in allowed_projects}
+	try:
+		total_rows = frappe.get_all(
+			"Task",
+			filters=[["project", "in", allowed_projects]],
+			fields=["project", "count(name) as total"],
+			group_by="project",
+			limit_page_length=100000,
+		)
+		for r in (total_rows or []):
+			p = str(r.get("project") or "").strip()
+			if not p:
+				continue
+			try:
+				task_total_by_project[p] = int(r.get("total") or 0)
+			except Exception:
+				task_total_by_project[p] = int(task_total_by_project.get(p, 0))
+	except frappe.PermissionError:
+		# Fallback: if Task permissions block counts, we will compute totals from the visible task list later.
+		task_total_by_project = {p: 0 for p in allowed_projects}
+
+	tasks_by_project: dict[str, list[dict]] = {p: [] for p in allowed_projects}
+	all_tasks: list[dict] = []
+	if int(include_tasks or 0) or int(include_matrix or 0) or int(include_summary or 0):
+		try:
+			rows = frappe.get_all(
+				"Task",
+				filters=[["project", "in", allowed_projects]],
+				fields=final_task_fields,
+				order_by="modified desc",
+				limit_page_length=100000,
+			)
+		except frappe.PermissionError:
+			rows = []
+
+		# Keep per-project limited list (stable order: modified desc)
+		per_count: dict[str, int] = {}
+		for t in (rows or []):
+			p = str(t.get("project") or "").strip()
+			if not p or p not in tasks_by_project:
+				continue
+			n = int(per_count.get(p, 0))
+			if n >= limit_per_project:
+				continue
+			per_count[p] = n + 1
+			row = dict(t)
+			row["project"] = p
+			tasks_by_project[p].append(row)
+			all_tasks.append(row)
+
+		# Fallback total counts when we couldn't read aggregated totals.
+		if not any(task_total_by_project.values()):
+			for p in allowed_projects:
+				task_total_by_project[p] = len(tasks_by_project.get(p) or [])
+
+	matrix: dict[str, dict[int, str]] = {}
+	done_counts: dict[str, dict[int, int]] = {}  # project -> mi -> done
+	if int(include_matrix or 0) or int(include_summary or 0):
+		task_names = [str(t.get("name") or "").strip() for t in all_tasks if str(t.get("name") or "").strip()]
+		task_names = list(dict.fromkeys(task_names))
+		fys = list({fy for fy in by_fy.values() if fy})
+
+		# If caller needs the full matrix (expanded task table), fetch detailed rows for those tasks.
+		if int(include_matrix or 0) and task_names and fys:
+			ms_rows = frappe.get_all(
+				"Monthly Status",
+				filters=[
+					["reference_doctype", "=", "Task"],
+					["reference_name", "in", task_names],
+					["fiscal_year", "in", fys],
+					["month_index", "between", [1, 12]],
+				],
+				fields=["reference_name", "fiscal_year", "month_index", "status", "project"],
+				ignore_permissions=True,
+				limit_page_length=200000,
+			)
+			for r in (ms_rows or []):
+				tn = str(r.get("reference_name") or "").strip()
+				p = str(r.get("project") or "").strip()
+				fy = str(r.get("fiscal_year") or "").strip()
+				try:
+					mi = int(r.get("month_index") or 0)
+				except Exception:
+					mi = 0
+				st = str(r.get("status") or "").strip()
+				if not tn or mi < 1 or mi > 12 or not st:
+					continue
+				# Only count rows matching the project's FY (best-effort)
+				if p and by_fy.get(p) and fy and fy != by_fy.get(p):
+					continue
+				matrix.setdefault(tn, {})[mi] = st
+				if st == "Done" and p:
+					done_counts.setdefault(p, {})[mi] = int(done_counts.get(p, {}).get(mi, 0)) + 1
+
+		# If caller only needs summary, fetch aggregated Done counts without pulling full matrix.
+		if int(include_summary or 0) and (not int(include_matrix or 0)) and fys:
+			try:
+				done_rows = frappe.get_all(
+					"Monthly Status",
+					filters=[
+						["reference_doctype", "=", "Task"],
+						["project", "in", allowed_projects],
+						["fiscal_year", "in", fys],
+						["month_index", "between", [1, 12]],
+						["status", "=", "Done"],
+					],
+					fields=["project", "fiscal_year", "month_index", "count(name) as done"],
+					group_by="project, fiscal_year, month_index",
+					ignore_permissions=True,
+					limit_page_length=200000,
+				)
+			except Exception:
+				done_rows = []
+			for r in (done_rows or []):
+				p = str(r.get("project") or "").strip()
+				fy = str(r.get("fiscal_year") or "").strip()
+				try:
+					mi = int(r.get("month_index") or 0)
+				except Exception:
+					mi = 0
+				try:
+					done = int(r.get("done") or 0)
+				except Exception:
+					done = 0
+				if not p or mi < 1 or mi > 12 or done <= 0:
+					continue
+				if by_fy.get(p) and fy and fy != by_fy.get(p):
+					continue
+				done_counts.setdefault(p, {})[mi] = int(done_counts.get(p, {}).get(mi, 0)) + done
+
+	# Summary per project
+	summary: dict[str, dict[int, dict]] = {}
+	if int(include_summary or 0):
+		for p in allowed_projects:
+			total = int(task_total_by_project.get(p, 0) or 0)
+			months = {}
+			for mi in range(1, 13):
+				done = int((done_counts.get(p) or {}).get(mi, 0) or 0)
+				percent = float(done) / float(total) * 100.0 if total else 0.0
+				months[mi] = {"done": done, "total": total, "percent": percent}
+			summary[p] = months
+
+	out = {
+		"start_month": start_month,
+		"start_month_by_project": by_project_start,
+		"start_month_counts": counts,
+		"fiscal_year": by_fy,
+	}
+	if int(include_tasks or 0):
+		out["tasks"] = tasks_by_project
+	if int(include_matrix or 0):
+		out["matrix"] = matrix
+	if int(include_summary or 0):
+		out["summary"] = summary
+	return out
+
+
 @frappe.whitelist()
 def set_project_team_members(project: str, members: Any) -> dict:
 	"""

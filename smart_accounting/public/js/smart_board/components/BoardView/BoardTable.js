@@ -51,6 +51,15 @@ export class BoardTable {
         this._taskCounts = new Map(); // project.name -> count
         this._tasksByProject = new Map(); // project.name -> tasks[]
         this._tasksLoading = new Set(); // project.name
+        // Monthly Status (matrix + summary) caches
+        this._msStartMonth = null; // 1-12 (board-level)
+        this._msStartMonthCounts = {};
+        this._msStartMonthByProject = {};
+        this._msSummaryByProject = new Map(); // project.name -> { month_index: {done,total,percent} }
+        this._msMatrixByTask = new Map(); // task.name -> { month_index: status }
+        this._msLoadedProjects = new Set();
+        this._msLoadingProjects = new Set();
+        this._msLastFetchAt = 0;
         this._taskCols = [
             { field: 'subject', label: 'Task', width: 320 },
             { field: 'status', label: 'Status', width: 140 },
@@ -106,6 +115,140 @@ export class BoardTable {
         }));
 
         return base.concat(derived);
+    }
+
+    _monthName(i) {
+        const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const idx = Number(i) - 1;
+        return names[idx] || '';
+    }
+
+    _getBoardMonthLabels() {
+        // Board-level month order (scheme 1): derived from primary year_end (mode across projects)
+        const start = Number(this._msStartMonth || 7); // fallback July
+        const out = [];
+        for (let k = 0; k < 12; k++) {
+            const m = ((start - 1 + k) % 12) + 1;
+            out.push(this._monthName(m));
+        }
+        return out;
+    }
+
+    _hasProjectMonthlyCompletion() {
+        return !!(this.columns || []).find((c) => c?.field === '__sb_project_monthly_completion');
+    }
+
+    _hasTaskMonthlyStatus() {
+        return !!(this._taskCols || []).find((c) => c?.field === '__sb_task_monthly_status');
+    }
+
+    _expandProjectColumnsForRender(columns) {
+        const cols = Array.isArray(columns) ? columns : [];
+        const labels = this._getBoardMonthLabels();
+        const expanded = [];
+        for (const c of cols) {
+            if (c?.field === '__sb_project_monthly_completion') {
+                for (let mi = 1; mi <= 12; mi++) {
+                    expanded.push({
+                        field: `__sb_pc_m${String(mi).padStart(2, '0')}`,
+                        label: labels[mi - 1] || `M${mi}`,
+                        width: 110,
+                        sortable: false,
+                        __msKind: 'project_completion',
+                        __monthIndex: mi
+                    });
+                }
+                continue;
+            }
+            expanded.push(c);
+        }
+        return expanded;
+    }
+
+    _expandTaskColumnsForRender(columns) {
+        const cols = Array.isArray(columns) ? columns : [];
+        const labels = this._getBoardMonthLabels();
+        const expanded = [];
+        for (const c of cols) {
+            if (c?.field === '__sb_task_monthly_status') {
+                for (let mi = 1; mi <= 12; mi++) {
+                    expanded.push({
+                        field: `__sb_ts_m${String(mi).padStart(2, '0')}`,
+                        label: labels[mi - 1] || `M${mi}`,
+                        width: 110,
+                        __msKind: 'task_status',
+                        __monthIndex: mi
+                    });
+                }
+                continue;
+            }
+            expanded.push(c);
+        }
+        return expanded;
+    }
+
+    async _ensureMonthlyBundle(projectNames, { includeTasks = false } = {}) {
+        const names = Array.isArray(projectNames) ? projectNames.filter(Boolean) : [];
+        const missing = names.filter((n) => !this._msLoadedProjects.has(n) && !this._msLoadingProjects.has(n));
+        if (!missing.length) return;
+
+        missing.forEach((n) => this._msLoadingProjects.add(n));
+        this.scheduleRowsUpdate();
+        try {
+            const taskFields = includeTasks
+                ? (this._taskCols || [])
+                    .map((c) => c?.field)
+                    .filter((f) => f && !String(f).startsWith('__sb_ts_m') && f !== '__sb_task_monthly_status')
+                : [];
+            const bundle = await ProjectService.getMonthlyStatusBundle(missing, {
+                includeTasks,
+                includeMatrix: includeTasks,
+                includeSummary: true,
+                limitPerProject: 500,
+                taskFields
+            });
+            const startMonth = Number(bundle?.start_month || 0) || null;
+            const wasNull = !this._msStartMonth;
+            if (startMonth && wasNull) {
+                this._msStartMonth = startMonth;
+                this._msStartMonthCounts = bundle?.start_month_counts || {};
+                this._msStartMonthByProject = bundle?.start_month_by_project || {};
+                // Month labels affect header; re-render once to apply correct month names.
+                if (this._hasProjectMonthlyCompletion?.() || this._hasTaskMonthlyStatus?.()) {
+                    this.render();
+                }
+            }
+
+            // Summary -> annotate project objects for fast cell rendering
+            const summary = bundle?.summary || {};
+            for (const [p, months] of Object.entries(summary)) {
+                this._msSummaryByProject.set(p, months || {});
+                const proj = this._projectByName.get(p);
+                if (proj) proj.__sb_monthly_completion = months || {};
+            }
+
+            // Tasks+Matrix (optional)
+            if (includeTasks) {
+                const tasks = bundle?.tasks || {};
+                for (const [p, list] of Object.entries(tasks)) {
+                    this._tasksByProject.set(p, Array.isArray(list) ? list : []);
+                }
+                const matrix = bundle?.matrix || {};
+                for (const [t, m] of Object.entries(matrix)) {
+                    const mm = {};
+                    for (const [k, v] of Object.entries(m || {})) mm[Number(k)] = v;
+                    this._msMatrixByTask.set(t, mm);
+                }
+            }
+
+            missing.forEach((n) => this._msLoadedProjects.add(n));
+            this._msLastFetchAt = Date.now();
+        } catch (e) {
+            console.error(e);
+        } finally {
+            missing.forEach((n) => this._msLoadingProjects.delete(n));
+            this.scheduleRowsUpdate();
+        }
     }
 
     getDefaultColumnConfigForView() {
@@ -289,6 +432,13 @@ export class BoardTable {
         const tbody = this.container.querySelector('#tableBody');
         if (tbody) {
             tbody.addEventListener('click', (e) => {
+                const msCell = e.target?.closest?.('.sb-ms-cell');
+                if (msCell) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this._openTaskMonthlyStatusMenu(msCell);
+                    return;
+                }
                 const addTaskBtn = e.target?.closest?.('.sb-add-task-btn');
                 if (addTaskBtn) {
                     e.preventDefault();
@@ -453,10 +603,12 @@ export class BoardTable {
         };
 
         // Clone columns to avoid mutating Saved View config objects
-        const cols = [selectCol].concat((this.columns || []).map((c) => ({ ...c })));
+        const base = (this.columns || []).map((c) => ({ ...c }));
+        const expandedProjectCols = this._expandProjectColumnsForRender(base);
+        const cols = [selectCol].concat(expandedProjectCols);
 
         // Primary column = first user-selected project column (like Monday's "Name" column)
-        const primaryField = cols.find((c) => c?.field && c.field !== '__sb_select')?.field || null;
+        const primaryField = cols.find((c) => c?.field && c.field !== '__sb_select' && !String(c.field).startsWith('__sb_pc_m'))?.field || null;
 
         // Apply header class hooks + compute sticky left offsets for frozen columns
         let left = 0;
@@ -706,6 +858,11 @@ export class BoardTable {
             this._rowModel = buildRowModel(this.projects || [], { groupBy: this._groupBy });
             // Task counts are used to render expand toggles (async best-effort).
             this._prefetchTaskCounts?.();
+            // Monthly completion needs summary data; load in the background (batched).
+            if (this._hasProjectMonthlyCompletion?.() && (this.projects || []).length) {
+                const names = (this._rowModel?.all?.() || this.projects || []).map((p) => p?.name).filter(Boolean).slice(0, 300);
+                this._ensureMonthlyBundle?.(names, { includeTasks: false });
+            }
             this.scheduleRowsUpdate();
         });
     }
@@ -736,6 +893,11 @@ export class BoardTable {
         this.rows = [];
 
         if (!this.isVirtual()) {
+            // If project monthly completion is enabled, prefetch summary for all rows (small table => acceptable)
+            if (this._hasProjectMonthlyCompletion?.()) {
+                const names = (this._rowModel?.all?.() || this.projects || []).map((p) => p?.name).filter(Boolean);
+                this._ensureMonthlyBundle(names, { includeTasks: false });
+            }
             // Precompute team role map once per row for derived columns
             (this._rowModel?.all?.() || this.projects || []).forEach((p) => this._prepareProjectDerivedCaches(p));
             tbody.innerHTML = this.renderRows();
@@ -759,6 +921,11 @@ export class BoardTable {
         });
 
         const slice = this._rowModel?.slice?.(start, end) || this.projects.slice(start, end);
+        // In virtual mode, prefetch monthly completion only for visible rows (perf)
+        if (this._hasProjectMonthlyCompletion?.()) {
+            const names = (slice || []).map((p) => p?.name).filter(Boolean);
+            this._ensureMonthlyBundle(names, { includeTasks: false });
+        }
         slice.forEach((p) => this._prepareProjectDerivedCaches(p));
         const rowsHtml = renderRows(
             slice,
@@ -849,6 +1016,10 @@ export class BoardTable {
             this._expanded.delete(projectName);
         } else {
             this._expanded.add(projectName);
+            // If monthly component is enabled, load tasks+matrix+summary in one request for best perf.
+            if (this._hasTaskMonthlyStatus() || this._hasProjectMonthlyCompletion()) {
+                await this._ensureMonthlyBundle([projectName], { includeTasks: this._hasTaskMonthlyStatus() });
+            }
             await this.ensureTasksLoaded(projectName);
         }
         const p = this._projectByName.get(projectName);
@@ -862,7 +1033,7 @@ export class BoardTable {
         const name = project?.name || '';
         const loading = name && this._tasksLoading.has(name);
         const tasks = name ? (this._tasksByProject.get(name) || []) : [];
-        const taskCols = (this._taskCols || []).slice();
+        const taskCols = this._expandTaskColumnsForRender((this._taskCols || []).slice());
 
         const head = `
           <div class="sb-task-head">
@@ -886,7 +1057,19 @@ export class BoardTable {
                 rows.push(`<tr>${tds}</tr>`);
             } else if (tasks && tasks.length) {
                 for (const t of tasks) {
-                    const tds = taskCols.map((c) => `<td>${escapeHtml(t?.[c.field] ?? '—')}</td>`).join('');
+                    const tn = String(t?.name || '').trim();
+                    const tds = taskCols.map((c) => {
+                        if (c?.__msKind === 'task_status') {
+                            const mi = Number(c.__monthIndex || 0);
+                            const st = (tn && this._msMatrixByTask.get(tn)) ? (this._msMatrixByTask.get(tn)[mi] || '') : '';
+                            const slug = st ? String(st).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : '';
+                            const cls = st ? `sb-ms-cell sb-ms-cell--${slug}` : 'sb-ms-cell sb-ms-cell--empty';
+                            const fy = escapeHtml(project?.custom_fiscal_year || project?.custom_fiscal_year?.name || '');
+                            return `<td class="${cls}" data-task="${escapeHtml(tn)}" data-month-index="${mi}" data-fiscal-year="${fy}" data-project="${escapeHtml(name)}">${st ? escapeHtml(st) : ''}</td>`;
+                        }
+                        const v = t?.[c.field];
+                        return `<td>${escapeHtml(v ?? '—')}</td>`;
+                    }).join('');
                     rows.push(`<tr>${tds}</tr>`);
                 }
             } else {
@@ -1026,6 +1209,8 @@ export class BoardTable {
             { field: 'exp_start_date', label: 'Start', width: 140 },
             { field: 'owner', label: 'Owner', width: 160 },
             { field: 'modified', label: 'Updated', width: 160 },
+            // Component: expands to 12 months (board fiscal order)
+            { field: '__sb_task_monthly_status', label: 'Monthly Task Status (12M)', width: 110 },
         ];
 
         const currentSet = new Set((this._taskCols || []).map((c) => c.field));
@@ -1112,6 +1297,83 @@ export class BoardTable {
             console.error(e);
             notify('Failed to create task', 'red');
         }
+    }
+
+    _openTaskMonthlyStatusMenu(cellEl) {
+        const td = cellEl?.closest?.('td') || cellEl;
+        if (!td) return;
+        const taskName = td.dataset.task;
+        const projectName = td.dataset.project;
+        const fy = td.dataset.fiscalYear || '';
+        const mi = Number(td.dataset.monthIndex || 0);
+        if (!taskName || !fy || !mi) return;
+
+        // Simple inline popover (website-safe)
+        const existing = document.querySelector('.sb-ms-menu');
+        if (existing) existing.remove();
+
+        const menu = document.createElement('div');
+        menu.className = 'sb-ms-menu';
+        menu.innerHTML = `
+          <button type="button" data-v="Not Started">Not Started</button>
+          <button type="button" data-v="Working On It">Working On It</button>
+          <button type="button" data-v="Stuck">Stuck</button>
+          <button type="button" data-v="Done">Done</button>
+        `;
+        document.body.appendChild(menu);
+
+        const r = td.getBoundingClientRect();
+        menu.style.left = `${Math.round(r.left + window.scrollX)}px`;
+        menu.style.top = `${Math.round(r.bottom + window.scrollY + 6)}px`;
+
+        const close = () => { try { menu.remove(); } catch (e) {} };
+        const onDoc = (ev) => {
+            if (ev.target?.closest?.('.sb-ms-menu')) return;
+            close();
+            document.removeEventListener('mousedown', onDoc);
+        };
+        document.addEventListener('mousedown', onDoc);
+
+        menu.addEventListener('click', async (ev) => {
+            const btn = ev.target?.closest?.('button[data-v]');
+            if (!btn) return;
+            const v = btn.dataset.v;
+            close();
+            try {
+                await ProjectService.setMonthlyStatus({
+                    referenceDoctype: 'Task',
+                    referenceName: taskName,
+                    fiscalYear: fy,
+                    monthIndex: mi,
+                    status: v
+                });
+                // Update local cache
+                const cur = this._msMatrixByTask.get(taskName) || {};
+                cur[mi] = v;
+                this._msMatrixByTask.set(taskName, cur);
+
+                // Recompute summary for that project (only for this month)
+                const proj = projectName ? this._projectByName.get(projectName) : null;
+                const tasks = projectName ? (this._tasksByProject.get(projectName) || []) : [];
+                const total = tasks.length;
+                let done = 0;
+                for (const t of tasks) {
+                    const tn = String(t?.name || '').trim();
+                    if (!tn) continue;
+                    if ((this._msMatrixByTask.get(tn) || {})[mi] === 'Done') done += 1;
+                }
+                const percent = total ? (done / total * 100) : 0;
+                const months = (proj?.__sb_monthly_completion) || (projectName ? (this._msSummaryByProject.get(projectName) || {}) : {});
+                months[mi] = { done, total, percent };
+                if (projectName) this._msSummaryByProject.set(projectName, months);
+                if (proj) proj.__sb_monthly_completion = months;
+
+                this.scheduleRowsUpdate();
+            } catch (e) {
+                console.error(e);
+                notify('Failed to update monthly status', 'red');
+            }
+        });
     }
     
     saveColumnWidths() {

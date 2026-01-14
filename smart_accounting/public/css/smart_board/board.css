@@ -10,10 +10,11 @@
     height: 100%;
     display: flex;
     flex-direction: column;
-    background: #ffffff;
+    background: var(--smart-board-surface);
     margin: 16px;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border-radius: var(--smart-board-radius-lg);
+    box-shadow: var(--smart-board-shadow-md);
+    border: 1px solid var(--smart-board-border);
     overflow: hidden;
 }
 
@@ -21,8 +22,8 @@
    Table Header
    ============================================ */
 .board-table-header {
-    background: #f8f9fa;
-    border-bottom: 2px solid var(--smart-board-border);
+    background: rgba(15, 23, 42, 0.03);
+    border-bottom: 1px solid var(--smart-board-border);
     /* Header should follow body horizontal scroll (single scroll source) */
     overflow-x: hidden;
     overflow-y: hidden;
@@ -37,7 +38,7 @@
 .board-table thead th {
     position: sticky;
     top: 0;
-    background: #f8f9fa;
+    background: rgba(15, 23, 42, 0.03);
     font-weight: 600;
     font-size: 13px;
     text-transform: uppercase;
@@ -45,7 +46,7 @@
     color: var(--smart-board-text-muted);
     padding: 12px 16px;
     text-align: left;
-    border-right: 1px solid #e9ecef;
+    border-right: 1px solid rgba(15, 23, 42, 0.06);
     white-space: nowrap;
     position: relative;
 }
@@ -54,7 +55,7 @@
     position: sticky;
     left: 0; /* inline style may override for multi-frozen columns */
     z-index: 10;
-    background: #ffffff;
+    background: var(--smart-board-surface);
 }
 
 /* ============================================
@@ -141,6 +142,78 @@
     color: var(--smart-board-text-muted);
 }
 
+/* Monthly status cells (Task) */
+.sb-ms-cell {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 12px;
+    text-align: center;
+    border-bottom: 1px solid #f1f3f5;
+}
+
+.sb-ms-cell--empty {
+    background: #f6f7f8;
+}
+
+.sb-ms-cell--not-started {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.sb-ms-cell--working-on-it {
+    background: #f59e0b;
+    color: #ffffff;
+}
+
+.sb-ms-cell--stuck {
+    background: #ef4444;
+    color: #ffffff;
+}
+
+.sb-ms-cell--done {
+    background: #10b981;
+    color: #ffffff;
+}
+
+.sb-ms-cell:hover {
+    filter: brightness(0.98);
+}
+
+/* Monthly completion cells (Project) */
+.sb-ms-sum__cell {
+    justify-content: center;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--smart-board-text-muted);
+}
+
+/* Simple popover menu */
+.sb-ms-menu {
+    position: absolute;
+    z-index: 10000;
+    background: #fff;
+    border: 1px solid var(--smart-board-border);
+    border-radius: 14px;
+    box-shadow: var(--smart-board-shadow-lg);
+    padding: 8px;
+    display: flex;
+    gap: 6px;
+}
+
+.sb-ms-menu button {
+    border: 1px solid var(--smart-board-border);
+    background: #fff;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.sb-ms-menu button:hover {
+    background: #f8f9fa;
+}
+
 /* Tabs for Columns modal */
 .sb-coltabs {
     display: inline-flex;
@@ -188,8 +261,8 @@
    ============================================ */
 .sb-task-wrap {
     padding: 10px 12px 14px 12px;
-    background: #fafbfc;
-    border-top: 1px solid #eef1f4;
+    background: transparent;
+    border-top: 1px solid rgba(15, 23, 42, 0.06);
     /* Indent under the first data column (skip checkbox col) */
     padding-left: calc(12px + 52px);
 }
@@ -209,9 +282,9 @@
 }
 
 .sb-task-grid {
-    background: #fff;
-    border: 1px solid #eef1f4;
-    border-radius: 10px;
+    background: var(--smart-board-surface);
+    border: 1px solid var(--smart-board-border);
+    border-radius: 14px;
     overflow: hidden; /* clip table header bg + rows */
     /* Follow main table horizontal scroll; no inner scrollbars */
 }
@@ -235,12 +308,12 @@
 }
 
 .sb-task-table th {
-    background: #f8f9fa;
+    background: rgba(15, 23, 42, 0.03);
     color: var(--smart-board-text-muted);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.3px;
-    border-bottom: 1px solid #eef1f4;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
 }
 
 .sb-task-empty {
@@ -300,18 +373,18 @@
 }
 
 .board-table tbody tr:hover {
-    background: #f8f9fa;
+    background: rgba(15, 23, 42, 0.02);
 }
 
 .board-table tbody tr.selected {
-    background: #e7f3ff;
+    background: var(--smart-board-primary-50);
 }
 
 .board-table tbody td {
     padding: 12px 16px;
     font-size: 14px;
     color: var(--smart-board-text);
-    border-right: 1px solid #f1f3f5;
+    border-right: 1px solid rgba(15, 23, 42, 0.06);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -320,12 +393,12 @@
 .board-table tbody td.frozen {
     position: sticky;
     left: 0; /* inline style may override for multi-frozen columns */
-    background: #ffffff;
+    background: var(--smart-board-surface);
     z-index: 1;
 }
 
 .board-table tbody tr:hover td.frozen {
-    background: #f8f9fa;
+    background: rgba(15, 23, 42, 0.03);
 }
 
 .board-table tbody td.editable {
@@ -371,10 +444,10 @@
 
 .sb-bulkbar__inner {
     pointer-events: auto;
-    background: #ffffff;
+    background: var(--smart-board-surface);
     border: 1px solid var(--smart-board-border);
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    border-radius: 14px;
+    box-shadow: var(--smart-board-shadow-lg);
     padding: 10px 12px;
     display: flex;
     align-items: center;

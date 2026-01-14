@@ -383,6 +383,42 @@ Partner
 
 ---
 
+### Phase 3.5（新增）：创建 Monthly Status DocType（用于月度进度网格）
+
+> **用途**：支撑“Monthly Task Status（12个月）”组件与 Project 端的“Done x/y · %”月度汇总。  
+> **设计原则**：用一个通用 DocType 存“某对象在某财年的第 N 月的状态”，未来可扩展到 Project/其他对象，不新增更多 DocType。
+>
+> ⚠️ **关键字段**：`month_index`（1-12）必须存在，否则无法展开 12 个月列。
+
+**Step 1: 创建 Monthly Status DocType（普通 DocType）**
+
+1. 进入：Setup → DocType → New DocType
+2. 填写基本信息：
+   - Name: `Monthly Status`
+   - Module: `Smart Accounting`
+   - **Is Child Table**: ❌ No（普通 DocType）
+   - Track Changes: ✅ 建议开启（审计谁改了状态）
+
+**Step 2: 添加字段（至少 6 个）**
+
+| # | Label | Fieldname | Fieldtype | Options | Mandatory | 说明 |
+|---|-------|-----------|-----------|---------|-----------|------|
+| 1 | Reference Doctype | `reference_doctype` | Link | DocType | ✅ | 默认值建议填 `Task` |
+| 2 | Reference Name | `reference_name` | Dynamic Link | reference_doctype | ✅ | 指向具体 Task（未来可扩展到 Project） |
+| 3 | Project | `project` | Link | Project |  | **建议保留**：用于 Project 月度汇总查询性能 |
+| 4 | Fiscal Year | `fiscal_year` | Link | Fiscal Year | ✅ | |
+| 5 | Month Index | `month_index` | Int | | ✅ | 取值 1-12（财年第几月，不是自然月） |
+| 6 | Status | `status` | Select | Not Started<br/>Working On It<br/>Stuck<br/>Done | ✅ | 四个状态即可 |
+
+**Step 3: 保存 + 导出 fixtures**
+
+- 修改后执行：
+  - `bench --site <site> export-fixtures --app smart_accounting`
+- 确认：
+  - `smart_accounting/fixtures/doctype.json` 包含 `Monthly Status`
+
+---
+
 ### Phase 4: Project 扩展（8 个字段）
 
 > ⚠️ **注意**：project_type 是 ERPNext 原生字段，无需添加 custom 字段！
@@ -959,7 +995,7 @@ bench restart
   - [x] `custom_is_referrer`【fixtures/custom_field.json】
   - [ ] `custom_contact_role`（当前 fixtures 中未发现）
   - [x] `custom_social_accounts`【fixtures/custom_field.json】
-- [ ] Project 扩展：8 个字段（`custom_entity_type`, `custom_team_members`, `custom_fiscal_year`, `custom_target_month`, `custom_lodgement_due_date`, `custom_project_frequency`, `custom_softwares`, `custom_engagement_letter`）
+- [ ] Project 扩展：9 个字段（`custom_customer_entity`, `custom_entity_type`, `custom_team_members`, `custom_fiscal_year`, `custom_target_month`, `custom_lodgement_due_date`, `custom_project_frequency`, `custom_softwares`, `custom_engagement_letter`）
   - [x] `custom_entity_type`【fixtures/custom_field.json】
   - [x] `custom_team_members`【fixtures/custom_field.json】
   - [x] `custom_fiscal_year`【fixtures/custom_field.json】

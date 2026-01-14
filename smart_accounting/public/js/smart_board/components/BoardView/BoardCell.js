@@ -13,6 +13,31 @@ export class BoardCell {
     }
     
     getHTML() {
+        // Virtual/computed columns (non-doctype fields)
+        if (this.column?.__msKind === 'project_completion') {
+            const mi = Number(this.column.__monthIndex || 0);
+            const months = this.project?.__sb_monthly_completion || {};
+            const m = months?.[mi] || months?.[String(mi)];
+            const done = Number(m?.done || 0);
+            const total = Number(m?.total || 0);
+            const percent = Number.isFinite(Number(m?.percent)) ? Number(m.percent) : (total ? (done / total * 100) : 0);
+            const text = total ? `Done ${done}/${total} · ${percent.toFixed(0)}%` : '—';
+            const tip = total ? `Done ${done}/${total}, ${percent.toFixed(1)}%` : 'No tasks';
+            const left = (this.column.frozen && this.column._stickyLeft != null) ? ` left: ${this.column._stickyLeft}px;` : '';
+            const extraClass = columnRegistry.getCellClass({ project: this.project, column: this.column });
+            const staticClass = this.column.__cellClass || '';
+            return `
+                <td
+                    class="board-table-cell ${this.column.frozen ? 'frozen' : ''} ${staticClass} ${extraClass} sb-ms-sum"
+                    data-field="${this.column.field}"
+                    title="${tip}"
+                    style="${left}"
+                >
+                    <div class="cell-content sb-ms-sum__cell">${text}</div>
+                </td>
+            `;
+        }
+
         const value = this.project[this.column.field];
         // Column Registry override (non-invasive): if no override, fall back to legacy formatter.
         const override = columnRegistry.renderCell({ project: this.project, column: this.column });

@@ -7,23 +7,32 @@
    Buttons
    ============================================ */
 .btn {
-    padding: 8px 16px;
+    padding: 8px 14px;
     border: 1px solid var(--smart-board-border);
-    border-radius: 4px;
+    border-radius: 12px;
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: #ffffff;
+    background: var(--smart-board-surface);
     color: var(--smart-board-text);
 }
 
 .btn:hover {
-    background: #f8f9fa;
-    border-color: #adb5bd;
+    background: rgba(15, 23, 42, 0.04);
+    border-color: var(--smart-board-border-strong);
+}
+
+.btn:active {
+    transform: translateY(0.5px);
+}
+
+.btn:focus-visible {
+    outline: none;
+    box-shadow: var(--smart-board-focus);
 }
 
 .btn-primary {
@@ -33,8 +42,8 @@
 }
 
 .btn-primary:hover {
-    background: #0056b3;
-    border-color: #0056b3;
+    background: var(--smart-board-primary-600);
+    border-color: var(--smart-board-primary-600);
 }
 
 .btn-default {
@@ -53,17 +62,17 @@
 .form-control {
     padding: 8px 12px;
     border: 1px solid var(--smart-board-border);
-    border-radius: 4px;
+    border-radius: 12px;
     font-size: 14px;
     color: var(--smart-board-text);
-    background: #ffffff;
+    background: var(--smart-board-surface);
     transition: all 0.2s;
 }
 
 .form-control:focus {
     outline: none;
     border-color: var(--smart-board-primary);
-    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+    box-shadow: var(--smart-board-focus);
 }
 
 .form-control:disabled {
@@ -112,10 +121,11 @@
 }
 
 .sb-card {
-    background: #fff;
+    background: var(--smart-board-surface);
     border: 1px solid var(--smart-board-border);
     border-radius: 12px;
     padding: 12px 14px;
+    box-shadow: var(--smart-board-shadow-sm);
 }
 
 .sb-card__label {
@@ -134,10 +144,11 @@
 /* Dashboard: My Projects list */
 .sb-dash__list {
     margin-top: 14px;
-    background: #fff;
+    background: var(--smart-board-surface);
     border: 1px solid var(--smart-board-border);
     border-radius: 12px;
     overflow: hidden;
+    box-shadow: var(--smart-board-shadow-sm);
 }
 
 .sb-dash__list-title {
@@ -165,7 +176,7 @@
 }
 
 .sb-dash__table th {
-    background: #f8f9fa;
+    background: rgba(15, 23, 42, 0.03);
     color: var(--smart-board-text-muted);
     font-weight: 700;
     text-transform: uppercase;
@@ -182,7 +193,7 @@
     margin-top: 14px;
     padding: 12px 14px;
     border: 1px solid var(--smart-board-border);
-    background: #fff;
+    background: var(--smart-board-surface);
     border-radius: 12px;
     color: var(--smart-board-text-muted);
 }
@@ -274,7 +285,7 @@
 .sb-modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.35);
+    background: rgba(15, 23, 42, 0.38);
     z-index: 20000;
     display: flex;
     align-items: center;
@@ -286,10 +297,10 @@
     width: 680px;
     max-width: 96vw;
     max-height: 86vh;
-    background: #fff;
-    border-radius: 12px;
+    background: var(--smart-board-surface);
+    border-radius: 16px;
     border: 1px solid var(--smart-board-border);
-    box-shadow: 0 18px 40px rgba(0,0,0,0.2);
+    box-shadow: var(--smart-board-shadow-lg);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -312,16 +323,16 @@
 .sb-modal__close {
     width: 32px;
     height: 32px;
-    border-radius: 8px;
+    border-radius: 10px;
     border: 1px solid var(--smart-board-border);
-    background: #fff;
+    background: var(--smart-board-surface);
     cursor: pointer;
     font-size: 18px;
     line-height: 1;
 }
 
 .sb-modal__close:hover {
-    background: #f3f4f6;
+    background: rgba(15, 23, 42, 0.04);
 }
 
 .sb-modal__body {
@@ -347,7 +358,7 @@
     border: 1px solid var(--smart-board-border);
     border-radius: 10px;
     overflow: hidden;
-    background: #fff;
+    background: var(--smart-board-surface);
 }
 
 .sb-colmgr__row {
@@ -365,13 +376,13 @@
 
 .sb-colmgr__row.is-dragging {
     opacity: 0.6;
-    background: #f8f9fa;
+    background: rgba(15, 23, 42, 0.03);
 }
 
 .sb-colmgr__row.is-drop-target {
-    outline: 2px solid rgba(13, 110, 253, 0.35);
+    outline: 2px solid rgba(37, 99, 235, 0.35);
     outline-offset: -2px;
-    background: #f3f8ff;
+    background: var(--smart-board-primary-50);
 }
 
 .sb-colmgr__drag {
@@ -416,15 +427,15 @@
     align-items: center;
     gap: 8px;
     padding: 8px 10px;
-    border: 1px solid #f1f3f5;
+    border: 1px solid var(--smart-board-border);
     border-radius: 10px;
-    background: #fff;
+    background: var(--smart-board-surface);
     cursor: pointer;
     user-select: none;
 }
 
 .sb-filter__item:hover {
-    background: #f8f9fa;
+    background: rgba(15, 23, 42, 0.04);
 }
 
 /* ============================================

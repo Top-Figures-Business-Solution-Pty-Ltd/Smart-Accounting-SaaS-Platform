@@ -358,7 +358,7 @@ Step 2: 基础层扩展
 
 Step 3: 核心层扩展
         ├── 创建 Project Team Member 子表（3个字段：user, role, assigned_date）
-        ├── Project 扩展（8个扩展字段：custom_entity_type, custom_team_members, custom_fiscal_year, custom_target_month, custom_lodgement_due_date, custom_project_frequency, custom_softwares, custom_engagement_letter）
+        ├── Project 扩展（9个扩扩展字段：custom_customer_entity, custom_entity_type(只读fetch), custom_team_members, custom_fiscal_year, custom_target_month, custom_lodgement_due_date, custom_project_frequency, custom_softwares, custom_engagement_letter）
         ├── Task 扩展（2个扩展字段：custom_fiscal_year, custom_period + 利用原生时间/工时/成本字段）
         └── Project Auto Repeat 钩子（after_insert/validate方法：自动创建和同步Auto Repeat）
 
@@ -864,6 +864,33 @@ Project命名：
 - ✅ 清晰区分客户的不同实体
 - ✅ 每个实体可以有独立的entity_type和year_end
 - ✅ Project可以明确关联到具体实体
+
+---
+
+### 4.2.2 Monthly Status（新建 - v9.x）
+
+> **定位**：支持 Monday.com 风格的“按财年 12 个月网格状态”，用于：
+> - Task：Monthly Task Status（每格 Not Started / Working On It / Stuck / Done）
+> - Project：按月汇总（Done x/y · %）
+>
+> **关键**：只新建一个通用 DocType，未来扩展到 Project/其他对象时不需要再建更多 Doctype。
+
+#### 4.2.2.1 Monthly Status 字段（建议）
+
+| 字段 | 字段名 | 类型 | 必填 | 说明 |
+|------|--------|------|------|------|
+| 引用 DocType | `reference_doctype` | Link → DocType | ✅ | 默认 Task |
+| 引用 Name | `reference_name` | Dynamic Link | ✅ | 指向具体 Task（未来可扩展 Project） |
+| Project | `project` | Link → Project |  | **建议冗余**：用于 Project 月度汇总性能（避免 join Task） |
+| Fiscal Year | `fiscal_year` | Link → Fiscal Year | ✅ | |
+| Month Index | `month_index` | Int | ✅ | 1-12（财年第几月） |
+| Status | `status` | Select | ✅ | Not Started / Working On It / Stuck / Done |
+
+#### 4.2.2.2 财年月份推导（方案 1）
+
+- 从 `Project.customer` 找到 `Customer.custom_entities` 的 `is_primary=1` 记录
+- 取 `Customer Entity.year_end`（June/December/March/September）
+- 财年起始月 = year_end 的次月，展开得到 12 个月列名（July…June）
 
 ---
 

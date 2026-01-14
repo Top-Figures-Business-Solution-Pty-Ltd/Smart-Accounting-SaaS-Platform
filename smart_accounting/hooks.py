@@ -92,6 +92,7 @@ fixtures = [
                 "Software",
                 "Saved View",
                 "Customer Entity",
+                "Monthly Status",
 				"Project Team Member",
 				"Project Software"
             ]]
