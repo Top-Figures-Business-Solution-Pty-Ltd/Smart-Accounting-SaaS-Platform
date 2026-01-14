@@ -358,6 +358,7 @@ export class BoardTable {
             return 140;
         };
         const tableWidth = (this._renderColumns || []).reduce((sum, c) => sum + colWidth(c), 0);
+        this._tableWidthPx = tableWidth;
 
         this.container.innerHTML = `
             <div class="board-table-wrapper">
@@ -1038,14 +1039,23 @@ export class BoardTable {
         const head = `
           <div class="sb-task-head">
             <div class="sb-task-title">Tasks</div>
-            <button type="button" class="btn btn-default btn-sm" data-action="task-columns">Task Columns</button>
           </div>
         `;
 
         const table = (() => {
             const widths = taskCols.map((c) => Math.max(60, Number(c.width) || 120));
-            const totalWidth = widths.reduce((a, b) => a + b, 0);
-            const colgroup = `<colgroup>${widths.map((w) => `<col style="width:${w}px" />`).join('')}</colgroup>`;
+            const baseWidth = widths.reduce((a, b) => a + b, 0);
+
+            // Fill remaining width so the expanded area doesn't look like a "small table in a huge blank area".
+            // We do NOT stretch existing columns (would break your earlier requirement); instead add one trailing filler column.
+            const leftPad = 12 + 52;  // matches CSS indent (12px + select col 52px)
+            const rightPad = 12;
+            const avail = Math.max(0, Number(this._tableWidthPx || 0) - leftPad - rightPad);
+            const filler = Math.max(0, avail - baseWidth);
+            const allWidths = filler > 0 ? widths.concat([filler]) : widths;
+
+            const totalWidth = allWidths.reduce((a, b) => a + b, 0);
+            const colgroup = `<colgroup>${allWidths.map((w) => `<col style="width:${w}px" />`).join('')}</colgroup>`;
             const ths = taskCols.map((c) => `<th>${escapeHtml(c.label || c.field)}</th>`).join('');
             const rows = [];
 
@@ -1054,7 +1064,7 @@ export class BoardTable {
                     ? `<td><span class="sb-task-muted">Loading…</span></td>`
                     : `<td></td>`
                 ).join('');
-                rows.push(`<tr>${tds}</tr>`);
+                rows.push(`<tr>${tds}${filler > 0 ? '<td></td>' : ''}</tr>`);
             } else if (tasks && tasks.length) {
                 for (const t of tasks) {
                     const tn = String(t?.name || '').trim();
@@ -1070,14 +1080,14 @@ export class BoardTable {
                         const v = t?.[c.field];
                         return `<td>${escapeHtml(v ?? '—')}</td>`;
                     }).join('');
-                    rows.push(`<tr>${tds}</tr>`);
+                    rows.push(`<tr>${tds}${filler > 0 ? '<td></td>' : ''}</tr>`);
                 }
             } else {
                 const tds = taskCols.map((c, idx) => idx === 0
                     ? `<td><span class="sb-task-muted">No tasks yet</span></td>`
                     : `<td></td>`
                 ).join('');
-                rows.push(`<tr>${tds}</tr>`);
+                rows.push(`<tr>${tds}${filler > 0 ? '<td></td>' : ''}</tr>`);
             }
 
             // Always show an add row (Monday-like)
@@ -1089,13 +1099,13 @@ export class BoardTable {
                 }
                 return `<td></td>`;
             }).join('');
-            rows.push(`<tr class="sb-task-add-row">${addTds}</tr>`);
+            rows.push(`<tr class="sb-task-add-row">${addTds}${filler > 0 ? '<td></td>' : ''}</tr>`);
 
             return `
               <div class="sb-task-grid">
                 <table class="sb-task-table" style="width:${totalWidth}px">
                   ${colgroup}
-                  <thead><tr>${ths}</tr></thead>
+                  <thead><tr>${ths}${filler > 0 ? '<th></th>' : ''}</tr></thead>
                   <tbody>${rows.join('')}</tbody>
                 </table>
               </div>

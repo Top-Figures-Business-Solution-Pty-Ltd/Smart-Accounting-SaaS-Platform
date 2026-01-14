@@ -35,7 +35,7 @@
     table-layout: fixed;
 }
 
-.board-table thead th {
+.board-table > thead > tr > th {
     position: sticky;
     top: 0;
     background: rgba(15, 23, 42, 0.03);
@@ -51,7 +51,7 @@
     position: relative;
 }
 
-.board-table thead th.frozen {
+.board-table > thead > tr > th.frozen {
     position: sticky;
     left: 0; /* inline style may override for multi-frozen columns */
     z-index: 10;
@@ -243,8 +243,8 @@
     justify-content: center;
 }
 
-.board-table thead th.sb-select-col,
-.board-table tbody td.sb-select-col {
+.board-table > thead > tr > th.sb-select-col,
+.board-table > tbody > tr > td.sb-select-col {
     /* Remove default cell padding so checkbox stays square */
     padding: 0;
 }
@@ -267,6 +267,16 @@
     padding-left: calc(12px + 52px);
 }
 
+/* Expanded tasks row should not inherit main table cell padding/borders (reduces wasted whitespace). */
+.sb-task-row > td {
+    padding: 0 !important;
+    border-right: 0 !important;
+    background: transparent !important;
+    /* IMPORTANT: main table cells default to overflow:hidden; that breaks sticky inside the expanded task table */
+    overflow: visible !important;
+    white-space: normal !important;
+}
+
 .sb-task-head {
     display: flex;
     align-items: center;
@@ -282,18 +292,32 @@
 }
 
 .sb-task-grid {
+    position: relative;
     background: var(--smart-board-surface);
-    border: 1px solid var(--smart-board-border);
     border-radius: 14px;
-    overflow: hidden; /* clip table header bg + rows */
+    overflow: visible; /* IMPORTANT: keep sticky columns working (no overflow hidden/auto here) */
     /* Follow main table horizontal scroll; no inner scrollbars */
 }
 
+.sb-task-grid::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--smart-board-border);
+    border-radius: 14px;
+    pointer-events: none;
+    z-index: 1;
+}
+
 .sb-task-table {
-    border-collapse: collapse;
+    /* Sticky inside table is unreliable with border-collapse: collapse in some browsers */
+    border-collapse: separate;
+    border-spacing: 0;
     table-layout: fixed;
     background: #fff;
     width: auto; /* avoid stretching when task has few columns */
+    position: relative;
+    z-index: 2; /* above the border pseudo-element */
 }
 
 .sb-task-table th,
@@ -301,10 +325,16 @@
     padding: 8px 10px;
     font-size: 13px;
     border-bottom: 1px solid #f1f3f5;
+    border-right: 1px solid rgba(15, 23, 42, 0.06);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     box-sizing: border-box;
+}
+
+.sb-task-table th:last-child,
+.sb-task-table td:last-child {
+    border-right: 0;
 }
 
 .sb-task-table th {
@@ -314,6 +344,21 @@
     text-transform: uppercase;
     letter-spacing: 0.3px;
     border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+/* Keep Task first column sticky when horizontal scrolling (match the indent). */
+.sb-task-table th:first-child,
+.sb-task-table td:first-child {
+    position: sticky;
+    left: calc(12px + 52px);
+    z-index: 4;
+    background: var(--smart-board-surface);
+    background-clip: padding-box;
+    box-shadow: inset -1px 0 0 rgba(15, 23, 42, 0.08);
+}
+
+.sb-task-table th:first-child {
+    z-index: 5;
 }
 
 .sb-task-empty {
@@ -339,7 +384,7 @@
     opacity: 0.5;
 }
 
-.board-table thead th:hover .sort-icon {
+.board-table > thead > tr > th:hover .sort-icon {
     opacity: 1;
 }
 
@@ -367,20 +412,20 @@
     overflow-y: auto;
 }
 
-.board-table tbody tr {
+.board-table > tbody > tr {
     border-bottom: 1px solid #f1f3f5;
     transition: background 0.15s;
 }
 
-.board-table tbody tr:hover {
+.board-table > tbody > tr:hover {
     background: rgba(15, 23, 42, 0.02);
 }
 
-.board-table tbody tr.selected {
+.board-table > tbody > tr.selected {
     background: var(--smart-board-primary-50);
 }
 
-.board-table tbody td {
+.board-table > tbody > tr > td {
     padding: 12px 16px;
     font-size: 14px;
     color: var(--smart-board-text);
@@ -390,22 +435,22 @@
     text-overflow: ellipsis;
 }
 
-.board-table tbody td.frozen {
+.board-table > tbody > tr > td.frozen {
     position: sticky;
     left: 0; /* inline style may override for multi-frozen columns */
     background: var(--smart-board-surface);
     z-index: 1;
 }
 
-.board-table tbody tr:hover td.frozen {
+.board-table > tbody > tr:hover > td.frozen {
     background: rgba(15, 23, 42, 0.03);
 }
 
-.board-table tbody td.editable {
+.board-table > tbody > tr > td.editable {
     cursor: pointer;
 }
 
-.board-table tbody td.editable:hover {
+.board-table > tbody > tr > td.editable:hover {
     background: #f1f3f5;
 }
 
@@ -426,7 +471,7 @@
     margin-left: 8px;
 }
 
-.board-table tbody td.sb-primary-col:hover .sb-update-btn {
+.board-table > tbody > tr > td.sb-primary-col:hover .sb-update-btn {
     opacity: 1;
 }
 
@@ -497,16 +542,16 @@
 /* ============================================
    Primary column highlight (dynamic first column)
    ============================================ */
-.board-table thead th.sb-primary-col,
-.board-table tbody td.sb-primary-col {
+.board-table > thead > tr > th.sb-primary-col,
+.board-table > tbody > tr > td.sb-primary-col {
     background: #f7f9fc;
 }
 
-.board-table tbody tr:hover td.sb-primary-col {
+.board-table > tbody > tr:hover > td.sb-primary-col {
     background: #f1f4f9;
 }
 
-.board-table thead th.sb-primary-col {
+.board-table > thead > tr > th.sb-primary-col {
     box-shadow: inset -1px 0 0 #eef1f4; /* subtle separator like monday */
 }
 
@@ -605,12 +650,12 @@
     transition: opacity 0.15s ease;
 }
 
-.board-table tbody td:hover .sb-afford {
+.board-table > tbody > tr > td:hover .sb-afford {
     opacity: 1;
 }
 
 /* Notes hover hint (lightweight; can be redesigned per your style spec later) */
-.board-table tbody td.sb-col-notes.editable:hover {
+.board-table > tbody > tr > td.sb-col-notes.editable:hover {
     box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
 }
 
