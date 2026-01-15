@@ -43,6 +43,44 @@ def _normalize_list(value: Any) -> list:
 	return []
 
 
+def _get_task_team_fieldname() -> str | None:
+	"""
+		Find the Task table field that points to Project Team Member.
+		Prefer fieldname 'custom_task_members' if present.
+	"""
+	def _find(meta) -> str | None:
+		if not meta:
+			return None
+		candidate = None
+		for f in (meta.fields or []):
+			if str(f.fieldtype or "") != "Table":
+				continue
+			if str(f.options or "") != "Project Team Member":
+				continue
+			if str(f.fieldname or "") == "custom_task_members":
+				return "custom_task_members"
+			if str(f.fieldname or "") == "custom_team_members":
+				return "custom_team_members"
+			if not candidate:
+				candidate = str(f.fieldname or "") or None
+		return candidate
+
+	try:
+		meta = frappe.get_meta("Task")
+		fieldname = _find(meta)
+		if fieldname:
+			return fieldname
+		# Cache could be stale if Custom Field was just added
+		try:
+			frappe.clear_cache(doctype="Task")
+		except Exception:
+			pass
+		meta = frappe.get_meta("Task", cached=False)
+		return _find(meta)
+	except Exception:
+		return None
+
+
 def _uniq_preserve_order(items: Iterable[tuple]) -> list[tuple]:
 	seen = set()
 	out = []
@@ -319,11 +357,16 @@ def get_monthly_status_bundle(
 		"owner",
 		"project",
 		"parent_task",
+		"custom_team_members",
 	}
 	req_task_fields = _normalize_list(task_fields)
 	req_task_fields = [str(x).strip() for x in req_task_fields if str(x).strip()]
 	final_task_fields = ["name", "project"]
+	need_team = False
 	for f in req_task_fields:
+		if f == "custom_team_members":
+			need_team = True
+			continue
 		if f in allowed_task_fields and f not in final_task_fields:
 			final_task_fields.append(f)
 	if "subject" not in final_task_fields:
@@ -383,6 +426,34 @@ def get_monthly_status_bundle(
 			row["project"] = p
 			tasks_by_project[p].append(row)
 			all_tasks.append(row)
+
+		# Attach Task.custom_team_members (child table) if requested
+		if need_team and rows:
+			fieldname = _get_task_team_fieldname()
+			task_names = [r.get("name") for r in rows if r.get("name")]
+			if fieldname and task_names:
+				try:
+					members = frappe.get_all(
+						"Project Team Member",
+						filters={"parenttype": "Task", "parent": ["in", task_names], "parentfield": fieldname},
+						fields=["parent", "user", "role", "assigned_date"],
+						limit_page_length=100000,
+					)
+				except frappe.PermissionError:
+					members = []
+				by_task = {}
+				for m in (members or []):
+					parent = m.get("parent")
+					if not parent:
+						continue
+					by_task.setdefault(parent, []).append(m)
+				by_name = {r.get("name"): r for r in (all_tasks or []) if r.get("name")}
+				for tn, members_list in by_task.items():
+					if tn in by_name:
+						if fieldname:
+							by_name[tn][fieldname] = members_list
+						if fieldname != "custom_team_members":
+							by_name[tn]["custom_team_members"] = members_list
 
 		# Fallback total counts when we couldn't read aggregated totals.
 		if not any(task_total_by_project.values()):
@@ -793,12 +864,17 @@ def get_tasks_for_projects(projects: Any, fields: Any = None, limit_per_project:
 		"owner",
 		"project",
 		"parent_task",
+		"custom_team_members",
 	}
 	req_fields = _normalize_list(fields)
 	req_fields = [str(x).strip() for x in req_fields if str(x).strip()]
 	# Always include name + project so we can group reliably
 	final_fields = ["name", "project"]
+	need_team = False
 	for f in req_fields:
+		if f == "custom_team_members":
+			need_team = True
+			continue
 		if f in allowed_fields and f not in final_fields:
 			final_fields.append(f)
 	if "subject" not in final_fields:
@@ -827,6 +903,35 @@ def get_tasks_for_projects(projects: Any, fields: Any = None, limit_per_project:
 		if len(out[p]) >= limit_per_project:
 			continue
 		out[p].append(r)
+
+	# Attach Task.custom_team_members (child table) if requested
+	if need_team and rows:
+		fieldname = _get_task_team_fieldname()
+		task_names = [r.get("name") for r in rows if r.get("name")]
+		if fieldname and task_names:
+			try:
+				members = frappe.get_all(
+					"Project Team Member",
+					filters={"parenttype": "Task", "parent": ["in", task_names], "parentfield": fieldname},
+					fields=["parent", "user", "role", "assigned_date"],
+					limit_page_length=100000,
+				)
+			except frappe.PermissionError:
+				members = []
+			by_task = {}
+			for m in (members or []):
+				parent = m.get("parent")
+				if not parent:
+					continue
+				by_task.setdefault(parent, []).append(m)
+			for r in (rows or []):
+				tn = r.get("name")
+				if not tn:
+					continue
+				if fieldname:
+					r[fieldname] = by_task.get(tn, [])
+				if fieldname != "custom_team_members":
+					r["custom_team_members"] = by_task.get(tn, [])
 
 	# Only return keys requested (preserve input order)
 	result = {}
@@ -861,6 +966,303 @@ def create_task_for_project(project: str, subject: str | None = None) -> dict:
 	doc.insert()
 
 	return {"task": {"name": doc.name, "project": doc.project, "subject": doc.subject}}
+
+
+@frappe.whitelist()
+def set_task_team_members(task: str, members: Any, role: str | None = None) -> dict:
+	"""
+	Replace Task.custom_team_members (child table: Project Team Member).
+	Role will default to "Assigned Person".
+	"""
+	_ensure_logged_in()
+	name = str(task or "").strip()
+	if not name:
+		frappe.throw("Missing task")
+
+	doc = frappe.get_doc("Task", name)
+	doc.check_permission("write")
+
+	fieldname = _get_task_team_fieldname()
+	if not fieldname:
+		return {"missing_field": True, "custom_team_members": []}
+
+	role_val = str(role or "").strip() or "Assigned Person"
+	users = _normalize_list(members)
+	users = [str(x).strip() for x in users if str(x).strip()]
+
+	doc.set(fieldname, [])
+	for u in users:
+		doc.append(fieldname, {"user": u, "role": role_val, "assigned_date": today()})
+	doc.save(ignore_permissions=False)
+
+	out = doc.get(fieldname) or []
+	if fieldname != "custom_task_members":
+		return {"custom_task_members": out, fieldname: out}
+	return {"custom_task_members": out}
+
+
+# ============================================================
+# Admin utilities (bench-only; NOT whitelisted)
+# ============================================================
+
+def debug_project_type_refs(project_types: Any) -> dict:
+	"""
+	Bench helper: list Saved View / Project rows referencing given Project Type(s).
+	Usage:
+	  bench --site <site> execute smart_accounting.smart_accounting.api.project_board.debug_project_type_refs --kwargs "{'project_types':['External','Internal']}"
+	"""
+	names = _normalize_list(project_types)
+	names = [str(x).strip() for x in names if str(x).strip()]
+	if not names:
+		return {"project_types": [], "saved_views": [], "projects": []}
+
+	saved_views = frappe.get_all(
+		"Saved View",
+		filters={"project_type": ["in", names]},
+		fields=["name", "title", "project_type", "modified"],
+		limit_page_length=10000,
+	)
+	projects = frappe.get_all(
+		"Project",
+		filters={"project_type": ["in", names]},
+		fields=["name", "project_name", "project_type", "modified"],
+		limit_page_length=10000,
+	)
+	return {
+		"project_types": names,
+		"saved_views": saved_views or [],
+		"projects": projects or [],
+	}
+
+
+def cleanup_project_types(
+	project_types: Any,
+	*,
+	reassign_to: str | None = None,
+	delete_saved_views: bool = True,
+	dry_run: bool = True,
+) -> dict:
+	"""
+	Bench helper: remove placeholder Project Types safely.
+	- If any Project still uses them, you must pass reassign_to.
+	- Saved Views referencing them will be deleted by default (or reassigned if delete_saved_views=False).
+
+	Usage (dry-run first):
+	  bench --site <site> execute smart_accounting.smart_accounting.api.project_board.cleanup_project_types --kwargs "{'project_types':['External','Internal'],'reassign_to':'<YourRealType>','delete_saved_views':true,'dry_run':true}"
+
+	Then run again with dry_run=false.
+	"""
+	names = _normalize_list(project_types)
+	names = [str(x).strip() for x in names if str(x).strip()]
+	reassign = str(reassign_to).strip() if reassign_to else ""
+
+	ref = debug_project_type_refs(names)
+	projects = ref.get("projects") or []
+	saved_views = ref.get("saved_views") or []
+
+	if projects and not reassign:
+		return {
+			"ok": False,
+			"reason": "projects_exist",
+			"message": "Some Project records still use these Project Types. Provide reassign_to first.",
+			**ref,
+		}
+
+	out = {
+		"ok": True,
+		"dry_run": bool(dry_run),
+		"project_types": names,
+		"reassign_to": reassign or None,
+		"delete_saved_views": bool(delete_saved_views),
+		"will_delete_saved_views": [x.get("name") for x in (saved_views or [])],
+		"will_update_projects": [x.get("name") for x in (projects or [])],
+		"will_delete_project_types": names,
+	}
+	if dry_run:
+		return out
+
+	# 1) Saved Views
+	if delete_saved_views:
+		for sv in (saved_views or []):
+			try:
+				frappe.delete_doc("Saved View", sv.get("name"), force=True, ignore_permissions=True)
+			except Exception:
+				pass
+	else:
+		for sv in (saved_views or []):
+			try:
+				frappe.db.set_value("Saved View", sv.get("name"), "project_type", reassign or None)
+			except Exception:
+				pass
+
+	# 2) Projects
+	if projects and reassign:
+		for p in (projects or []):
+			try:
+				frappe.db.set_value("Project", p.get("name"), "project_type", reassign)
+			except Exception:
+				pass
+
+	# 3) Delete Project Type docs
+	for pt in names:
+		try:
+			frappe.delete_doc("Project Type", pt, force=True, ignore_permissions=True)
+		except Exception:
+			pass
+
+	frappe.db.commit()
+	return {**out, "committed": True}
+
+
+def migrate_saved_views_v2(*, dry_run: bool = True) -> dict:
+	"""
+	Bench helper: normalize Saved View filters schema and backfill new fields.
+	- Ensure reference_doctype / is_active / scope / sidebar_order exist (if fields exist on DocType)
+	- Normalize Saved View.filters to object: {filters:[], or_filters:[], search:'', ui:{...}}
+	- If legacy Saved View.project_type (Data, hidden) has a value, ensure a matching project_type filter exists.
+
+	Usage:
+	  bench --site <site> execute smart_accounting.api.project_board.migrate_saved_views_v2 --kwargs "{'dry_run':True}"
+	  bench --site <site> execute smart_accounting.api.project_board.migrate_saved_views_v2 --kwargs "{'dry_run':False}"
+	"""
+	def _has_field(dt: str, fieldname: str) -> bool:
+		try:
+			meta = frappe.get_meta(dt)
+			return bool(meta and meta.has_field(fieldname))
+		except Exception:
+			return False
+
+	def _parse_json(v: Any) -> Any:
+		if v is None:
+			return None
+		if isinstance(v, (dict, list)):
+			return v
+		if isinstance(v, str):
+			s = v.strip()
+			if not s:
+				return None
+			try:
+				return frappe.parse_json(s)
+			except Exception:
+				return None
+		return None
+
+	def _normalize_filters_payload(raw: Any) -> dict:
+		"""
+		Accept:
+		- null/'' -> {}
+		- list -> treated as AND filters
+		- dict -> if already has 'filters'/'or_filters' keep; else treat keys as UI only
+		"""
+		obj = _parse_json(raw)
+		if obj is None:
+			return {"filters": [], "or_filters": [], "search": "", "ui": {}}
+		if isinstance(obj, list):
+			return {"filters": obj, "or_filters": [], "search": "", "ui": {}}
+		if isinstance(obj, dict):
+			if "filters" in obj or "or_filters" in obj or "search" in obj or "ui" in obj:
+				return {
+					"filters": obj.get("filters") or [],
+					"or_filters": obj.get("or_filters") or [],
+					"search": obj.get("search") or "",
+					"ui": obj.get("ui") or {},
+				}
+			return {"filters": [], "or_filters": [], "search": "", "ui": obj}
+		return {"filters": [], "or_filters": [], "search": "", "ui": {}}
+
+	def _ensure_project_type_filter(payload: dict, project_type_val: str) -> dict:
+		pt = str(project_type_val or "").strip()
+		if not pt:
+			return payload
+		fl = payload.get("filters") or []
+		# avoid duplicates
+		for t in fl:
+			try:
+				if len(t) >= 3 and str(t[0]) == "project_type" and str(t[1]) in ("=", "in") and (
+					(str(t[1]) == "=" and str(t[2]) == pt) or (str(t[1]) == "in" and pt in (t[2] or []))
+				):
+					return payload
+			except Exception:
+				continue
+		fl.append(["project_type", "=", pt])
+		payload["filters"] = fl
+		payload.setdefault("ui", {})
+		payload["ui"]["pinned_project_type"] = pt
+		return payload
+
+	has_reference = _has_field("Saved View", "reference_doctype")
+	has_active = _has_field("Saved View", "is_active")
+	has_scope = _has_field("Saved View", "scope")
+	has_order = _has_field("Saved View", "sidebar_order")
+
+	rows = frappe.get_all(
+		"Saved View",
+		fields=["name", "title", "reference_doctype", "project_type", "filters", "is_active", "scope", "sidebar_order", "modified"],
+		ignore_permissions=True,
+		limit_page_length=10000,
+	)
+
+	updated = []
+	skipped = []
+	errors = []
+
+	for r in (rows or []):
+		name = r.get("name")
+		try:
+			next_vals = {}
+			changed = False
+
+			# reference_doctype default
+			if has_reference:
+				cur = str(r.get("reference_doctype") or "").strip()
+				if not cur:
+					next_vals["reference_doctype"] = "Project"
+					changed = True
+
+			# is_active default
+			if has_active:
+				if r.get("is_active") in (None, ""):
+					next_vals["is_active"] = 1
+					changed = True
+
+			# scope default
+			if has_scope:
+				cur = str(r.get("scope") or "").strip()
+				if not cur:
+					next_vals["scope"] = "Shared"
+					changed = True
+
+			# sidebar_order default
+			if has_order:
+				if r.get("sidebar_order") in (None, ""):
+					next_vals["sidebar_order"] = 0
+					changed = True
+
+			# filters normalization
+			payload = _normalize_filters_payload(r.get("filters"))
+			payload = _ensure_project_type_filter(payload, r.get("project_type"))
+			normalized_json = frappe.as_json(payload)
+			# Compare string forms best-effort
+			cur_raw = r.get("filters")
+			cur_obj = _parse_json(cur_raw)
+			if cur_obj != payload:
+				next_vals["filters"] = normalized_json
+				changed = True
+
+			if not changed:
+				skipped.append(name)
+				continue
+
+			updated.append({"name": name, "title": r.get("title"), "set": next_vals})
+			if not dry_run:
+				frappe.db.set_value("Saved View", name, next_vals, update_modified=False)
+		except Exception as e:
+			errors.append({"name": name, "error": str(e)})
+
+	if (not dry_run) and updated:
+		frappe.db.commit()
+
+	return {"dry_run": bool(dry_run), "updated": updated, "skipped": skipped, "errors": errors}
 
 
 @frappe.whitelist()

@@ -188,7 +188,8 @@ function multiLinkEditor({ cellEl, project, manager, doctype, placeholder, initi
     defaultList: defaultList || null,
     resolveMeta: resolveMeta || null,
     onChange: () => {
-      // Do NOT auto-commit; user can pick multiple then click outside to save.
+      // Commit on each change but keep editor open for multi-select.
+      manager?.commit?.('multilink-change');
     }
   });
 

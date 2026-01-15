@@ -278,6 +278,21 @@
     border-top: 1px solid rgba(15, 23, 42, 0.06);
     /* Indent under the first data column (skip checkbox col) */
     padding-left: calc(12px + 52px);
+    position: relative;
+}
+
+/* Mask the left gutter so task columns don't bleed through when scrolling */
+.sb-task-wrap::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: calc(12px + 52px);
+    background: var(--smart-board-surface);
+    border-right: 1px solid rgba(15, 23, 42, 0.06);
+    z-index: 3;
+    pointer-events: none;
 }
 
 /* Expanded tasks row should not inherit main table cell padding/borders (reduces wasted whitespace). */
@@ -310,6 +325,7 @@
     border-radius: 14px;
     overflow: visible; /* IMPORTANT: keep sticky columns working (no overflow hidden/auto here) */
     /* Follow main table horizontal scroll; no inner scrollbars */
+    z-index: 2;
 }
 
 .sb-task-grid::before {
@@ -339,10 +355,30 @@
     font-size: 13px;
     border-bottom: 1px solid #f1f3f5;
     border-right: 1px solid rgba(15, 23, 42, 0.06);
+    background: #fff;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     box-sizing: border-box;
+}
+
+.sb-task-table td.editable {
+    cursor: pointer;
+}
+
+.sb-task-table td.editable:hover {
+    background: #f8f9fb;
+}
+
+.sb-task-table td .cell-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.sb-task-table td:hover .sb-afford {
+    opacity: 1;
 }
 
 .sb-task-table th:last-child,
@@ -379,7 +415,7 @@
 .sb-task-table th:nth-child(1),
 .sb-task-table td:nth-child(1) {
     position: sticky;
-    left: calc(12px + 52px);
+    left: 0;
     z-index: 6;
     background: var(--smart-board-surface);
     background-clip: padding-box;
@@ -394,7 +430,7 @@
 .sb-task-table th:nth-child(2),
 .sb-task-table td:nth-child(2) {
     position: sticky;
-    left: calc(12px + 52px + 44px);
+    left: 44px;
     z-index: 5;
     background: var(--smart-board-surface);
     background-clip: padding-box;
@@ -483,11 +519,18 @@
     position: sticky;
     left: 0; /* inline style may override for multi-frozen columns */
     background: var(--smart-board-surface);
-    z-index: 1;
+    background-clip: padding-box;
+    z-index: 3;
+    box-shadow: 1px 0 0 rgba(15, 23, 42, 0.06);
 }
 
 .board-table > tbody > tr:hover > td.frozen {
-    background: rgba(15, 23, 42, 0.03);
+    /* Use opaque background to prevent right-side content bleeding through while hovering */
+    background: #f1f4f9;
+}
+
+.board-table > tbody > tr.selected > td.frozen {
+    background: var(--smart-board-primary-50);
 }
 
 .board-table > tbody > tr > td.editable {

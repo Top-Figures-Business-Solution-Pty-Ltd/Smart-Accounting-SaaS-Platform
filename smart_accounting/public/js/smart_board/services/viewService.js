@@ -6,6 +6,48 @@
 import { ApiService } from './api.js';
 
 export class ViewService {
+    static normalizeFilters(raw) {
+        // Normalize Saved View.filters into:
+        // { filters: [], or_filters: [], search: '', ui: {} }
+        let obj = raw;
+        if (obj == null || obj === '') {
+            return { filters: [], or_filters: [], search: '', ui: {} };
+        }
+        if (typeof obj === 'string') {
+            try { obj = JSON.parse(obj); } catch (e) { obj = null; }
+        }
+        if (Array.isArray(obj)) {
+            return { filters: obj, or_filters: [], search: '', ui: {} };
+        }
+        if (obj && typeof obj === 'object') {
+            if ('filters' in obj || 'or_filters' in obj || 'search' in obj || 'ui' in obj) {
+                return {
+                    filters: Array.isArray(obj.filters) ? obj.filters : [],
+                    or_filters: Array.isArray(obj.or_filters) ? obj.or_filters : [],
+                    search: typeof obj.search === 'string' ? obj.search : '',
+                    ui: (obj.ui && typeof obj.ui === 'object') ? obj.ui : {},
+                };
+            }
+            return { filters: [], or_filters: [], search: '', ui: obj };
+        }
+        return { filters: [], or_filters: [], search: '', ui: {} };
+    }
+
+    static inferPinnedProjectType(view) {
+        // 1) New schema: filters.ui.pinned_project_type
+        const payload = this.normalizeFilters(view?.filters);
+        const pinned = payload?.ui?.pinned_project_type;
+        if (pinned) return String(pinned);
+        // 2) Fallback: find project_type filter
+        for (const t of (payload.filters || [])) {
+            try {
+                if (t?.[0] === 'project_type' && t?.[1] === '=' && t?.[2]) return String(t[2]);
+            } catch (e) {}
+        }
+        // 3) Legacy (now Data/hidden)
+        if (view?.project_type) return String(view.project_type);
+        return '';
+    }
     static _jsonify(value) {
         if (value === undefined) return value;
         if (value === null) return value;
@@ -22,7 +64,8 @@ export class ViewService {
      */
     static async fetchViews(projectType = null) {
         try {
-            const filters = projectType ? [['project_type', '=', projectType]] : [];
+            // v2: projectType is derived from filters; do not hard-filter by Saved View.project_type (deprecated)
+            const filters = [];
             
             const response = await frappe.call({
                 method: 'frappe.client.get_list',
@@ -33,8 +76,10 @@ export class ViewService {
                     order_by: 'is_default desc, title asc'
                 }
             });
-            
-            return response.message || [];
+            const rows = response.message || [];
+            if (!projectType) return rows;
+            const pt = String(projectType);
+            return rows.filter((v) => this.inferPinnedProjectType(v) === pt);
         } catch (error) {
             console.error('Failed to fetch views:', error);
             return [];
@@ -46,24 +91,26 @@ export class ViewService {
      */
     static async getDefaultView(projectType) {
         try {
-            const filters = [
-                ['project_type', '=', projectType],
-                ['is_default', '=', 1]
-            ];
-
             const response = await frappe.call({
                 method: 'frappe.client.get_list',
                 args: {
                     doctype: 'Saved View',
-                    fields: ['name', 'title', 'project_type', 'columns', 'filters', 'sort_by', 'sort_order', 'is_default', 'owner', 'modified'],
-                    filters,
-                    limit_page_length: 1,
+                    fields: ['name', 'title', 'project_type', 'columns', 'filters', 'sort_by', 'sort_order', 'is_default', 'owner', 'modified', 'reference_doctype', 'is_active', 'scope', 'sidebar_order'],
+                    filters: [],
+                    limit_page_length: 200,
                     order_by: 'modified desc'
                 }
             });
 
             const rows = response.message || [];
-            return rows[0] || null;
+            const pt = String(projectType || '').trim();
+            const matched = rows
+                .filter((v) => (String(v?.reference_doctype || 'Project') || 'Project') === 'Project')
+                .filter((v) => (v?.is_active == null ? 1 : Number(v.is_active)) !== 0)
+                .filter((v) => (String(v?.scope || 'Shared') || 'Shared') === 'Shared')
+                .filter((v) => this.inferPinnedProjectType(v) === pt)
+                .filter((v) => Number(v?.is_default || 0) === 1);
+            return matched[0] || null;
         } catch (error) {
             console.error('Failed to get default view:', error);
             return null;
@@ -89,9 +136,19 @@ export class ViewService {
                     doc: {
                         doctype: 'Saved View',
                         title,
-                        project_type: projectType,
+                        // v2 schema
+                        reference_doctype: 'Project',
+                        is_active: 1,
+                        scope: 'Shared',
+                        sidebar_order: 0,
+                        project_type: projectType, // legacy (Data/hidden) for compatibility only
                         columns: this._jsonify(columns),
-                        filters: this._jsonify({}),
+                        filters: this._jsonify({
+                            filters: [['project_type', '=', projectType]],
+                            or_filters: [],
+                            search: '',
+                            ui: { pinned_project_type: projectType }
+                        }),
                         sort_by: 'modified',
                         sort_order: 'desc',
                         is_default: 1

@@ -200,6 +200,13 @@ export class ProjectService {
     static async updateProject(name, data) {
         return ApiService.updateDoc('Project', name, data);
     }
+
+    /**
+     * 更新Task
+     */
+    static async updateTask(name, data) {
+        return ApiService.updateDoc('Task', name, data);
+    }
     
     /**
      * 删除Project
@@ -311,6 +318,17 @@ export class ProjectService {
             args: { project: p, subject }
         });
         return r?.message?.task || r?.message;
+    }
+
+    static async setTaskTeamMembers(task, members = [], role = 'Assigned Person') {
+        const t = String(task || '').trim();
+        if (!t) throw new Error('Missing task');
+        const list = Array.isArray(members) ? members : [];
+        const r = await frappe.call({
+            method: 'smart_accounting.api.project_board.set_task_team_members',
+            args: { task: t, members: list, role }
+        });
+        return r?.message || {};
     }
 
     static async getMyProjectsWithRoles() {

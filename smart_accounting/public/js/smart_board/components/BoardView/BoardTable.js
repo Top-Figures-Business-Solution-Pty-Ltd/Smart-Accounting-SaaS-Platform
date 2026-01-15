@@ -12,6 +12,8 @@ import { ViewService } from '../../services/viewService.js';
 import { ColumnsManagerModal } from './ColumnsManagerModal.js';
 import { TeamRoleService } from '../../services/teamRoleService.js';
 import { EditingManager } from './boardTableEditingManager.js';
+import { TaskEditingManager } from './boardTableTaskEditingManager.js';
+import { getTaskColumnSpec } from '../../columns/specs/taskColumns.js';
 import { columnRegistry } from '../../columns/registry.js';
 import { UpdatesModal } from './UpdatesModal.js';
 import { buildRowModel } from './rowModel.js';
@@ -37,6 +39,7 @@ export class BoardTable {
         this._teamRoles = null;
         this._openingColMgr = false;
         this._editing = null;
+        this._taskEditing = null;
         this._bulkWorking = false;
         this._onBulkBarClick = null;
 
@@ -145,6 +148,10 @@ export class BoardTable {
         return !!(this._taskCols || []).find((c) => c?.field === '__sb_task_monthly_status');
     }
 
+    _needsTaskTeam() {
+        return !!(this._taskCols || []).find((c) => c?.field === 'owner' || c?.field === 'custom_task_members' || c?.field === 'custom_team_members');
+    }
+
     _expandProjectColumnsForRender(columns) {
         const cols = Array.isArray(columns) ? columns : [];
         const labels = this._getBoardMonthLabels();
@@ -203,6 +210,10 @@ export class BoardTable {
                     .map((c) => c?.field)
                     .filter((f) => f && !String(f).startsWith('__sb_ts_m') && f !== '__sb_task_monthly_status')
                 : [];
+            if (includeTasks && this._needsTaskTeam()) {
+                if (!taskFields.includes('custom_task_members')) taskFields.push('custom_task_members');
+                if (!taskFields.includes('custom_team_members')) taskFields.push('custom_team_members');
+            }
             const bundle = await ProjectService.getMonthlyStatusBundle(missing, {
                 includeTasks,
                 includeMatrix: includeTasks,
@@ -554,6 +565,7 @@ export class BoardTable {
         
         // 单元格编辑
         this.initCellEditing();
+        this.initTaskEditing();
 
         // Bulk select events
         this.bindBulkSelect();
@@ -654,6 +666,74 @@ export class BoardTable {
         this._editing.bindToTbody(tbody);
     }
 
+    initTaskEditing() {
+        const tbody = this.container.querySelector('#tableBody');
+        if (!tbody) return;
+        if (!this._taskEditing) {
+            this._taskEditing = new TaskEditingManager({
+                rootEl: this.container,
+                getTaskByName: (projectName, taskName) => this._getTaskByName(projectName, taskName),
+                updateTask: (taskName, data) => ProjectService.updateTask(taskName, data),
+                onTaskUpdated: ({ projectName, taskName, field, value }) => {
+                    this._updateTaskLocal(projectName, taskName, field, value);
+                }
+            });
+        }
+        this._taskEditing.bindToTbody(tbody);
+    }
+
+    _getTaskByName(projectName, taskName) {
+        if (!projectName || !taskName) return null;
+        const tasks = this._tasksByProject.get(projectName) || [];
+        return tasks.find((t) => String(t?.name || '') === String(taskName)) || null;
+    }
+
+    _updateTaskLocal(projectName, taskName, field, value) {
+        const task = this._getTaskByName(projectName, taskName);
+        if (task) task[field] = value;
+        this.scheduleRowsUpdate();
+    }
+
+    _isTaskFieldEditable(column) {
+        const field = column?.field;
+        if (!field) return false;
+        if (String(field).startsWith('__sb_')) return false;
+        if (column?.__msKind) return false;
+        const spec = getTaskColumnSpec(field);
+        if (spec && spec.isEditable !== undefined) return !!spec.isEditable;
+        return true;
+    }
+
+    _getTaskAffordance(field) {
+        const spec = getTaskColumnSpec(field);
+        const kind = spec?.afford || 'edit';
+        return kind === 'select' ? '▾' : '✎';
+    }
+
+    _renderTaskTeam(members) {
+        if (!Array.isArray(members) || !members.length) {
+            return '<span class="text-muted">—</span>';
+        }
+        const avatars = members.slice(0, 3).map((member) => {
+            const name = this._extractName(member?.user || '');
+            const initial = (name || '').charAt(0).toUpperCase();
+            const img = member?.user_image || '';
+            if (img) {
+                return `<img class="user-avatar user-avatar--img" src="${escapeHtml(String(img))}" title="${escapeHtml(name)}" alt="" />`;
+            }
+            return `<span class="user-avatar" title="${escapeHtml(name)}">${escapeHtml(initial)}</span>`;
+        }).join('');
+        const moreCount = members.length - 3;
+        const moreText = moreCount > 0 ? `<span class="more-count">+${moreCount}</span>` : '';
+        return `<div class="team-avatars">${avatars}${moreText}</div>`;
+    }
+
+    _extractName(email) {
+        if (!email) return '';
+        const name = String(email).split('@')[0];
+        return name.charAt(0).toUpperCase() + name.slice(1);
+    }
+
     buildRenderColumns() {
         // Inject system select column at the very left (not persisted in Saved View)
         const selectCol = {
@@ -679,6 +759,8 @@ export class BoardTable {
             const baseHeaderClass = columnRegistry.getHeaderClass({ column: col }) || '';
             col.__headerClass = `${baseHeaderClass} ${col.__isPrimary ? 'sb-primary-col' : ''}`.trim();
             col.__cellClass = col.__isPrimary ? 'sb-primary-col' : '';
+            // Keep the primary (first user) column sticky so right-side content doesn't slide behind it.
+            col.frozen = !!(col.frozen || col.__isPrimary);
             if (col.frozen) {
                 col._stickyLeft = left;
                 left += Number(col.width || 0);
@@ -1064,6 +1146,10 @@ export class BoardTable {
         this.scheduleRowsUpdate();
         try {
             const fields = this._taskCols.map((c) => c.field);
+            if (this._needsTaskTeam()) {
+                if (!fields.includes('custom_task_members')) fields.push('custom_task_members');
+                if (!fields.includes('custom_team_members')) fields.push('custom_team_members');
+            }
             const map = await ProjectService.getTasksForProjects([projectName], fields, 200);
             const tasks = map?.[projectName] || [];
             this._tasksByProject.set(projectName, tasks);
@@ -1139,10 +1225,25 @@ export class BoardTable {
                             return `<td class="${cls}" data-task="${escapeHtml(tn)}" data-month-index="${mi}" data-fiscal-year="${fy}" data-project="${escapeHtml(name)}">${st ? escapeHtml(st) : ''}</td>`;
                         }
                         const v = t?.[c.field];
-                        return `<td>${escapeHtml(v ?? '—')}</td>`;
+                        const editable = this._isTaskFieldEditable(c);
+                        const cls = editable ? 'editable' : '';
+                        const attrs = editable
+                            ? ` data-task-field="${escapeHtml(c.field)}" data-task-name="${escapeHtml(tn)}" data-project-name="${escapeHtml(name)}"`
+                            : '';
+                        let val = '';
+                        const teamMembers = (c.field === 'custom_task_members' || c.field === 'custom_team_members' || c.field === 'owner')
+                            ? (Array.isArray(t?.custom_task_members) ? t.custom_task_members : (Array.isArray(t?.custom_team_members) ? t.custom_team_members : null))
+                            : null;
+                        if (teamMembers && teamMembers.length) {
+                            val = this._renderTaskTeam(teamMembers);
+                        } else {
+                            val = escapeHtml(v ?? '—');
+                        }
+                        const afford = editable ? `<span class="sb-afford sb-afford--task">${this._getTaskAffordance(c.field)}</span>` : '';
+                        return `<td class="${cls}"${attrs}><div class="cell-content">${val}${afford}</div></td>`;
                     }).join('');
                     const selTd = `<td class="sb-task-select-col"><input type="checkbox" class="sb-task-select" data-project="${escapeHtml(name)}" data-task="${escapeHtml(tn)}" ${selected ? 'checked' : ''} aria-label="Select task" /></td>`;
-                    rows.push(`<tr class="${selected ? 'sb-task-selected' : ''}">${selTd}${tds}${filler > 0 ? '<td></td>' : ''}</tr>`);
+                    rows.push(`<tr class="${selected ? 'sb-task-selected' : ''}" data-task-name="${escapeHtml(tn)}" data-project-name="${escapeHtml(name)}">${selTd}${tds}${filler > 0 ? '<td></td>' : ''}</tr>`);
                 }
             } else {
                 const tds = `<td class="sb-task-select-col"></td>` + taskCols.map((c, idx) => idx === 0

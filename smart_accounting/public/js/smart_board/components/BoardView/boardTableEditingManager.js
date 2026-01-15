@@ -24,6 +24,7 @@ export class EditingManager {
 
     this._active = null; // { cellEl, projectName, field, originalHTML, originalValue }
     this._committing = false;
+    this._pendingCommit = false;
     this._onDocMouseDown = null;
     this._editorInstance = null;
   }
@@ -176,7 +177,10 @@ export class EditingManager {
 
   async commit(reason = 'unknown') {
     if (!this._active) return;
-    if (this._committing) return;
+    if (this._committing) {
+      this._pendingCommit = true;
+      return;
+    }
     this._committing = true;
 
     try {
@@ -200,12 +204,16 @@ export class EditingManager {
         return;
       }
 
+      const spec = columnRegistry.getSpec(field);
       // Store for closeEditor optimistic paint
       this._active._committedValue = value;
       // No-op: if unchanged, just restore (avoid extra store churn)
-      const oldVal = project?.[field];
-      if ((oldVal == null ? '' : String(oldVal)) === (value == null ? '' : String(value))) {
-        return;
+      // IMPORTANT: for custom commit columns (e.g., team:role), project[field] may be undefined.
+      if (!(spec && typeof spec.commit === 'function')) {
+        const oldVal = project?.[field];
+        if ((oldVal == null ? '' : String(oldVal)) === (value == null ? '' : String(value))) {
+          return;
+        }
       }
 
       // Default commit path: projects/updateProjectField (uses frappe.client.set_value)
@@ -216,7 +224,6 @@ export class EditingManager {
       const doBulk = isBulkField && selected.length > 1 && selected.includes(projectName);
 
       try {
-        const spec = columnRegistry.getSpec(field);
         const confirmFn = spec?.confirmCommit;
         if (typeof confirmFn === 'function') {
           // Confirm once for bulk operations (avoid N dialogs).
@@ -231,7 +238,6 @@ export class EditingManager {
       // - only when the edited row is itself selected
       // - skip explicitly opted-out fields (spec.bulkSync === false)
       if (doBulk) {
-        const spec = columnRegistry.getSpec(field);
         if (spec?.bulkSync === false) {
           // Explicitly opted out (e.g. attachments / unique per-row fields)
         } else {
@@ -266,7 +272,6 @@ export class EditingManager {
 
       // Allow per-column custom commit (complex fields / derived columns).
       // If not provided, fall back to store action (frappe.client.set_value).
-      const spec = columnRegistry.getSpec(field);
       if (spec && typeof spec.commit === 'function') {
         await spec.commit({ project, projectName, field, value, reason, store: this.store });
         return;
@@ -277,6 +282,10 @@ export class EditingManager {
       }
     } finally {
       this._committing = false;
+      if (this._pendingCommit) {
+        this._pendingCommit = false;
+        setTimeout(() => this.commit('pending'), 0);
+      }
     }
   }
 

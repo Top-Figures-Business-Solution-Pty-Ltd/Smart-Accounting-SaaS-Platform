@@ -134,13 +134,11 @@ export class SmartBoardApp {
         // 从store加载数据：合并 filters（含 advanced filter rules/groups + search）
         const projectTypeValues = new Set(this.projectTypes.map(t => t.value));
 
-        // board view 强制带 project_type；dashboard/其他视图允许空（用于 future）
-        const base = projectTypeValues.has(viewType)
-            ? { project_type: viewType }
-            : {};
+        // v2: board view 默认仍按 project_type 过滤（Saved View.filters 只是“默认配置来源”，不会阻塞删除 Project Type）
+        const base = projectTypeValues.has(viewType) ? { project_type: viewType } : {};
 
         const stateFilters = this.store?.getState?.()?.filters || {};
-        // base 需要覆盖 stateFilters 里的 project_type（避免旧视图残留）
+        // base 覆盖 stateFilters 里的 project_type（避免旧视图残留）
         const merged = { ...stateFilters, ...base };
 
         await this.store.dispatch('projects/fetchProjects', merged);
