@@ -88,6 +88,7 @@ export class BoardTable {
         this._onScroll = null;
         this._onBodyHScroll = null;
         this._syncingHScroll = false;
+        this._lastLoadMoreAt = 0;
         this._rowHeight = 44; // fallback, will be refined after first render
         this._virtualThreshold = options.virtualThreshold || 200;
         this._overscan = options.overscan || 6;
@@ -556,15 +557,42 @@ export class BoardTable {
         }
 
         this._onScroll = () => {
-            if (!this.isVirtual()) return;
             // Requirement: click elsewhere saves; scrolling is a "leave cell" action too.
-            // Commit and close to avoid editor being destroyed by virtualization rerender.
             if (this._editing?.isEditing?.()) {
                 this._editing.commitAndClose?.('scroll');
             }
-            this.scheduleRowsUpdate();
+
+            // Infinite scroll (pagination): when near bottom, fetch next page.
+            this._maybeLoadMore?.(body);
+
+            // Virtual mode only: update visible window.
+            if (this.isVirtual()) {
+                this.scheduleRowsUpdate();
+            }
         };
         body.addEventListener('scroll', this._onScroll, { passive: true });
+    }
+
+    _maybeLoadMore(bodyEl) {
+        const body = bodyEl || this.container.querySelector('#boardTableBody');
+        if (!body || !this.store) return;
+
+        // Expanded rows disable virtualization; still allow loading more.
+        const st = this.store.getState?.()?.projects;
+        if (!st) return;
+        if (st.loading || st.loadingMore) return;
+        if (!st.hasMore) return;
+
+        // Throttle to avoid hammering on fast scroll
+        const now = Date.now();
+        if (now - (this._lastLoadMoreAt || 0) < 350) return;
+
+        const nearBottom = (body.scrollTop + body.clientHeight) >= (body.scrollHeight - 320);
+        if (!nearBottom) return;
+
+        this._lastLoadMoreAt = now;
+        // Use stored lastFilters inside the projects module, so we don't need to reconstruct filters here.
+        this.store.dispatch?.('projects/fetchMoreProjects', null);
     }
 
     initResizable() {
@@ -922,8 +950,6 @@ export class BoardTable {
     }
 
     isVirtual() {
-        // Expanded rows break fixed row height assumptions; disable virtualization while expanded.
-        if (this._expanded && this._expanded.size > 0) return false;
         const total = this._rowModel?.count?.() ?? (this.projects || []).length;
         return shouldVirtualize(total, this._virtualThreshold);
     }
@@ -955,13 +981,50 @@ export class BoardTable {
         const scrollTop = viewport?.scrollTop || 0;
         const total = this._rowModel?.count?.() ?? (this.projects || []).length;
 
-        const { start, end, topPad, bottomPad } = computeWindow({
-            scrollTop,
+        // Keep virtualization stable even when many rows are expanded:
+        // treat each expanded row as adding a fixed extra height (the task subtable is now internally scrollable).
+        const expandedHeight = 260; // must match CSS max-height of .sb-task-grid (+ paddings are within the same row)
+        const ordered = this._rowModel?.all?.() || this.projects || [];
+        const expanded = this._expanded || new Set();
+        const expandedIdx = [];
+        for (let i = 0; i < ordered.length; i++) {
+            const p = ordered[i];
+            const name = p?.name;
+            if (name && expanded.has(name)) expandedIdx.push(i);
+        }
+        const countExpandedBefore = (idx) => {
+            if (!expandedIdx.length) return 0;
+            // expandedIdx is sorted
+            let lo = 0, hi = expandedIdx.length;
+            while (lo < hi) {
+                const mid = (lo + hi) >> 1;
+                if (expandedIdx[mid] < idx) lo = mid + 1;
+                else hi = mid;
+            }
+            return lo;
+        };
+        // Approximate mapping from scrollTop->row index by subtracting expanded heights above.
+        let startGuess = Math.floor(scrollTop / Math.max(1, this._rowHeight));
+        startGuess = Math.max(0, Math.min(total - 1, startGuess));
+        for (let k = 0; k < 3; k++) {
+            const above = countExpandedBefore(startGuess);
+            const adjusted = scrollTop - above * expandedHeight;
+            const nextGuess = Math.floor(adjusted / Math.max(1, this._rowHeight));
+            if (nextGuess === startGuess) break;
+            startGuess = Math.max(0, Math.min(total - 1, nextGuess));
+        }
+        const adjustedScrollTop = Math.max(0, scrollTop - countExpandedBefore(startGuess) * expandedHeight);
+        const win = computeWindow({
+            scrollTop: adjustedScrollTop,
             viewportHeight,
             rowHeight: this._rowHeight,
             total,
             overscan: this._overscan
         });
+        const start = win.start;
+        const end = win.end;
+        const topPad = (start * this._rowHeight) + (countExpandedBefore(start) * expandedHeight);
+        const bottomPad = ((total - end) * this._rowHeight) + ((expandedIdx.length - countExpandedBefore(end)) * expandedHeight);
 
         const slice = this._rowModel?.slice?.(start, end) || this.projects.slice(start, end);
         // In virtual mode, prefetch monthly completion only for visible rows (perf)

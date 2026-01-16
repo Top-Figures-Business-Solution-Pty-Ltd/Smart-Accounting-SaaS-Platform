@@ -6,13 +6,14 @@
 import { Sidebar } from './components/Layout/Sidebar.js';
 import { Header } from './components/Layout/Header.js';
 import { MainContent } from './components/Layout/MainContent.js';
-import { PROJECT_TYPE_ICONS, DEFAULT_PROJECT_TYPE_ICON } from './utils/constants.js';
+import { PROJECT_TYPE_ICONS, DEFAULT_PROJECT_TYPE_ICON, DEFAULT_COLUMNS } from './utils/constants.js';
 import { Store } from './store/store.js';
 import { ProjectTypeService } from './services/projectTypeService.js';
 import { isBoardView as isBoardViewFn } from './utils/viewTypes.js';
 import { handleHeaderAction } from './controllers/headerActionHandler.js';
 import { openProject, createProject } from './services/navigationService.js';
 import { msgprint } from './services/uiAdapter.js';
+import { ViewService } from './services/viewService.js';
 import './columns/registerDefaultSpecs.js';
 
 export class SmartBoardApp {
@@ -140,6 +141,51 @@ export class SmartBoardApp {
         const stateFilters = this.store?.getState?.()?.filters || {};
         // base 覆盖 stateFilters 里的 project_type（避免旧视图残留）
         const merged = { ...stateFilters, ...base };
+
+        // PERF (SaaS-ready):
+        // Derive Project query fields from the current Saved View (visible columns).
+        // This prevents pulling a giant payload for every board, and scales much better.
+        if (this.isBoardView(viewType)) {
+            try {
+                const fallbackCols = (DEFAULT_COLUMNS[viewType] || DEFAULT_COLUMNS['DEFAULT'] || []).map((c) => ({ field: c.field, label: c.label }));
+                const view = await ViewService.getOrCreateDefaultView(viewType, {
+                    fallbackTitle: `${viewType} Board`,
+                    fallbackColumns: fallbackCols
+                });
+
+                const parseColumns = (raw) => {
+                    if (!raw) return [];
+                    let v = raw;
+                    if (typeof v === 'string') {
+                        try { v = JSON.parse(v); } catch (e) { v = null; }
+                    }
+                    if (Array.isArray(v)) return v;
+                    if (v && typeof v === 'object') {
+                        return Array.isArray(v.project) ? v.project : (Array.isArray(v.projectColumns) ? v.projectColumns : []);
+                    }
+                    return [];
+                };
+
+                const cols = parseColumns(view?.columns);
+                const baseFields = ['name', 'project_name', 'customer', 'project_type', 'status', 'company', 'is_active', 'modified'];
+                const fields = new Set(baseFields);
+                for (const c of (cols || [])) {
+                    const f = String(c?.field || '').trim();
+                    if (!f) continue;
+                    // Skip virtual/computed columns
+                    if (f.startsWith('__sb_')) continue;
+                    // Derived column: team:<Role> needs custom_team_members
+                    if (f.startsWith('team:')) {
+                        fields.add('custom_team_members');
+                        continue;
+                    }
+                    fields.add(f);
+                }
+                merged.fields = Array.from(fields);
+            } catch (e) {
+                // Fail-safe: if Saved View fetch fails, fall back to legacy behavior.
+            }
+        }
 
         await this.store.dispatch('projects/fetchProjects', merged);
     }

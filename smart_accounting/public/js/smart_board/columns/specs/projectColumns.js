@@ -272,15 +272,15 @@ function normalizeTeamInitial(project, role) {
     .filter(Boolean);
 }
 
-function attachmentEditor({ cellEl, project, manager, field, label = 'Upload' }) {
+function attachmentEditor({ cellEl, project, manager, field, label = 'Upload', autoOpen = false }) {
   const contentEl = cellEl.querySelector('.cell-content') || cellEl;
   const current = project?.[field] || '';
   const safeUrl = current ? escapeHtml(String(current)) : '';
 
   contentEl.innerHTML = `
     <div class="sb-attach">
-      ${safeUrl ? `<a class="sb-attach__link" href="${safeUrl}" target="_blank" rel="noopener noreferrer">📎 View</a>` : `<span class="text-muted">—</span>`}
-      <button type="button" class="btn btn-sm btn-light sb-attach__btn">${escapeHtml(label)}</button>
+      ${safeUrl ? `<a class="sb-attach__link" href="${safeUrl}" target="_blank" rel="noopener noreferrer">View</a>` : `<span class="text-muted">—</span>`}
+      <button type="button" class="sb-attach__btn" aria-label="${escapeHtml(label)}">${escapeHtml(label)}</button>
       <input type="file" class="sb-attach__file" style="display:none;" />
       <span class="sb-attach__hint text-muted" style="display:none;">Uploading...</span>
     </div>
@@ -298,8 +298,6 @@ function attachmentEditor({ cellEl, project, manager, field, label = 'Upload' })
     destroy() {}
   };
 
-  // Prevent outside-click commit when interacting with file dialog
-  btn?.addEventListener('mousedown', (e) => { e.preventDefault(); }, true);
   btn?.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -329,10 +327,16 @@ function attachmentEditor({ cellEl, project, manager, field, label = 'Upload' })
       // keep editor open; user can retry
     } finally {
       if (hint) hint.style.display = 'none';
+      // Allow picking the same file again (some browsers won't fire change if the same file is chosen).
+      try { fileInput.value = ''; } catch (e) {}
     }
   });
 
   manager?.bindActiveEditor?.(btn, editor);
+  // UX: open file picker immediately on first click-to-edit.
+  if (autoOpen) {
+    try { fileInput?.click?.(); } catch (e) {}
+  }
   return editor;
 }
 
@@ -547,11 +551,11 @@ export function makeProjectColumnSpecs() {
       bulkSync: false,
       renderCell: ({ project }) => {
         const v = project?.custom_engagement_letter;
-        if (!v) return '<span class="text-muted">—</span><span class="sb-afford sb-afford--select">Upload</span>';
+        if (!v) return '<span class="sb-attach-pill">Upload</span>';
         const url = escapeHtml(String(v));
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer">📎 Engagement Letter</a>`;
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer">📎 Engagement Letter</a> <span class="sb-attach-pill sb-attach-pill--subtle">Replace</span>`;
       },
-      renderEditor: ({ cellEl, project, manager, field }) => attachmentEditor({ cellEl, project, manager, field, label: 'Upload' })
+      renderEditor: ({ cellEl, project, manager, field }) => attachmentEditor({ cellEl, project, manager, field, label: 'Upload', autoOpen: true })
     },
 
     // (19) Team by role derived columns: team:<Role> => later editor

@@ -206,6 +206,59 @@
     color: #ffffff !important;
 }
 
+/* ============================================
+   Attachment pill (Engagement Letter, etc.)
+   ============================================ */
+.sb-attach-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--smart-board-border);
+    background: rgba(15, 23, 42, 0.04);
+    color: var(--smart-board-text);
+    user-select: none;
+    cursor: pointer;
+}
+.sb-attach-pill--subtle {
+    margin-left: 8px;
+    background: transparent;
+    color: var(--smart-board-text-muted);
+}
+
+.sb-attach {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+.sb-attach__link {
+    font-size: 13px;
+    color: var(--smart-board-primary);
+    text-decoration: none;
+    font-weight: 600;
+}
+.sb-attach__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid var(--smart-board-border);
+    background: rgba(15, 23, 42, 0.04);
+    color: var(--smart-board-text);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.sb-attach__btn:hover {
+    background: rgba(15, 23, 42, 0.06);
+}
+
 .sb-ms-cell:hover {
     filter: brightness(0.98);
 }
@@ -341,8 +394,10 @@
     position: relative;
     background: var(--smart-board-surface);
     border-radius: 14px;
-    overflow: visible; /* IMPORTANT: keep sticky columns working (no overflow hidden/auto here) */
-    /* Follow main table horizontal scroll; no inner scrollbars */
+    /* FIXED HEIGHT + inner scroll so expanded rows don't blow up page height.
+       Sticky columns still work (sticky works inside overflow:auto; overflow:hidden was the real blocker). */
+    overflow: auto;
+    max-height: 260px;
     z-index: 2;
 }
 

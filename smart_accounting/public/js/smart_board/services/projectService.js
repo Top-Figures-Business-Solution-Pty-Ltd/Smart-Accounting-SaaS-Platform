@@ -51,11 +51,19 @@ export class ProjectService {
             'is_active'
         ];
 
-        // Include optional extra fields (website-safe, best-effort)
-        const extra = await this._getExtraFields();
-        if (Array.isArray(extra) && extra.length) {
-            for (const f of extra) {
-                if (f && !fullFields.includes(f)) fullFields.push(f);
+        // PERF:
+        // If caller provides an explicit fields list (derived from visible columns),
+        // we should respect it and avoid inflating payloads.
+        const explicitFields = Array.isArray(filters?.fields) ? filters.fields.filter(Boolean) : [];
+        const hasExplicit = explicitFields.length > 0;
+
+        // Include optional extra fields (website-safe, best-effort) only for the legacy "full fields" path.
+        if (!hasExplicit) {
+            const extra = await this._getExtraFields();
+            if (Array.isArray(extra) && extra.length) {
+                for (const f of extra) {
+                    if (f && !fullFields.includes(f)) fullFields.push(f);
+                }
             }
         }
 
@@ -92,13 +100,16 @@ export class ProjectService {
             }
 
             const or_filters = this.buildOrFilters(filters);
+            const limitStart = Number.isFinite(Number(filters?.limit_start)) ? Number(filters.limit_start) : 0;
+            const limit = Number.isFinite(Number(filters?.limit)) ? Number(filters.limit) : 100;
             const args = {
                 doctype: 'Project',
                 fields,
                 filters: this.buildFilters({ ...filters, ...(nameIn ? { name_in: nameIn } : {}) }),
                 ...(or_filters && or_filters.length ? { or_filters } : {}),
                 order_by: 'modified desc',
-                limit_page_length: filters.limit || 100
+                limit_start: Math.max(0, limitStart),
+                limit_page_length: Math.max(1, limit)
             };
             
             const response = await frappe.call({
@@ -108,14 +119,21 @@ export class ProjectService {
             });
             
             const rows = response.message || [];
-            // Hydrate child tables (get_list doesn't include Table/child rows)
-            try {
-                await this._hydrateChildTables(rows);
-            } catch (e) {}
+            // Hydrate child tables (get_list doesn't include Table/child rows).
+            // Only do it if the current visible columns actually need them.
+            const needsTeam = Array.isArray(fields) && fields.includes('custom_team_members');
+            const needsSoft = Array.isArray(fields) && fields.includes('custom_softwares');
+            if (needsTeam || needsSoft) {
+                try {
+                    await this._hydrateChildTables(rows);
+                } catch (e) {}
+            }
             return rows;
         };
 
         try {
+            // If caller gave explicit fields (usually derived from visible columns), use them.
+            if (hasExplicit) return await fetchWithFields(explicitFields);
             return await fetchWithFields(fullFields);
         } catch (error) {
             console.error('Failed to fetch projects (full fields):', error);
