@@ -37,7 +37,8 @@ website_redirects = [
 
 # DocType Class Overrides (Python)
 override_doctype_class = {
-    "Project": "smart_accounting.custom.project.CustomProject"
+    "Project": "smart_accounting.custom.project.CustomProject",
+    "Project Type": "smart_accounting.overrides.project_type.SmartProjectType",
 }
 
 # Document Events

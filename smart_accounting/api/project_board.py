@@ -1011,28 +1011,9 @@ def debug_project_type_refs(project_types: Any) -> dict:
 	Usage:
 	  bench --site <site> execute smart_accounting.smart_accounting.api.project_board.debug_project_type_refs --kwargs "{'project_types':['External','Internal']}"
 	"""
-	names = _normalize_list(project_types)
-	names = [str(x).strip() for x in names if str(x).strip()]
-	if not names:
-		return {"project_types": [], "saved_views": [], "projects": []}
+	from .project_board_admin import debug_project_type_refs as _impl
 
-	saved_views = frappe.get_all(
-		"Saved View",
-		filters={"project_type": ["in", names]},
-		fields=["name", "title", "project_type", "modified"],
-		limit_page_length=10000,
-	)
-	projects = frappe.get_all(
-		"Project",
-		filters={"project_type": ["in", names]},
-		fields=["name", "project_name", "project_type", "modified"],
-		limit_page_length=10000,
-	)
-	return {
-		"project_types": names,
-		"saved_views": saved_views or [],
-		"projects": projects or [],
-	}
+	return _impl(project_types)
 
 
 def cleanup_project_types(
@@ -1052,66 +1033,14 @@ def cleanup_project_types(
 
 	Then run again with dry_run=false.
 	"""
-	names = _normalize_list(project_types)
-	names = [str(x).strip() for x in names if str(x).strip()]
-	reassign = str(reassign_to).strip() if reassign_to else ""
+	from .project_board_admin import cleanup_project_types as _impl
 
-	ref = debug_project_type_refs(names)
-	projects = ref.get("projects") or []
-	saved_views = ref.get("saved_views") or []
-
-	if projects and not reassign:
-		return {
-			"ok": False,
-			"reason": "projects_exist",
-			"message": "Some Project records still use these Project Types. Provide reassign_to first.",
-			**ref,
-		}
-
-	out = {
-		"ok": True,
-		"dry_run": bool(dry_run),
-		"project_types": names,
-		"reassign_to": reassign or None,
-		"delete_saved_views": bool(delete_saved_views),
-		"will_delete_saved_views": [x.get("name") for x in (saved_views or [])],
-		"will_update_projects": [x.get("name") for x in (projects or [])],
-		"will_delete_project_types": names,
-	}
-	if dry_run:
-		return out
-
-	# 1) Saved Views
-	if delete_saved_views:
-		for sv in (saved_views or []):
-			try:
-				frappe.delete_doc("Saved View", sv.get("name"), force=True, ignore_permissions=True)
-			except Exception:
-				pass
-	else:
-		for sv in (saved_views or []):
-			try:
-				frappe.db.set_value("Saved View", sv.get("name"), "project_type", reassign or None)
-			except Exception:
-				pass
-
-	# 2) Projects
-	if projects and reassign:
-		for p in (projects or []):
-			try:
-				frappe.db.set_value("Project", p.get("name"), "project_type", reassign)
-			except Exception:
-				pass
-
-	# 3) Delete Project Type docs
-	for pt in names:
-		try:
-			frappe.delete_doc("Project Type", pt, force=True, ignore_permissions=True)
-		except Exception:
-			pass
-
-	frappe.db.commit()
-	return {**out, "committed": True}
+	return _impl(
+		project_types,
+		reassign_to=reassign_to,
+		delete_saved_views=delete_saved_views,
+		dry_run=dry_run,
+	)
 
 
 def migrate_saved_views_v2(*, dry_run: bool = True) -> dict:
@@ -1125,144 +1054,19 @@ def migrate_saved_views_v2(*, dry_run: bool = True) -> dict:
 	  bench --site <site> execute smart_accounting.api.project_board.migrate_saved_views_v2 --kwargs "{'dry_run':True}"
 	  bench --site <site> execute smart_accounting.api.project_board.migrate_saved_views_v2 --kwargs "{'dry_run':False}"
 	"""
-	def _has_field(dt: str, fieldname: str) -> bool:
-		try:
-			meta = frappe.get_meta(dt)
-			return bool(meta and meta.has_field(fieldname))
-		except Exception:
-			return False
+	from .project_board_admin import migrate_saved_views_v2 as _impl
 
-	def _parse_json(v: Any) -> Any:
-		if v is None:
-			return None
-		if isinstance(v, (dict, list)):
-			return v
-		if isinstance(v, str):
-			s = v.strip()
-			if not s:
-				return None
-			try:
-				return frappe.parse_json(s)
-			except Exception:
-				return None
-		return None
+	return _impl(dry_run=bool(dry_run))
 
-	def _normalize_filters_payload(raw: Any) -> dict:
-		"""
-		Accept:
-		- null/'' -> {}
-		- list -> treated as AND filters
-		- dict -> if already has 'filters'/'or_filters' keep; else treat keys as UI only
-		"""
-		obj = _parse_json(raw)
-		if obj is None:
-			return {"filters": [], "or_filters": [], "search": "", "ui": {}}
-		if isinstance(obj, list):
-			return {"filters": obj, "or_filters": [], "search": "", "ui": {}}
-		if isinstance(obj, dict):
-			if "filters" in obj or "or_filters" in obj or "search" in obj or "ui" in obj:
-				return {
-					"filters": obj.get("filters") or [],
-					"or_filters": obj.get("or_filters") or [],
-					"search": obj.get("search") or "",
-					"ui": obj.get("ui") or {},
-				}
-			return {"filters": [], "or_filters": [], "search": "", "ui": obj}
-		return {"filters": [], "or_filters": [], "search": "", "ui": {}}
 
-	def _ensure_project_type_filter(payload: dict, project_type_val: str) -> dict:
-		pt = str(project_type_val or "").strip()
-		if not pt:
-			return payload
-		fl = payload.get("filters") or []
-		# avoid duplicates
-		for t in fl:
-			try:
-				if len(t) >= 3 and str(t[0]) == "project_type" and str(t[1]) in ("=", "in") and (
-					(str(t[1]) == "=" and str(t[2]) == pt) or (str(t[1]) == "in" and pt in (t[2] or []))
-				):
-					return payload
-			except Exception:
-				continue
-		fl.append(["project_type", "=", pt])
-		payload["filters"] = fl
-		payload.setdefault("ui", {})
-		payload["ui"]["pinned_project_type"] = pt
-		return payload
+def find_project_type_link_refs(project_type: str) -> dict:
+	"""
+	Bench helper (kept here for convenience):
+	find Link-field references that would block deleting a Project Type.
+	"""
+	from .project_board_admin import find_project_type_link_refs as _impl
 
-	has_reference = _has_field("Saved View", "reference_doctype")
-	has_active = _has_field("Saved View", "is_active")
-	has_scope = _has_field("Saved View", "scope")
-	has_order = _has_field("Saved View", "sidebar_order")
-
-	rows = frappe.get_all(
-		"Saved View",
-		fields=["name", "title", "reference_doctype", "project_type", "filters", "is_active", "scope", "sidebar_order", "modified"],
-		ignore_permissions=True,
-		limit_page_length=10000,
-	)
-
-	updated = []
-	skipped = []
-	errors = []
-
-	for r in (rows or []):
-		name = r.get("name")
-		try:
-			next_vals = {}
-			changed = False
-
-			# reference_doctype default
-			if has_reference:
-				cur = str(r.get("reference_doctype") or "").strip()
-				if not cur:
-					next_vals["reference_doctype"] = "Project"
-					changed = True
-
-			# is_active default
-			if has_active:
-				if r.get("is_active") in (None, ""):
-					next_vals["is_active"] = 1
-					changed = True
-
-			# scope default
-			if has_scope:
-				cur = str(r.get("scope") or "").strip()
-				if not cur:
-					next_vals["scope"] = "Shared"
-					changed = True
-
-			# sidebar_order default
-			if has_order:
-				if r.get("sidebar_order") in (None, ""):
-					next_vals["sidebar_order"] = 0
-					changed = True
-
-			# filters normalization
-			payload = _normalize_filters_payload(r.get("filters"))
-			payload = _ensure_project_type_filter(payload, r.get("project_type"))
-			normalized_json = frappe.as_json(payload)
-			# Compare string forms best-effort
-			cur_raw = r.get("filters")
-			cur_obj = _parse_json(cur_raw)
-			if cur_obj != payload:
-				next_vals["filters"] = normalized_json
-				changed = True
-
-			if not changed:
-				skipped.append(name)
-				continue
-
-			updated.append({"name": name, "title": r.get("title"), "set": next_vals})
-			if not dry_run:
-				frappe.db.set_value("Saved View", name, next_vals, update_modified=False)
-		except Exception as e:
-			errors.append({"name": name, "error": str(e)})
-
-	if (not dry_run) and updated:
-		frappe.db.commit()
-
-	return {"dry_run": bool(dry_run), "updated": updated, "skipped": skipped, "errors": errors}
+	return _impl(project_type)
 
 
 @frappe.whitelist()

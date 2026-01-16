@@ -188,6 +188,24 @@
     color: #ffffff;
 }
 
+/* Ensure task sub-table monthly cells always paint their background (avoid being overridden by table cell rules). */
+.sb-task-table td.sb-ms-cell--not-started {
+    background: #e9ecef !important;
+    color: #495057 !important;
+}
+.sb-task-table td.sb-ms-cell--working-on-it {
+    background: #f59e0b !important;
+    color: #ffffff !important;
+}
+.sb-task-table td.sb-ms-cell--stuck {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+}
+.sb-task-table td.sb-ms-cell--done {
+    background: #10b981 !important;
+    color: #ffffff !important;
+}
+
 .sb-ms-cell:hover {
     filter: brightness(0.98);
 }
