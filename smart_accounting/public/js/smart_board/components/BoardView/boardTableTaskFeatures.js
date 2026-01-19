@@ -217,16 +217,24 @@ export function installBoardTableTaskFeatures(BoardTable) {
 								? ` data-task-field="${escapeHtml(c.field)}" data-task-name="${escapeHtml(tn)}" data-project-name="${escapeHtml(name)}"`
 								: '';
 							let val = '';
-							const teamMembers =
-								c.field === 'custom_task_members' || c.field === 'custom_team_members' || c.field === 'owner'
-									? Array.isArray(t?.custom_task_members)
-										? t.custom_task_members
-										: Array.isArray(t?.custom_team_members)
-											? t.custom_team_members
-											: null
-									: null;
-							if (teamMembers && teamMembers.length) {
-								val = this._renderTaskTeam(teamMembers);
+							const teamAll = Array.isArray(t?.custom_task_members)
+								? t.custom_task_members
+								: (Array.isArray(t?.custom_team_members) ? t.custom_team_members : null);
+
+							// Role-based team column (team:<Role>)
+							if (String(c.field || '').startsWith('team:')) {
+								const role = String(c.field || '').slice(5).trim();
+								const filtered = role && teamAll ? (teamAll || []).filter((m) => String(m?.role || '').trim() === role) : [];
+								if (filtered && filtered.length) val = this._renderTaskTeam(filtered);
+								else val = '—';
+							} else if (c.field === 'custom_task_members' || c.field === 'custom_team_members') {
+								if (teamAll && teamAll.length) val = this._renderTaskTeam(teamAll);
+								else val = '—';
+							} else if (c.field === 'owner') {
+								// Prefer Assigned Person role from team table; fallback to legacy Task.owner string
+								const assigned = teamAll ? (teamAll || []).filter((m) => String(m?.role || '').trim() === 'Assigned Person') : [];
+								if (assigned && assigned.length) val = this._renderTaskTeam(assigned);
+								else val = escapeHtml(v ?? '—');
 							} else {
 								val = escapeHtml(v ?? '—');
 							}

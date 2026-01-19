@@ -119,12 +119,12 @@
   "doctype_or_field": "DocType",
   "field_name": null,
   "is_system_generated": 0,
-  "modified": "2026-01-15 14:03:28.876473",
+  "modified": "2026-01-19 10:02:41.623375",
   "module": null,
   "name": "Task-main-field_order",
   "property": "field_order",
   "property_type": "Data",
   "row_name": null,
-  "value": "[\"subject\", \"project\", \"issue\", \"type\", \"color\", \"is_group\", \"is_template\", \"custom_fiscal_year\", \"custom_period\", \"task_members\", \"column_break0\", \"status\", \"priority\", \"task_weight\", \"parent_task\", \"completed_by\", \"completed_on\", \"sb_timeline\", \"exp_start_date\", \"expected_time\", \"start\", \"column_break_11\", \"exp_end_date\", \"progress\", \"duration\", \"is_milestone\", \"sb_details\", \"description\", \"sb_depends_on\", \"depends_on\", \"depends_on_tasks\", \"sb_actual\", \"act_start_date\", \"actual_time\", \"column_break_15\", \"act_end_date\", \"sb_costing\", \"total_costing_amount\", \"column_break_20\", \"total_billing_amount\", \"sb_more_info\", \"review_date\", \"closing_date\", \"column_break_22\", \"department\", \"company\", \"lft\", \"rgt\", \"old_parent\", \"template_task\", \"auto_repeat\"]"
+  "value": "[\"subject\", \"project\", \"issue\", \"type\", \"color\", \"is_group\", \"is_template\", \"custom_fiscal_year\", \"custom_period\", \"custom_task_members\", \"column_break0\", \"status\", \"priority\", \"task_weight\", \"parent_task\", \"completed_by\", \"completed_on\", \"sb_timeline\", \"exp_start_date\", \"expected_time\", \"start\", \"column_break_11\", \"exp_end_date\", \"progress\", \"duration\", \"is_milestone\", \"sb_details\", \"description\", \"sb_depends_on\", \"depends_on\", \"depends_on_tasks\", \"sb_actual\", \"act_start_date\", \"actual_time\", \"column_break_15\", \"act_end_date\", \"sb_costing\", \"total_costing_amount\", \"column_break_20\", \"total_billing_amount\", \"sb_more_info\", \"review_date\", \"closing_date\", \"column_break_22\", \"department\", \"company\", \"lft\", \"rgt\", \"old_parent\", \"template_task\", \"auto_repeat\"]"
  }
 ]

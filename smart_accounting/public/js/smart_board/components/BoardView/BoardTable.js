@@ -100,6 +100,32 @@ export class BoardTable {
         // Load shared default columns (Saved View) after first paint to keep UI responsive
         this.refreshColumnsFromSavedView();
     }
+
+    _defaultTaskColumnsConfig() {
+        // Task columns default (website shell): include the 4 personnel role columns
+        return [
+            { field: 'subject', label: 'Task', width: 320 },
+            { field: 'status', label: 'Status', width: 140 },
+            { field: 'exp_end_date', label: 'Due', width: 140 },
+            { field: 'priority', label: 'Priority', width: 120 },
+            { field: 'team:Assigned Person', label: 'Assigned Person', width: 180 },
+            { field: 'team:Preparer', label: 'Preparer', width: 160 },
+            { field: 'team:Reviewer', label: 'Reviewer', width: 160 },
+            { field: 'team:Partner', label: 'Partner', width: 160 },
+            { field: 'modified', label: 'Updated', width: 160 },
+        ];
+    }
+
+    _migrateTaskColumns(taskCfg) {
+        const list = Array.isArray(taskCfg) ? taskCfg : [];
+        if (!list.length) return this._defaultTaskColumnsConfig();
+        const fields = list.map((c) => String(c?.field || '').trim()).filter(Boolean);
+        const hasRoleCols = fields.some((f) => f.startsWith('team:'));
+        const hasLegacyOwner = fields.includes('owner') || fields.includes('custom_task_members') || fields.includes('custom_team_members');
+        // Legacy schema: only owner/custom_* members => upgrade to role columns
+        if (!hasRoleCols && hasLegacyOwner) return this._defaultTaskColumnsConfig();
+        return list.map((c) => ({ field: c.field, label: c.label || c.field, width: c.width || 140 }));
+    }
     
     getColumnsForView() {
         const base = (DEFAULT_COLUMNS[this.viewType] || DEFAULT_COLUMNS['DEFAULT']).map(c => ({ ...c }));
@@ -157,7 +183,10 @@ export class BoardTable {
     }
 
     _needsTaskTeam() {
-        return !!(this._taskCols || []).find((c) => c?.field === 'owner' || c?.field === 'custom_task_members' || c?.field === 'custom_team_members');
+        return !!(this._taskCols || []).find((c) => {
+            const f = String(c?.field || '');
+            return f === 'owner' || f === 'custom_task_members' || f === 'custom_team_members' || f.startsWith('team:');
+        });
     }
 
     _expandProjectColumnsForRender(columns) {
@@ -283,9 +312,11 @@ export class BoardTable {
         } catch (e) {}
 
         const fallbackCols = this.getDefaultColumnConfigForView().map(c => ({ field: c.field, label: c.label }));
+        const fallbackTaskCols = this._defaultTaskColumnsConfig().map((c) => ({ field: c.field, label: c.label, width: c.width || 140 }));
         const view = await ViewService.getOrCreateDefaultView(this.viewType, {
             fallbackTitle: `${this.viewType} Board`,
-            fallbackColumns: fallbackCols
+            fallbackColumns: fallbackCols,
+            fallbackTaskColumns: fallbackTaskCols,
         });
 
         if (!view) return;
@@ -294,9 +325,19 @@ export class BoardTable {
         const both = this._normalizeSavedViewColumns(view.columns);
         const cfg = both.project || [];
         const taskCfg = both.tasks || [];
-        if (Array.isArray(taskCfg) && taskCfg.length) {
-            this._taskCols = taskCfg.map((c) => ({ field: c.field, label: c.label || c.field, width: c.width || 140 }));
-        }
+        const nextTaskCols = this._migrateTaskColumns(taskCfg);
+        this._taskCols = nextTaskCols;
+
+        // If Saved View is legacy schema (no tasks), persist upgraded schema (best-effort)
+        try {
+            const raw = view?.columns;
+            const isLegacyArray = Array.isArray(raw);
+            const tasksEmpty = !(Array.isArray(taskCfg) && taskCfg.length);
+            if (view?.name && (isLegacyArray || tasksEmpty)) {
+                await ViewService.updateView(view.name, { columns: { project: cfg || [], tasks: nextTaskCols } });
+                this._setSavedViewColumnsInMemory({ project: cfg || [], tasks: nextTaskCols });
+            }
+        } catch (e) {}
         if (!cfg || cfg.length === 0) return;
 
         this.columns = this.buildColumnsFromConfig(cfg);
@@ -1168,7 +1209,13 @@ export class BoardTable {
             { field: 'exp_end_date', label: 'Due', width: 140 },
             { field: 'priority', label: 'Priority', width: 120 },
             { field: 'exp_start_date', label: 'Start', width: 140 },
-            { field: 'owner', label: 'Owner', width: 160 },
+            // Task team roles (stored in Project Team Member child table on Task)
+            { field: 'team:Assigned Person', label: 'Assigned Person', width: 180 },
+            { field: 'team:Preparer', label: 'Preparer', width: 160 },
+            { field: 'team:Reviewer', label: 'Reviewer', width: 160 },
+            { field: 'team:Partner', label: 'Partner', width: 160 },
+            // Legacy fallback (Desk Task.owner). Keep in defs for compatibility, but prefer role columns above.
+            { field: 'owner', label: 'Owner (legacy)', width: 160 },
             { field: 'modified', label: 'Updated', width: 160 },
             // Component: expands to 12 months (board fiscal order)
             { field: '__sb_task_monthly_status', label: 'Monthly Task Status (12M)', width: 110 },

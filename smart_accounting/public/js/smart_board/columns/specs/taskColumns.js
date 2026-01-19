@@ -211,6 +211,42 @@ const TASK_COLUMN_SPECS = {
 
 export function getTaskColumnSpec(field) {
   const f = String(field || '');
+  // Dynamic role-based team columns: team:<Role>
+  if (f.startsWith('team:')) {
+    const role = f.slice(5).trim();
+    return {
+      isEditable: true,
+      afford: 'select',
+      renderEditor: ({ cellEl, task, manager }) => multiLinkEditor({
+        cellEl,
+        task,
+        manager,
+        doctype: 'User',
+        placeholder: `Select ${role || 'users'}...`,
+        initialValues: (() => {
+          const team = Array.isArray(task?.custom_task_members)
+            ? task.custom_task_members
+            : (Array.isArray(task?.custom_team_members) ? task.custom_team_members : []);
+          const users = (team || []).filter((m) => String(m?.role || '').trim() === role).map((m) => m?.user).filter(Boolean);
+          // legacy fallback for Assigned Person
+          if ((!users || !users.length) && role === 'Assigned Person' && task?.owner) return [String(task.owner)];
+          return users;
+        })(),
+        defaultList: defaultUserList,
+        resolveMeta: resolveUserMeta,
+        max: null
+      }),
+      async commit({ task, taskName, value }) {
+        const arr = Array.isArray(value) ? value : (value ? [value] : []);
+        const r = await ProjectService.setTaskTeamMembers(taskName, arr, role || 'Assigned Person');
+        if (r?.missing_field) {
+          notify('Task missing team members field (Table → Project Team Member)', 'orange');
+          return;
+        }
+        task.custom_task_members = r?.custom_task_members || r?.custom_team_members || [];
+      }
+    };
+  }
   return TASK_COLUMN_SPECS[f] || null;
 }
 

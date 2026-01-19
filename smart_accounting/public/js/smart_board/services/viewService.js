@@ -134,13 +134,15 @@ export class ViewService {
      * 获取或创建某个 project_type 的默认 View
      * - 目标：团队共享默认列（不做个人视图隔离）
      */
-    static async getOrCreateDefaultView(projectType, { fallbackTitle, fallbackColumns } = {}) {
+    static async getOrCreateDefaultView(projectType, { fallbackTitle, fallbackColumns, fallbackTaskColumns } = {}) {
         const existing = await this.getDefaultView(projectType);
         if (existing) return existing;
 
         // Create a minimal default view
         const title = fallbackTitle || `${projectType} Board`;
         const columns = Array.isArray(fallbackColumns) ? fallbackColumns : [];
+        const taskColumns = Array.isArray(fallbackTaskColumns) ? fallbackTaskColumns : [];
+        const columnsPayload = taskColumns.length ? { project: columns, tasks: taskColumns } : columns;
 
         try {
             const response = await frappe.call({
@@ -155,7 +157,7 @@ export class ViewService {
                         scope: 'Shared',
                         sidebar_order: 0,
                         project_type: projectType, // legacy (Data/hidden) for compatibility only
-                        columns: this._jsonify(columns),
+                        columns: this._jsonify(columnsPayload),
                         filters: this._jsonify({
                             filters: [['project_type', '=', projectType]],
                             or_filters: [],

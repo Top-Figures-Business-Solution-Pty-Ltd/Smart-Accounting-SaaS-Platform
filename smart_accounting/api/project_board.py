@@ -971,7 +971,8 @@ def create_task_for_project(project: str, subject: str | None = None) -> dict:
 @frappe.whitelist()
 def set_task_team_members(task: str, members: Any, role: str | None = None) -> dict:
 	"""
-	Replace Task.custom_team_members (child table: Project Team Member).
+	Update ONE role within Task team members (child table: Project Team Member).
+	We replace only rows where role == role_val, and keep other roles.
 	Role will default to "Assigned Person".
 	"""
 	_ensure_logged_in()
@@ -989,10 +990,41 @@ def set_task_team_members(task: str, members: Any, role: str | None = None) -> d
 	role_val = str(role or "").strip() or "Assigned Person"
 	users = _normalize_list(members)
 	users = [str(x).strip() for x in users if str(x).strip()]
+	users = [u for (u,) in _uniq_preserve_order([(u,) for u in users])]
+
+	# Keep other roles; replace only this role
+	existing = doc.get(fieldname) or []
+	kept = []
+	existing_role_dates: dict[str, Any] = {}
+	for m in existing:
+		u = str(getattr(m, "user", "") or "").strip()
+		r = str(getattr(m, "role", "") or "").strip()
+		if not u or not r:
+			continue
+		if r != role_val:
+			kept.append(
+				{
+					"user": u,
+					"role": r,
+					"assigned_date": getattr(m, "assigned_date", None),
+				}
+			)
+		else:
+			# preserve assigned_date for users staying in the same role
+			existing_role_dates[u] = getattr(m, "assigned_date", None)
 
 	doc.set(fieldname, [])
+	for m in kept:
+		doc.append(fieldname, m)
 	for u in users:
-		doc.append(fieldname, {"user": u, "role": role_val, "assigned_date": today()})
+		doc.append(
+			fieldname,
+			{
+				"user": u,
+				"role": role_val,
+				"assigned_date": existing_role_dates.get(u) or today(),
+			},
+		)
 	doc.save(ignore_permissions=False)
 
 	out = doc.get(fieldname) or []
