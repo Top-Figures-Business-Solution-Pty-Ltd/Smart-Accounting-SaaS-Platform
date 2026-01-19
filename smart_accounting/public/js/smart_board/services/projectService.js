@@ -79,7 +79,8 @@ export class ProjectService {
                             project_type: filters.project_type || null,
                             groups: filters.advanced_groups,
                             limit: filters.limit || 2000,
-                            is_active_only: filters.is_active !== false ? 1 : 0,
+                            // Default: do NOT force is_active=Yes; match ERPNext list behavior unless explicitly enabled.
+                            is_active_only: filters.is_active === true ? 1 : 0,
                             search: filters.search || null,
                         }
                     });
@@ -407,7 +408,8 @@ export class ProjectService {
         }
         
         // 只显示活跃的项目
-        if (filters.is_active !== false) {
+        // Default: do NOT force is_active=Yes; match ERPNext list behavior unless explicitly enabled.
+        if (filters.is_active === true) {
             result.push(['is_active', '=', 'Yes']);
         }
 

@@ -239,6 +239,47 @@ export class SmartBoardApp {
         console.log('Project clicked:', project);
         return openProject(project.name);
     }
+
+    /**
+     * Website shell helper: open a Project's Updates modal by name.
+     * Used by in-app notifications (bell).
+     */
+    async openProjectUpdatesByName(projectName) {
+        const name = String(projectName || '').trim();
+        if (!name) return;
+
+        const state = this.store?.getState?.() || {};
+        const list = state?.projects?.items || [];
+        let project = (list || []).find((p) => p?.name === name) || null;
+
+        // If not in current list (different board / filtered out), fetch minimal doc to determine project_type.
+        if (!project) {
+            try {
+                const r = await frappe.call({
+                    method: 'frappe.client.get',
+                    args: { doctype: 'Project', name }
+                });
+                project = r?.message || null;
+            } catch (e) {
+                return;
+            }
+        }
+
+        const pt = String(project?.project_type || '').trim();
+        if (pt && this.currentView !== pt) {
+            // Switch view + load its data so BoardTable has the row model ready.
+            this.currentView = pt;
+            this.header?.updateView?.(pt);
+            this.mainContent?.updateView?.(pt);
+            try { await this.loadViewData(pt); } catch (e) {}
+        }
+
+        // Re-resolve from store after load
+        const nextState = this.store?.getState?.() || {};
+        const nextList = nextState?.projects?.items || [];
+        const resolved = (nextList || []).find((p) => p?.name === name) || project;
+        try { this.mainContent?.boardTable?.openUpdates?.(resolved); } catch (e) {}
+    }
     
     // handleStoreUpdate 已废弃：交给 BoardTable 自己订阅 store 并更新行
     
