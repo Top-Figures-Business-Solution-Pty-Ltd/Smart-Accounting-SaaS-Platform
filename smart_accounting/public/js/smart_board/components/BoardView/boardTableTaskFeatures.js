@@ -67,7 +67,10 @@ export function installBoardTableTaskFeatures(BoardTable) {
 
 	BoardTable.prototype._prefetchTaskCounts = async function () {
 		const names = (this.projects || []).map((p) => p?.name).filter(Boolean);
-		const missing = names.filter((n) => !this._taskCounts.has(n));
+		// Avoid duplicate in-flight requests: without this, every store update while the request is pending
+		// can re-trigger get_task_counts and make the app feel progressively slower.
+		if (!this._taskCountsLoading) this._taskCountsLoading = new Set();
+		const missing = names.filter((n) => !this._taskCounts.has(n) && !this._taskCountsLoading.has(n));
 		if (!missing.length) {
 			// still keep expanded flag in sync for rendering
 			for (const p of this.projects || []) {
@@ -76,6 +79,7 @@ export function installBoardTableTaskFeatures(BoardTable) {
 			}
 			return;
 		}
+		missing.forEach((n) => this._taskCountsLoading.add(n));
 		try {
 			const counts = await ProjectService.getTaskCounts(missing);
 			for (const n of missing) {
@@ -92,6 +96,7 @@ export function installBoardTableTaskFeatures(BoardTable) {
 		} catch (e) {
 			// ignore
 		} finally {
+			missing.forEach((n) => this._taskCountsLoading.delete(n));
 			this.scheduleRowsUpdate();
 		}
 	};

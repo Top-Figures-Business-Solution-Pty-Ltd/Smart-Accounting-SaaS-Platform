@@ -4,7 +4,7 @@
 **项目**: Smart Accounting  
 **版本**: v2.0  
 **日期**: 2025-12-09  
-**状态**: 🔄 General Workflow (待细化)
+**状态**: ✅ Smart Board 已落地（流程持续细化）
 
 ---
 
@@ -37,6 +37,15 @@
 
 > **注**: 当前图中没有 SYSTEM 泳道，系统操作隐含在 USER 操作中。
 > 后续细化时可以拆分出 SYSTEM 泳道。
+
+### 1.2 2026-01：Smart Board 对应的“系统触点”
+
+> 目前产品主要触点在 Smart Board（`/smart`），并直接驱动 ERPNext 的 Project/Task 数据：
+- **Board（按 Project Type）**：查看/筛选/编辑 Project 字段
+- **Tasks（展开行）**：查看/编辑 Task（含人员、Monthly Status）
+- **Engagement Letter**：在 Project 的 `custom_engagement_letter`（Attach）上传/Replace/查看
+- **Saved View**：保存列配置与过滤条件，作为默认视图来源
+- **Monthly Status**：Task 的月度网格状态 + Project 的月度汇总（Done x/y · %）
 
 ### 1.1 外部用户入口（/smart）说明（2026-01 更新）
 
@@ -236,6 +245,17 @@ Signature           │               │
 - [ ] **Sign EL 流程**: Engagement Letter 签署的详细步骤
 - [ ] **Collect Docs 流程**: 文档收集的具体步骤，文档清单管理
 - [ ] **Review 流程**: Reviewer 和 Partner 两级审核的详细流程
+
+### 5.2 状态体系（2026-01 实际实现）
+
+> 注意：系统里同时存在三套“状态”，用途不同，避免混淆：
+- **Project.status**：项目主状态（业务线/流程阶段），用于 Board 主表显示与筛选
+- **Task.status**：任务本体状态（ERPNext 原生），用于任务列表的粗粒度状态
+- **Monthly Status.status**：月度进度（按财年 12 个月），用于 Task 的月度网格与 Project 的月度汇总
+
+### 5.3 Engagement Letter（EL）在系统中的落点
+- 目前落点：`Project.custom_engagement_letter`（Attach）
+- Smart Board 行为：整格点击上传，上传使用 Frappe 原生 `/api/method/upload_file`，并写回该字段，表格展示文件名与 Replace
 - [ ] **Client Review 流程**: 客户审核的详细交互
 - [ ] **Invoice 流程**: 账单生成、发送、跟踪的详细步骤
 - [ ] **Lodge 流程**: ATO 提交的详细步骤

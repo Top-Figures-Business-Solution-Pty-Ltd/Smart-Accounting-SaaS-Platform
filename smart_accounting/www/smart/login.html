@@ -1,0 +1,172 @@
+{% extends "templates/web.html" %}
+
+{% block title %}{{ brand_name or "Smart Accounting" }} · Login{% endblock %}
+
+{# Product shell: remove standard website navbar + breadcrumbs #}
+{% block navbar %}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+{% block header %}{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block page_content %}
+{% if redirect_to %}
+  <script>
+    // Logged-in users should not see the login page.
+    window.location.replace("{{ redirect_to }}");
+  </script>
+{% endif %}
+
+<div class="sa-login">
+  <div class="sa-login__card">
+    <div class="sa-login__brand">{{ brand_name or "Smart Accounting" }}</div>
+    <div class="sa-login__subtitle text-muted">Sign in to continue</div>
+
+    <form id="saLoginForm" class="sa-login__form" autocomplete="on">
+      <label class="sa-login__label" for="saUsr">Email</label>
+      <input class="form-control sa-login__input" id="saUsr" name="usr" type="text" autocomplete="username" placeholder="you@company.com" required>
+
+      <label class="sa-login__label" for="saPwd">Password</label>
+      <input class="form-control sa-login__input" id="saPwd" name="pwd" type="password" autocomplete="current-password" placeholder="••••••••" required>
+
+      <div class="sa-login__error text-danger" id="saLoginError" style="display:none;"></div>
+
+      <button class="btn btn-primary sa-login__submit" type="submit" id="saLoginSubmit">Sign in</button>
+    </form>
+
+    <div class="sa-login__links text-muted">
+      <span>Forgot password? Please contact your administrator.</span>
+    </div>
+  </div>
+</div>
+
+<style>
+  .sa-login {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: #f8f9fa;
+  }
+  .sa-login__card {
+    width: 420px;
+    max-width: 100%;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 14px;
+    padding: 22px 22px 18px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.10);
+  }
+  .sa-login__brand {
+    font-weight: 700;
+    font-size: 18px;
+    margin-bottom: 2px;
+  }
+  .sa-login__subtitle { margin-bottom: 14px; }
+  .sa-login__label {
+    display:block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #495057;
+    margin-top: 10px;
+    margin-bottom: 6px;
+  }
+  .sa-login__input { height: 40px; }
+  .sa-login__submit {
+    width: 100%;
+    margin-top: 14px;
+    height: 40px;
+    border-radius: 10px;
+  }
+  .sa-login__error {
+    margin-top: 10px;
+    font-size: 13px;
+  }
+  .sa-login__links {
+    margin-top: 12px;
+    text-align: center;
+    font-size: 13px;
+  }
+  .sa-login__link { color: inherit; text-decoration: underline; }
+  .sa-login__sep { margin: 0 8px; }
+</style>
+
+<script>
+  (function() {
+    const form = document.getElementById("saLoginForm");
+    const usr = document.getElementById("saUsr");
+    const pwd = document.getElementById("saPwd");
+    const submit = document.getElementById("saLoginSubmit");
+    const err = document.getElementById("saLoginError");
+
+    function safeRedirectTarget() {
+      try {
+        const params = new URLSearchParams(window.location.search || "");
+        const rt = (params.get("redirect-to") || "/smart").trim();
+        // Basic hardening: only allow internal paths, and never allow /app redirects for external users.
+        if (!rt.startsWith("/")) return "/smart";
+        if (rt.startsWith("/app")) return "/smart";
+        // Prefer keeping users in product shell.
+        if (!rt.startsWith("/smart")) return "/smart";
+        return rt;
+      } catch (e) {
+        return "/smart";
+      }
+    }
+
+    function showError(msg) {
+      const m = (msg || "").toString().trim() || "Login failed. Please check your email and password.";
+      err.textContent = m;
+      err.style.display = "block";
+    }
+    function clearError() {
+      err.textContent = "";
+      err.style.display = "none";
+    }
+
+    form?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearError();
+
+      const u = (usr?.value || "").trim();
+      const p = (pwd?.value || "").trim();
+      if (!u || !p) {
+        showError("Please enter email and password.");
+        return;
+      }
+
+      submit.disabled = true;
+      submit.textContent = "Signing in…";
+
+      try {
+        const fd = new FormData();
+        fd.append("usr", u);
+        fd.append("pwd", p);
+
+        const resp = await fetch("/api/method/login", {
+          method: "POST",
+          body: fd,
+          credentials: "include",
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          const msg = data?.message || data?.exc || data?._server_messages || resp.statusText;
+          showError(msg);
+          return;
+        }
+
+        // Success: go to product shell
+        window.location.replace(safeRedirectTarget());
+      } catch (ex) {
+        showError(ex?.message || String(ex));
+      } finally {
+        submit.disabled = false;
+        submit.textContent = "Sign in";
+      }
+    });
+  })();
+</script>
+
+{% endblock %}
+
+

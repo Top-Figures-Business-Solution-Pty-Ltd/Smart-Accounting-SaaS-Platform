@@ -12,6 +12,19 @@ import { DoctypeMetaService } from '../../services/doctypeMetaService.js';
 import { confirmDialog } from '../../services/uiAdapter.js';
 import { escapeHtml } from '../../utils/dom.js';
 
+function _fileNameFromUrl(url) {
+  const s = String(url || '').trim();
+  if (!s) return '';
+  const clean = s.split('?')[0].split('#')[0];
+  const parts = clean.split('/');
+  const last = parts[parts.length - 1] || '';
+  try {
+    return decodeURIComponent(last);
+  } catch (e) {
+    return last;
+  }
+}
+
 function monthOptions() {
   return [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -276,11 +289,12 @@ function attachmentEditor({ cellEl, project, manager, field, label = 'Upload', a
   const contentEl = cellEl.querySelector('.cell-content') || cellEl;
   const current = project?.[field] || '';
   const safeUrl = current ? escapeHtml(String(current)) : '';
+  const displayName = current ? escapeHtml(_fileNameFromUrl(current) || 'Attachment') : '';
 
   contentEl.innerHTML = `
     <div class="sb-attach">
-      ${safeUrl ? `<a class="sb-attach__link" href="${safeUrl}" target="_blank" rel="noopener noreferrer">View</a>` : `<span class="text-muted">—</span>`}
-      <button type="button" class="sb-attach__btn" aria-label="${escapeHtml(label)}">${escapeHtml(label)}</button>
+      ${safeUrl ? `<a class="sb-attach__link sb-attach__link--file" href="${safeUrl}" target="_blank" rel="noopener noreferrer">📎 ${displayName}</a>` : `<span class="text-muted">—</span>`}
+      <button type="button" class="sb-attach__btn sb-inline-editor" aria-label="${escapeHtml(label)}">${escapeHtml(label)}</button>
       <input type="file" class="sb-attach__file" style="display:none;" />
       <span class="sb-attach__hint text-muted" style="display:none;">Uploading...</span>
     </div>
@@ -320,6 +334,14 @@ function attachmentEditor({ cellEl, project, manager, field, label = 'Upload', a
       // Prefer file_url; if missing, keep current.
       const url = msg?.file_url || msg?.file_url_full || msg?.file_url_full_path || msg?.file_url_path || '';
       editor._value = url || editor._value || '';
+      // Update editor UI immediately (so user sees success without waiting for re-render)
+      try {
+        const linkEl = contentEl.querySelector('.sb-attach__link--file');
+        if (linkEl && editor._value) {
+          linkEl.setAttribute('href', String(editor._value));
+          linkEl.textContent = `📎 ${_fileNameFromUrl(editor._value) || 'Attachment'}`;
+        }
+      } catch (e) {}
       // Commit immediately once upload finishes (avoid relying on blur)
       manager?.commitAndClose?.('upload-file');
     } catch (err) {
@@ -335,7 +357,11 @@ function attachmentEditor({ cellEl, project, manager, field, label = 'Upload', a
   manager?.bindActiveEditor?.(btn, editor);
   // UX: open file picker immediately on first click-to-edit.
   if (autoOpen) {
-    try { fileInput?.click?.(); } catch (e) {}
+    // Defer to next tick so the original click event delegation finishes,
+    // and to avoid re-entering EditingManager.startEdit via the synthetic click.
+    setTimeout(() => {
+      try { fileInput?.click?.(); } catch (e) {}
+    }, 0);
   }
   return editor;
 }
@@ -549,13 +575,36 @@ export function makeProjectColumnSpecs() {
       isEditable: true,
       // Attach upload should not be bulk-synced by default (would copy the same file_url to many Projects).
       bulkSync: false,
+      // IMPORTANT:
+      // Upload is performed inside the editor (via /api/method/upload_file), but the Attach field
+      // still must be written back to Project to persist in the form view.
+      // We provide a custom commit so EditingManager will NOT short-circuit due to "unchanged"
+      // (because we may update UI optimistically).
+      async commit({ projectName, field, value, store }) {
+        if (!projectName || !field) return;
+        const v = String(value || '').trim();
+        // Persist to backend (set_value) + update store
+        if (store?.dispatch) {
+          await store.dispatch('projects/updateProjectField', { name: projectName, field, value: v });
+        } else if (store?.commit) {
+          store.commit('projects/updateProject', { name: projectName, [field]: v });
+        }
+      },
       renderCell: ({ project }) => {
         const v = project?.custom_engagement_letter;
         if (!v) return '<span class="sb-attach-pill">Upload</span>';
         const url = escapeHtml(String(v));
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer">📎 Engagement Letter</a> <span class="sb-attach-pill sb-attach-pill--subtle">Replace</span>`;
+        const name = escapeHtml(_fileNameFromUrl(v) || 'Engagement Letter');
+        return `<a class="sb-attach__link sb-attach__link--file" href="${url}" target="_blank" rel="noopener noreferrer">📎 ${name}</a> <span class="sb-attach-pill sb-attach-pill--subtle">Replace</span>`;
       },
-      renderEditor: ({ cellEl, project, manager, field }) => attachmentEditor({ cellEl, project, manager, field, label: 'Upload', autoOpen: true })
+      renderEditor: ({ cellEl, project, manager, field }) => attachmentEditor({
+        cellEl,
+        project,
+        manager,
+        field,
+        label: (project?.[field] ? 'Replace' : 'Upload'),
+        autoOpen: true
+      })
     },
 
     // (19) Team by role derived columns: team:<Role> => later editor

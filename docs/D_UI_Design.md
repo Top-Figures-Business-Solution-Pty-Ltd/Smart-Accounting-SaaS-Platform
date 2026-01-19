@@ -2,9 +2,9 @@
 # 用户界面设计文档
 
 **项目**: Smart Accounting  
-**版本**: v1.1  
-**日期**: 2025-12-12  
-**状态**: 🎨 设计讨论中
+**版本**: v1.2  
+**日期**: 2026-01-19  
+**状态**: ✅ Smart Board 已落地（UI 持续迭代）
 
 ---
 
@@ -30,6 +30,26 @@
 | **业务导向** | 专为会计事务所工作流程设计 |
 | **高效操作** | 快速查看、筛选、更新工作状态 |
 | **多业务类型支持** | ITR / BAS / Payroll / Bookkeeping 等不同业务有不同视图 |
+
+### 1.3 2026-01：已落地 UI 能力清单（Smart Board）
+
+- **导航/入口**
+  - `/smart`：产品壳入口（对外/日常入口）
+  - 左侧 Sidebar：按 `Project Type` 展示 Boards
+- **表格（BoardTable）**
+  - ✅ 虚拟滚动（大量项目）+ ✅ 无限滚动分页（infinite scroll）
+  - ✅ 行内编辑：text/select/date/link/multi-link/attachment
+  - ✅ 列管理：显示/隐藏/拖拽排序/列宽持久化
+  - ✅ 展开行查看 Tasks（子表），并支持 Task 行内编辑
+- **人员单元格（Project/Task）**
+  - ✅ 统一 MultiLinkPicker 交互：点击选择/删除成员，稳定不误退出
+  - ✅ 头像渲染（有 user_image 显示头像，否则显示首字母）
+- **Monthly Status**
+  - ✅ Task：12 个月状态网格（Not Started/Working On It/Stuck/Done）
+  - ✅ Project：月度汇总（Done x/y · %），按需加载 matrix 数据
+- **附件（Engagement Letter）**
+  - ✅ 整格点击上传、上传后显示文件名/链接、支持 Replace
+  - ✅ 使用 Frappe 原生 `/api/method/upload_file`
 
 ### 1.2 目标用户
 
@@ -234,6 +254,12 @@
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+#### 5.1.1 性能策略（与 Monday 体验对齐，2026-01 落地）
+- 默认只请求“当前可见列”对应的 Project fields（减少 payload）
+- 子表（team/software）按需 hydrate
+- 展开 Tasks 时按需加载任务数据与月度 matrix（避免一次性加载全部）
+- 防闪回：快速切换 board 的并发请求不会覆盖当前视图
 
 ---
 

@@ -2,20 +2,27 @@
 # 数据模型 - 重构规划文档
 
 **项目**: Smart Accounting  
-**版本**: v8.2  
-**日期**: 2025-12-18  
-**状态**: 🔄 重构规划中 (Prototype 阶段)  
+**版本**: v8.3  
+**日期**: 2026-01-19  
+**状态**: ✅ 已落地（持续迭代）  
 **重构策略**: ✅ **最大化利用 ERPNext 原生 DocType + Frappe Auto Repeat**  
 **SaaS架构**: ✅ **Frappe原生多Site架构**（两阶段演进，无需tenant_id）
 
 ---
+
+## 更新日志 (v8.3 - 2026-01-19)
+
+### 🎯 Smart Board 数据结构对齐（落地）
+- ✅ **Task 成员字段统一**：Task 使用 `custom_task_members`（Table → `Project Team Member`），与 Project 成员结构一致（便于人员 cell 复用与头像渲染）
+- ✅ **Monthly Status 落地**：引入通用 DocType `Monthly Status`，用于 Task 的 12 个月网格状态 + Project 的月度汇总
+- ✅ **Engagement Letter 落地**：Project 使用 `custom_engagement_letter`（Attach），Smart Board 支持上传/Replace/查看
 
 ## 更新日志 (v8.2 - 2025-12-18)
 
 ### 🎯 团队字段架构优化（Critical - 提升SaaS可扩展性）
 - ✅ **custom_team从JSON改为子表**：提升查询性能和数据完整性
 - ✅ **创建Project Team Member子表**：3个字段（user, role, assigned_date）
-- ✅ **Project扩展字段优化**：从8个减少到7个（custom_team删除，custom_team_members改为Table类型）
+- ✅ **Project扩展字段优化**：移除 `custom_team`（JSON），`custom_team_members` 改为 Table；并支持 `custom_engagement_letter`（Attach）
 - ✅ **查询性能提升**：支持数据库级别索引和JOIN，高效查询"用户的所有Projects"
 - ✅ **SaaS可扩展性**：大规模数据（>10000 Projects）性能稳定
 - ✅ **数据完整性**：外键约束，用户删除时可级联清理
@@ -105,7 +112,7 @@
 |------|---------|
 | **ERPNext 原生扩展** | Customer / Contact / Project / Task 保持原生，添加扩展字段 |
 | **ERPNext 原生直接使用** | User / Company / Project Type 保持原生，无需扩展 |
-| **新建 DocType** | Customer Entity（子表4字段）、Software（极简2字段）、Saved View（精简7字段）|
+| **新建 DocType** | Customer Entity（子表5字段）、Project Team Member（子表3字段）、Software（极简2字段）、Saved View（精简7字段）、Monthly Status（通用状态表）|
 | **Property Setter** | Status 等Select字段选项配置（多Site架构下每租户独立配置）|
 | **原生功能利用** | Comment 系统、User Settings、Assignment（任务分配）|
 | **Auto Repeat 自动创建** | Project创建时根据custom_project_frequency自动创建Auto Repeat |
@@ -358,8 +365,9 @@ Step 2: 基础层扩展
 
 Step 3: 核心层扩展
         ├── 创建 Project Team Member 子表（3个字段：user, role, assigned_date）
-        ├── Project 扩展（9个扩扩展字段：custom_customer_entity, custom_entity_type(只读fetch), custom_team_members, custom_fiscal_year, custom_target_month, custom_lodgement_due_date, custom_project_frequency, custom_softwares, custom_engagement_letter）
-        ├── Task 扩展（2个扩展字段：custom_fiscal_year, custom_period + 利用原生时间/工时/成本字段）
+        ├── Project 扩展（8个扩展字段：custom_entity_type, custom_team_members, custom_fiscal_year, custom_target_month, custom_lodgement_due_date, custom_project_frequency, custom_softwares, custom_engagement_letter）
+        ├── Task 扩展（2个扩展字段：custom_fiscal_year, custom_period）+ Task 成员子表（custom_task_members → Project Team Member）
+        ├── Monthly Status DocType（用于 12 个月状态网格/汇总）
         └── Project Auto Repeat 钩子（after_insert/validate方法：自动创建和同步Auto Repeat）
 
 Step 4: 视图层
@@ -1145,10 +1153,12 @@ Task 列表：
 - [ ] Contact 扩展字段（3个字段：custom_is_referrer, custom_contact_role, custom_social_accounts）
 
 ### Phase 3: 核心层扩展
-- [ ] 创建 Project Team Member 子表 DocType（3个字段：user, role, assigned_date）
-- [ ] Project 扩展字段（7个字段：custom_entity_type, custom_team_members, custom_fiscal_year, custom_target_month, custom_lodgement_due_date, custom_project_frequency, custom_softwares）
-- [ ] Task 扩展字段（2个字段：custom_fiscal_year, custom_period）
-- [ ] Project Auto Repeat钩子（after_insert和validate方法：自动创建和同步Auto Repeat）
+- [x] 创建 Project Team Member 子表 DocType（3个字段：user, role, assigned_date）
+- [x] Project 扩展字段（8个字段：custom_entity_type, custom_team_members, custom_fiscal_year, custom_target_month, custom_lodgement_due_date, custom_project_frequency, custom_softwares, custom_engagement_letter）
+- [x] Task 扩展字段（2个字段：custom_fiscal_year, custom_period）
+- [x] Task 成员子表（custom_task_members → Project Team Member）
+- [x] Monthly Status DocType（用于月度网格/汇总）
+- [x] Project Auto Repeat钩子（after_insert和validate方法：自动创建和同步Auto Repeat）
 
 ### Phase 4: 创建辅助DocType
 - [ ] Software DocType（2个字段：software_name, is_active）

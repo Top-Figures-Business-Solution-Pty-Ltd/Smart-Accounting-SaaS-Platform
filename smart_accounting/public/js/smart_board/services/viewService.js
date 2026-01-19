@@ -6,6 +6,8 @@
 import { ApiService } from './api.js';
 
 export class ViewService {
+    static _defaultViewCache = new Map(); // projectType -> { ts, view }
+    static _cacheTtlMs = 15_000;
     static normalizeFilters(raw) {
         // Normalize Saved View.filters into:
         // { filters: [], or_filters: [], search: '', ui: {} }
@@ -91,26 +93,37 @@ export class ViewService {
      */
     static async getDefaultView(projectType) {
         try {
+            const pt = String(projectType || '').trim();
+            if (pt) {
+                const cached = this._defaultViewCache.get(pt);
+                if (cached && (Date.now() - (cached.ts || 0) < this._cacheTtlMs)) {
+                    return cached.view || null;
+                }
+            }
             const response = await frappe.call({
                 method: 'frappe.client.get_list',
                 args: {
                     doctype: 'Saved View',
                     fields: ['name', 'title', 'project_type', 'columns', 'filters', 'sort_by', 'sort_order', 'is_default', 'owner', 'modified', 'reference_doctype', 'is_active', 'scope', 'sidebar_order'],
-                    filters: [],
+                    // Server-side narrow-down (still need client-side match for pinned project type)
+                    filters: [
+                        ['reference_doctype', '=', 'Project'],
+                        ['scope', '=', 'Shared'],
+                        ['is_active', '=', 1],
+                        ['is_default', '=', 1],
+                    ],
                     limit_page_length: 200,
                     order_by: 'modified desc'
                 }
             });
 
             const rows = response.message || [];
-            const pt = String(projectType || '').trim();
             const matched = rows
-                .filter((v) => (String(v?.reference_doctype || 'Project') || 'Project') === 'Project')
-                .filter((v) => (v?.is_active == null ? 1 : Number(v.is_active)) !== 0)
-                .filter((v) => (String(v?.scope || 'Shared') || 'Shared') === 'Shared')
                 .filter((v) => this.inferPinnedProjectType(v) === pt)
                 .filter((v) => Number(v?.is_default || 0) === 1);
-            return matched[0] || null;
+            const out = matched[0] || null;
+            if (pt) this._defaultViewCache.set(pt, { ts: Date.now(), view: out });
+            return out;
         } catch (error) {
             console.error('Failed to get default view:', error);
             return null;
@@ -203,6 +216,8 @@ export class ViewService {
         const payload = { ...data };
         if (payload.columns !== undefined) payload.columns = this._jsonify(payload.columns);
         if (payload.filters !== undefined) payload.filters = this._jsonify(payload.filters);
+        // Invalidate cache best-effort (unknown which projectType it belongs to, so clear all)
+        try { this._defaultViewCache?.clear?.(); } catch (e) {}
         return ApiService.updateDoc('Saved View', name, payload);
     }
     

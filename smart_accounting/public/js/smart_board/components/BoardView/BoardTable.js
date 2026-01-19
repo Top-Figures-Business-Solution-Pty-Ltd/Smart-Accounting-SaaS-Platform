@@ -56,6 +56,7 @@ export class BoardTable {
         // Expand -> Tasks
         this._expanded = new Set(); // project.name
         this._taskCounts = new Map(); // project.name -> count
+        this._taskCountsLoading = new Set(); // project.name (in-flight get_task_counts)
         this._tasksByProject = new Map(); // project.name -> tasks[]
         this._tasksLoading = new Set(); // project.name
         // Monthly Status (matrix + summary) caches
@@ -582,6 +583,10 @@ export class BoardTable {
         if (!st) return;
         if (st.loading || st.loadingMore) return;
         if (!st.hasMore) return;
+
+        // Avoid auto-loading more on initial render (when scrollTop is 0 but content is short).
+        // Only load more after the user actually scrolls a bit.
+        if ((body.scrollTop || 0) < 8) return;
 
         // Throttle to avoid hammering on fast scroll
         const now = Date.now();

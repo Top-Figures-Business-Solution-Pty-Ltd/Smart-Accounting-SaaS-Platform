@@ -149,7 +149,13 @@ export class MainContent {
     }
     
     createNewProject() {
-        import('../../services/navigationService.js').then(({ createProject }) => createProject(this.currentView));
+        // Website shell: use website-safe modal flow
+        import('../../controllers/newProjectController.js')
+            .then(({ openNewProjectFlow }) => openNewProjectFlow({ app: this.options?.app, viewType: this.currentView }))
+            .catch(() => {
+                // Fallback: call app if available
+                try { this.options?.app?.createNewProject?.(); } catch (e) {}
+            });
     }
 
     hidePlaceholder() {

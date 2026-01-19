@@ -15,6 +15,7 @@ import { openProject, createProject } from './services/navigationService.js';
 import { msgprint } from './services/uiAdapter.js';
 import { ViewService } from './services/viewService.js';
 import './columns/registerDefaultSpecs.js';
+import { isDesk } from './utils/env.js';
 
 export class SmartBoardApp {
     constructor(container) {
@@ -81,6 +82,7 @@ export class SmartBoardApp {
         this.mainContent = new MainContent(contentContainer, {
             currentView: this.currentView,
             store: this.store,
+            app: this,
             isBoardView: (viewType) => this.isBoardView(viewType),
             onProjectClick: (project) => this.handleProjectClick(project)
         });
@@ -248,7 +250,10 @@ export class SmartBoardApp {
     }
     
     createNewProject() {
-        return createProject(this.currentView);
+        // Desk: keep native ERPNext behavior (open form)
+        if (isDesk()) return createProject(this.currentView);
+        // Website shell: postpone until Clients/Customer flow is ready (avoids mandatory-field + inline customer creation complexity).
+        return msgprint('New Project will be enabled after Clients/Customer flow is ready.');
     }
     
     applyFilters(filters) {

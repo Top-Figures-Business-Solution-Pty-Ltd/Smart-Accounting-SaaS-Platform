@@ -1,0 +1,51 @@
+{% extends "templates/web.html" %}
+
+{% block title %}{{ brand_name or "Smart Accounting" }} · Logging out{% endblock %}
+
+{% block navbar %}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+{% block header %}{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block page_content %}
+<div class="sa-logout">
+  <div class="sa-logout__card">
+    <div class="sa-logout__title">Logging out…</div>
+    <div class="text-muted">You will be redirected to the login page.</div>
+  </div>
+</div>
+
+<style>
+  .sa-logout {
+    min-height: 100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding: 24px;
+    background: #f8f9fa;
+  }
+  .sa-logout__card {
+    width: 420px;
+    max-width: 100%;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 14px;
+    padding: 22px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.10);
+  }
+  .sa-logout__title { font-weight: 700; font-size: 16px; margin-bottom: 6px; }
+</style>
+
+<script>
+  (async function() {
+    try {
+      // Call Frappe builtin logout (clears session cookies).
+      await fetch("/api/method/logout", { method: "GET", credentials: "include" });
+    } catch (e) {}
+    // Always land on product login.
+    window.location.replace("/smart/login");
+  })();
+</script>
+{% endblock %}
+
+

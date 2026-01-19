@@ -241,6 +241,14 @@
     text-decoration: none;
     font-weight: 600;
 }
+.sb-attach__link--file {
+    display: inline-block;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+}
 .sb-attach__btn {
     display: inline-flex;
     align-items: center;

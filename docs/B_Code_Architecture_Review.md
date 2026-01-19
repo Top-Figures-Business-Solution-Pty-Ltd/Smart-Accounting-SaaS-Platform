@@ -2,9 +2,9 @@
 # 代码架构重构文档
 
 **项目**: Smart Accounting  
-**版本**: v1.0  
-**日期**: 2025-12-09  
-**状态**: ✅ 已开始落地（持续迭代）
+**版本**: v1.1  
+**日期**: 2026-01-19  
+**状态**: ✅ 已落地（持续迭代）
 
 ---
 
@@ -54,9 +54,9 @@
 
 | 问题类别 | 具体表现 |
 |---------|---------|
-| **全局污染** | 20+ Manager 对象挂在 window 上，耦合严重 |
-| **大文件** | combination-view.js (2,325行)、index.py (3,059行) |
-| **无模块系统** | 40+ JS 文件手动管理加载顺序 |
+| **历史全局污染（Legacy）** | 旧 Desk 页面存在 window.Manager 互相调用；Smart Board 已避免该模式 |
+| **大文件风险（当前关注点）** | `project_board.py` 与 `BoardTable.js` 复杂度偏高，需要持续拆分（已做第一轮拆分） |
+| **无模块系统（Legacy）** | 旧页面依赖手动加载；Smart Board 已统一 ES Modules + bench/esbuild 构建 |
 | **API 分散** | API 调用散落各处，错误处理不统一 |
 
 ### 1.4 重构目标
@@ -88,10 +88,10 @@
 
 ```
 Frontend:
-├── JavaScript (ES5/ES6 混合)
-├── jQuery 3.x
-├── Frappe UI Components
-└── Custom CSS
+├── JavaScript (ES6+) + ES Modules
+├── 自定义 Store（类 Redux）
+├── 自研行内编辑器（Inline editors）/ MultiLinkPicker
+└── CSS Variables + Smart Board 组件样式
 
 Backend:
 ├── Python 3.10+
@@ -110,13 +110,13 @@ smart_accounting/
 │   ├── access_control.py           # 权限控制
 │   │
 │   ├── public/                     # 前端资源
-│   │   ├── js/                     # JavaScript (34,448 行)
-│   │   │   ├── main.js             # 主入口
-│   │   │   ├── combination-view.js # 组合视图 ⚠️ 过大
-│   │   │   ├── editors.js          # 编辑器 ⚠️ 过大
-│   │   │   ├── ui/                 # UI 组件
-│   │   │   └── performance/        # 性能优化
-│   │   └── css/                    # 样式文件
+│   │   ├── js/smart_board/          # ✅ Smart Board（ES Modules）
+│   │   │   ├── app.js               # 应用编排（薄）
+│   │   │   ├── components/          # Sidebar/Header/MainContent/BoardTable...
+│   │   │   ├── columns/specs/       # 列定义（Project/Task）
+│   │   │   ├── services/            # project/view/fileUpload/meta...
+│   │   │   └── store/               # modules/projects/filters/views...
+│   │   └── css/smart_board/         # Smart Board 样式
 │   │
 │   ├── www/                        # Website 页面（产品壳）
 │   │   └── smart/                  # ✅ `/smart`：外部用户入口（自定义顶栏/壳，mount Smart Board）
@@ -126,6 +126,16 @@ smart_accounting/
 │
 └── docs/                           # 文档
 ```
+
+### 2.3 2026-01 已落地的“防回归”工程改进
+- ✅ **编辑器稳定性**：EditingManager 增加 portal click 保护，MultiLinkPicker 不再因为“点下拉就退出”导致无法选择
+- ✅ **附件上传**：统一走 Frappe 原生 `/api/method/upload_file`，并提供列级 commit 强制落库（避免只更新 UI 未保存）
+- ✅ **性能护栏**：
+  - 动态 fields（按可见列请求）
+  - 子表 hydration 按需
+  - 虚拟滚动 + 无限滚动分页
+  - task counts 预取 in-flight 去重
+  - projects/fetchProjects 并发回写保护（快速切换 board 不闪回）
 
 ### 2.3 模块边界问题
 

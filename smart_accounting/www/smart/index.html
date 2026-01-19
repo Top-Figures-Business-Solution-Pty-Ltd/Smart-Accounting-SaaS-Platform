@@ -1,6 +1,6 @@
 {% extends "templates/web.html" %}
 
-{% block title %}Smart Accounting{% endblock %}
+{% block title %}{{ brand_name or "Smart Accounting" }}{% endblock %}
 
 {# Product shell: remove standard website navbar + breadcrumbs #}
 {% block navbar %}{% endblock %}
@@ -12,7 +12,7 @@
 <div id="smart-shell" class="smart-shell">
   <div class="smart-shell__topbar">
     <div class="smart-shell__left">
-      <div class="smart-shell__brand">Smart Accounting</div>
+      <div class="smart-shell__brand">{{ brand_name or "Smart Accounting" }}</div>
     </div>
     <div class="smart-shell__actions">
       <button class="smart-shell__icon-btn" id="btnNotifications" aria-label="Notifications" type="button">
@@ -37,7 +37,7 @@
       <button class="smart-shell__menu-item" id="btnMyProfile" type="button">My Profile</button>
       <button class="smart-shell__menu-item" id="btnMySettings" type="button">My Settings</button>
       <div class="smart-shell__menu-divider"></div>
-      <a class="smart-shell__menu-item smart-shell__menu-link" href="/api/method/logout">Log out</a>
+      <a class="smart-shell__menu-item smart-shell__menu-link" href="/smart/logout">Log out</a>
     </div>
   </div>
 

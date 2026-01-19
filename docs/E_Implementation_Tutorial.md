@@ -443,6 +443,10 @@ Partner
 | Softwares | `custom_softwares` | Table MultiSelect | Project Software | Table MultiSelect 的子表为 `Project Software`；子表字段 `software` Link → `Software` |
 | Engagement Letter | `custom_engagement_letter` | Attach | | 业务文件附件（Smart Board 支持上传/查看） |
 
+补充说明（Smart Board 行为）：
+- Engagement Letter 上传使用 Frappe 原生 `/api/method/upload_file`
+- 上传成功后会写回 `Project.custom_engagement_letter`，表格会显示文件名并支持 Replace
+
 > **custom_team_members 说明**：子表字段，可以添加多个团队成员，每个成员有角色（Preparer/Reviewer/Partner）。支持高效的数据库查询和统计。
 
 > **custom_project_frequency 说明**：选择频率后，系统会自动创建Auto Repeat记录（通过after_insert钩子）
@@ -459,6 +463,21 @@ Partner
 |-------|-----------|-----------|---------|------|
 | Fiscal Year | `custom_fiscal_year` | Link | Fiscal Year | 如 "FY24", "FY25" |
 | Period | `custom_period` | Data | | 如 "Q1", "Q2", "Q3", "Q4" |
+
+### Phase 5.1（新增）：Task 成员子表（用于 Smart Board 人员 cell + 任务分配一致性）
+
+> **背景**：Smart Board 的 Task 人员单元格需要稳定的数据结构来渲染头像/增删成员。  
+> **原则**：与 Project 的 `custom_team_members` 复用同一个子表 DocType（`Project Team Member`），避免两套成员结构分裂。
+
+在 **Task** DocType 添加字段：
+
+| Label | Fieldname | Fieldtype | Options | 说明 |
+|-------|-----------|-----------|---------|------|
+| Task Members | `custom_task_members` | Table | Project Team Member | Task 级成员；Smart Board 优先使用该字段 |
+
+关键要求：
+- `custom_task_members` 必须是 **Table**，Options 必须是 `Project Team Member`（否则后端 append/前端渲染会失败）
+- 如果你历史上用过别的字段名，建议统一迁移到 `custom_task_members`（Smart Board API 会优先识别它）
 
 ---
 
@@ -1005,6 +1024,7 @@ bench restart
   - [x] `custom_softwares`【fixtures/custom_field.json】
   - [x] `custom_engagement_letter`【fixtures/custom_field.json】
 - [x] Task 扩展：2 个字段（`custom_fiscal_year`, `custom_period`）【fixtures/custom_field.json】
+- [ ] Task 成员子表：`custom_task_members`（Table → `Project Team Member`）
 
 ### 7.3 功能验证
 

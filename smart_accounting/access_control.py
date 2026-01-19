@@ -11,15 +11,109 @@ from __future__ import annotations
 import frappe
 
 
-# Extend this allowlist as needed (e.g. Support Team, Implementation)
-DESK_ALLOW_ROLES = {
-	"System Manager",
+def _redirect(location: str, status_code: int = 302) -> None:
+	"""
+	Force a redirect early in request lifecycle.
+
+	Important:
+	- This hook runs inside `frappe.app.init_request()` (before response rendering).
+	- Raising `frappe.Redirect` here will be treated as an unhandled exception and may render a traceback page in dev.
+	- Instead, raise a Werkzeug HTTP redirect (caught by `frappe.app.application` as HTTPException).
+	"""
+	code = int(status_code or 302)
+	location = str(location or "/").strip() or "/"
+	# Use a Response-based abort to stay compatible across Werkzeug versions.
+	from werkzeug.wrappers import Response
+	from werkzeug.exceptions import abort
+
+	resp = Response("", status=code)
+	resp.headers["Location"] = location
+	abort(resp)
+
+
+def _get_desk_allow_roles() -> set[str]:
+	"""
+	Desk access allowlist (roles).
+
+	Default: empty (only Administrator can access Desk).
+
+	Optional site_config.json:
+	  "smart_desk_allow_roles": ["System Manager", "Support Team"]
+	"""
+	try:
+		cfg = frappe.get_site_config() or {}
+	except Exception:
+		cfg = {}
+
+	roles = cfg.get("smart_desk_allow_roles") or []
+	if isinstance(roles, str):
+		roles = [roles]
+
+	out: set[str] = set()
+	for r in roles:
+		s = str(r or "").strip()
+		if s:
+			out.add(s)
+	return out
+
+
+def _get_desk_allow_users() -> set[str]:
+	"""
+	Desk access allowlist (users).
+
+	Optional site_config.json:
+	  "smart_desk_allow_users": ["alice@company.com"]
+	"""
+	try:
+		cfg = frappe.get_site_config() or {}
+	except Exception:
+		cfg = {}
+
+	users = cfg.get("smart_desk_allow_users") or []
+	if isinstance(users, str):
+		users = [users]
+
+	out: set[str] = set()
+	for u in users:
+		s = str(u or "").strip()
+		if s:
+			out.add(s)
+	return out
+
+def _get_desk_access_mode() -> str:
+	"""
+	Desk access mode:
+	- "admin_only" (default): ONLY Administrator can access /app*
+	- "config": allow additional roles/users via site_config.json
+	"""
+	try:
+		cfg = frappe.get_site_config() or {}
+	except Exception:
+		cfg = {}
+	mode = str(cfg.get("smart_desk_access_mode") or "admin_only").strip().lower()
+	if mode not in {"admin_only", "config"}:
+		mode = "admin_only"
+	return mode
+
+SMART_PUBLIC_PATHS = {
+	"/smart/login",
+	"/smart/login/",
+	"/smart/logout",
+	"/smart/logout/",
+	"/smart/forgot-password",
+	"/smart/forgot-password/",
+	"/smart/signup",
+	"/smart/signup/",
 }
 
 
 def _is_desk_path(path: str) -> bool:
 	# Desk routes are under /app (e.g. /app, /app/project-management)
 	return path == "/app" or path.startswith("/app/")
+
+def _is_smart_path(path: str) -> bool:
+	# Product shell routes are under /smart
+	return path == "/smart" or path.startswith("/smart/")
 
 
 def _is_allowed_to_use_desk() -> bool:
@@ -31,12 +125,24 @@ def _is_allowed_to_use_desk() -> bool:
 	if user == "Administrator":
 		return True
 
+	# Default: keep everyone out of Desk except Administrator.
+	if _get_desk_access_mode() != "config":
+		return False
+
+	# Explicit per-user allowlist (site config)
+	try:
+		if str(user) in _get_desk_allow_users():
+			return True
+	except Exception:
+		pass
+
 	try:
 		user_roles = set(frappe.get_roles(user))
 	except Exception:
 		user_roles = set()
 
-	if user_roles.intersection(DESK_ALLOW_ROLES):
+	allow_roles = _get_desk_allow_roles()
+	if allow_roles and user_roles.intersection(allow_roles):
 		return True
 
 	return False
@@ -57,21 +163,26 @@ def before_request():
 	if not path:
 		return
 
-	# Ensure /smart always requires login (avoid showing a half-broken shell to Guest)
-	if path == "/smart" and frappe.session.user == "Guest":
-		frappe.local.response["type"] = "redirect"
-		frappe.local.response["location"] = "/login?redirect-to=/smart"
-		return
+	# Hard-gate Desk routes first (prevents non-admin users from ever seeing /app* HTML).
+	if _is_desk_path(path) and not _is_allowed_to_use_desk():
+		_redirect("/smart", 302)
 
+	# Always prefer product login (avoid exposing Desk/ERPNext login UI to end users)
+	if path == "/login":
+		_redirect("/smart/login", 302)
+	# Avoid exposing ERPNext website pages (keep URLs stable but land in /smart).
+	if path == "/update-password":
+		_redirect("/smart/forgot-password", 302)
+	if path == "/signup":
+		_redirect("/smart/signup", 302)
+
+	# Ensure /smart always requires login (avoid showing a half-broken shell to Guest)
+	# We route Guests to a product-branded login page under /smart/login, not Desk's /login.
+	if _is_smart_path(path) and frappe.session.user == "Guest" and path not in SMART_PUBLIC_PATHS:
+		_redirect(f"/smart/login?redirect-to={path}", 302)
+
+	# Non-desk routes continue as normal.
 	if not _is_desk_path(path):
 		return
-
-	# Allow internal admins to use Desk
-	if _is_allowed_to_use_desk():
-		return
-
-	# Redirect external users to product shell
-	frappe.local.response["type"] = "redirect"
-	frappe.local.response["location"] = "/smart"
 
 

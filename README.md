@@ -70,6 +70,23 @@ Smart Accounting 是一个专为会计事务所设计的 SaaS 项目管理平台
 - ✅ 引入 `smart_board` 前端模块化目录结构（组件/服务/状态管理/样式）
 - ✅ `hooks.py` 中加入 Smart Board 的 `app_include_js/app_include_css`
 
+### v2.2 (2026-01-19) - Smart Board 核心可用（编辑/性能/附件/月度）
+
+**已落地**：
+- ✅ **人员单元格统一**：Project/Task 的人员选择与删除逻辑一致（MultiLinkPicker + 行内编辑）
+- ✅ **Monthly Status**：
+  - Task：12 个月状态网格（Not Started/Working On It/Stuck/Done）
+  - Project：月度汇总（Done x/y · %），支持展开任务后按需加载更重的 matrix 数据
+- ✅ **Engagement Letter（Attach）**：
+  - 支持整格点击上传、上传后立即显示文件名/链接、可 Replace
+  - 使用 Frappe 原生上传接口 `/api/method/upload_file`
+- ✅ **性能优化（面向大量 Projects）**：
+  - 按当前 Saved View 可见列动态请求 Project fields（减少 payload）
+  - 子表 hydration 按需加载（team/software）
+  - 项目列表分页（infinite scrolling）+ 虚拟滚动（包含展开行高度）
+  - 并发请求防回写（快速切换 board 不会闪回旧数据）
+  - task counts 预取去重（避免 store 更新期间重复请求导致越用越慢）
+
 ### v2.0 (2025-12-16) - Clean Slate 重构
 
 **重大变更**：

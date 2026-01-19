@@ -80,8 +80,11 @@ smart_accounting/public/
 ### BoardView 组件
 - **BoardTable**: 类Monday.com的表格视图
   - 可调整列宽
-  - 支持排序
-  - 行内编辑（计划中）
+  - 支持列管理（显示/隐藏/拖拽排序）
+  - 支持虚拟滚动（大量项目）
+  - 支持无限滚动分页（infinite scrolling）
+  - ✅ 行内编辑（已落地：text/select/date/link/multi-link/attachment）
+  - ✅ 展开项目查看 Tasks，并支持 Tasks 行内编辑（含人员/Monthly Status）
 - **BoardRow**: 表格行渲染
 - **BoardCell**: 单元格格式化显示
 
@@ -89,6 +92,7 @@ smart_accounting/public/
 - **ProjectService**: Project CRUD操作
 - **ViewService**: Saved View管理
 - **ApiService**: 通用API封装
+- **fileUploadService**: 使用 Frappe 原生 `/api/method/upload_file` 上传并绑定 Attach 字段
 
 ### Store 状态管理
 - **projects**: 项目数据管理
@@ -141,22 +145,34 @@ app_include_css = [
 
 ### 高优先级
 1. ✅ 完成基础架构搭建
-2. 🔲 实现数据加载和显示
-3. 🔲 实现筛选功能
-4. 🔲 实现行内编辑
-5. 🔲 集成Frappe Comment系统
+2. ✅ 实现数据加载和显示（Project + Task）
+3. 🟡 筛选功能（已有基础 filter/search + Saved View filters；高级 groups 持续完善）
+4. ✅ 实现行内编辑（Project/Task）
+5. 🟡 Updates/Comments（目前是 website-safe placeholder，后续对接 Frappe Comment）
 
 ### 中优先级
-1. 🔲 实现Saved View保存/加载
-2. 🔲 实现列管理（显示/隐藏/排序）
+1. ✅ 实现Saved View保存/加载（默认 Shared View + columns/filters）
+2. ✅ 实现列管理（显示/隐藏/排序/宽度持久化）
 3. 🔲 实现看板视图
-4. 🔲 性能优化（虚拟滚动）
+4. ✅ 性能优化（虚拟滚动 + 分页 + 动态 fields）
 
 ### 低优先级
 1. 🔲 移动端优化
 2. 🔲 深色模式
 3. 🔲 导出功能
 4. 🔲 批量操作
+
+## 🔍 常见问题 / 排错
+
+### 1) Engagement Letter 上传后表格显示了，但 Project 表单没保存？
+- 原因：如果只做“本地状态更新”而没有触发后端 `set_value`，表单字段会是空。
+- 现状：已修复为**强制落库**（该列有自定义 `commit`，最终走 `projects/updateProjectField`）。
+
+### 2) 切换 Board 越切越慢？
+- 已做的保护：
+  - Saved View 默认视图有缓存 + 服务端过滤
+  - `fetchProjects` 做了并发回写保护（旧请求不会覆盖新视图）
+  - task counts 预取做了 in-flight 去重（避免重复请求）
 
 ## 💡 设计原则
 
