@@ -7,6 +7,7 @@ import { STATUS_OPTIONS } from '../../utils/constants.js';
 import { renderHeaderActions, bindHeaderActions } from './headerToolbars.js';
 import { isProductView } from '../../utils/viewTypes.js';
 import { AdvancedFilterModal } from '../BoardView/AdvancedFilterModal.js';
+import { buildAdvancedFilterColumns } from '../../utils/filterColumns.js';
 
 export class Header {
     constructor(container, options = {}) {
@@ -79,22 +80,14 @@ export class Header {
         return '';
     }
     
-    showFilterDialog() {
+    async showFilterDialog() {
         // Website-safe modal (Monday-like)
         const initial = this.options?.store?.getState?.()?.filters || {};
         const statusOptions = STATUS_OPTIONS[this.currentView] || STATUS_OPTIONS['DEFAULT'] || [];
-        const columns = [
-            { field: 'customer', label: 'Client Name', type: 'link', doctype: 'Customer', placeholder: 'Search Customer...' },
-            { field: 'project_name', label: 'Project Name', type: 'text' },
-            { field: 'status', label: 'Status', type: 'select', options: statusOptions },
-            { field: 'company', label: 'Company', type: 'link', doctype: 'Company', placeholder: 'Search Company...' },
-            { field: 'custom_target_month', label: 'Target Month', type: 'select', options: [
-                'January','February','March','April','May','June','July','August','September','October','November','December'
-            ] },
-            { field: 'custom_fiscal_year', label: 'Fiscal Year', type: 'link', doctype: 'Fiscal Year', placeholder: 'Search Fiscal Year...' },
-            { field: 'custom_lodgement_due_date', label: 'Lodgement Due', type: 'date' },
-            { field: 'expected_end_date', label: 'End Date', type: 'date' },
-        ];
+        const columns = await buildAdvancedFilterColumns({
+            viewType: this.currentView,
+            statusOptions,
+        });
 
         const modal = new AdvancedFilterModal({
             title: `Filter · ${this.currentView}`,
