@@ -89,6 +89,10 @@ export class BoardTable {
         this._onScroll = null;
         this._onBodyHScroll = null;
         this._syncingHScroll = false;
+        this._onBottomHScroll = null;
+        // Prevent feedback loops between body <-> bottom scrollbar.
+        this._syncingFromBottom = false;
+        this._syncingFromBody = false;
         this._lastLoadMoreAt = 0;
         this._rowHeight = 44; // fallback, will be refined after first render
         this._virtualThreshold = options.virtualThreshold || 200;
@@ -379,6 +383,11 @@ export class BoardTable {
                         </tbody>
                     </table>
                 </div>
+
+                <!-- Bottom horizontal scrollbar (page-level feel) -->
+                <div class="sb-bottom-hscroll" id="sbBottomHScroll" style="display:none;">
+                    <div class="sb-bottom-hscroll__inner" style="width:${tableWidth}px;"></div>
+                </div>
             </div>
             <div class="sb-bulkbar" id="sbBulkBar" style="display:none;">
               <div class="sb-bulkbar__inner">
@@ -558,11 +567,15 @@ export class BoardTable {
 
         // Horizontal scroll sync (body drives, header follows)
         this.bindHorizontalScrollSync();
+        this.bindBottomScrollbarSync();
+        this._syncHeaderPaddingForScrollbar();
+        this._updateBottomScrollbarVisibility();
     }
 
     bindHorizontalScrollSync() {
         const header = this.container.querySelector('.board-table-header');
         const body = this.container.querySelector('#boardTableBody');
+        const bottom = this.container.querySelector('#sbBottomHScroll');
         if (!header || !body) return;
 
         // Remove existing listener to avoid leaks on re-render
@@ -572,6 +585,8 @@ export class BoardTable {
         }
 
         this._onBodyHScroll = () => {
+            // If scroll originated from bottom scrollbar sync, ignore to avoid jitter/blur.
+            if (this._syncingFromBottom) return;
             if (this._syncingHScroll) return;
             // If no horizontal overflow, do nothing
             const left = body.scrollLeft || 0;
@@ -579,6 +594,12 @@ export class BoardTable {
             requestAnimationFrame(() => {
                 this._syncingHScroll = true;
                 header.scrollLeft = left;
+                if (bottom) {
+                    // Mark as programmatic update to avoid bottom->body feedback loops.
+                    this._syncingFromBody = true;
+                    bottom.scrollLeft = left;
+                    requestAnimationFrame(() => { this._syncingFromBody = false; });
+                }
                 this._syncingHScroll = false;
             });
         };
@@ -587,6 +608,55 @@ export class BoardTable {
         body.addEventListener('scroll', this._onBodyHScroll, { passive: true });
         // Initial sync
         header.scrollLeft = body.scrollLeft || 0;
+        if (bottom) {
+            this._syncingFromBody = true;
+            bottom.scrollLeft = body.scrollLeft || 0;
+            requestAnimationFrame(() => { this._syncingFromBody = false; });
+        }
+    }
+
+    bindBottomScrollbarSync() {
+        const bottom = this.container.querySelector('#sbBottomHScroll');
+        const header = this.container.querySelector('.board-table-header');
+        const body = this.container.querySelector('#boardTableBody');
+        if (!bottom || !header || !body) return;
+
+        if (this._onBottomHScroll) {
+            bottom.removeEventListener('scroll', this._onBottomHScroll);
+            this._onBottomHScroll = null;
+        }
+
+        this._onBottomHScroll = () => {
+            // If bottom scroll was set programmatically from body, ignore.
+            if (this._syncingFromBody) return;
+            const left = bottom.scrollLeft || 0;
+            requestAnimationFrame(() => {
+                this._syncingFromBottom = true;
+                body.scrollLeft = left;
+                header.scrollLeft = left;
+                requestAnimationFrame(() => { this._syncingFromBottom = false; });
+            });
+        };
+        bottom.addEventListener('scroll', this._onBottomHScroll, { passive: true });
+    }
+
+    _syncHeaderPaddingForScrollbar() {
+        const header = this.container.querySelector('.board-table-header');
+        const body = this.container.querySelector('#boardTableBody');
+        if (!header || !body) return;
+        // Align header with body when body has a vertical scrollbar.
+        const sbw = Math.max(0, (body.offsetWidth || 0) - (body.clientWidth || 0));
+        header.style.paddingRight = sbw ? `${sbw}px` : '';
+    }
+
+    _updateBottomScrollbarVisibility() {
+        const bottom = this.container.querySelector('#sbBottomHScroll');
+        const body = this.container.querySelector('#boardTableBody');
+        if (!bottom || !body) return;
+        requestAnimationFrame(() => {
+            const hasH = (body.scrollWidth || 0) > (body.clientWidth || 0) + 2;
+            bottom.style.display = hasH ? 'block' : 'none';
+        });
     }
     
     bindScroll() {
@@ -1302,7 +1372,8 @@ export class BoardTable {
     
     handleResize() {
         // 处理窗口大小变化
-        // TODO: 实现虚拟滚动或其他性能优化
+        this._syncHeaderPaddingForScrollbar();
+        this._updateBottomScrollbarVisibility();
     }
     
     destroy() {
@@ -1319,6 +1390,11 @@ export class BoardTable {
         if (body && this._onBodyHScroll) {
             body.removeEventListener('scroll', this._onBodyHScroll);
             this._onBodyHScroll = null;
+        }
+        const bottom = this.container.querySelector('#sbBottomHScroll');
+        if (bottom && this._onBottomHScroll) {
+            bottom.removeEventListener('scroll', this._onBottomHScroll);
+            this._onBottomHScroll = null;
         }
 
         if (this._unsubscribe) {

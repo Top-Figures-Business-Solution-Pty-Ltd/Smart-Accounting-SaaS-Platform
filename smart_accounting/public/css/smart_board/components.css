@@ -86,10 +86,21 @@
    ============================================ */
 .page-placeholder {
     padding: 24px;
+    flex: 1;
+    overflow: auto;
+    /* Keep scrollbars stable (when supported) so users can drag without a touchpad */
+    scrollbar-gutter: stable both-edges;
 }
 
 .sb-page {
     max-width: 980px;
+}
+
+/* Generic scroll container that should expose a visible horizontal scrollbar when needed */
+.sb-table-scroll {
+    overflow-x: scroll;
+    overflow-y: auto;
+    scrollbar-gutter: stable both-edges;
 }
 
 .sb-page__title {

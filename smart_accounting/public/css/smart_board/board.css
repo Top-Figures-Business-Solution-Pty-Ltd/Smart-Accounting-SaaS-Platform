@@ -573,6 +573,21 @@
     overflow-y: auto;
 }
 
+/* ============================================
+   Bottom horizontal scrollbar (Monday-like)
+   ============================================ */
+.sb-bottom-hscroll {
+    height: 14px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    background: rgba(15, 23, 42, 0.06);
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.sb-bottom-hscroll__inner {
+    height: 1px; /* tiny inner to create scrollWidth */
+}
+
 .board-table > tbody > tr {
     border-bottom: 1px solid #f1f3f5;
     transition: background 0.15s;

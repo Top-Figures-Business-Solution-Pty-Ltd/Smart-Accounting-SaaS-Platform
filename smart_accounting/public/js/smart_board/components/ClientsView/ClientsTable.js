@@ -72,7 +72,7 @@ export class ClientsTable {
       if (err) return `<div class="text-danger" style="padding:12px;">Failed to load: ${escapeHtml(err)}</div>`;
       if (!items.length) return `<div class="text-muted" style="padding:12px;">No clients found.</div>`;
       return `
-        <div style="overflow:auto; border:1px solid var(--smart-board-border); border-radius:12px; background:#fff;">
+        <div class="sb-table-scroll" style="border:1px solid var(--smart-board-border); border-radius:12px; background:#fff;">
           <table class="table table-borderless" style="margin:0;">
             <thead style="position:sticky; top:0; background:#fff; border-bottom:1px solid rgba(0,0,0,0.06);">
               <tr>
