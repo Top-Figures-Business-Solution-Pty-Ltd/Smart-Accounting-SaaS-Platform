@@ -1,7 +1,9 @@
-import { isProductView } from '../../utils/viewTypes.js';
+// Placeholder pages are the "static HTML" pages inside the product shell.
+// Clients is no longer a placeholder; it is a real ClientsApp.
+const PLACEHOLDER_VIEWS = ['dashboard', 'settings'];
 
 export function isPlaceholderView(view) {
-    return isProductView(view);
+    return PLACEHOLDER_VIEWS.includes(String(view || ''));
 }
 
 export function renderPlaceholderHTML(view, store) {

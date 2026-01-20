@@ -119,9 +119,11 @@ export class Sidebar {
             item.classList.remove('active');
         });
         
+        const effectiveView = (this.currentView === 'client-projects') ? 'clients' : this.currentView;
+
         // 添加active到当前视图
         const currentItem = this.container.querySelector(
-            `.nav-item[data-view="${this.currentView}"]`
+            `.nav-item[data-view="${effectiveView}"]`
         );
         if (currentItem) {
             currentItem.classList.add('active');

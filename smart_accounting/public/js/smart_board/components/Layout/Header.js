@@ -67,7 +67,8 @@ export class Header {
             'Audit': 'Audit',
             'Financial Statements': 'Financial Statements',
             'clients': 'Clients',
-            'settings': 'Settings'
+            'settings': 'Settings',
+            'client-projects': 'Client Projects',
         };
         
         return viewTitles[this.currentView] || this.currentView;

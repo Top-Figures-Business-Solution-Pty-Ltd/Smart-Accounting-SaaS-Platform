@@ -9,23 +9,27 @@ import { MainContent } from './components/Layout/MainContent.js';
 import { PROJECT_TYPE_ICONS, DEFAULT_PROJECT_TYPE_ICON, DEFAULT_COLUMNS } from './utils/constants.js';
 import { Store } from './store/store.js';
 import { ProjectTypeService } from './services/projectTypeService.js';
-import { isBoardView as isBoardViewFn } from './utils/viewTypes.js';
+import { isBoardView as isBoardViewFn, isProductView } from './utils/viewTypes.js';
 import { handleHeaderAction } from './controllers/headerActionHandler.js';
 import { openProject, createProject } from './services/navigationService.js';
 import { msgprint } from './services/uiAdapter.js';
 import { ViewService } from './services/viewService.js';
 import './columns/registerDefaultSpecs.js';
 import { isDesk } from './utils/env.js';
+import { getUrlState, setUrlState } from './utils/urlState.js';
 
 export class SmartBoardApp {
     constructor(container) {
         this.container = container;
         this.store = new Store();
+        const urlState = getUrlState();
         // 默认先落在 dashboard，避免系统还没加载 Project Type 时误用不存在的 type（例如 ITR）
-        this.currentView = 'dashboard';
+        this.currentView = urlState?.view || 'dashboard';
+        this._initialUrlCustomer = String(urlState?.customer || '').trim();
         this.projectTypes = [];   // 运行时从系统获取
         this._unsubscribers = [];
         this._onWindowResize = null;
+        this._clientProjects = null;
         
         this.init();
     }
@@ -115,6 +119,21 @@ export class SmartBoardApp {
             await this.loadProjectTypes();
             
             // 加载当前视图的数据
+            // If URL points to client-projects, seed customer filter before the initial fetch.
+            if (this.currentView === 'client-projects' && this._initialUrlCustomer) {
+                this.store.dispatch('filters/setFilters', {
+                    status: [],
+                    company: null,
+                    fiscal_year: null,
+                    date_from: null,
+                    date_to: null,
+                    search: '',
+                    advanced_rules: [],
+                    advanced_groups: [],
+                    customer: this._initialUrlCustomer,
+                });
+                this._clientProjects = { customer: this._initialUrlCustomer, customer_name: this._initialUrlCustomer };
+            }
             await this.loadViewData(this.currentView);
             
             this.showLoading(false);
@@ -132,6 +151,20 @@ export class SmartBoardApp {
         // Dashboard uses its own lightweight API (avoid loading all Projects)
         if (viewType === 'dashboard') {
             await this.store.dispatch('dashboard/fetchMyProjects');
+            return;
+        }
+        // Clients uses its own module/state
+        if (viewType === 'clients') {
+            await this.store.dispatch('clients/fetchClients', { search: '', limit: 200 });
+            return;
+        }
+        // Client Projects: a cross-project-type view, still backed by Projects module
+        if (viewType === 'client-projects') {
+            const stateFilters = this.store?.getState?.()?.filters || {};
+            const merged = { ...stateFilters };
+            // Keep payload minimal; this view is read-only.
+            merged.fields = ['name', 'project_name', 'customer', 'project_type', 'status', 'modified'];
+            await this.store.dispatch('projects/fetchProjects', merged);
             return;
         }
         // 从store加载数据：合并 filters（含 advanced filter rules/groups + search）
@@ -204,8 +237,12 @@ export class SmartBoardApp {
             icon: PROJECT_TYPE_ICONS[name] || DEFAULT_PROJECT_TYPE_ICON
         }));
 
-        // 如果系统里有 Project Type，就把默认视图切到第一个（避免写死 ITR）
-        if (this.projectTypes.length && !this.projectTypes.find(t => t.value === this.currentView)) {
+        // 如果系统里有 Project Type：仅当 currentView 不是产品页且不是合法 board 时，才切到第一个
+        if (
+            this.projectTypes.length &&
+            !isProductView(this.currentView) &&
+            !this.projectTypes.find(t => t.value === this.currentView)
+        ) {
             this.currentView = this.projectTypes[0].value;
         }
 
@@ -224,10 +261,12 @@ export class SmartBoardApp {
         this.header.updateView(viewType);
         this.mainContent.updateView(viewType);
         
-        // 加载新视图的数据：只对 Boards（Project Type）和 Dashboard 有意义
-        if (this.isBoardView(viewType) || viewType === 'dashboard') {
+        // 加载新视图的数据：Boards（Project Type）/ Dashboard / Clients / Client Projects
+        if (this.isBoardView(viewType) || viewType === 'dashboard' || viewType === 'clients' || viewType === 'client-projects') {
             this.loadViewData(viewType);
         }
+
+        try { this._syncUrl?.(); } catch (e) {}
     }
     
     handleHeaderAction(action, data) {
@@ -300,11 +339,23 @@ export class SmartBoardApp {
     applyFilters(filters) {
         this.store.dispatch('filters/setFilters', filters);
         this.loadViewData(this.currentView);
+        try { this._syncUrl?.(); } catch (e) {}
     }
     
     performSearch(searchTerm) {
         this.store.dispatch('filters/setSearch', searchTerm);
         this.loadViewData(this.currentView);
+        try { this._syncUrl?.(); } catch (e) {}
+    }
+
+    goBackToClients() {
+        this.currentView = 'clients';
+        this.header?.updateView?.(this.currentView);
+        this.mainContent?.updateView?.(this.currentView);
+        this.sidebar?.updateView?.(this.currentView);
+        try { this._syncUrl?.(); } catch (e) {}
+        // Clients view fetch
+        return this.loadViewData(this.currentView);
     }
     
     showColumnManager() {
@@ -314,6 +365,73 @@ export class SmartBoardApp {
             return table.openColumnManager();
         }
         msgprint('Column Manager is not available in this view.');
+    }
+
+    setClientsSearch(q) {
+        // Delegate to ClientsApp mounted inside MainContent
+        return this.mainContent?.setClientsSearch?.(q);
+    }
+
+    showClientsColumnManager() {
+        return this.mainContent?.openClientsColumnsManager?.();
+    }
+
+    openBoardForProject(project) {
+        const pt = String(project?.project_type || '').trim();
+        if (!pt) return;
+
+        // Switch to the board view
+        this.currentView = pt;
+        this.header?.updateView?.(pt);
+        this.mainContent?.updateView?.(pt);
+        this.sidebar?.updateView?.(pt);
+
+        // Keep the customer filter so the board is scoped to the same client
+        const customer = String(project?.customer || '').trim();
+        const stateFilters = this.store?.getState?.()?.filters || {};
+        this.applyFilters({
+            ...stateFilters,
+            customer: customer || stateFilters.customer || '',
+            search: '',
+        });
+    }
+
+    /**
+     * Navigate from Clients -> Projects (board) filtered by customer.
+     * Strategy (MVP):
+     * - Switch to the customer's most recent project_type (if any)
+     * - Apply filters.customer and load that board
+     */
+    async openCustomerProjects(client) {
+        const customer = String(client?.name || '').trim();
+        if (!customer) return;
+        // Navigate to a dedicated cross-project-type view
+        this.currentView = 'client-projects';
+        this._clientProjects = { customer, customer_name: client?.customer_name || customer };
+        this.header?.updateView?.(this.currentView);
+        this.mainContent?.updateView?.(this.currentView);
+        this.sidebar?.updateView?.(this.currentView); // Sidebar will map highlight to Clients
+
+        // Apply customer filter; do NOT set project_type so all project types are included
+        this.applyFilters({
+            status: [],
+            company: null,
+            fiscal_year: null,
+            date_from: null,
+            date_to: null,
+            search: '',
+            advanced_rules: [],
+            advanced_groups: [],
+            customer,
+        });
+
+        try { this._syncUrl?.(); } catch (e) {}
+    }
+
+    _syncUrl() {
+        const state = this.store?.getState?.() || {};
+        const customer = String(state?.filters?.customer || this._clientProjects?.customer || '').trim();
+        setUrlState({ view: this.currentView, customer: customer || '' });
     }
     
     showLoading(show) {

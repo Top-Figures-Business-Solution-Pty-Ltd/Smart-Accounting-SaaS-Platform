@@ -33,7 +33,22 @@ export function renderHeaderActions(view, { isBoardView }) {
                     id="headerClientSearchInput"
                 />
             </div>
+            <button class="btn btn-default" id="btnClientsColumns">Columns</button>
             <button class="btn btn-primary" id="btnNewClient">New Client</button>
+        `;
+    }
+
+    if (view === 'client-projects') {
+        return `
+            <button class="btn btn-default" id="btnClientProjectsBack">Back</button>
+            <div class="header-search">
+                <input 
+                    type="text" 
+                    class="form-control search-input" 
+                    placeholder="Search projects..."
+                    id="headerClientProjectsSearchInput"
+                />
+            </div>
         `;
     }
 
@@ -64,6 +79,7 @@ export function bindHeaderActions(rootEl, view, { isBoardView, onAction, onShowF
     }
 
     rootEl.querySelector('#btnNewClient')?.addEventListener('click', () => onAction?.('new_client'));
+    rootEl.querySelector('#btnClientsColumns')?.addEventListener('click', () => onAction?.('clients_columns'));
 
     const clientSearch = rootEl.querySelector('#headerClientSearchInput');
     if (clientSearch) {
@@ -75,6 +91,16 @@ export function bindHeaderActions(rootEl, view, { isBoardView, onAction, onShowF
     }
 
     rootEl.querySelector('#btnDashboardRefresh')?.addEventListener('click', () => onAction?.('dashboard_refresh'));
+
+    rootEl.querySelector('#btnClientProjectsBack')?.addEventListener('click', () => onAction?.('client_projects_back'));
+    const clientProjectsSearch = rootEl.querySelector('#headerClientProjectsSearchInput');
+    if (clientProjectsSearch) {
+        let t;
+        clientProjectsSearch.addEventListener('input', (e) => {
+            clearTimeout(t);
+            t = setTimeout(() => onAction?.('client_projects_search', e.target.value), 300);
+        });
+    }
 }
 
 

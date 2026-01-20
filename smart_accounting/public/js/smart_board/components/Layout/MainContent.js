@@ -5,6 +5,8 @@
 
 import { BoardTable } from '../BoardView/BoardTable.js';
 import { isPlaceholderView, renderPlaceholderHTML } from './placeholderPages.js';
+import { ClientsApp } from '../ClientsView/ClientsApp.js';
+import { ClientProjectsApp } from '../ClientsView/ClientProjectsApp.js';
 
 export class MainContent {
     constructor(container, options = {}) {
@@ -15,6 +17,8 @@ export class MainContent {
         this.isBoardView = options.isBoardView || (() => false);
         this.onProjectClick = options.onProjectClick || (() => {});
         this._unsub = null;
+        this._clientsApp = null;
+        this._clientProjectsApp = null;
         
         this.render();
 
@@ -93,7 +97,7 @@ export class MainContent {
         this.currentView = view;
 
         // Non-board views should not show the projects table
-        if (isPlaceholderView(view)) {
+        if (view === 'clients' || view === 'client-projects' || isPlaceholderView(view)) {
             this.showPlaceholder(view);
             return;
         }
@@ -177,7 +181,50 @@ export class MainContent {
         if (!placeholder) return;
 
         placeholder.style.display = 'block';
-        placeholder.innerHTML = renderPlaceholderHTML(view, this.store);
+        // Clients is now a real module, not a static placeholder.
+        if (view === 'clients') {
+            placeholder.innerHTML = `<div id="sbClientsMount"></div>`;
+            const mount = placeholder.querySelector('#sbClientsMount');
+            // Recreate app on each entry to keep lifecycle clean
+            try { this._clientsApp?.destroy?.(); } catch (e) {}
+            try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
+            this._clientProjectsApp = null;
+            this._clientsApp = new ClientsApp(mount, {
+                store: this.store,
+                onOpenProjects: (client) => {
+                    try { this.options?.app?.openCustomerProjects?.(client); } catch (e) {}
+                }
+            });
+            this._clientsApp.init();
+        } else if (view === 'client-projects') {
+            placeholder.innerHTML = `<div id="sbClientProjectsMount"></div>`;
+            const mount = placeholder.querySelector('#sbClientProjectsMount');
+            try { this._clientsApp?.destroy?.(); } catch (e) {}
+            this._clientsApp = null;
+            try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
+            this._clientProjectsApp = new ClientProjectsApp(mount, {
+                store: this.store,
+                onOpenBoard: (project) => {
+                    try { this.options?.app?.openBoardForProject?.(project); } catch (e) {}
+                }
+            });
+            this._clientProjectsApp.init();
+        } else {
+            // Dashboard / Settings placeholders remain static-html based for now
+            try { this._clientsApp?.destroy?.(); } catch (e) {}
+            this._clientsApp = null;
+            try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
+            this._clientProjectsApp = null;
+            placeholder.innerHTML = renderPlaceholderHTML(view, this.store);
+        }
+    }
+
+    setClientsSearch(q) {
+        try { return this._clientsApp?.search?.(q); } catch (e) {}
+    }
+
+    openClientsColumnsManager() {
+        try { return this._clientsApp?.openColumnsManager?.(); } catch (e) {}
     }
     
     handleResize() {
@@ -190,6 +237,10 @@ export class MainContent {
         if (this.boardTable) {
             this.boardTable.destroy();
         }
+        try { this._clientsApp?.destroy?.(); } catch (e) {}
+        this._clientsApp = null;
+        try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
+        this._clientProjectsApp = null;
         try { this._unsub?.(); } catch (e) {}
         this._unsub = null;
         this.container.innerHTML = '';

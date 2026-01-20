@@ -18,9 +18,15 @@ export async function handleHeaderAction(app, action, data) {
     case 'new_client':
       return msgprint('New Client - coming soon.');
     case 'clients_search':
-      return console.log('Client search:', data);
+      return app?.setClientsSearch?.(data);
+    case 'clients_columns':
+      return app?.showClientsColumnManager?.();
     case 'dashboard_refresh':
       return app?.loadViewData?.('dashboard');
+    case 'client_projects_back':
+      return app?.goBackToClients?.();
+    case 'client_projects_search':
+      return app?.performSearch?.(data);
     default:
       console.warn('Unknown action:', action, data);
   }

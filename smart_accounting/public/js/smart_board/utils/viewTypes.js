@@ -3,7 +3,9 @@
  * Keep view classification in one place to avoid "if (view === ...)" spreading everywhere.
  */
 
-export const PRODUCT_VIEWS = ['dashboard', 'clients', 'settings'];
+// Product shell views (non-board).
+// NOTE: Some product views are rendered as real apps (e.g. Clients), not placeholders.
+export const PRODUCT_VIEWS = ['dashboard', 'clients', 'client-projects', 'settings'];
 
 export function isProductView(view) {
     return PRODUCT_VIEWS.includes(view);

@@ -7,6 +7,7 @@ import { ProjectsModule } from './modules/projects.js';
 import { FiltersModule } from './modules/filters.js';
 import { ViewsModule } from './modules/views.js';
 import { DashboardModule } from './modules/dashboard.js';
+import { ClientsModule } from './modules/clients.js';
 
 export class Store {
     constructor() {
@@ -15,7 +16,8 @@ export class Store {
             projects: ProjectsModule.state(),
             filters: FiltersModule.state(),
             views: ViewsModule.state(),
-            dashboard: DashboardModule.state()
+            dashboard: DashboardModule.state(),
+            clients: ClientsModule.state(),
         };
         
         // 订阅者列表
@@ -26,7 +28,8 @@ export class Store {
             projects: ProjectsModule,
             filters: FiltersModule,
             views: ViewsModule,
-            dashboard: DashboardModule
+            dashboard: DashboardModule,
+            clients: ClientsModule,
         };
     }
     
