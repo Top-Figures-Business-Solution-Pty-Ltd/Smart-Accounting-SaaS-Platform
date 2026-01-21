@@ -59,6 +59,15 @@ override_doctype_class = {
 # Fixtures
 # Export DocTypes and Custom Fields to fixtures for version control
 fixtures = [
+    # Roles used by Smart Accounting (so test/prod imports won't miss them)
+    {
+        "doctype": "Role",
+        "filters": [
+            ["name", "in", [
+                "Smart Accounting User"
+            ]]
+        ]
+    },
     # Custom Fields for ERPNext native DocTypes
     {
         "doctype": "Custom Field",
