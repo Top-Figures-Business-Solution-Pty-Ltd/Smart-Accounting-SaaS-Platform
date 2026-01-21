@@ -68,6 +68,17 @@ fixtures = [
             ]]
         ]
     },
+    # Role permissions (customized via Role Permission Manager).
+    # NOTE: We intentionally export only the permissions for Smart Accounting User
+    # to avoid pulling unrelated system-wide permission customizations into this app.
+    {
+        "doctype": "Custom DocPerm",
+        "filters": [
+            ["role", "in", [
+                "Smart Accounting User"
+            ]]
+        ]
+    },
     # Custom Fields for ERPNext native DocTypes
     {
         "doctype": "Custom Field",
