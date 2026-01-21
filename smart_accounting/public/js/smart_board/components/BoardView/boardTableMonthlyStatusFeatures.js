@@ -102,7 +102,11 @@ export function installBoardTableMonthlyStatusFeatures(BoardTable) {
 		const projectName = td.dataset.project;
 		const fy = td.dataset.fiscalYear || '';
 		const mi = Number(td.dataset.monthIndex || 0);
-		if (!taskName || !fy || !mi) return;
+		if (!taskName || !mi) return;
+		if (!fy) {
+			notify('请先为该项目设置 Fiscal Year（可在 Columns 中勾选 Fiscal Year 并填写），然后再设置 Task Monthly Status。', 'orange');
+			return;
+		}
 
 		// Simple inline popover (website-safe)
 		const existing = document.querySelector('.sb-ms-menu');

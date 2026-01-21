@@ -202,7 +202,20 @@ export class SmartBoardApp {
                 };
 
                 const cols = parseColumns(view?.columns);
-                const baseFields = ['name', 'project_name', 'customer', 'project_type', 'status', 'company', 'is_active', 'modified'];
+                // Base fields are always fetched even if not visible in Columns Manager.
+                // IMPORTANT: `custom_fiscal_year` is required for Task Monthly Status interactions
+                // (cells need a fiscal year to call setMonthlyStatus), so never omit it.
+                const baseFields = [
+                    'name',
+                    'project_name',
+                    'customer',
+                    'project_type',
+                    'status',
+                    'company',
+                    'is_active',
+                    'modified',
+                    'custom_fiscal_year',
+                ];
                 const fields = new Set(baseFields);
                 for (const c of (cols || [])) {
                     const f = String(c?.field || '').trim();
