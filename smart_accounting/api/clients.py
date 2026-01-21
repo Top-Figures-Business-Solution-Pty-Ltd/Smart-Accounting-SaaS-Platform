@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
+from frappe.exceptions import DuplicateEntryError
 
 
 def _ensure_logged_in() -> None:
@@ -23,6 +24,39 @@ def _normalize_int(v: Any, default: int) -> int:
 		return int(v)
 	except Exception:
 		return int(default)
+
+
+def _pick_default(doctype: str, preferred_name: str) -> str | None:
+	"""Best-effort pick a default value for Link fields like Customer Group / Territory."""
+	try:
+		if preferred_name and frappe.db.exists(doctype, preferred_name):
+			return preferred_name
+	except Exception:
+		pass
+	try:
+		rows = frappe.get_all(doctype, fields=["name"], limit_page_length=1)
+		if rows:
+			return rows[0].get("name")
+	except Exception:
+		pass
+	return None
+
+
+def _build_client_summary(customer: dict, primary_entity: dict | None = None) -> dict:
+	"""Return a minimal item shape compatible with ClientsTable rows."""
+	return {
+		"name": customer.get("name"),
+		"customer_name": customer.get("customer_name") or customer.get("name"),
+		"customer_group": customer.get("customer_group"),
+		"territory": customer.get("territory"),
+		"disabled": int(customer.get("disabled") or 0),
+		"modified": customer.get("modified"),
+		"entities_count": 1 if primary_entity else 0,
+		"project_count": 0,
+		"active_project_count": 0,
+		"last_project_type": "",
+		"primary_entity": primary_entity,
+	}
 
 
 @frappe.whitelist()
@@ -201,5 +235,94 @@ def get_clients(search: str | None = None, limit_start: int = 0, limit_page_leng
 			"limit_page_length": limit_page_length,
 		},
 	}
+
+
+@frappe.whitelist()
+def create_client(payload: dict | None = None) -> dict:
+	"""
+	Create a new Customer (and optional Primary Entity row).
+	Website-safe: designed for /smart shell.
+
+	payload:
+	{
+	  customer_name: str (required)
+	  customer_type: "Company"|"Individual"|... (optional)
+	  customer_group: str (optional)
+	  territory: str (optional)
+	  primary_entity: {
+	    entity_name: str
+	    entity_type: str
+	    abn: str|None
+	    year_end: str|None
+	  } | null
+	}
+	"""
+	_ensure_logged_in()
+
+	# frappe.call may send nested objects as JSON strings; normalize here.
+	if isinstance(payload, str):
+		try:
+			data = frappe.parse_json(payload) or {}
+		except Exception:
+			data = {}
+	else:
+		data = payload or {}
+	if not isinstance(data, dict):
+		data = {}
+	customer_name = str(data.get("customer_name") or "").strip()
+	if not customer_name:
+		frappe.throw("customer_name is required")
+
+	customer_type = str(data.get("customer_type") or "").strip() or "Individual"
+	customer_group = str(data.get("customer_group") or "").strip() or (_pick_default("Customer Group", "All Customer Groups") or "")
+	territory = str(data.get("territory") or "").strip() or (_pick_default("Territory", "All Territories") or "")
+
+	primary = data.get("primary_entity") or None
+	primary_entity_row = None
+	if isinstance(primary, dict):
+		entity_name = str(primary.get("entity_name") or "").strip()
+		entity_type = str(primary.get("entity_type") or "").strip()
+		abn = str(primary.get("abn") or "").strip() or None
+		year_end = str(primary.get("year_end") or "").strip() or None
+		if not year_end:
+			frappe.throw("year_end is required")
+		if entity_name and entity_type:
+			primary_entity_row = {
+				"doctype": "Customer Entity",
+				"entity_name": entity_name,
+				"entity_type": entity_type,
+				"abn": abn,
+				"year_end": year_end,
+				"is_primary": 1,
+			}
+
+	try:
+		doc = frappe.get_doc(
+			{
+				"doctype": "Customer",
+				"customer_name": customer_name,
+				"customer_type": customer_type,
+				"customer_group": customer_group or None,
+				"territory": territory or None,
+				# Child table field may or may not exist; append only if present.
+				"custom_entities": [primary_entity_row] if primary_entity_row else [],
+			}
+		)
+		doc.insert()
+	except DuplicateEntryError:
+		frappe.throw("Customer already exists")
+
+	# Return a website-safe summary (avoid sending full doc blob)
+	customer = doc.as_dict()
+	pe = None
+	if primary_entity_row:
+		pe = {
+			"entity_name": primary_entity_row.get("entity_name"),
+			"entity_type": primary_entity_row.get("entity_type"),
+			"abn": primary_entity_row.get("abn"),
+			"year_end": primary_entity_row.get("year_end"),
+			"is_primary": 1,
+		}
+	return {"item": _build_client_summary(customer, pe)}
 
 

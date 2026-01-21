@@ -4,6 +4,7 @@
  */
 
 import { msgprint } from '../services/uiAdapter.js';
+import { openNewClientFlow } from './newClientController.js';
 
 export async function handleHeaderAction(app, action, data) {
   switch (action) {
@@ -16,7 +17,7 @@ export async function handleHeaderAction(app, action, data) {
     case 'manage_columns':
       return app?.showColumnManager?.();
     case 'new_client':
-      return msgprint('New Client - coming soon.');
+      return openNewClientFlow({ app });
     case 'clients_search':
       return app?.setClientsSearch?.(data);
     case 'clients_columns':
