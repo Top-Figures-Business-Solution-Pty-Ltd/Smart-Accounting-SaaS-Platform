@@ -34,7 +34,10 @@ export class Sidebar {
                     
                     <!-- Project Types -->
                     <div class="nav-section">
-                        <div class="nav-section-title">Boards</div>
+                        <div class="nav-section-title sb-boards-title">
+                            <span>Boards</span>
+                            <button type="button" class="sb-boards-settings" id="sbBoardsSettings" title="Board settings">⚙️</button>
+                        </div>
                         ${this.renderProjectTypes()}
                     </div>
                     
@@ -86,6 +89,13 @@ export class Sidebar {
     bindEvents() {
         // 导航点击事件（事件委托）
         this._onContainerClick = (e) => {
+            const settingsBtn = e.target?.closest?.('#sbBoardsSettings');
+            if (settingsBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                try { this.options?.onBoardSettings?.(); } catch (e2) {}
+                return;
+            }
             const navItem = e.target.closest('.nav-item');
             if (navItem) {
                 e.preventDefault();

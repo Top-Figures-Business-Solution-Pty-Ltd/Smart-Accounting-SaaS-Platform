@@ -69,7 +69,8 @@ export class SmartBoardApp {
         this.sidebar = new Sidebar(sidebarContainer, {
             projectTypes: this.projectTypes,
             currentView: this.currentView,
-            onViewChange: (viewType) => this.handleViewChange(viewType)
+            onViewChange: (viewType) => this.handleViewChange(viewType),
+            onBoardSettings: () => this.handleHeaderAction('board_settings')
         });
         
         // 初始化头部

@@ -5,6 +5,7 @@
 
 import { msgprint } from '../services/uiAdapter.js';
 import { openNewClientFlow } from './newClientController.js';
+import { openBoardSettingsFlow } from './boardSettingsController.js';
 
 export async function handleHeaderAction(app, action, data) {
   switch (action) {
@@ -16,6 +17,8 @@ export async function handleHeaderAction(app, action, data) {
       return app?.performSearch?.(data);
     case 'manage_columns':
       return app?.showColumnManager?.();
+    case 'board_settings':
+      return openBoardSettingsFlow({ app });
     case 'new_client':
       return openNewClientFlow({ app });
     case 'clients_search':

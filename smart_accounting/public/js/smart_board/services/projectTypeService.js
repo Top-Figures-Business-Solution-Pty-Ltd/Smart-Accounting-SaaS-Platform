@@ -3,12 +3,18 @@
  * Project Type 相关 API 调用
  */
 
+import { BoardSettingsService } from './boardSettingsService.js';
+
 export class ProjectTypeService {
     /**
      * 获取系统内已有的 Project Type 列表（ERPNext 原生 DocType）
      */
     static async fetchProjectTypes() {
         try {
+            // Prefer Board Settings ordering (global default); fallback to name asc.
+            const ordered = await BoardSettingsService.fetchOrderedProjectTypes();
+            if (ordered && ordered.length) return ordered;
+
             const r = await frappe.call({
                 method: 'frappe.client.get_list',
                 args: {
@@ -20,9 +26,7 @@ export class ProjectTypeService {
             });
 
             const rows = r.message || [];
-            return rows
-                .map(d => d.name)
-                .filter(Boolean);
+            return rows.map(d => d.name).filter(Boolean);
         } catch (e) {
             console.error('Failed to fetch Project Types:', e);
             return [];
