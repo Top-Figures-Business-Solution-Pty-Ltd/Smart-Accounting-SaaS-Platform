@@ -593,11 +593,12 @@ export class BoardTable {
             // Schedule in rAF to avoid layout thrash on fast scroll
             requestAnimationFrame(() => {
                 this._syncingHScroll = true;
-                header.scrollLeft = left;
+                // Avoid redundant writes (can trigger extra style/layout work)
+                if ((header.scrollLeft || 0) !== left) header.scrollLeft = left;
                 if (bottom) {
                     // Mark as programmatic update to avoid bottom->body feedback loops.
                     this._syncingFromBody = true;
-                    bottom.scrollLeft = left;
+                    if ((bottom.scrollLeft || 0) !== left) bottom.scrollLeft = left;
                     requestAnimationFrame(() => { this._syncingFromBody = false; });
                 }
                 this._syncingHScroll = false;
@@ -632,8 +633,8 @@ export class BoardTable {
             const left = bottom.scrollLeft || 0;
             requestAnimationFrame(() => {
                 this._syncingFromBottom = true;
-                body.scrollLeft = left;
-                header.scrollLeft = left;
+                if ((body.scrollLeft || 0) !== left) body.scrollLeft = left;
+                if ((header.scrollLeft || 0) !== left) header.scrollLeft = left;
                 requestAnimationFrame(() => { this._syncingFromBottom = false; });
             });
         };

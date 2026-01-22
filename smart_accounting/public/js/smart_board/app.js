@@ -17,6 +17,7 @@ import { ViewService } from './services/viewService.js';
 import './columns/registerDefaultSpecs.js';
 import { isDesk } from './utils/env.js';
 import { getUrlState, setUrlState } from './utils/urlState.js';
+import { Perf } from './utils/perf.js';
 
 export class SmartBoardApp {
     constructor(container) {
@@ -151,6 +152,8 @@ export class SmartBoardApp {
     }
     
     async loadViewData(viewType) {
+        const label = `loadViewData ${String(viewType || '')}`;
+        const run = async () => {
         // Dashboard uses its own lightweight API (avoid loading all Projects)
         if (viewType === 'dashboard') {
             await this.store.dispatch('dashboard/fetchMyProjects');
@@ -239,6 +242,11 @@ export class SmartBoardApp {
         }
 
         await this.store.dispatch('projects/fetchProjects', merged);
+        };
+        return await Perf.timeAsync(label, run, () => ({
+            view: String(viewType || ''),
+            isBoard: !!this.isBoardView?.(viewType),
+        }));
     }
 
     isBoardView(viewType) {

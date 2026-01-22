@@ -78,8 +78,9 @@ export const ClientsModule = {
         store.commit('clients/setLastFilters', filters || {});
         store.commit('clients/setHasMore', true);
         store.commit('clients/setOffset', 0);
-        // Default to 200 in small sites so users can see "all clients" without paging confusion.
-        const limit = Number.isFinite(Number(filters?.limit)) ? Number(filters.limit) : 200;
+        // Default page size. We will auto-load more as user scrolls (ClientsTable),
+        // so we don't need to pull everything in one go.
+        const limit = Number.isFinite(Number(filters?.limit)) ? Number(filters.limit) : 50;
         const r = await ClientsService.fetchClients({
           search: filters?.search || '',
           limitStart: 0,
@@ -110,7 +111,7 @@ export const ClientsModule = {
       store.commit('clients/setLoadingMore', true);
       try {
         const offset = Number(state.offset || 0);
-        const limit = Number.isFinite(Number(effective?.limit)) ? Number(effective.limit) : 200;
+        const limit = Number.isFinite(Number(effective?.limit)) ? Number(effective.limit) : 50;
         const r = await ClientsService.fetchClients({
           search: effective?.search || '',
           limitStart: offset,

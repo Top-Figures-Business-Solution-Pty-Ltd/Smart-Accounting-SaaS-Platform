@@ -16,6 +16,7 @@ export class ClientsApp {
     this._table = null;
     this._lastSearch = '';
     this._columns = loadClientColumns() || getDefaultClientColumns();
+    this._pageSize = 50;
   }
 
   async init() {
@@ -35,7 +36,7 @@ export class ClientsApp {
     }
 
     // Initial load
-    await this.store?.dispatch?.('clients/fetchClients', { search: '' });
+    await this.store?.dispatch?.('clients/fetchClients', { search: '', limit: this._pageSize });
     this.render();
   }
 
@@ -55,7 +56,7 @@ export class ClientsApp {
 
   async search(q) {
     this._lastSearch = String(q || '');
-    await this.store?.dispatch?.('clients/fetchClients', { search: this._lastSearch });
+    await this.store?.dispatch?.('clients/fetchClients', { search: this._lastSearch, limit: this._pageSize });
   }
 
   openColumnsManager() {
@@ -69,8 +70,10 @@ export class ClientsApp {
 
   async loadMore() {
     const state = this.store?.getState?.() || {};
-    const last = state?.clients?.lastFilters || { search: this._lastSearch || '' };
-    await this.store?.dispatch?.('clients/fetchMoreClients', last);
+    const last = state?.clients?.lastFilters || { search: this._lastSearch || '', limit: this._pageSize };
+    // Ensure paging size is consistent even if older state didn't persist `limit`.
+    const effective = { ...(last || {}), limit: Number(last?.limit || this._pageSize) };
+    await this.store?.dispatch?.('clients/fetchMoreClients', effective);
   }
 
   destroy() {

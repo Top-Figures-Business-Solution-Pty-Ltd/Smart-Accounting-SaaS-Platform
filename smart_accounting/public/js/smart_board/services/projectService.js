@@ -4,10 +4,26 @@
  */
 
 import { ApiService } from './api.js';
+import { Perf } from '../utils/perf.js';
 
 export class ProjectService {
     static _warnedMissingFields = false;
     static _extraFields = null;
+    static _inflightList = new Map(); // key -> Promise(rows)
+
+    static _stableKey(obj) {
+        // Create a stable-ish string key (sort object keys, normalize arrays)
+        const normalize = (v) => {
+            if (Array.isArray(v)) return v.map(normalize);
+            if (v && typeof v === 'object') {
+                const out = {};
+                for (const k of Object.keys(v).sort()) out[k] = normalize(v[k]);
+                return out;
+            }
+            return v;
+        };
+        try { return JSON.stringify(normalize(obj)); } catch (e) { return String(Date.now()); }
+    }
 
     /**
      * 获取Projects列表
@@ -113,23 +129,55 @@ export class ProjectService {
                 limit_page_length: Math.max(1, limit)
             };
             
-            const response = await frappe.call({
-                method: 'frappe.client.get_list',
-                type: 'POST',
-                args
+            // In-flight de-dupe: same query fired repeatedly (e.g. rapid view/filter changes)
+            // should share a single request to reduce server load and client work.
+            const key = this._stableKey({
+                doctype: 'Project',
+                // field order doesn't matter for response shape in our usage; sort for stable key
+                fields: Array.isArray(fields) ? fields.map(String).sort() : fields,
+                filters: args.filters,
+                or_filters: args.or_filters || [],
+                order_by: args.order_by,
+                limit_start: args.limit_start,
+                limit_page_length: args.limit_page_length
             });
-            
-            const rows = response.message || [];
-            // Hydrate child tables (get_list doesn't include Table/child rows).
-            // Only do it if the current visible columns actually need them.
-            const needsTeam = Array.isArray(fields) && fields.includes('custom_team_members');
-            const needsSoft = Array.isArray(fields) && fields.includes('custom_softwares');
-            if (needsTeam || needsSoft) {
-                try {
-                    await this._hydrateChildTables(rows);
-                } catch (e) {}
+
+            if (this._inflightList.has(key)) return await this._inflightList.get(key);
+
+            const p = (async () => {
+                return await Perf.timeAsync('projects.get_list', async () => {
+                    const response = await frappe.call({
+                        method: 'frappe.client.get_list',
+                        type: 'POST',
+                        args
+                    });
+
+                    const rows = response.message || [];
+                    // Hydrate child tables (get_list doesn't include Table/child rows).
+                    // Only do it if the current visible columns actually need them.
+                    const needsTeam = Array.isArray(fields) && fields.includes('custom_team_members');
+                    const needsSoft = Array.isArray(fields) && fields.includes('custom_softwares');
+                    if (needsTeam || needsSoft) {
+                        try {
+                            await this._hydrateChildTables(rows);
+                        } catch (e) {}
+                    }
+                    return rows;
+                }, () => ({
+                    project_type: String(filters?.project_type || ''),
+                    limit_start: Number(args?.limit_start || 0),
+                    limit: Number(args?.limit_page_length || 0),
+                    fields_count: Array.isArray(fields) ? fields.length : null,
+                }));
+            })();
+
+            this._inflightList.set(key, p);
+            try {
+                return await p;
+            } finally {
+                // Only delete if it still points to the same promise (avoid races)
+                if (this._inflightList.get(key) === p) this._inflightList.delete(key);
             }
-            return rows;
         };
 
         try {

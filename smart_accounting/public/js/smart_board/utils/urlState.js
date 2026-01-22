@@ -6,6 +6,8 @@
 const VIEW_PARAM = 'view';
 const CUSTOMER_PARAM = 'customer';
 
+let _lastWrittenUrl = null;
+
 export function getUrlState() {
   try {
     const u = new URL(window.location.href);
@@ -32,8 +34,12 @@ export function setUrlState({ view, customer } = {}) {
     if (c) u.searchParams.set(CUSTOMER_PARAM, c);
     else u.searchParams.delete(CUSTOMER_PARAM);
 
+    const next = u.toString();
+    // Avoid redundant replaceState calls (can be surprisingly expensive in some browsers).
+    if (_lastWrittenUrl === next || window.location.href === next) return;
+    _lastWrittenUrl = next;
     // Keep path/hash intact, only update query string.
-    window.history.replaceState({}, '', u.toString());
+    window.history.replaceState({}, '', next);
   } catch (e) {
     // no-op
   }

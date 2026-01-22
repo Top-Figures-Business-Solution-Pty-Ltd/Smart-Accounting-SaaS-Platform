@@ -8,6 +8,7 @@ import { FiltersModule } from './modules/filters.js';
 import { ViewsModule } from './modules/views.js';
 import { DashboardModule } from './modules/dashboard.js';
 import { ClientsModule } from './modules/clients.js';
+import { Perf } from '../utils/perf.js';
 
 export class Store {
     constructor() {
@@ -85,7 +86,16 @@ export class Store {
         
         try {
             // 执行action（可能是异步的）
-            const newState = await actionFn(this.state[moduleName], payload, this);
+            const run = async () => await actionFn(this.state[moduleName], payload, this);
+            const newState = await Perf.timeAsync(
+                `dispatch ${action}`,
+                run,
+                () => ({
+                    module: moduleName,
+                    action: actionName,
+                    payload_keys: payload && typeof payload === 'object' ? Object.keys(payload).slice(0, 12) : null,
+                })
+            );
             
             // 更新状态
             if (newState !== undefined) {

@@ -11,6 +11,8 @@ export class ClientsTable {
     this.onRowClick = typeof onRowClick === 'function' ? onRowClick : (() => {});
     this.onOpenProjects = typeof onOpenProjects === 'function' ? onOpenProjects : (() => {});
     this._state = { items: [], loading: false, loadingMore: false, hasMore: true, error: null, columns: [] };
+    this._io = null;
+    this._lastAutoLoadAt = 0;
   }
 
   render(state) {
@@ -104,6 +106,7 @@ export class ClientsTable {
             ${loadingMore ? 'Loading…' : (hasMore ? 'Load more' : 'No more')}
           </button>
         </div>
+        <div id="sbClientsSentinel" style="height:1px;"></div>
       </div>
     `;
 
@@ -124,6 +127,29 @@ export class ClientsTable {
       const client = items.find((x) => String(x?.name) === String(name2)) || null;
       if (client) this.onRowClick(client);
     });
+
+    // Auto infinite-load: when sentinel enters viewport, trigger loadMore (keeps button as fallback).
+    // This does NOT change click/navigation behavior, only how more rows are fetched.
+    try {
+      this._io?.disconnect?.();
+    } catch (e) {}
+    this._io = null;
+
+    const sentinel = this.container.querySelector('#sbClientsSentinel');
+    if (sentinel && hasMore && !loading && !loadingMore && typeof IntersectionObserver !== 'undefined') {
+      this._io = new IntersectionObserver((entries) => {
+        const hit = entries && entries[0] && entries[0].isIntersecting;
+        if (!hit) return;
+        const now = Date.now();
+        // guard: avoid tight loops / repeated triggers
+        if (now - (this._lastAutoLoadAt || 0) < 600) return;
+        this._lastAutoLoadAt = now;
+        try { this.onLoadMore(); } catch (e) {}
+      }, { root: null, rootMargin: '600px 0px', threshold: 0.01 });
+      try { this._io.observe(sentinel); } catch (e) {}
+    } else if (sentinel && hasMore && !loading && !loadingMore) {
+      // Fallback for very old browsers: if everything fits (no scroll), keep the old Load more button.
+    }
   }
 }
 
