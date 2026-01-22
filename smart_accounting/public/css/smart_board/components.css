@@ -96,6 +96,68 @@
     max-width: 980px;
 }
 
+/* Settings */
+.sb-settings {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+}
+
+.sb-settings__nav {
+    width: 240px;
+    flex: 0 0 240px;
+    padding: 12px;
+    background: #fff;
+    border: 1px solid var(--smart-board-border);
+    border-radius: 12px;
+}
+
+.sb-settings__tab {
+    width: 100%;
+    border: 1px solid transparent;
+    background: transparent;
+    text-align: left;
+    padding: 10px 10px;
+    border-radius: 10px;
+    font-weight: 600;
+    color: var(--smart-board-text);
+}
+
+.sb-settings__tab:hover:not(:disabled) {
+    background: rgba(15, 23, 42, 0.04);
+}
+
+.sb-settings__tab:disabled {
+    color: var(--smart-board-text-muted);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.sb-settings__tab--active {
+    background: var(--smart-board-primary-50);
+    color: var(--smart-board-primary);
+    box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.15);
+}
+
+.sb-settings__content {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Card-like block used in Settings content */
+.sb-cardlike {
+    background: #fff;
+    border: 1px solid var(--smart-board-border);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.sb-cardlike__title {
+    font-weight: 700;
+    font-size: 16px;
+    margin-bottom: 12px;
+}
+
 /* Generic scroll container that should expose a visible horizontal scrollbar when needed */
 .sb-table-scroll {
     overflow-x: scroll;

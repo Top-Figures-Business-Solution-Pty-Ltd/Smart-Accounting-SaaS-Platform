@@ -7,6 +7,7 @@ import { BoardTable } from '../BoardView/BoardTable.js';
 import { isPlaceholderView, renderPlaceholderHTML } from './placeholderPages.js';
 import { ClientsApp } from '../ClientsView/ClientsApp.js';
 import { ClientProjectsApp } from '../ClientsView/ClientProjectsApp.js';
+import { SettingsApp } from '../SettingsView/SettingsApp.js';
 
 export class MainContent {
     constructor(container, options = {}) {
@@ -19,6 +20,7 @@ export class MainContent {
         this._unsub = null;
         this._clientsApp = null;
         this._clientProjectsApp = null;
+        this._settingsApp = null;
         
         this.render();
 
@@ -209,12 +211,24 @@ export class MainContent {
                 }
             });
             this._clientProjectsApp.init();
+        } else if (view === 'settings') {
+            placeholder.innerHTML = `<div id="sbSettingsMount"></div>`;
+            const mount = placeholder.querySelector('#sbSettingsMount');
+            try { this._clientsApp?.destroy?.(); } catch (e) {}
+            this._clientsApp = null;
+            try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
+            this._clientProjectsApp = null;
+            try { this._settingsApp?.destroy?.(); } catch (e) {}
+            this._settingsApp = new SettingsApp(mount);
+            this._settingsApp.init();
         } else {
             // Dashboard / Settings placeholders remain static-html based for now
             try { this._clientsApp?.destroy?.(); } catch (e) {}
             this._clientsApp = null;
             try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
             this._clientProjectsApp = null;
+            try { this._settingsApp?.destroy?.(); } catch (e) {}
+            this._settingsApp = null;
             placeholder.innerHTML = renderPlaceholderHTML(view, this.store);
         }
     }
@@ -241,6 +255,8 @@ export class MainContent {
         this._clientsApp = null;
         try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
         this._clientProjectsApp = null;
+        try { this._settingsApp?.destroy?.(); } catch (e) {}
+        this._settingsApp = null;
         try { this._unsub?.(); } catch (e) {}
         this._unsub = null;
         this.container.innerHTML = '';
