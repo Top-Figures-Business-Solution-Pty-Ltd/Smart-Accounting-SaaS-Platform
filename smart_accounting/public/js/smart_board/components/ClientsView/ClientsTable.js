@@ -32,7 +32,13 @@ export class ClientsTable {
       if (field === 'entities_count') return `<span class="text-muted">${Number(client?.entities_count || 0) || '—'}</span>`;
       if (field === 'project_count') {
         const n = Number(client?.project_count || 0) || 0;
-        return `<button type="button" class="btn btn-link p-0 sb-client-open-projects" data-client="${escapeHtml(client?.name || '')}">${n}</button>`;
+        const label = n === 1 ? 'Project' : 'Projects';
+        return `
+          <button type="button" class="sb-client-open-projects" data-client="${escapeHtml(client?.name || '')}" aria-label="View ${n} ${label}">
+            <span class="sb-client-open-projects__num">${n}</span>
+            <span class="sb-client-open-projects__label">${label}</span>
+          </button>
+        `;
       }
       if (field === 'active_project_count') {
         const n = Number(client?.active_project_count || 0) || 0;

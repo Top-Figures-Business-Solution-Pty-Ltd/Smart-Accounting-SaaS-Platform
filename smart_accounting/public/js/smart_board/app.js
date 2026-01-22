@@ -25,11 +25,13 @@ export class SmartBoardApp {
         const urlState = getUrlState();
         // 默认先落在 dashboard，避免系统还没加载 Project Type 时误用不存在的 type（例如 ITR）
         this.currentView = urlState?.view || 'dashboard';
-        this._initialUrlCustomer = String(urlState?.customer || '').trim();
+        // Only treat URL customer param as meaningful for client-projects view
+        this._initialUrlCustomer = (this.currentView === 'client-projects') ? String(urlState?.customer || '').trim() : '';
         this.projectTypes = [];   // 运行时从系统获取
         this._unsubscribers = [];
         this._onWindowResize = null;
         this._clientProjects = null;
+        this._scopedCustomer = '';
         
         this.init();
     }
@@ -269,6 +271,16 @@ export class SmartBoardApp {
     
     handleViewChange(viewType) {
         console.log('View changed to:', viewType);
+        // Leaving a client-scoped view: clear the transient customer filter so it doesn't "stick" everywhere.
+        // This matches user expectation: customer filter added from Clients navigation should not persist when switching boards/pages.
+        if (this._scopedCustomer) {
+            try {
+                const st = this.store?.getState?.()?.filters || {};
+                this.store?.dispatch?.('filters/setFilters', { ...st, customer: null });
+            } catch (e) {}
+            this._scopedCustomer = '';
+            this._clientProjects = null;
+        }
         this.currentView = viewType;
         
         // 更新各组件状态
@@ -346,8 +358,8 @@ export class SmartBoardApp {
     createNewProject() {
         // Desk: keep native ERPNext behavior (open form)
         if (isDesk()) return createProject(this.currentView);
-        // Website shell: postpone until Clients/Customer flow is ready (avoids mandatory-field + inline customer creation complexity).
-        return msgprint('New Project will be enabled after Clients/Customer flow is ready.');
+        // Website shell: enable modal flow (minimal required fields).
+        return this.mainContent?.createNewProject?.();
     }
     
     applyFilters(filters) {
@@ -400,7 +412,7 @@ export class SmartBoardApp {
         this.mainContent?.updateView?.(pt);
         this.sidebar?.updateView?.(pt);
 
-        // Keep the customer filter so the board is scoped to the same client
+        // Keep the customer filter so the board is scoped to the same client (transient).
         const customer = String(project?.customer || '').trim();
         const stateFilters = this.store?.getState?.()?.filters || {};
         this.applyFilters({
@@ -408,6 +420,7 @@ export class SmartBoardApp {
             customer: customer || stateFilters.customer || '',
             search: '',
         });
+        if (customer) this._scopedCustomer = customer;
     }
 
     /**
@@ -438,6 +451,7 @@ export class SmartBoardApp {
             advanced_groups: [],
             customer,
         });
+        this._scopedCustomer = customer;
 
         try { this._syncUrl?.(); } catch (e) {}
     }
@@ -445,7 +459,8 @@ export class SmartBoardApp {
     _syncUrl() {
         const state = this.store?.getState?.() || {};
         const customer = String(state?.filters?.customer || this._clientProjects?.customer || '').trim();
-        setUrlState({ view: this.currentView, customer: customer || '' });
+        // Only keep `customer` in URL for client-projects view to avoid confusing sticky filters on other pages.
+        setUrlState({ view: this.currentView, customer: (this.currentView === 'client-projects') ? (customer || '') : '' });
     }
     
     showLoading(show) {

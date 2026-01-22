@@ -17,11 +17,14 @@ export async function openNewProjectFlow({ app, viewType } = {}) {
 
   const currentView = String(viewType || app?.currentView || '').trim();
   const store = app?.store || null;
+  const stateFilters = store?.getState?.()?.filters || {};
 
   const modal = new NewProjectModal({
     title: 'New Project',
     initial: {
       project_type: currentView || null,
+      // If user has an active fiscal_year filter, reuse it for creation.
+      fiscal_year: stateFilters?.fiscal_year || null,
     },
     onSubmit: async (payload) => {
       const doc = await ProjectCreateService.createProject(payload);

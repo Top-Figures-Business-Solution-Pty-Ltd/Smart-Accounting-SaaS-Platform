@@ -39,12 +39,9 @@ class CustomProject(Project):
             
             # 更新Project的auto_repeat字段
             frappe.db.set_value("Project", self.name, "auto_repeat", auto_repeat.name)
-            
-            frappe.msgprint(
-                msg=f"已自动创建 Auto Repeat: {auto_repeat.name}",
-                title="Auto Repeat 创建成功",
-                indicator="green"
-            )
+            # NOTE: Do not show msgprint popups on insert; it harms /smart UX.
+            # Keep only server-side logs; the feature still works.
+            frappe.logger("smart_accounting").info("Auto Repeat created: %s for Project %s", auto_repeat.name, self.name)
             
         except Exception as e:
             frappe.log_error(f"Failed to create Auto Repeat for {self.name}: {str(e)}")
@@ -62,20 +59,17 @@ class CustomProject(Project):
             if self.custom_project_frequency == "One-off":
                 # 改为One-off，禁用Auto Repeat
                 frappe.db.set_value("Auto Repeat", self.auto_repeat, "disabled", 1)
-                frappe.msgprint(
-                    msg=f"已禁用 Auto Repeat: {self.auto_repeat}",
-                    title="Auto Repeat 已禁用",
-                    indicator="orange"
-                )
+                frappe.logger("smart_accounting").info("Auto Repeat disabled: %s for Project %s", self.auto_repeat, self.name)
             else:
                 auto_repeat = frappe.get_doc("Auto Repeat", self.auto_repeat)
                 auto_repeat.frequency = self.custom_project_frequency
                 auto_repeat.disabled = 0
                 auto_repeat.save(ignore_permissions=True)
-                frappe.msgprint(
-                    msg=f"已更新 Auto Repeat 频率为: {self.custom_project_frequency}",
-                    title="Auto Repeat 已更新",
-                    indicator="blue"
+                frappe.logger("smart_accounting").info(
+                    "Auto Repeat updated: %s frequency=%s for Project %s",
+                    self.auto_repeat,
+                    self.custom_project_frequency,
+                    self.name,
                 )
         except Exception as e:
             frappe.log_error(f"Failed to sync Auto Repeat for {self.name}: {str(e)}")

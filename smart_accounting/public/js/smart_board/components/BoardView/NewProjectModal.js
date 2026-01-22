@@ -6,7 +6,6 @@
 import { Modal } from '../Common/Modal.js';
 import { LinkInput } from '../Common/LinkInput.js';
 import { DoctypeMetaService } from '../../services/doctypeMetaService.js';
-import { escapeHtml } from '../../utils/dom.js';
 
 export class NewProjectModal {
   constructor({ title = 'New Project', initial = {}, onSubmit, onClose } = {}) {
@@ -18,7 +17,6 @@ export class NewProjectModal {
     this._modal = null;
     this._root = null;
     this._linkInputs = [];
-    this._statusOptions = [];
   }
 
   async open() {
@@ -43,15 +41,13 @@ export class NewProjectModal {
         </div>
 
         <div class="sb-newproj__row">
-          <label class="sb-newproj__label">Project Type</label>
-          <div id="sbNewProjType"></div>
+          <label class="sb-newproj__label">Fiscal Year</label>
+          <div id="sbNewProjFiscalYear"></div>
         </div>
 
         <div class="sb-newproj__row">
-          <label class="sb-newproj__label">Status</label>
-          <select class="form-control" id="sbNewProjStatus">
-            <option value="" disabled selected>Select status</option>
-          </select>
+          <label class="sb-newproj__label">Project Type</label>
+          <div id="sbNewProjType"></div>
         </div>
 
         <div class="sb-newproj__error text-danger" id="sbNewProjError" style="display:none;"></div>
@@ -86,15 +82,11 @@ export class NewProjectModal {
     // Link inputs
     this._mountLink('sbNewProjCustomer', 'Customer', this.initial.customer || null);
     this._mountLink('sbNewProjCompany', 'Company', this.initial.company || null);
+    this._mountLink('sbNewProjFiscalYear', 'Fiscal Year', this.initial.custom_fiscal_year || this.initial.fiscal_year || null);
     this._mountLink('sbNewProjType', 'Project Type', this.initial.project_type || null);
 
-    // Status options from DocType meta (Property Setter)
-    await this._loadStatusOptions();
-    this._renderStatusSelect();
-    if (this.initial.status) {
-      const st = content.querySelector('#sbNewProjStatus');
-      if (st) st.value = this.initial.status;
-    }
+    // Preload DocType meta (best-effort) so future enhancements can derive required fields/options.
+    try { await DoctypeMetaService.getMeta('Project'); } catch (e) {}
 
     // Bind
     footer.querySelector('#sbNewProjCancel')?.addEventListener('click', () => this.close());
@@ -145,31 +137,13 @@ export class NewProjectModal {
     this._linkInputs.push(li);
   }
 
-  async _loadStatusOptions() {
-    try {
-      const opts = await DoctypeMetaService.getSelectOptions('Project', 'status');
-      this._statusOptions = Array.isArray(opts) ? opts : [];
-    } catch (e) {
-      this._statusOptions = [];
-    }
-  }
-
-  _renderStatusSelect() {
-    const sel = this._root?.querySelector?.('#sbNewProjStatus');
-    if (!sel) return;
-    const options = (this._statusOptions || []).filter(Boolean);
-    sel.innerHTML = `
-      <option value="" disabled selected>Select status</option>
-      ${options.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}
-    `;
-  }
-
   _readValueFromLinkInput(doctype) {
     // LinkInput stores value in an input; we can query by placeholder-ish container order.
     // We keep this deterministic by looking for the mount container id by doctype.
     const map = {
       'Customer': '#sbNewProjCustomer',
       'Company': '#sbNewProjCompany',
+      'Fiscal Year': '#sbNewProjFiscalYear',
       'Project Type': '#sbNewProjType',
     };
     const sel = map[doctype];
@@ -183,15 +157,15 @@ export class NewProjectModal {
     const name = String(this._root?.querySelector?.('#sbNewProjName')?.value || '').trim();
     const customer = this._readValueFromLinkInput('Customer');
     const company = this._readValueFromLinkInput('Company');
+    const custom_fiscal_year = this._readValueFromLinkInput('Fiscal Year');
     const project_type = this._readValueFromLinkInput('Project Type');
-    const status = String(this._root?.querySelector?.('#sbNewProjStatus')?.value || '').trim();
 
     const missing = [];
     if (!name) missing.push('Project Name');
     if (!customer) missing.push('Customer');
     if (!company) missing.push('Company');
+    if (!custom_fiscal_year) missing.push('Fiscal Year');
     if (!project_type) missing.push('Project Type');
-    if (!status) missing.push('Status');
     if (missing.length) {
       this._setError(`Please fill: ${missing.join(', ')}`);
       return;
@@ -200,7 +174,7 @@ export class NewProjectModal {
     const btn = this._modal?._overlay?.querySelector?.('#sbNewProjCreate');
     if (btn) btn.disabled = true;
     try {
-      await this.onSubmit({ project_name: name, customer, company, project_type, status });
+      await this.onSubmit({ project_name: name, customer, company, custom_fiscal_year, project_type });
       this.close();
     } catch (e) {
       this._setError(e?.message || String(e));
