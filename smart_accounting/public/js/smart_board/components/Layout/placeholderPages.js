@@ -79,7 +79,7 @@ export function renderPlaceholderHTML(view, store) {
             <div class="sb-page">
                 <div class="sb-page__subtitle">Client directory (coming soon)</div>
                 <div class="sb-page__hint">
-                    We will build a custom Clients UI here (based on Customer/Contact) while keeping your SaaS look & feel.
+                    We will build a custom Clients UI here (based on Client/Contact) while keeping your SaaS look & feel.
                 </div>
             </div>
         `;

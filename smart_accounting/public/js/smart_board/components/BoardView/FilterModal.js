@@ -1,6 +1,6 @@
 /**
  * Filter Modal (no Desk dependency)
- * P1: Status multi-select + Due date range + Link filters (Company/Customer/Fiscal Year)
+ * P1: Status multi-select + Due date range + Link filters (Company/Client/Fiscal Year)
  */
 import { escapeHtml } from '../../utils/dom.js';
 import { Modal } from '../Common/Modal.js';
@@ -29,7 +29,7 @@ export class FilterModal {
 
     const content = document.createElement('div');
     content.innerHTML = `
-      <div class="sb-modal__hint">Status/日期范围 + Company/Customer/Fiscal Year（Link 搜索）。</div>
+      <div class="sb-modal__hint">Status/日期范围 + Company/Client/Fiscal Year（Link 搜索）。</div>
 
       <div style="margin-bottom:12px;">
         <div style="font-weight:600;font-size:13px;margin-bottom:8px;">Status</div>
@@ -52,7 +52,7 @@ export class FilterModal {
           <div id="sbFilterCompany"></div>
         </div>
         <div style="min-width:220px; flex: 1;">
-          <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Customer</div>
+          <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Client</div>
           <div id="sbFilterCustomer"></div>
         </div>
         <div style="min-width:220px; flex: 1;">
@@ -102,7 +102,7 @@ export class FilterModal {
     });
     this._inputs.customer = new LinkInput(content.querySelector('#sbFilterCustomer'), {
       doctype: 'Customer',
-      placeholder: 'Search Customer...',
+      placeholder: 'Search Client...',
       initialValue: initialCustomer
     });
     this._inputs.fiscal_year = new LinkInput(content.querySelector('#sbFilterFiscalYear'), {

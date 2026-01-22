@@ -1,6 +1,6 @@
 /**
  * Smart Board - Clients Module
- * - Customer list state for /smart shell
+ * - Client list state for /smart shell
  */
 import { ClientsService } from '../../services/clientsService.js';
 

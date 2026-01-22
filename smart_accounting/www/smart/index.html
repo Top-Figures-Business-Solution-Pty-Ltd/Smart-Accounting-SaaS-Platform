@@ -125,7 +125,8 @@
   // Website page: mount Smart Board into our container (not into body / Desk).
   const mount = document.getElementById("smartBoardMount");
   // Cache-buster: ES modules can be aggressively cached by the browser.
-  const entry = "/assets/smart_accounting/js/smart_board/index.js?v={{ (frappe.session.data.csrf_token or '') | e }}";
+  // Use build_version (changes after bench build) so UI updates always invalidate browser cache.
+  const entry = "/assets/smart_accounting/js/smart_board/index.js?v={{ build_version }}&csrf={{ (frappe.session.data.csrf_token or '') | e }}";
   const btnNotifications = document.getElementById("btnNotifications");
   const popover = document.getElementById("notificationsPopover");
   const notificationsBadge = document.getElementById("notificationsBadge");

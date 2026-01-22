@@ -107,7 +107,7 @@ export const PROJECT_COLUMN_CATALOG = [
     { field: 'customer', label: 'Client Name', width: 200, frozen: true },
     { field: 'custom_entity_type', label: 'Entity', width: 160 },
     // Optional (advanced): explicit entity selection (usually auto/hidden in UI)
-    { field: 'custom_customer_entity', label: 'Customer Entity', width: 200, hidden: true },
+    { field: 'custom_customer_entity', label: 'Client Entity', width: 200, hidden: true },
 
     // Components (computed/virtual)
     { field: '__sb_project_monthly_completion', label: 'Monthly Completion (12M)', width: 110 },

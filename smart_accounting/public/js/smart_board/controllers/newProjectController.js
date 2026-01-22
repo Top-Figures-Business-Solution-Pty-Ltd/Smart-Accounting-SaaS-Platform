@@ -5,6 +5,7 @@
  */
 import { NewProjectModal } from '../components/BoardView/NewProjectModal.js';
 import { ProjectCreateService } from '../services/projectCreateService.js';
+import { openNewClientFlow } from './newClientController.js';
 import { notify } from '../services/uiAdapter.js';
 import { isDesk } from '../utils/env.js';
 
@@ -25,6 +26,13 @@ export async function openNewProjectFlow({ app, viewType } = {}) {
       project_type: currentView || null,
       // If user has an active fiscal_year filter, reuse it for creation.
       fiscal_year: stateFilters?.fiscal_year || null,
+    },
+    onCreateClient: async ({ initialName, onCreated } = {}) => {
+      await openNewClientFlow({
+        app,
+        initial: { customer_name: initialName || '' },
+        onCreated,
+      });
     },
     onSubmit: async (payload) => {
       const doc = await ProjectCreateService.createProject(payload);

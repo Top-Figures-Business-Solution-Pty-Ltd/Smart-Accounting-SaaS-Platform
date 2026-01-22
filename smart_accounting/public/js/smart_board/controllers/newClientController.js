@@ -7,7 +7,7 @@ import { ClientCreateService } from '../services/clientCreateService.js';
 import { notify } from '../services/uiAdapter.js';
 import { isDesk } from '../utils/env.js';
 
-export async function openNewClientFlow({ app } = {}) {
+export async function openNewClientFlow({ app, initial = {}, onCreated } = {}) {
   // Desk: keep native ERPNext behavior
   if (isDesk()) {
     try { frappe?.new_doc?.('Customer'); } catch (e) {}
@@ -18,9 +18,11 @@ export async function openNewClientFlow({ app } = {}) {
 
   const modal = new NewClientModal({
     title: 'New Client',
+    initial: initial || {},
     onSubmit: async (payload) => {
       const item = await ClientCreateService.createClient(payload);
       notify('Client created', 'green');
+      try { onCreated?.(item); } catch (e) {}
       // Refresh clients list (keeps counts/ordering consistent)
       const last = store?.getState?.()?.clients?.lastFilters || { search: '' };
       try {

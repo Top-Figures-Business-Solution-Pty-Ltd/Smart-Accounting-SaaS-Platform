@@ -12,7 +12,7 @@ export const CLIENT_COLUMNS = [
   { field: 'abn', label: 'ABN', width: 160 },
   { field: 'year_end', label: 'Year End', width: 140 },
   { field: 'entities_count', label: 'Entities', width: 120 },
-  // Optional extras (still from Customer / primary entity)
+  // Optional extras (still from Customer / primary entity) — UI labels should prefer "Client"
   { field: 'customer_group', label: 'Group', width: 160 },
   { field: 'territory', label: 'Territory', width: 160 },
 ];

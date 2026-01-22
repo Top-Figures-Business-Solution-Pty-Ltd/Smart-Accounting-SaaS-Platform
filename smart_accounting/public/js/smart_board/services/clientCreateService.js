@@ -8,7 +8,7 @@ import { notify } from './uiAdapter.js';
 export class ClientCreateService {
   static async createClient(payload = {}) {
     const name = String(payload?.customer_name || '').trim();
-    if (!name) throw new Error('Customer Name is required');
+    if (!name) throw new Error('Client Name is required');
 
     try {
       const r = await frappe.call({

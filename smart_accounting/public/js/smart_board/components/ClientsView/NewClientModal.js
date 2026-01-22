@@ -23,13 +23,13 @@ export class NewClientModal {
     content.innerHTML = `
       <div class="sb-newclient">
         <div class="sb-newproj__row">
-          <label class="sb-newproj__label">Customer Name *</label>
+          <label class="sb-newproj__label">Client Name *</label>
           <input class="form-control" id="sbNewClientName" type="text" placeholder="e.g. David Tao" />
         </div>
 
         <div style="display:flex; gap:12px; flex-wrap: wrap;">
           <div class="sb-newproj__row" style="min-width:220px; flex:1;">
-            <label class="sb-newproj__label">Customer Type</label>
+            <label class="sb-newproj__label">Client Type</label>
             <select class="form-control" id="sbNewClientType">
               <option value="" disabled selected>Loading...</option>
             </select>
@@ -51,7 +51,7 @@ export class NewClientModal {
 
         <div class="sb-newproj__error text-danger" id="sbNewClientError" style="display:none;"></div>
         <div class="text-muted" style="font-size:12px; margin-top:6px;">
-          Note: Customer Group / Territory will use system defaults. You can refine later in ERPNext if needed.
+          Note: Group / Territory will use system defaults. You can refine later in ERPNext if needed.
         </div>
       </div>
     `;
@@ -136,7 +136,7 @@ export class NewClientModal {
     const abn = String(this._root?.querySelector?.('#sbNewClientAbn')?.value || '').trim();
 
     if (!customer_name) {
-      this._setError('Customer Name is required');
+      this._setError('Client Name is required');
       return;
     }
     if (!year_end) {
