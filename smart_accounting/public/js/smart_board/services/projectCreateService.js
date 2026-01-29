@@ -4,19 +4,8 @@
  * - Kept separate from ProjectService to avoid mixing list/query logic with creation workflow.
  */
 import { notify } from './uiAdapter.js';
-
-function _extractServerMessage(err) {
-  try {
-    const raw = err?._server_messages;
-    if (raw) {
-      const arr = JSON.parse(raw);
-      const first = Array.isArray(arr) ? arr[0] : null;
-      const decoded = first ? JSON.parse(first) : null;
-      if (decoded?.message) return String(decoded.message);
-    }
-  } catch (e) {}
-  return String(err?.message || err?.exc || err?.exception || err || '').trim();
-}
+import { getErrorMessage } from '../utils/errorMessage.js';
+import { isDesk } from '../utils/env.js';
 
 export class ProjectCreateService {
   /**
@@ -46,8 +35,9 @@ export class ProjectCreateService {
       });
       return r?.message || null;
     } catch (e) {
-      const msg = _extractServerMessage(e) || 'Create project failed';
-      notify(`Create project failed: ${msg}`, 'red');
+      const msg = getErrorMessage(e) || 'Create project failed';
+      // Website shell: do not use alert() popups; surface the message in the modal only.
+      if (isDesk()) notify(`Create project failed: ${msg}`, 'red');
       throw new Error(msg);
     }
   }

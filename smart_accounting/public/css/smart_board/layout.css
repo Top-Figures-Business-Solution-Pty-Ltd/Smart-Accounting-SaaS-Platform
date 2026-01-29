@@ -222,6 +222,9 @@
 
 .board-table-container {
     flex: 1;
-    overflow: hidden;
+    /* Single vertical scrollbar for the whole board area */
+    overflow: auto;
+    /* Reserve space for the fixed bottom horizontal scrollbar */
+    padding-bottom: 18px;
 }
 

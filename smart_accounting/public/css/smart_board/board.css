@@ -7,7 +7,8 @@
    Board Table Container
    ============================================ */
 .board-table-wrapper {
-    height: 100%;
+    height: auto;
+    min-height: 100%;
     display: flex;
     flex-direction: column;
     background: var(--smart-board-surface);
@@ -15,7 +16,7 @@
     border-radius: var(--smart-board-radius-lg);
     box-shadow: var(--smart-board-shadow-md);
     border: 1px solid var(--smart-board-border);
-    overflow: hidden;
+    overflow: visible;
 }
 
 /* ============================================
@@ -27,6 +28,9 @@
     /* Header should follow body horizontal scroll (single scroll source) */
     overflow-x: hidden;
     overflow-y: hidden;
+    position: sticky;
+    top: 0;
+    z-index: 8;
 }
 
 .board-table {
@@ -569,9 +573,12 @@
    ============================================ */
 .board-table-body {
     flex: 1;
-    overflow-x: auto;
-    overflow-y: auto;
+    /* Vertical scroll is handled by the page container; keep body clean */
+    overflow-x: hidden;
+    overflow-y: visible;
+    scrollbar-width: none; /* Firefox */
 }
+.board-table-body::-webkit-scrollbar { height: 0; width: 0; }
 
 /* ============================================
    Bottom horizontal scrollbar (Monday-like)
@@ -582,6 +589,12 @@
     overflow-y: hidden;
     background: rgba(15, 23, 42, 0.06);
     border-top: 1px solid rgba(15, 23, 42, 0.08);
+    position: fixed;
+    left: calc(var(--smart-board-sidebar-width) + 16px);
+    right: 16px;
+    bottom: 0;
+    z-index: 120;
+    border-radius: 8px 8px 0 0;
 }
 
 .sb-bottom-hscroll__inner {

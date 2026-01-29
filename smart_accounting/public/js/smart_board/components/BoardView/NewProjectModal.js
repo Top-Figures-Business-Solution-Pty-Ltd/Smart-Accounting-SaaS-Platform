@@ -6,6 +6,7 @@
 import { Modal } from '../Common/Modal.js';
 import { LinkInput } from '../Common/LinkInput.js';
 import { DoctypeMetaService } from '../../services/doctypeMetaService.js';
+import { getErrorMessage } from '../../utils/errorMessage.js';
 
 export class NewProjectModal {
   constructor({ title = 'New Project', initial = {}, onSubmit, onCreateClient, onClose } = {}) {
@@ -200,7 +201,8 @@ export class NewProjectModal {
       });
     } catch (e) {
       // Only show unexpected errors; validation is handled inside the New Client modal itself.
-      this._setError(e?.message || String(e));
+      const msg = getErrorMessage(e) || '';
+      if (msg) this._setError(msg);
     } finally {
       if (btn) btn.disabled = false;
     }
@@ -231,7 +233,8 @@ export class NewProjectModal {
       await this.onSubmit({ project_name: name, customer, company, custom_fiscal_year, project_type });
       this.close();
     } catch (e) {
-      this._setError(e?.message || String(e));
+      const msg = getErrorMessage(e) || 'Create project failed';
+      this._setError(msg);
     } finally {
       if (btn) btn.disabled = false;
     }

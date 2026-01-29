@@ -4,6 +4,8 @@
  * - Kept separate from ClientsService list/query logic.
  */
 import { notify } from './uiAdapter.js';
+import { getErrorMessage } from '../utils/errorMessage.js';
+import { isDesk } from '../utils/env.js';
 
 export class ClientCreateService {
   static async createClient(payload = {}) {
@@ -18,21 +20,10 @@ export class ClientCreateService {
       });
       return r?.message?.item || null;
     } catch (e) {
-      let msg = e?.message || '';
-      // Frappe often returns server messages as a JSON string array in _server_messages
-      try {
-        const raw = e?._server_messages;
-        if (raw) {
-          const arr = JSON.parse(raw);
-          const first = Array.isArray(arr) ? arr[0] : null;
-          const decoded = first ? JSON.parse(first) : null;
-          if (decoded?.message) msg = decoded.message;
-        }
-      } catch (e2) {}
-      if (!msg) msg = (typeof e === 'string') ? e : (e?.exc || e?.exception || '');
-      if (!msg) msg = JSON.stringify(e);
-      notify(`Create client failed: ${msg}`, 'red');
-      throw e;
+      const msg = getErrorMessage(e) || 'Create client failed';
+      // Website shell: avoid alert() popups; the modal will show the message.
+      if (isDesk()) notify(`Create client failed: ${msg}`, 'red');
+      throw new Error(msg);
     }
   }
 }
