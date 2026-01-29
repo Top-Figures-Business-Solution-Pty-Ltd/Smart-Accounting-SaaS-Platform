@@ -5,6 +5,7 @@
 const STORAGE_KEY = 'sb_clients_columns_v1';
 
 export const CLIENT_COLUMNS = [
+  { field: 'name', label: 'ID', width: 180 },
   { field: 'customer_name', label: 'Client', width: 260 },
   { field: 'project_count', label: 'Projects', width: 120 },
   { field: 'active_project_count', label: 'Active', width: 120 },

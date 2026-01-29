@@ -25,6 +25,8 @@ export async function handleHeaderAction(app, action, data) {
       return app?.setClientsSearch?.(data);
     case 'clients_columns':
       return app?.showClientsColumnManager?.();
+    case 'clients_normalize':
+      return app?.normalizeClientNames?.();
     case 'dashboard_refresh':
       return app?.loadViewData?.('dashboard');
     case 'client_projects_back':

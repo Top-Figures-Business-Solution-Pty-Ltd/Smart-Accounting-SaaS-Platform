@@ -26,6 +26,59 @@ def _normalize_int(v: Any, default: int) -> int:
 		return int(default)
 
 
+def _clean_spaces(s: str) -> str:
+	return " ".join(str(s or "").strip().split())
+
+
+def _cap_word(w: str) -> str:
+	t = str(w or "").strip().lower()
+	if not t:
+		return ""
+	return t[:1].upper() + t[1:]
+
+
+def _cap_hyphen(w: str) -> str:
+	parts = [p for p in str(w or "").split("-") if p.strip()]
+	return "-".join([_cap_word(p) for p in parts if _cap_word(p)])
+
+
+def _title_case_words(name: str) -> str:
+	clean = _clean_spaces(name)
+	if not clean:
+		return ""
+	return " ".join([_cap_hyphen(w) for w in clean.split(" ") if w.strip()])
+
+
+def _format_individual(name: str) -> str:
+	clean = _clean_spaces(name)
+	if not clean:
+		return ""
+	last = ""
+	first = ""
+	if "," in clean:
+		parts = clean.split(",", 1)
+		last = _clean_spaces(parts[0])
+		first = _clean_spaces(parts[1])
+	else:
+		parts = [p for p in clean.split(" ") if p.strip()]
+		if len(parts) == 1:
+			last = parts[0]
+		else:
+			last = parts[-1]
+			first = parts[0]
+	last_up = str(last or "").upper()
+	first_cap = _cap_word(first)
+	return f"{last_up}, {first_cap}" if first_cap else last_up
+
+
+def _normalize_client_name(name: str, customer_type: str) -> str:
+	ct = str(customer_type or "").strip()
+	if ct == "Individual":
+		return _format_individual(name)
+	# Non-Individual
+	return _title_case_words(name)
+
+
 def _pick_default(doctype: str, preferred_name: str) -> str | None:
 	"""Best-effort pick a default value for Link fields like Customer Group / Territory."""
 	try:
@@ -324,5 +377,91 @@ def create_client(payload: dict | None = None) -> dict:
 			"is_primary": 1,
 		}
 	return {"item": _build_client_summary(customer, pe)}
+
+
+@frappe.whitelist()
+def normalize_client_names(apply: int = 0) -> dict:
+	"""
+	Normalize Customer.customer_name using standard naming rules.
+	- Individual: LAST, First
+	- Non-Individual: Title Case words
+	Only updates customer_name (does NOT rename the Customer docname).
+	"""
+	_ensure_logged_in()
+	if not frappe.has_permission("Customer", "write"):
+		frappe.throw("Not permitted", frappe.PermissionError)
+
+	rows = frappe.get_all(
+		"Customer",
+		fields=["name", "customer_name", "customer_type"],
+		limit_page_length=100000,
+	)
+
+	changes = []
+	for r in rows or []:
+		docname = r.get("name")
+		cur = str(r.get("customer_name") or r.get("name") or "").strip()
+		if not docname or not cur:
+			continue
+		target = _normalize_client_name(cur, str(r.get("customer_type") or ""))
+		target = str(target or "").strip()
+		if target and target != cur:
+			changes.append({"name": docname, "from": cur, "to": target})
+
+	if not apply:
+		return {
+			"total": len(rows or []),
+			"to_update": len(changes),
+			"sample": changes[:10],
+		}
+
+	updated = 0
+	for c in changes:
+		try:
+			frappe.db.set_value("Customer", c["name"], "customer_name", c["to"], update_modified=True)
+			updated += 1
+		except Exception:
+			# Best-effort: skip failures and continue
+			pass
+
+	return {
+		"total": len(rows or []),
+		"updated": updated,
+		"skipped": max(0, len(changes) - updated),
+		"sample": changes[:10],
+	}
+
+
+@frappe.whitelist()
+def check_client_name_exists(name: str | None = None) -> dict:
+	"""
+	Check if a Customer already exists with the same customer_name (or docname).
+	Used by /smart New Client to prompt before creating duplicates.
+	"""
+	_ensure_logged_in()
+	q = str(name or "").strip()
+	if not q:
+		return {"exists": False, "items": []}
+
+	rows = frappe.get_all(
+		"Customer",
+		fields=["name", "customer_name"],
+		filters={"customer_name": q},
+		limit_page_length=5,
+	)
+	# Also check docname equality (ERPNext may name by customer_name)
+	rows2 = frappe.get_all(
+		"Customer",
+		fields=["name", "customer_name"],
+		filters={"name": q},
+		limit_page_length=5,
+	)
+	merged = {r.get("name"): r for r in (rows or []) if r.get("name")}
+	for r in rows2 or []:
+		if r.get("name"):
+			merged[r.get("name")] = r
+
+	items = list(merged.values())
+	return {"exists": bool(items), "items": items}
 
 

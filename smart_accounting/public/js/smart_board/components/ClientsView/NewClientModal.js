@@ -5,6 +5,9 @@
 import { Modal } from '../Common/Modal.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { DoctypeMetaService } from '../../services/doctypeMetaService.js';
+import { formatClientName } from '../../utils/clientNameFormat.js';
+import { ClientsService } from '../../services/clientsService.js';
+import { confirmDialog } from '../../services/uiAdapter.js';
 
 export class NewClientModal {
   constructor({ title = 'New Client', initial = {}, onSubmit, onClose } = {}) {
@@ -84,6 +87,16 @@ export class NewClientModal {
     // Bind
     footer.querySelector('#sbNewClientCancel')?.addEventListener('click', () => this.close());
     footer.querySelector('#sbNewClientCreate')?.addEventListener('click', () => this._handleSubmit());
+    const typeSel = content.querySelector('#sbNewClientType');
+    if (nameEl) {
+      nameEl.addEventListener('blur', () => {
+        const raw = String(nameEl.value || '').trim();
+        if (!raw) return;
+        const t = String(typeSel?.value || '').trim() || 'Individual';
+        const fmt = formatClientName(raw, t);
+        if (fmt) nameEl.value = fmt;
+      });
+    }
     nameEl?.addEventListener?.('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -129,8 +142,9 @@ export class NewClientModal {
 
   async _handleSubmit() {
     this._setError('');
-    const customer_name = String(this._root?.querySelector?.('#sbNewClientName')?.value || '').trim();
     const customer_type = String(this._root?.querySelector?.('#sbNewClientType')?.value || '').trim() || 'Individual';
+    const rawName = String(this._root?.querySelector?.('#sbNewClientName')?.value || '').trim();
+    const customer_name = formatClientName(rawName, customer_type);
 
     const year_end = String(this._root?.querySelector?.('#sbNewClientYearEnd')?.value || '').trim();
     const abn = String(this._root?.querySelector?.('#sbNewClientAbn')?.value || '').trim();
@@ -156,6 +170,16 @@ export class NewClientModal {
     const btn = this._modal?._overlay?.querySelector?.('#sbNewClientCreate');
     if (btn) btn.disabled = true;
     try {
+      // If name already exists, require user confirmation before creating another.
+      const existsResp = await ClientsService.checkClientNameExists(customer_name);
+      if (existsResp?.exists) {
+        const names = (existsResp?.items || []).map((x) => x?.customer_name || x?.name).filter(Boolean);
+        const list = names.length ? `Existing: ${names.slice(0, 3).join(', ')}${names.length > 3 ? '…' : ''}` : '';
+        const ok = await confirmDialog(
+          `Client name already exists. Create anyway?\n${list}`
+        );
+        if (!ok) return;
+      }
       await this.onSubmit({ customer_name, customer_type, primary_entity });
       this.close();
     } catch (e) {

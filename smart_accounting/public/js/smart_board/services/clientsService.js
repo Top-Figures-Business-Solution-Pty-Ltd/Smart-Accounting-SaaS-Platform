@@ -21,6 +21,26 @@ export class ClientsService {
       };
     }, () => ({ search: String(search || ''), limitStart: Number(limitStart) || 0, limit: Number(limit) || 50 }));
   }
+
+  static async normalizeClientNames({ apply = 0 } = {}) {
+    return await Perf.timeAsync('clients.normalize_names', async () => {
+      const r = await frappe.call({
+        method: 'smart_accounting.api.clients.normalize_client_names',
+        args: { apply: apply ? 1 : 0 }
+      });
+      return r?.message || {};
+    }, () => ({ apply: apply ? 1 : 0 }));
+  }
+
+  static async checkClientNameExists(name = '') {
+    return await Perf.timeAsync('clients.check_name', async () => {
+      const r = await frappe.call({
+        method: 'smart_accounting.api.clients.check_client_name_exists',
+        args: { name: String(name || '') }
+      });
+      return r?.message || { exists: false, items: [] };
+    }, () => ({ name: String(name || '') }));
+  }
 }
 
 

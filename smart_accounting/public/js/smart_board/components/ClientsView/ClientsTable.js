@@ -53,6 +53,7 @@ export class ClientsTable {
     };
 
     const labelFor = (field) => ({
+      name: 'ID',
       customer_name: 'Client',
       project_count: 'Projects',
       active_project_count: 'Active',

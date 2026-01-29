@@ -12,12 +12,13 @@ import { ProjectTypeService } from './services/projectTypeService.js';
 import { isBoardView as isBoardViewFn, isProductView } from './utils/viewTypes.js';
 import { handleHeaderAction } from './controllers/headerActionHandler.js';
 import { openProject, createProject } from './services/navigationService.js';
-import { msgprint } from './services/uiAdapter.js';
+import { msgprint, confirmDialog, notify } from './services/uiAdapter.js';
 import { ViewService } from './services/viewService.js';
 import './columns/registerDefaultSpecs.js';
 import { isDesk } from './utils/env.js';
 import { getUrlState, setUrlState } from './utils/urlState.js';
 import { Perf } from './utils/perf.js';
+import { ClientsService } from './services/clientsService.js';
 
 export class SmartBoardApp {
     constructor(container) {
@@ -408,6 +409,24 @@ export class SmartBoardApp {
 
     showClientsColumnManager() {
         return this.mainContent?.openClientsColumnsManager?.();
+    }
+
+    async normalizeClientNames() {
+        const ok = await confirmDialog(
+            'This will normalize all client names using the standard rules. This cannot be undone. Continue?'
+        );
+        if (!ok) return;
+        try {
+            const result = await ClientsService.normalizeClientNames({ apply: 1 });
+            const updated = Number(result?.updated || 0);
+            const skipped = Number(result?.skipped || 0);
+            notify(`Normalized ${updated} clients${skipped ? ` (skipped ${skipped})` : ''}.`, 'green');
+            const last = this.store?.getState?.()?.clients?.lastFilters || { search: '' };
+            await this.store?.dispatch?.('clients/fetchClients', { ...(last || {}), limit: 50 });
+        } catch (e) {
+            const msg = e?.message || String(e);
+            notify(`Normalize names failed: ${msg}`, 'red');
+        }
     }
 
     openBoardForProject(project) {
