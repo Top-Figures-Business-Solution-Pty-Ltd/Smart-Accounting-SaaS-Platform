@@ -408,7 +408,8 @@
     border-radius: 14px;
     /* FIXED HEIGHT + inner scroll so expanded rows don't blow up page height.
        Sticky columns still work (sticky works inside overflow:auto; overflow:hidden was the real blocker). */
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
     max-height: 260px;
     z-index: 2;
 }

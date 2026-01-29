@@ -123,7 +123,6 @@ export const PROJECT_COLUMN_CATALOG = [
     { field: 'custom_engagement_letter', label: 'Engagement Letter', width: 200 },
 
     // Dates / planning
-    { field: 'expected_start_date', label: 'Start Date', width: 130 },
     { field: 'expected_end_date', label: 'End Date', width: 130 },
     { field: 'custom_lodgement_due_date', label: 'Lodgement Due', width: 140 },
 
@@ -138,12 +137,9 @@ export const PROJECT_COLUMN_CATALOG = [
     // "Active" is primarily a filter dimension; hide it from Columns Manager by default.
     // Keep it here for backward compatibility with Saved Views that may already reference it.
     { field: 'is_active', label: 'Active', width: 90, hidden: true },
-    { field: 'percent_complete', label: '% Complete', width: 110 },
 
     // Meta
-    { field: 'modified', label: 'Last Updated', width: 150 },
-    { field: 'auto_repeat', label: 'Auto Repeat', width: 140 },
-    { field: 'name', label: 'ID', width: 180 }
+    { field: 'modified', label: 'Last Updated', width: 150 }
 ];
 
 // 默认列配置（按 project_type）

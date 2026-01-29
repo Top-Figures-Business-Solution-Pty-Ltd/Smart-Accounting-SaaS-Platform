@@ -1279,14 +1279,11 @@ export class BoardTable {
             { field: 'status', label: 'Status', width: 140 },
             { field: 'exp_end_date', label: 'Due', width: 140 },
             { field: 'priority', label: 'Priority', width: 120 },
-            { field: 'exp_start_date', label: 'Start', width: 140 },
             // Task team roles (stored in Project Team Member child table on Task)
             { field: 'team:Assigned Person', label: 'Assigned Person', width: 180 },
             { field: 'team:Preparer', label: 'Preparer', width: 160 },
             { field: 'team:Reviewer', label: 'Reviewer', width: 160 },
             { field: 'team:Partner', label: 'Partner', width: 160 },
-            // Legacy fallback (Desk Task.owner). Keep in defs for compatibility, but prefer role columns above.
-            { field: 'owner', label: 'Owner (legacy)', width: 160 },
             { field: 'modified', label: 'Updated', width: 160 },
             // Component: expands to 12 months (board fiscal order)
             { field: '__sb_task_monthly_status', label: 'Monthly Task Status (12M)', width: 110 },
