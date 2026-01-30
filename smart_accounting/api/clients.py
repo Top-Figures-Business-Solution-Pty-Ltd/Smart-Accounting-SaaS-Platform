@@ -573,15 +573,37 @@ def normalize_client_names(apply: int = 0) -> dict:
 			if int(row.get("is_primary") or 0):
 				primary = row
 				break
-		if not primary:
-			entity_skipped += 1
-			continue
-		cur_type = str(primary.get("entity_type") or "").strip()
-		if cur_type:
-			entity_skipped += 1
-			continue
 		try:
-			primary.entity_type = customer_type
+			if not primary:
+				# Create a primary entity if missing (imported customers)
+				entity_name = str(doc.get("customer_name") or doc.get("name") or "").strip()
+				if not entity_name:
+					entity_skipped += 1
+					continue
+				doc.append(
+					"custom_entities",
+					{
+						"doctype": "Customer Entity",
+						"entity_name": entity_name,
+						"entity_type": customer_type,
+						"year_end": "June",
+						"abn": None,
+						"is_primary": 1,
+					},
+				)
+				doc.save()
+				entity_synced += 1
+				continue
+
+			cur_type = str(primary.get("entity_type") or "").strip()
+			cur_year_end = str(primary.get("year_end") or "").strip()
+			if cur_type and cur_year_end:
+				entity_skipped += 1
+				continue
+			if not cur_type:
+				primary.entity_type = customer_type
+			if not cur_year_end:
+				primary.year_end = "June"
 			doc.save()
 			entity_synced += 1
 		except Exception:
