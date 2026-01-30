@@ -93,6 +93,19 @@ export class MainContent {
                 this.createNewProject();
             });
         }
+
+        // Dashboard: Open Board action (event delegation)
+        this.container.addEventListener('click', (e) => {
+            const btn = e.target?.closest?.('.sb-dash-open-board');
+            if (!btn) return;
+            e.preventDefault();
+            const name = btn.getAttribute('data-project-name') || '';
+            const state = this.store?.getState?.() || {};
+            const list = state?.dashboard?.myProjects || [];
+            const project = (list || []).find((p) => String(p?.name) === String(name)) || null;
+            if (!project) return;
+            try { this.options?.app?.openBoardForProject?.(project); } catch (e2) {}
+        });
     }
     
     updateView(view) {

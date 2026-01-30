@@ -2,6 +2,15 @@
 // Clients/Settings are real apps now (not placeholders).
 const PLACEHOLDER_VIEWS = ['dashboard'];
 
+function _escapeHtml(v) {
+    return String(v ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 export function isPlaceholderView(view) {
     return PLACEHOLDER_VIEWS.includes(String(view || ''));
 }
@@ -34,9 +43,12 @@ export function renderPlaceholderHTML(view, store) {
             if (!myProjects.length) return `<div class="sb-dash__empty">No related projects yet.</div>`;
             const rows = myProjects.map((p) => `
               <tr>
-                <td class="sb-dash__proj">${p.project_name || p.name}</td>
-                <td class="sb-dash__type">${p.project_type || '—'}</td>
-                <td class="sb-dash__role">${p.role_text || '—'}</td>
+                <td class="sb-dash__proj">${_escapeHtml(p.project_name || p.name)}</td>
+                <td class="sb-dash__type">${_escapeHtml(p.project_type || '—')}</td>
+                <td class="sb-dash__role">${_escapeHtml(p.role_text || '—')}</td>
+                <td class="sb-dash__open">
+                  <button class="btn btn-default sb-dash-open-board" data-project-name="${_escapeHtml(p.name)}">Open Board</button>
+                </td>
               </tr>
             `).join('');
             return `
@@ -48,6 +60,7 @@ export function renderPlaceholderHTML(view, store) {
                       <th>Project</th>
                       <th>Type</th>
                       <th>My Role</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>

@@ -54,6 +54,19 @@
 <link rel="stylesheet" href="/assets/smart_accounting/css/smart_board/components.css">
 
 <style>
+  /* Make /smart full-bleed, overriding website container width limits */
+  .page-container,
+  .page-content,
+  .page-content-wrapper,
+  .web-page-content,
+  .container {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  body { margin: 0; }
   .smart-shell { min-height: 100vh; background: #f8f9fa; }
   .smart-shell__topbar {
     height: 56px; display: flex; align-items: center; justify-content: space-between;

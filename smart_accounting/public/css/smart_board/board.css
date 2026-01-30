@@ -34,7 +34,8 @@
 }
 
 .board-table {
-    width: auto; /* avoid stretching columns when total width is small */
+    width: max-content; /* expand to fit columns */
+    min-width: 100%; /* but never smaller than container */
     border-collapse: collapse;
     table-layout: fixed;
 }

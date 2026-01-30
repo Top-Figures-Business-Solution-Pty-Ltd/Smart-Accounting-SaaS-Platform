@@ -85,7 +85,7 @@
    Placeholder Pages (Dashboard / Clients / Settings)
    ============================================ */
 .page-placeholder {
-    padding: 24px;
+    padding: 16px;
     flex: 1;
     overflow: auto;
     /* Keep scrollbars stable (when supported) so users can drag without a touchpad */
@@ -93,7 +93,7 @@
 }
 
 .sb-page {
-    max-width: 980px;
+    max-width: 1200px;
 }
 
 /* Settings */

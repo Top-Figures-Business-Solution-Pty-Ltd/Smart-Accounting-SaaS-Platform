@@ -33,6 +33,9 @@ function isFilterableField(field) {
   if (f.startsWith('__sb_')) return false;
   // Derived team role columns (not a real Project field)
   if (f.startsWith('team:')) return false;
+  // Exclude fields that should never appear in Filters
+  if (f === 'custom_engagement_letter') return false;
+  if (f === 'notes') return false;
   return true;
 }
 
