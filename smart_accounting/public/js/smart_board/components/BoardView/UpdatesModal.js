@@ -10,9 +10,10 @@ import { UpdatesService } from '../../services/updatesService.js';
 import { attachMentionPicker } from '../../controllers/mentionPickerController.js';
 
 export class UpdatesModal {
-  constructor({ project, onClose } = {}) {
+  constructor({ project, onClose, onPosted } = {}) {
     this.project = project || null;
     this.onClose = onClose || (() => {});
+    this.onPosted = onPosted || (() => {});
     this._modal = null;
     this._items = [];
     this._loading = false;
@@ -174,6 +175,7 @@ export class UpdatesModal {
         this._items = [item].concat(this._items || []);
         this._renderList();
         notify('Posted.', 'green');
+        try { this.onPosted?.(item); } catch (e) {}
       }
       if (ta) ta.value = '';
       this._mentions = [];

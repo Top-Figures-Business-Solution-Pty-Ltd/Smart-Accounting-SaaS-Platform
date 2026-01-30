@@ -14,6 +14,7 @@ import { TeamRoleService } from '../../services/teamRoleService.js';
 import { EditingManager } from './boardTableEditingManager.js';
 import { TaskEditingManager } from './boardTableTaskEditingManager.js';
 import { installBoardTableTaskFeatures } from './boardTableTaskFeatures.js';
+import { installBoardTableUpdatesFeatures } from './boardTableUpdatesFeatures.js';
 import { installBoardTableMonthlyStatusFeatures } from './boardTableMonthlyStatusFeatures.js';
 import { columnRegistry } from '../../columns/registry.js';
 import { UpdatesModal } from './UpdatesModal.js';
@@ -57,6 +58,8 @@ export class BoardTable {
         this._expanded = new Set(); // project.name
         this._taskCounts = new Map(); // project.name -> count
         this._taskCountsLoading = new Set(); // project.name (in-flight get_task_counts)
+        this._updateCounts = new Map(); // project.name -> updates count
+        this._updateCountsLoading = new Set();
         this._tasksByProject = new Map(); // project.name -> tasks[]
         this._tasksLoading = new Set(); // project.name
         // Monthly Status (matrix + summary) caches
@@ -1054,8 +1057,16 @@ export class BoardTable {
     openUpdates(project) {
         // Step 7: website-safe modal placeholder (no persistence yet)
         this._updatesModal?.close?.();
+        const name = project?.name || '';
+        if (name) {
+            this._markUpdatesSeen?.(name);
+            this.scheduleRowsUpdate();
+        }
         this._updatesModal = new UpdatesModal({
             project,
+            onPosted: () => {
+                if (name) this._bumpUpdateCount?.(name, 1);
+            },
             onClose: () => { this._updatesModal = null; }
         });
         this._updatesModal.open();
@@ -1090,6 +1101,8 @@ export class BoardTable {
             this._rowModel = buildRowModel(this.projects || [], { groupBy: this._groupBy });
             // Task counts are used to render expand toggles (async best-effort).
             this._prefetchTaskCounts?.();
+            // Update counts for badge (async best-effort).
+            this._prefetchUpdateCounts?.();
             // Monthly completion needs summary data; load in the background (batched).
             if (this._hasProjectMonthlyCompletion?.() && (this.projects || []).length) {
                 const names = (this._rowModel?.all?.() || this.projects || []).map((p) => p?.name).filter(Boolean).slice(0, 300);
@@ -1469,4 +1482,6 @@ export class BoardTable {
 installBoardTableTaskFeatures(BoardTable);
 // Install prototype-based monthly status features.
 installBoardTableMonthlyStatusFeatures(BoardTable);
+// Install updates badge features.
+installBoardTableUpdatesFeatures(BoardTable);
 

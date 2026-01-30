@@ -168,3 +168,50 @@ def add_project_update(project: str, content: str, mentions: Any = None) -> dict
 	}
 
 
+@frappe.whitelist()
+def get_project_update_counts(projects: Any = None) -> dict:
+	"""
+	Return update counts per project (Comment count).
+	Respects Project read permissions by filtering to permitted projects.
+	"""
+	_ensure_logged_in()
+	names: list[str] = []
+	try:
+		if isinstance(projects, str):
+			names = frappe.parse_json(projects) or []
+		elif isinstance(projects, (list, tuple)):
+			names = list(projects)
+	except Exception:
+		names = []
+	names = [str(n).strip() for n in (names or []) if str(n).strip()]
+	if not names:
+		return {"counts": {}}
+
+	# Permission-respecting list of projects
+	permitted = frappe.get_all(
+		"Project",
+		fields=["name"],
+		filters={"name": ["in", names]},
+		limit_page_length=len(names) + 5,
+	)
+	perm_names = [p.get("name") for p in (permitted or []) if p.get("name")]
+	if not perm_names:
+		return {"counts": {}}
+
+	rows = frappe.get_all(
+		"Comment",
+		fields=["reference_name", "count(name) as cnt"],
+		filters={
+			"reference_doctype": "Project",
+			"reference_name": ["in", perm_names],
+			"comment_type": "Comment",
+		},
+		group_by="reference_name",
+		limit_page_length=100000,
+		ignore_permissions=True,  # bounded by Project permission above
+	)
+
+	counts = {str(r.get("reference_name")): int(r.get("cnt") or 0) for r in (rows or []) if r.get("reference_name")}
+	return {"counts": counts}
+
+

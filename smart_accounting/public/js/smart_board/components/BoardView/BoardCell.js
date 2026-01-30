@@ -59,6 +59,8 @@ export class BoardCell {
             const pn = this.escapeHtml(this.project?.name || '');
             const isEmpty = taskCount <= 0;
             const expandTitle = expanded ? 'Collapse tasks' : (isEmpty ? 'Show tasks (no tasks yet)' : 'Expand tasks');
+            const updCount = Number(this.project?.__sb_update_count || 0);
+            const isHot = !!this.project?.__sb_update_hot;
             const expander = `
                 <button
                     type="button"
@@ -71,6 +73,7 @@ export class BoardCell {
             const updatesBtn = `
                 <button type="button" class="sb-update-btn" data-project-name="${pn}" aria-label="Open updates" title="Updates">
                     💬
+                    ${updCount > 0 ? `<span class="sb-update-badge ${isHot ? 'sb-update-badge--hot' : 'sb-update-badge--quiet'}">${updCount > 99 ? '99+' : updCount}</span>` : ''}
                 </button>
             `;
             cellInnerHTML = `

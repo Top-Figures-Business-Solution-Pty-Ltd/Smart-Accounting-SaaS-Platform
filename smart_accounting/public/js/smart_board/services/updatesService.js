@@ -28,6 +28,16 @@ export class UpdatesService {
     });
     return r?.message?.item || null;
   }
+
+  static async getUpdateCounts(projects = []) {
+    const names = Array.isArray(projects) ? projects : [];
+    if (!names.length) return {};
+    const r = await frappe.call({
+      method: 'smart_accounting.api.updates.get_project_update_counts',
+      args: { projects: names }
+    });
+    return r?.message?.counts || {};
+  }
 }
 
 
