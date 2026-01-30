@@ -90,6 +90,7 @@ export class BoardTable {
         this._onBodyHScroll = null;
         this._syncingHScroll = false;
         this._onBottomHScroll = null;
+        this._onWheelHScroll = null;
         // Prevent feedback loops between body <-> bottom scrollbar.
         this._syncingFromBottom = false;
         this._syncingFromBody = false;
@@ -570,6 +571,8 @@ export class BoardTable {
         this.bindBottomScrollbarSync();
         this._syncHeaderPaddingForScrollbar();
         this._updateBottomScrollbarVisibility();
+        this._bindTrackpadHorizontalScroll();
+        this._positionBottomScrollbar();
     }
 
     bindHorizontalScrollSync() {
@@ -639,6 +642,47 @@ export class BoardTable {
             });
         };
         bottom.addEventListener('scroll', this._onBottomHScroll, { passive: true });
+    }
+
+    _bindTrackpadHorizontalScroll() {
+        const body = this.container.querySelector('#boardTableBody');
+        const container = this.container?.closest?.('.board-table-container') || this.container;
+        if (!container || !body) return;
+
+        if (this._onWheelHScroll) {
+            container.removeEventListener('wheel', this._onWheelHScroll);
+            this._onWheelHScroll = null;
+        }
+
+        this._onWheelHScroll = (e) => {
+            // Allow normal vertical scroll; only handle horizontal intent.
+            const dx = Number(e?.deltaX || 0);
+            const dy = Number(e?.deltaY || 0);
+            let delta = 0;
+            if (Math.abs(dx) > 0) delta = dx;
+            else if (e?.shiftKey && Math.abs(dy) > 0) delta = dy;
+            else return;
+
+            const current = body.scrollLeft || 0;
+            const next = current + delta;
+            if (next === current) return;
+            body.scrollLeft = next;
+            // Prevent page from horizontally/vertically scrolling while we handle h-scroll
+            e.preventDefault();
+        };
+
+        container.addEventListener('wheel', this._onWheelHScroll, { passive: false });
+    }
+
+    _positionBottomScrollbar() {
+        const bottom = this.container.querySelector('#sbBottomHScroll');
+        const wrapper = this.container.querySelector('.board-table-wrapper');
+        if (!bottom || !wrapper) return;
+        const rect = wrapper.getBoundingClientRect();
+        const left = Math.max(0, rect.left || 0);
+        const rightGap = Math.max(0, (window.innerWidth || 0) - (rect.right || 0));
+        bottom.style.left = `${left}px`;
+        bottom.style.right = `${rightGap}px`;
     }
 
     _syncHeaderPaddingForScrollbar() {
@@ -1372,6 +1416,7 @@ export class BoardTable {
         // 处理窗口大小变化
         this._syncHeaderPaddingForScrollbar();
         this._updateBottomScrollbarVisibility();
+        this._positionBottomScrollbar();
     }
     
     destroy() {
@@ -1393,6 +1438,11 @@ export class BoardTable {
         if (bottom && this._onBottomHScroll) {
             bottom.removeEventListener('scroll', this._onBottomHScroll);
             this._onBottomHScroll = null;
+        }
+        const container = this.container?.closest?.('.board-table-container') || this.container;
+        if (container && this._onWheelHScroll) {
+            container.removeEventListener('wheel', this._onWheelHScroll);
+            this._onWheelHScroll = null;
         }
 
         if (this._unsubscribe) {
