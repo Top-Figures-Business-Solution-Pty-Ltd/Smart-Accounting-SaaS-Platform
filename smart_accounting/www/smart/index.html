@@ -37,7 +37,6 @@
   <div class="smart-shell__popover" id="profilePopover" style="display:none;">
     <div class="smart-shell__popover-title">Account</div>
     <div class="smart-shell__popover-body smart-shell__menu">
-      <button class="smart-shell__menu-item" id="btnMyProfile" type="button">My Profile</button>
       <button class="smart-shell__menu-item" id="btnMySettings" type="button">My Settings</button>
       <div class="smart-shell__menu-divider"></div>
       <a class="smart-shell__menu-item smart-shell__menu-link" href="/smart/logout">Log out</a>
@@ -74,6 +73,12 @@
     display:flex; align-items:center; justify-content:center;
     user-select:none;
     border: 0;
+  }
+  .smart-shell__avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 999px;
   }
   .smart-shell__popover {
     position: absolute;
@@ -132,7 +137,6 @@
   const notificationsBadge = document.getElementById("notificationsBadge");
   const userAvatar = document.getElementById("userAvatar");
   const profilePopover = document.getElementById("profilePopover");
-  const btnMyProfile = document.getElementById("btnMyProfile");
   const btnMySettings = document.getElementById("btnMySettings");
 
   function hideAllPopovers() {
@@ -166,11 +170,6 @@
     hideAllPopovers();
     // Reuse existing Smart Board view
     window.smart_accounting?.smart_board_instance?.handleViewChange?.("settings");
-  });
-  btnMyProfile?.addEventListener("click", () => {
-    hideAllPopovers();
-    // Placeholder until we implement a real profile screen in /smart
-    alert("My Profile - coming soon.");
   });
 
   // Surface module-load errors for debugging (Website doesn't have Desk console context)

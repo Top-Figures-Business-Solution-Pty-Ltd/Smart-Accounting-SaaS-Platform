@@ -165,6 +165,10 @@ export class SmartBoardApp {
             await this.store.dispatch('clients/fetchClients', { search: '', limit: 200 });
             return;
         }
+        // Settings is a product view (no board data needed)
+        if (viewType === 'settings') {
+            return;
+        }
         // Client Projects: a cross-project-type view, still backed by Projects module
         if (viewType === 'client-projects') {
             const stateFilters = this.store?.getState?.()?.filters || {};
@@ -409,6 +413,16 @@ export class SmartBoardApp {
 
     showClientsColumnManager() {
         return this.mainContent?.openClientsColumnsManager?.();
+    }
+
+    openSettingsTab(tabKey) {
+        this._settingsTab = String(tabKey || '').trim() || null;
+        this.currentView = 'settings';
+        this.header?.updateView?.(this.currentView);
+        this.mainContent?.updateView?.(this.currentView);
+        this.sidebar?.updateView?.(this.currentView);
+        try { this._syncUrl?.(); } catch (e) {}
+        return this.loadViewData(this.currentView);
     }
 
     async normalizeClientNames() {

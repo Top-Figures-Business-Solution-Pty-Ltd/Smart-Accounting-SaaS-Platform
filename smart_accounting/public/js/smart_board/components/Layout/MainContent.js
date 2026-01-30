@@ -99,7 +99,7 @@ export class MainContent {
         this.currentView = view;
 
         // Non-board views should not show the projects table
-        if (view === 'clients' || view === 'client-projects' || isPlaceholderView(view)) {
+        if (view === 'clients' || view === 'client-projects' || view === 'settings' || isPlaceholderView(view)) {
             this.showPlaceholder(view);
             return;
         }
@@ -219,7 +219,8 @@ export class MainContent {
             try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
             this._clientProjectsApp = null;
             try { this._settingsApp?.destroy?.(); } catch (e) {}
-            this._settingsApp = new SettingsApp(mount);
+            const initialTab = this.options?.app?._settingsTab || null;
+            this._settingsApp = new SettingsApp(mount, { initialTab });
             this._settingsApp.init();
         } else {
             // Dashboard / Settings placeholders remain static-html based for now

@@ -6,6 +6,7 @@ import { ClientsTable } from './ClientsTable.js';
 import { notify } from '../../services/uiAdapter.js';
 import { getDefaultClientColumns, loadClientColumns } from '../../utils/clientsColumns.js';
 import { openClientsColumnsManager } from '../../controllers/clientsColumnsController.js';
+import { openEditClientFlow } from '../../controllers/editClientController.js';
 
 export class ClientsApp {
   constructor(container, { store, onOpenProjects } = {}) {
@@ -28,7 +29,10 @@ export class ClientsApp {
       },
       onOpenProjects: (client) => {
         this.onOpenProjects(client);
-      }
+      },
+      onEdit: (client) => {
+        openEditClientFlow({ app: this, client });
+      },
     });
 
     if (this.store?.subscribe) {

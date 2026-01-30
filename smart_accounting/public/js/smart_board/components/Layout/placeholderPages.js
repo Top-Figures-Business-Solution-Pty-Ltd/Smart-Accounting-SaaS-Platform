@@ -1,6 +1,6 @@
 // Placeholder pages are the "static HTML" pages inside the product shell.
-// Clients is no longer a placeholder; it is a real ClientsApp.
-const PLACEHOLDER_VIEWS = ['dashboard', 'settings'];
+// Clients/Settings are real apps now (not placeholders).
+const PLACEHOLDER_VIEWS = ['dashboard'];
 
 export function isPlaceholderView(view) {
     return PLACEHOLDER_VIEWS.includes(String(view || ''));
@@ -80,17 +80,6 @@ export function renderPlaceholderHTML(view, store) {
                 <div class="sb-page__subtitle">Client directory (coming soon)</div>
                 <div class="sb-page__hint">
                     We will build a custom Clients UI here (based on Client/Contact) while keeping your SaaS look & feel.
-                </div>
-            </div>
-        `;
-    }
-
-    if (view === 'settings') {
-        return `
-            <div class="sb-page">
-                <div class="sb-page__subtitle">Personal & workspace settings (coming soon)</div>
-                <div class="sb-page__hint">
-                    This will replace Desk settings for external users.
                 </div>
             </div>
         `;

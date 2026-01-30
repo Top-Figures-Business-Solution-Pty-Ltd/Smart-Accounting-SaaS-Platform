@@ -95,6 +95,17 @@ def _pick_default(doctype: str, preferred_name: str) -> str | None:
 	return None
 
 
+def _get_select_options(doctype: str, fieldname: str) -> list[str]:
+	try:
+		meta = frappe.get_meta(doctype)
+		field = meta.get_field(fieldname) if meta else None
+		raw = str(field.options or "") if field else ""
+		opts = [o.strip() for o in raw.split("\n") if o.strip()]
+		return opts
+	except Exception:
+		return []
+
+
 def _build_client_summary(customer: dict, primary_entity: dict | None = None) -> dict:
 	"""Return a minimal item shape compatible with ClientsTable rows."""
 	return {
@@ -377,6 +388,113 @@ def create_client(payload: dict | None = None) -> dict:
 			"is_primary": 1,
 		}
 	return {"item": _build_client_summary(customer, pe)}
+
+
+@frappe.whitelist()
+def update_client(payload: dict | None = None) -> dict:
+	"""
+	Update basic Client fields.
+	Allowed:
+	- customer_name
+	- primary entity: entity_type, year_end (entity_name follows customer_name)
+	"""
+	_ensure_logged_in()
+
+	# Normalize payload (may arrive as JSON string)
+	if isinstance(payload, str):
+		try:
+			data = frappe.parse_json(payload) or {}
+		except Exception:
+			data = {}
+	else:
+		data = payload or {}
+	if not isinstance(data, dict):
+		data = {}
+
+	name = str(data.get("name") or "").strip()
+	if not name:
+		frappe.throw("name is required")
+	if not frappe.has_permission("Customer", "write", name):
+		frappe.throw("Not permitted", frappe.PermissionError)
+
+	doc = frappe.get_doc("Customer", name)
+
+	customer_name = data.get("customer_name", None)
+	if customer_name is not None:
+		customer_name = str(customer_name or "").strip()
+		if not customer_name:
+			frappe.throw("customer_name is required")
+		doc.customer_name = customer_name
+
+	entity_type = data.get("entity_type", None)
+	year_end = data.get("year_end", None)
+
+	if entity_type is not None:
+		entity_type = str(entity_type or "").strip()
+	if year_end is not None:
+		year_end = str(year_end or "").strip()
+
+	if entity_type is not None or year_end is not None:
+		if not doc.meta.get_field("custom_entities"):
+			frappe.throw("Customer Entity table is not configured")
+		allowed_year_ends = _get_select_options("Customer Entity", "year_end")
+		# If legacy rows have invalid year_end, normalize them before validation.
+		if year_end and allowed_year_ends:
+			for row in (doc.get("custom_entities") or []):
+				cur = str(row.get("year_end") or "").strip()
+				if cur and cur not in allowed_year_ends:
+					row.year_end = year_end
+		primary = None
+		for row in (doc.get("custom_entities") or []):
+			if int(row.get("is_primary") or 0):
+				primary = row
+				break
+
+		if primary:
+			if entity_type:
+				primary.entity_type = entity_type
+			if year_end:
+				primary.year_end = year_end
+			# Keep primary entity aligned with customer name
+			if customer_name:
+				primary.entity_name = customer_name
+		else:
+			if not year_end:
+				frappe.throw("year_end is required")
+			new_entity_type = entity_type or str(doc.get("customer_type") or "")
+			doc.append(
+				"custom_entities",
+				{
+					"doctype": "Customer Entity",
+					"entity_name": customer_name or doc.get("customer_name") or doc.get("name"),
+					"entity_type": new_entity_type,
+					"year_end": year_end,
+					"abn": None,
+					"is_primary": 1,
+				},
+			)
+
+	doc.save()
+
+	primary_out = None
+	for row in (doc.get("custom_entities") or []):
+		if int(row.get("is_primary") or 0):
+			primary_out = {
+				"entity_name": row.get("entity_name"),
+				"entity_type": row.get("entity_type"),
+				"abn": row.get("abn"),
+				"year_end": row.get("year_end"),
+				"is_primary": row.get("is_primary"),
+			}
+			break
+
+	return {
+		"item": {
+			"name": doc.get("name"),
+			"customer_name": doc.get("customer_name") or doc.get("name"),
+			"primary_entity": primary_out,
+		}
+	}
 
 
 @frappe.whitelist()

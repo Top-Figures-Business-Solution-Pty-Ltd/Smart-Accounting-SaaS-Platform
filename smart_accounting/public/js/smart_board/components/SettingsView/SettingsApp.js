@@ -3,21 +3,25 @@
  * - Currently only implements "My Settings" -> Change Password.
  */
 import { ChangePasswordForm } from './ChangePasswordForm.js';
+import { ProfileForm } from './ProfileForm.js';
 
 export class SettingsApp {
-  constructor(container) {
+  constructor(container, { initialTab } = {}) {
     this.container = container;
     this._form = null;
-    this._active = 'password';
+    this._active = initialTab || 'profile';
     this._onNavClick = null;
   }
 
   init() {
+    const isProfile = this._active === 'profile';
+    const isPassword = this._active === 'password';
     this.container.innerHTML = `
       <div class="sb-page">
         <div class="sb-settings">
           <div class="sb-settings__nav" id="sbSettingsNav">
-            <button class="sb-settings__tab sb-settings__tab--active" type="button" data-key="password">Change Password</button>
+            <button class="sb-settings__tab ${isProfile ? 'sb-settings__tab--active' : ''}" type="button" data-key="profile">My Profile</button>
+            <button class="sb-settings__tab ${isPassword ? 'sb-settings__tab--active' : ''}" type="button" data-key="password">Change Password</button>
             <button class="sb-settings__tab" type="button" data-key="prefs" disabled title="Coming soon">Personal Preferences</button>
             <button class="sb-settings__tab" type="button" data-key="notifs" disabled title="Coming soon">Notification Preferences</button>
           </div>
@@ -60,7 +64,12 @@ export class SettingsApp {
     try { this._form?.destroy?.(); } catch (e) {}
     this._form = null;
 
-    // Currently only password is implemented
+    if (this._active === 'profile') {
+      this._form = new ProfileForm(mount);
+      this._form.render();
+      return;
+    }
+    // Password (fallback)
     this._form = new ChangePasswordForm(mount);
     this._form.render();
   }

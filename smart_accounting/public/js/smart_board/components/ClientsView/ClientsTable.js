@@ -5,11 +5,12 @@
 import { escapeHtml } from '../../utils/dom.js';
 
 export class ClientsTable {
-  constructor(container, { onLoadMore, onRowClick, onOpenProjects } = {}) {
+  constructor(container, { onLoadMore, onRowClick, onOpenProjects, onEdit } = {}) {
     this.container = container;
     this.onLoadMore = typeof onLoadMore === 'function' ? onLoadMore : (() => {});
     this.onRowClick = typeof onRowClick === 'function' ? onRowClick : (() => {});
     this.onOpenProjects = typeof onOpenProjects === 'function' ? onOpenProjects : (() => {});
+    this.onEdit = typeof onEdit === 'function' ? onEdit : (() => {});
     this._state = { items: [], loading: false, loadingMore: false, hasMore: true, error: null, columns: [] };
     this._io = null;
     this._lastAutoLoadAt = 0;
@@ -65,7 +66,10 @@ export class ClientsTable {
       territory: 'Territory',
     }[field] || field);
 
-    const thead = cols.map((f) => `<th>${escapeHtml(labelFor(f))}</th>`).join('');
+    const thead = [
+      ...cols.map((f) => `<th>${escapeHtml(labelFor(f))}</th>`),
+      '<th style="width:96px;">Actions</th>',
+    ].join('');
     const rows = items.map((c) => {
       const name = escapeHtml(c?.name || '');
       const tds = cols.map((f, idx) => {
@@ -73,7 +77,12 @@ export class ClientsTable {
         const isFirst = idx === 0;
         return `<td ${isFirst ? 'style="font-weight:600;"' : ''}>${val}</td>`;
       }).join('');
-      return `<tr class="sb-clients__row" data-name="${name}">${tds}</tr>`;
+      const actions = `
+        <td class="sb-clients__actions">
+          <button type="button" class="btn btn-default sb-client-edit-btn" data-client="${name}">Edit</button>
+        </td>
+      `;
+      return `<tr class="sb-clients__row" data-name="${name}">${tds}${actions}</tr>`;
     }).join('');
 
     const body = (() => {
@@ -113,6 +122,15 @@ export class ClientsTable {
 
     this.container.querySelector('#sbClientsLoadMore')?.addEventListener('click', () => this.onLoadMore());
     this.container.querySelector('tbody')?.addEventListener('click', (e) => {
+      const editBtn = e.target?.closest?.('.sb-client-edit-btn');
+      if (editBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const name = editBtn.getAttribute('data-client') || '';
+        const client = items.find((x) => String(x?.name) === String(name)) || null;
+        if (client) this.onEdit(client);
+        return;
+      }
       const btn = e.target?.closest?.('.sb-client-open-projects');
       if (btn) {
         e.preventDefault();

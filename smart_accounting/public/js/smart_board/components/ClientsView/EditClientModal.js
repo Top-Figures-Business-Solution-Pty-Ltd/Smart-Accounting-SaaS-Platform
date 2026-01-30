@@ -1,0 +1,171 @@
+/**
+ * EditClientModal (Website-safe)
+ * - UI-only: edit core client fields.
+ */
+import { Modal } from '../Common/Modal.js';
+import { escapeHtml } from '../../utils/dom.js';
+import { DoctypeMetaService } from '../../services/doctypeMetaService.js';
+import { formatClientName } from '../../utils/clientNameFormat.js';
+
+export class EditClientModal {
+  constructor({ title = 'Edit Client', initial = {}, onSubmit, onClose } = {}) {
+    this.title = title;
+    this.initial = initial || {};
+    this.onSubmit = onSubmit || (async () => {});
+    this.onClose = onClose || (() => {});
+    this._modal = null;
+    this._root = null;
+  }
+
+  async open() {
+    this.close();
+
+    const content = document.createElement('div');
+    content.innerHTML = `
+      <div class="sb-newclient">
+        <div class="sb-newproj__row">
+          <label class="sb-newproj__label">Client Name *</label>
+          <input class="form-control" id="sbEditClientName" type="text" placeholder="e.g. David Tao" />
+        </div>
+
+        <div style="display:flex; gap:12px; flex-wrap: wrap;">
+          <div class="sb-newproj__row" style="min-width:220px; flex:1;">
+            <label class="sb-newproj__label">Entity Type *</label>
+            <select class="form-control" id="sbEditClientEntityType">
+              <option value="" disabled selected>Loading...</option>
+            </select>
+          </div>
+          <div class="sb-newproj__row" style="min-width:220px; flex:1;">
+            <label class="sb-newproj__label">Year End *</label>
+            <select class="form-control" id="sbEditClientYearEnd">
+              <option value="" disabled selected>Loading...</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="sb-newproj__error text-danger" id="sbEditClientError" style="display:none;"></div>
+      </div>
+    `;
+
+    const footer = document.createElement('div');
+    footer.style.display = 'flex';
+    footer.style.justifyContent = 'flex-end';
+    footer.style.gap = '10px';
+    footer.innerHTML = `
+      <button class="btn btn-default" type="button" id="sbEditClientCancel">Cancel</button>
+      <button class="btn btn-primary" type="button" id="sbEditClientSave">Save</button>
+    `;
+
+    this._modal = new Modal({
+      title: this.title,
+      contentEl: content,
+      footerEl: footer,
+      onClose: () => this.onClose(),
+    });
+    this._modal.open();
+    this._root = content;
+
+    // Init fields
+    const nameEl = content.querySelector('#sbEditClientName');
+    if (nameEl) nameEl.value = this.initial.customer_name || this.initial.name || '';
+
+    await this._loadSelectOptions();
+
+    // Apply initial selects after options load
+    const typeSel = content.querySelector('#sbEditClientEntityType');
+    const yearSel = content.querySelector('#sbEditClientYearEnd');
+    if (typeSel && this.initial.entity_type) typeSel.value = String(this.initial.entity_type);
+    if (yearSel && this.initial.year_end) yearSel.value = String(this.initial.year_end);
+
+    // Bind
+    footer.querySelector('#sbEditClientCancel')?.addEventListener('click', () => this.close());
+    footer.querySelector('#sbEditClientSave')?.addEventListener('click', () => this._handleSubmit());
+    nameEl?.addEventListener?.('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this._handleSubmit();
+      }
+    });
+    if (nameEl) {
+      nameEl.addEventListener('blur', () => {
+        const raw = String(nameEl.value || '').trim();
+        if (!raw) return;
+        const t = String(typeSel?.value || '').trim();
+        const fmt = formatClientName(raw, t || 'Company');
+        if (fmt) nameEl.value = fmt;
+      });
+    }
+  }
+
+  close() {
+    this._modal?.close?.();
+    this._modal = null;
+    this._root = null;
+  }
+
+  _setError(msg) {
+    const el = this._root?.querySelector?.('#sbEditClientError');
+    if (!el) return;
+    const m = String(msg || '').trim();
+    el.textContent = m;
+    el.style.display = m ? 'block' : 'none';
+  }
+
+  async _loadSelectOptions() {
+    const typeSel = this._root?.querySelector?.('#sbEditClientEntityType');
+    const yearSel = this._root?.querySelector?.('#sbEditClientYearEnd');
+    if (!typeSel || !yearSel) return;
+
+    // Customer Entity.entity_type options
+    const types = await DoctypeMetaService.getSelectOptions('Customer Entity', 'entity_type');
+    const safeTypes = (types || []).filter(Boolean);
+    const fallbackType = this.initial.entity_type ? [String(this.initial.entity_type)] : [];
+    const typeOptions = safeTypes.length ? safeTypes : fallbackType;
+    typeSel.innerHTML = typeOptions.length
+      ? typeOptions.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')
+      : `<option value="" disabled selected>No options</option>`;
+
+    // Customer Entity.year_end options
+    const yearEnds = await DoctypeMetaService.getSelectOptions('Customer Entity', 'year_end');
+    const safeYears = (yearEnds || []).filter(Boolean);
+    const fallbackYear = this.initial.year_end ? [String(this.initial.year_end)] : [];
+    const yearOptions = safeYears.length ? safeYears : fallbackYear;
+    yearSel.innerHTML = `
+      <option value="" disabled selected>Select year end</option>
+      ${yearOptions.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('')}
+    `;
+  }
+
+  async _handleSubmit() {
+    this._setError('');
+    const customer_name = String(this._root?.querySelector?.('#sbEditClientName')?.value || '').trim();
+    const entity_type = String(this._root?.querySelector?.('#sbEditClientEntityType')?.value || '').trim();
+    const year_end = String(this._root?.querySelector?.('#sbEditClientYearEnd')?.value || '').trim();
+
+    if (!customer_name) {
+      this._setError('Client Name is required');
+      return;
+    }
+    if (!entity_type) {
+      this._setError('Entity Type is required');
+      return;
+    }
+    if (!year_end) {
+      this._setError('Year End is required');
+      return;
+    }
+
+    const btn = this._modal?._overlay?.querySelector?.('#sbEditClientSave');
+    if (btn) btn.disabled = true;
+    try {
+      await this.onSubmit({ name: this.initial.name, customer_name, entity_type, year_end });
+      this.close();
+    } catch (e) {
+      this._setError(e?.message || String(e));
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+}
+
+

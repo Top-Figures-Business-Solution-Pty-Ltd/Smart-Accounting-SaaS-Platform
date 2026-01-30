@@ -63,6 +63,14 @@ export const ClientsModule = {
     setLastFilters(state, f) { state.lastFilters = f ? { ...(f || {}) } : { search: '' }; },
     setRequestSeq(state, seq) { state.requestSeq = Number(seq) || 0; },
     setActiveRequestSeq(state, seq) { state.activeRequestSeq = Number(seq) || 0; },
+    updateClient(state, { name, data } = {}) {
+      const key = String(name || data?.name || '');
+      if (!key || !Array.isArray(state.items)) return;
+      const idx = state.items.findIndex((c) => String(c?.name) === key);
+      if (idx < 0) return;
+      const current = state.items[idx] || {};
+      state.items[idx] = { ...current, ...(data || {}) };
+    },
   },
 
   actions: {
