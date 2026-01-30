@@ -34,7 +34,6 @@ export function renderHeaderActions(view, { isBoardView }) {
                 />
             </div>
             <button class="btn btn-default" id="btnClientsColumns">Columns</button>
-            <button class="btn btn-default" id="btnNormalizeClients">Normalize Names</button>
             <button class="btn btn-primary" id="btnNewClient">New Client</button>
         `;
     }
@@ -81,7 +80,6 @@ export function bindHeaderActions(rootEl, view, { isBoardView, onAction, onShowF
 
     rootEl.querySelector('#btnNewClient')?.addEventListener('click', () => onAction?.('new_client'));
     rootEl.querySelector('#btnClientsColumns')?.addEventListener('click', () => onAction?.('clients_columns'));
-    rootEl.querySelector('#btnNormalizeClients')?.addEventListener('click', () => onAction?.('clients_normalize'));
 
     const clientSearch = rootEl.querySelector('#headerClientSearchInput');
     if (clientSearch) {

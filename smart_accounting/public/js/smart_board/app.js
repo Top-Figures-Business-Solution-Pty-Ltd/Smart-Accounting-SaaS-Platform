@@ -425,23 +425,7 @@ export class SmartBoardApp {
         return this.loadViewData(this.currentView);
     }
 
-    async normalizeClientNames() {
-        const ok = await confirmDialog(
-            'This will normalize all client names using the standard rules. This cannot be undone. Continue?'
-        );
-        if (!ok) return;
-        try {
-            const result = await ClientsService.normalizeClientNames({ apply: 1 });
-            const updated = Number(result?.updated || 0);
-            const skipped = Number(result?.skipped || 0);
-            notify(`Normalized ${updated} clients${skipped ? ` (skipped ${skipped})` : ''}.`, 'green');
-            const last = this.store?.getState?.()?.clients?.lastFilters || { search: '' };
-            await this.store?.dispatch?.('clients/fetchClients', { ...(last || {}), limit: 50 });
-        } catch (e) {
-            const msg = e?.message || String(e);
-            notify(`Normalize names failed: ${msg}`, 'red');
-        }
-    }
+    // normalizeClientNames removed (no longer needed)
 
     openBoardForProject(project) {
         const pt = String(project?.project_type || '').trim();
