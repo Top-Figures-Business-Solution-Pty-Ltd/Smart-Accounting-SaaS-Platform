@@ -17,6 +17,7 @@ export class NewClientModal {
     this.onClose = onClose || (() => {});
     this._modal = null;
     this._root = null;
+    this._nameChoice = null;
   }
 
   async open() {
@@ -88,20 +89,19 @@ export class NewClientModal {
     footer.querySelector('#sbNewClientCancel')?.addEventListener('click', () => this.close());
     footer.querySelector('#sbNewClientCreate')?.addEventListener('click', () => this._handleSubmit());
     const typeSel = content.querySelector('#sbNewClientType');
-    if (nameEl) {
-      nameEl.addEventListener('blur', () => {
-        const raw = String(nameEl.value || '').trim();
-        if (!raw) return;
-        const t = String(typeSel?.value || '').trim() || 'Individual';
-        const fmt = formatClientName(raw, t);
-        if (fmt) nameEl.value = fmt;
-      });
-    }
     nameEl?.addEventListener?.('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         this._handleSubmit();
       }
+    });
+    nameEl?.addEventListener?.('input', () => {
+      // Clear previous choice if user edits the name
+      this._nameChoice = null;
+    });
+    typeSel?.addEventListener?.('change', () => {
+      // Reset choice when type changes (rules differ)
+      this._nameChoice = null;
     });
   }
 
@@ -144,7 +144,8 @@ export class NewClientModal {
     this._setError('');
     const customer_type = String(this._root?.querySelector?.('#sbNewClientType')?.value || '').trim() || 'Individual';
     const rawName = String(this._root?.querySelector?.('#sbNewClientName')?.value || '').trim();
-    const customer_name = formatClientName(rawName, customer_type);
+    let customer_name = rawName;
+    const suggested = formatClientName(rawName, customer_type);
 
     const year_end = String(this._root?.querySelector?.('#sbNewClientYearEnd')?.value || '').trim();
     const abn = String(this._root?.querySelector?.('#sbNewClientAbn')?.value || '').trim();
@@ -158,6 +159,22 @@ export class NewClientModal {
       return;
     }
 
+    if (suggested && suggested !== rawName) {
+      const cached = this._nameChoice;
+      if (cached && cached.raw === rawName && cached.type === customer_type && cached.choice) {
+        customer_name = cached.choice;
+      } else {
+        // Let user pick a name and submit immediately (no extra Create click)
+        return this._chooseNameAndSubmit({
+          rawName,
+          suggested,
+          customer_type,
+          year_end,
+          abn,
+        });
+      }
+    }
+
     // Current phase: customer itself is treated as the primary entity.
     // We keep the backend interface ready for future multi-entity expansion.
     const primary_entity = {
@@ -169,6 +186,10 @@ export class NewClientModal {
 
     const btn = this._modal?._overlay?.querySelector?.('#sbNewClientCreate');
     if (btn) btn.disabled = true;
+    return this._submitClient({ customer_name, customer_type, primary_entity, btn });
+  }
+
+  async _submitClient({ customer_name, customer_type, primary_entity, btn }) {
     try {
       // If name already exists, require user confirmation before creating another.
       const existsResp = await ClientsService.checkClientNameExists(customer_name);
@@ -187,6 +208,72 @@ export class NewClientModal {
     } finally {
       if (btn) btn.disabled = false;
     }
+  }
+
+  async _chooseNameAndSubmit({ rawName, suggested, customer_type, year_end, abn }) {
+    return await new Promise((resolve) => {
+      const content = document.createElement('div');
+      content.innerHTML = `
+        <div style="font-size:14px; line-height:1.5;">
+          <div style="margin-bottom:8px;">We generated a standard name based on your input.</div>
+          <div style="margin-bottom:6px;"><strong>Suggested:</strong> ${escapeHtml(suggested)}</div>
+          <div style="margin-bottom:12px;"><strong>Your input:</strong> ${escapeHtml(rawName)}</div>
+          <div class="text-muted" style="font-size:12px;">Choose which name to use.</div>
+        </div>
+      `;
+
+      const footer = document.createElement('div');
+      footer.style.display = 'flex';
+      footer.style.justifyContent = 'flex-end';
+      footer.style.gap = '10px';
+      footer.innerHTML = `
+        <button class="btn btn-default" type="button" id="sbNameUseRaw">Use my input</button>
+        <button class="btn btn-primary" type="button" id="sbNameUseSuggested">Use suggested</button>
+      `;
+
+      const modal = new Modal({
+        title: 'Confirm Client Name',
+        contentEl: content,
+        footerEl: footer,
+        onClose: () => resolve(null),
+      });
+      modal.open();
+
+      footer.querySelector('#sbNameUseRaw')?.addEventListener('click', () => {
+        modal.close();
+        const choice = String(rawName || '').trim();
+        this._nameChoice = { raw: rawName, type: customer_type, choice };
+        this._submitClient({
+          customer_name: choice,
+          customer_type,
+          primary_entity: {
+            entity_name: choice,
+            entity_type: (customer_type === 'Company' ? 'Company' : 'Individual'),
+            year_end: year_end,
+            abn: abn || null,
+          },
+          btn: this._modal?._overlay?.querySelector?.('#sbNewClientCreate'),
+        });
+        resolve(choice);
+      });
+      footer.querySelector('#sbNameUseSuggested')?.addEventListener('click', () => {
+        modal.close();
+        const choice = String(suggested || '').trim();
+        this._nameChoice = { raw: rawName, type: customer_type, choice };
+        this._submitClient({
+          customer_name: choice,
+          customer_type,
+          primary_entity: {
+            entity_name: choice,
+            entity_type: (customer_type === 'Company' ? 'Company' : 'Individual'),
+            year_end: year_end,
+            abn: abn || null,
+          },
+          btn: this._modal?._overlay?.querySelector?.('#sbNewClientCreate'),
+        });
+        resolve(choice);
+      });
+    });
   }
 }
 

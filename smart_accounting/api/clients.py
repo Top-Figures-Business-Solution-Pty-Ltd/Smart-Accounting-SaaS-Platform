@@ -516,6 +516,7 @@ def normalize_client_names(apply: int = 0) -> dict:
 	)
 
 	changes = []
+	entity_fills = []
 	for r in rows or []:
 		docname = r.get("name")
 		cur = str(r.get("customer_name") or r.get("name") or "").strip()
@@ -525,11 +526,19 @@ def normalize_client_names(apply: int = 0) -> dict:
 		target = str(target or "").strip()
 		if target and target != cur:
 			changes.append({"name": docname, "from": cur, "to": target})
+		# Sync entity_type when primary entity exists but is empty
+		entity_fills.append(
+			{
+				"name": docname,
+				"customer_type": str(r.get("customer_type") or "").strip(),
+			}
+		)
 
 	if not apply:
 		return {
 			"total": len(rows or []),
 			"to_update": len(changes),
+			"entity_type_sync_candidates": len(entity_fills),
 			"sample": changes[:10],
 		}
 
@@ -542,10 +551,48 @@ def normalize_client_names(apply: int = 0) -> dict:
 			# Best-effort: skip failures and continue
 			pass
 
+	# Sync missing entity_type on existing primary entities (best-effort)
+	entity_synced = 0
+	entity_skipped = 0
+	for r in entity_fills:
+		docname = r.get("name")
+		customer_type = r.get("customer_type")
+		if not docname or not customer_type:
+			entity_skipped += 1
+			continue
+		try:
+			doc = frappe.get_doc("Customer", docname)
+		except Exception:
+			entity_skipped += 1
+			continue
+		if not doc.meta.get_field("custom_entities"):
+			entity_skipped += 1
+			continue
+		primary = None
+		for row in (doc.get("custom_entities") or []):
+			if int(row.get("is_primary") or 0):
+				primary = row
+				break
+		if not primary:
+			entity_skipped += 1
+			continue
+		cur_type = str(primary.get("entity_type") or "").strip()
+		if cur_type:
+			entity_skipped += 1
+			continue
+		try:
+			primary.entity_type = customer_type
+			doc.save()
+			entity_synced += 1
+		except Exception:
+			entity_skipped += 1
+
 	return {
 		"total": len(rows or []),
 		"updated": updated,
 		"skipped": max(0, len(changes) - updated),
+		"entity_type_synced": entity_synced,
+		"entity_type_skipped": entity_skipped,
 		"sample": changes[:10],
 	}
 

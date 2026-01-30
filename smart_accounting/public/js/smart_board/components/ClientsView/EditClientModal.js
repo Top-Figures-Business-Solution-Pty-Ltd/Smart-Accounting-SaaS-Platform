@@ -86,15 +86,6 @@ export class EditClientModal {
         this._handleSubmit();
       }
     });
-    if (nameEl) {
-      nameEl.addEventListener('blur', () => {
-        const raw = String(nameEl.value || '').trim();
-        if (!raw) return;
-        const t = String(typeSel?.value || '').trim();
-        const fmt = formatClientName(raw, t || 'Company');
-        if (fmt) nameEl.value = fmt;
-      });
-    }
   }
 
   close() {
@@ -155,6 +146,20 @@ export class EditClientModal {
       return;
     }
 
+    const suggested = formatClientName(customer_name, entity_type || 'Company');
+    if (suggested && suggested !== customer_name) {
+      return this._chooseNameAndSubmit({
+        rawName: customer_name,
+        suggested,
+        entity_type,
+        year_end,
+      });
+    }
+
+    return this._submitUpdate({ customer_name, entity_type, year_end });
+  }
+
+  async _submitUpdate({ customer_name, entity_type, year_end }) {
     const btn = this._modal?._overlay?.querySelector?.('#sbEditClientSave');
     if (btn) btn.disabled = true;
     try {
@@ -165,6 +170,48 @@ export class EditClientModal {
     } finally {
       if (btn) btn.disabled = false;
     }
+  }
+
+  async _chooseNameAndSubmit({ rawName, suggested, entity_type, year_end }) {
+    return await new Promise((resolve) => {
+      const content = document.createElement('div');
+      content.innerHTML = `
+        <div style="font-size:14px; line-height:1.5;">
+          <div style="margin-bottom:8px;">We generated a standard name based on your input.</div>
+          <div style="margin-bottom:6px;"><strong>Suggested:</strong> ${escapeHtml(suggested)}</div>
+          <div style="margin-bottom:12px;"><strong>Your input:</strong> ${escapeHtml(rawName)}</div>
+          <div class="text-muted" style="font-size:12px;">Choose which name to use.</div>
+        </div>
+      `;
+
+      const footer = document.createElement('div');
+      footer.style.display = 'flex';
+      footer.style.justifyContent = 'flex-end';
+      footer.style.gap = '10px';
+      footer.innerHTML = `
+        <button class="btn btn-default" type="button" id="sbEditNameUseRaw">Use my input</button>
+        <button class="btn btn-primary" type="button" id="sbEditNameUseSuggested">Use suggested</button>
+      `;
+
+      const modal = new Modal({
+        title: 'Confirm Client Name',
+        contentEl: content,
+        footerEl: footer,
+        onClose: () => resolve(null),
+      });
+      modal.open();
+
+      footer.querySelector('#sbEditNameUseRaw')?.addEventListener('click', () => {
+        modal.close();
+        this._submitUpdate({ customer_name: rawName, entity_type, year_end });
+        resolve(rawName);
+      });
+      footer.querySelector('#sbEditNameUseSuggested')?.addEventListener('click', () => {
+        modal.close();
+        this._submitUpdate({ customer_name: suggested, entity_type, year_end });
+        resolve(suggested);
+      });
+    });
   }
 }
 
