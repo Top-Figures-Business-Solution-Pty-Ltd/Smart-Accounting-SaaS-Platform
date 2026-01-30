@@ -7,6 +7,8 @@ import { notify } from '../../services/uiAdapter.js';
 import { getDefaultClientColumns, loadClientColumns } from '../../utils/clientsColumns.js';
 import { openClientsColumnsManager } from '../../controllers/clientsColumnsController.js';
 import { openEditClientFlow } from '../../controllers/editClientController.js';
+import { ClientDeleteService } from '../../services/clientDeleteService.js';
+import { confirmDialog } from '../../services/uiAdapter.js';
 
 export class ClientsApp {
   constructor(container, { store, onOpenProjects } = {}) {
@@ -32,6 +34,9 @@ export class ClientsApp {
       },
       onEdit: (client) => {
         openEditClientFlow({ app: this, client });
+      },
+      onDelete: (client) => {
+        this.deleteClient(client);
       },
     });
 
@@ -78,6 +83,24 @@ export class ClientsApp {
     // Ensure paging size is consistent even if older state didn't persist `limit`.
     const effective = { ...(last || {}), limit: Number(last?.limit || this._pageSize) };
     await this.store?.dispatch?.('clients/fetchMoreClients', effective);
+  }
+
+  async deleteClient(client) {
+    const name = client?.name || '';
+    const label = client?.customer_name || name;
+    const ok = await confirmDialog(`Delete client "${label}"? This cannot be undone.`);
+    if (!ok) return;
+    try {
+      const r = await ClientDeleteService.deleteClient(name);
+      if (r?.blocked) {
+        notify(r?.message || 'Client has linked projects. Delete them first.', 'orange');
+        return;
+      }
+      this.store?.commit?.('clients/removeClient', { name });
+      notify('Client deleted', 'green');
+    } catch (e) {
+      notify(e?.message || 'Delete client failed', 'red');
+    }
   }
 
   destroy() {

@@ -71,6 +71,12 @@ export const ClientsModule = {
       const current = state.items[idx] || {};
       state.items[idx] = { ...current, ...(data || {}) };
     },
+    removeClient(state, { name } = {}) {
+      const key = String(name || '');
+      if (!key || !Array.isArray(state.items)) return;
+      state.items = state.items.filter((c) => String(c?.name) !== key);
+      state.offset = (state.items || []).length;
+    },
   },
 
   actions: {

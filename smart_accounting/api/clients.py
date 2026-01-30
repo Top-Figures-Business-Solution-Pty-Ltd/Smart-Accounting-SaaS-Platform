@@ -583,3 +583,34 @@ def check_client_name_exists(name: str | None = None) -> dict:
 	return {"exists": bool(items), "items": items}
 
 
+@frappe.whitelist()
+def delete_client(name: str | None = None) -> dict:
+	"""
+	Delete a Client (Customer) if no Projects reference it.
+	Returns {deleted: bool, blocked: bool, project_count: int, message: str}
+	"""
+	_ensure_logged_in()
+	docname = str(name or "").strip()
+	if not docname:
+		frappe.throw("name is required")
+	if not frappe.has_permission("Customer", "delete", docname):
+		frappe.throw("Not permitted", frappe.PermissionError)
+
+	# Check project references
+	count = 0
+	try:
+		count = frappe.db.count("Project", filters={"customer": docname})
+	except Exception:
+		count = 0
+	if count and int(count) > 0:
+		return {
+			"deleted": False,
+			"blocked": True,
+			"project_count": int(count),
+			"message": f"Client has {int(count)} linked project(s). Delete projects first.",
+		}
+
+	frappe.delete_doc("Customer", docname, ignore_permissions=False)
+	return {"deleted": True, "blocked": False, "project_count": 0, "message": "Client deleted"}
+
+

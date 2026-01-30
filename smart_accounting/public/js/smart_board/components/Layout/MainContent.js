@@ -7,6 +7,7 @@ import { BoardTable } from '../BoardView/BoardTable.js';
 import { isPlaceholderView, renderPlaceholderHTML } from './placeholderPages.js';
 import { ClientsApp } from '../ClientsView/ClientsApp.js';
 import { ClientProjectsApp } from '../ClientsView/ClientProjectsApp.js';
+import { ActivityLogApp } from '../ActivityLogView/ActivityLogApp.js';
 import { SettingsApp } from '../SettingsView/SettingsApp.js';
 
 export class MainContent {
@@ -20,6 +21,7 @@ export class MainContent {
         this._unsub = null;
         this._clientsApp = null;
         this._clientProjectsApp = null;
+        this._activityLogApp = null;
         this._settingsApp = null;
         
         this.render();
@@ -112,7 +114,7 @@ export class MainContent {
         this.currentView = view;
 
         // Non-board views should not show the projects table
-        if (view === 'clients' || view === 'client-projects' || view === 'settings' || isPlaceholderView(view)) {
+        if (view === 'clients' || view === 'client-projects' || view === 'activity' || view === 'settings' || isPlaceholderView(view)) {
             this.showPlaceholder(view);
             return;
         }
@@ -224,6 +226,16 @@ export class MainContent {
                 }
             });
             this._clientProjectsApp.init();
+        } else if (view === 'activity') {
+            placeholder.innerHTML = `<div id="sbActivityLogMount"></div>`;
+            const mount = placeholder.querySelector('#sbActivityLogMount');
+            try { this._clientsApp?.destroy?.(); } catch (e) {}
+            this._clientsApp = null;
+            try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
+            this._clientProjectsApp = null;
+            try { this._activityLogApp?.destroy?.(); } catch (e) {}
+            this._activityLogApp = new ActivityLogApp(mount, { app: this.options?.app });
+            this._activityLogApp.init();
         } else if (view === 'settings') {
             placeholder.innerHTML = `<div id="sbSettingsMount"></div>`;
             const mount = placeholder.querySelector('#sbSettingsMount');
@@ -231,6 +243,8 @@ export class MainContent {
             this._clientsApp = null;
             try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
             this._clientProjectsApp = null;
+            try { this._activityLogApp?.destroy?.(); } catch (e) {}
+            this._activityLogApp = null;
             try { this._settingsApp?.destroy?.(); } catch (e) {}
             const initialTab = this.options?.app?._settingsTab || null;
             this._settingsApp = new SettingsApp(mount, { initialTab });
@@ -241,6 +255,8 @@ export class MainContent {
             this._clientsApp = null;
             try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
             this._clientProjectsApp = null;
+            try { this._activityLogApp?.destroy?.(); } catch (e) {}
+            this._activityLogApp = null;
             try { this._settingsApp?.destroy?.(); } catch (e) {}
             this._settingsApp = null;
             placeholder.innerHTML = renderPlaceholderHTML(view, this.store);
@@ -269,6 +285,8 @@ export class MainContent {
         this._clientsApp = null;
         try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
         this._clientProjectsApp = null;
+        try { this._activityLogApp?.destroy?.(); } catch (e) {}
+        this._activityLogApp = null;
         try { this._settingsApp?.destroy?.(); } catch (e) {}
         this._settingsApp = null;
         try { this._unsub?.(); } catch (e) {}

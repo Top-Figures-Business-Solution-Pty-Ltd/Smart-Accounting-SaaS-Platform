@@ -165,8 +165,8 @@ export class SmartBoardApp {
             await this.store.dispatch('clients/fetchClients', { search: '', limit: 200 });
             return;
         }
-        // Settings is a product view (no board data needed)
-        if (viewType === 'settings') {
+        // Settings / Activity are product views (no board data needed)
+        if (viewType === 'settings' || viewType === 'activity') {
             return;
         }
         // Client Projects: a cross-project-type view, still backed by Projects module

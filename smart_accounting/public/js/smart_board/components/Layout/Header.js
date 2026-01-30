@@ -68,6 +68,7 @@ export class Header {
             'Audit': 'Audit',
             'Financial Statements': 'Financial Statements',
             'clients': 'Clients',
+            'activity': 'Activity Log',
             'settings': 'Settings',
             'client-projects': 'Client Projects',
         };

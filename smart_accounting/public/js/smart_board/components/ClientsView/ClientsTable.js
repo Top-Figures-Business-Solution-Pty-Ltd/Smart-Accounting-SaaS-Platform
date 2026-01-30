@@ -5,12 +5,13 @@
 import { escapeHtml } from '../../utils/dom.js';
 
 export class ClientsTable {
-  constructor(container, { onLoadMore, onRowClick, onOpenProjects, onEdit } = {}) {
+  constructor(container, { onLoadMore, onRowClick, onOpenProjects, onEdit, onDelete } = {}) {
     this.container = container;
     this.onLoadMore = typeof onLoadMore === 'function' ? onLoadMore : (() => {});
     this.onRowClick = typeof onRowClick === 'function' ? onRowClick : (() => {});
     this.onOpenProjects = typeof onOpenProjects === 'function' ? onOpenProjects : (() => {});
     this.onEdit = typeof onEdit === 'function' ? onEdit : (() => {});
+    this.onDelete = typeof onDelete === 'function' ? onDelete : (() => {});
     this._state = { items: [], loading: false, loadingMore: false, hasMore: true, error: null, columns: [] };
     this._io = null;
     this._lastAutoLoadAt = 0;
@@ -80,6 +81,7 @@ export class ClientsTable {
       const actions = `
         <td class="sb-clients__actions">
           <button type="button" class="btn btn-default sb-client-edit-btn" data-client="${name}">Edit</button>
+          <button type="button" class="btn btn-default sb-client-delete-btn" data-client="${name}">Delete</button>
         </td>
       `;
       return `<tr class="sb-clients__row" data-name="${name}">${tds}${actions}</tr>`;
@@ -129,6 +131,15 @@ export class ClientsTable {
         const name = editBtn.getAttribute('data-client') || '';
         const client = items.find((x) => String(x?.name) === String(name)) || null;
         if (client) this.onEdit(client);
+        return;
+      }
+      const delBtn = e.target?.closest?.('.sb-client-delete-btn');
+      if (delBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const name = delBtn.getAttribute('data-client') || '';
+        const client = items.find((x) => String(x?.name) === String(name)) || null;
+        if (client) this.onDelete(client);
         return;
       }
       const btn = e.target?.closest?.('.sb-client-open-projects');

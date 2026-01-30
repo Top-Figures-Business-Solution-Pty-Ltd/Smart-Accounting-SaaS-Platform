@@ -5,7 +5,7 @@
 
 // Product shell views (non-board).
 // NOTE: Some product views are rendered as real apps (e.g. Clients), not placeholders.
-export const PRODUCT_VIEWS = ['dashboard', 'clients', 'client-projects', 'settings'];
+export const PRODUCT_VIEWS = ['dashboard', 'clients', 'client-projects', 'activity', 'settings'];
 
 export function isProductView(view) {
     return PRODUCT_VIEWS.includes(view);
