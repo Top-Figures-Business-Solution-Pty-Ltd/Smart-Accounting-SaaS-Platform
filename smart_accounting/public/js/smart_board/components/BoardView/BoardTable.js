@@ -429,6 +429,14 @@ export class BoardTable {
         const headers = this.container.querySelectorAll('th[data-field]');
         headers.forEach(header => {
             header.addEventListener('click', (e) => {
+                // Status settings (gear) should not trigger sort
+                const gear = e.target?.closest?.('.sb-status-settings-btn');
+                if (gear) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.openStatusSettings?.();
+                    return;
+                }
                 if (!e.target.closest('.resize-handle')) {
                     this.handleSort(header.dataset.field);
                 }
@@ -576,6 +584,20 @@ export class BoardTable {
         this._updateBottomScrollbarVisibility();
         this._bindTrackpadHorizontalScroll();
         this._positionBottomScrollbar();
+    }
+
+    async openStatusSettings() {
+        try {
+            const { openBoardStatusSettings } = await import('../../controllers/boardStatusController.js');
+            await openBoardStatusSettings({
+                projectType: this.viewType,
+                onSaved: () => {
+                    // No need to re-fetch projects; only editor options change.
+                }
+            });
+        } catch (e) {
+            notify(`Open status settings failed: ${e?.message || String(e)}`, 'red');
+        }
     }
 
     bindHorizontalScrollSync() {

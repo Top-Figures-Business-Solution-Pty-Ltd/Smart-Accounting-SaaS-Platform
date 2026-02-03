@@ -3,11 +3,11 @@
  * 顶部工具栏组件
  */
 
-import { STATUS_OPTIONS } from '../../utils/constants.js';
 import { renderHeaderActions, bindHeaderActions } from './headerToolbars.js';
 import { isProductView } from '../../utils/viewTypes.js';
 import { AdvancedFilterModal } from '../BoardView/AdvancedFilterModal.js';
 import { buildAdvancedFilterColumns } from '../../utils/filterColumns.js';
+import { BoardStatusService } from '../../services/boardStatusService.js';
 
 export class Header {
     constructor(container, options = {}) {
@@ -84,7 +84,10 @@ export class Header {
     async showFilterDialog() {
         // Website-safe modal (Monday-like)
         const initial = this.options?.store?.getState?.()?.filters || {};
-        const statusOptions = STATUS_OPTIONS[this.currentView] || STATUS_OPTIONS['DEFAULT'] || [];
+        const statusOptions = await BoardStatusService.getEffectiveOptions({
+            projectType: this.currentView,
+            currentValue: '',
+        });
         const columns = await buildAdvancedFilterColumns({
             viewType: this.currentView,
             statusOptions,
@@ -109,9 +112,8 @@ export class Header {
     }
     
     getStatusOptions() {
-        // 从constants获取当前视图的status选项
-        const options = STATUS_OPTIONS[this.currentView] || STATUS_OPTIONS['DEFAULT'];
-        return options.join('\n');
+        // Deprecated: status options are now sourced from backend meta + board status config.
+        return '';
     }
     
     updateView(view) {

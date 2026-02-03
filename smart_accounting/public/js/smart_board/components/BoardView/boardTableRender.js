@@ -22,6 +22,7 @@ export function renderHeaderCells(columns) {
            </div>`
         : `<div class="cell-content">
             <span class="cell-label">${col.label}</span>
+            ${col.field === 'status' ? '<button type="button" class="sb-status-settings-btn" title="Status settings" aria-label="Status settings">⚙️</button>' : ''}
             ${col.sortable !== false ? '<span class="sort-icon"></span>' : ''}
           </div>
           <div class="resize-handle"></div>`

@@ -551,6 +551,23 @@
     opacity: 0.5;
 }
 
+.sb-status-settings-btn {
+    margin-left: 8px;
+    border: 0;
+    background: transparent;
+    color: var(--smart-board-text-muted);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 8px;
+    line-height: 1;
+    font-size: 14px;
+}
+
+.sb-status-settings-btn:hover {
+    background: rgba(15, 23, 42, 0.06);
+    color: var(--smart-board-primary);
+}
+
 .board-table > thead > tr > th:hover .sort-icon {
     opacity: 1;
 }

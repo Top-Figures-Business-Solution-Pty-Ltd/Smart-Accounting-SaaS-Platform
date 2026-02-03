@@ -9,6 +9,7 @@ import { LinkInput } from '../../components/Common/LinkInput.js';
 import { MultiLinkPicker } from '../../components/Common/MultiLinkPicker.js';
 import { uploadAttachmentToField } from '../../services/fileUploadService.js';
 import { DoctypeMetaService } from '../../services/doctypeMetaService.js';
+import { BoardStatusService } from '../../services/boardStatusService.js';
 import { confirmDialog } from '../../services/uiAdapter.js';
 import { escapeHtml } from '../../utils/dom.js';
 
@@ -38,11 +39,15 @@ function priorityOptions() {
 }
 
 async function statusOptionsForProject(project) {
-  // Source of truth: Project.status options from DocType meta (Customize Form / Property Setter)
-  const base = await DoctypeMetaService.getSelectOptions('Project', 'status');
-  const cur = (project?.status || '').trim();
-  if (cur && Array.isArray(base) && !base.includes(cur)) return [cur].concat(base);
-  return Array.isArray(base) ? base : (cur ? [cur] : []);
+  const pt = String(project?.project_type || '').trim();
+  const cur = String(project?.status || '').trim();
+  // Source of truth:
+  // - Pool comes from Project.status meta (Property Setter)
+  // - Board can further restrict to a subset by Project Type
+  const opts = await BoardStatusService.getEffectiveOptions({ projectType: pt, currentValue: cur });
+  // Ensure current value is always present (even if not in allowed subset)
+  if (cur && Array.isArray(opts) && !opts.includes(cur)) return [cur].concat(opts);
+  return Array.isArray(opts) ? opts : (cur ? [cur] : []);
 }
 
 function statusMenuEditor({ cellEl, project, manager, field }) {
