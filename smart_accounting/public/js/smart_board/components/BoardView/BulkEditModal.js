@@ -11,12 +11,14 @@ import { escapeHtml } from '../../utils/dom.js';
 import { Modal } from '../Common/Modal.js';
 import { LinkInput } from '../Common/LinkInput.js';
 import { DoctypeMetaService } from '../../services/doctypeMetaService.js';
+import { BoardStatusService } from '../../services/boardStatusService.js';
 
 export class BulkEditModal {
-  constructor({ title = 'Bulk Edit', count = 0, initialField = 'status', onApply, onClose } = {}) {
+  constructor({ title = 'Bulk Edit', count = 0, initialField = 'status', projectType = null, onApply, onClose } = {}) {
     this.title = title;
     this.count = Number(count) || 0;
     this.initialField = initialField || 'status';
+    this.projectType = String(projectType || '').trim() || null;
     this.onApply = onApply || (() => {});
     this.onClose = onClose || (() => {});
 
@@ -113,11 +115,21 @@ export class BulkEditModal {
       return;
     }
 
-    // status (default): load from doctype meta
+    // status (default): source of truth
+    // - Pool comes from Project.status meta (Property Setter)
+    // - Board can further restrict to a subset by Project Type (if provided)
     if (!Array.isArray(this._statusOptions)) {
       try {
-        const opts = await DoctypeMetaService.getSelectOptions('Project', 'status');
-        this._statusOptions = Array.isArray(opts) ? opts : [];
+        if (this.projectType) {
+          const opts = await BoardStatusService.getEffectiveOptions({
+            projectType: this.projectType,
+            currentValue: '',
+          });
+          this._statusOptions = Array.isArray(opts) ? opts : [];
+        } else {
+          const opts = await DoctypeMetaService.getSelectOptions('Project', 'status');
+          this._statusOptions = Array.isArray(opts) ? opts : [];
+        }
       } catch (e) {
         this._statusOptions = [];
       }

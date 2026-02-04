@@ -19,7 +19,10 @@ export const PROJECT_TYPE_ICONS = {
 
 export const DEFAULT_PROJECT_TYPE_ICON = '📋';
 
-// Status 配置（这些可以从后端动态获取）
+// Status 配置（DEPRECATED）
+// - Status 选项（可选值）应以“单一真相”为准：来自后端 DocType meta（Project.status options，包含 Property Setter）。
+// - Smart Board 还支持按 Project Type（Board）配置“允许的子集”，见 Board Status Settings。
+// - 该常量仅保留作历史参考/兼容文档，不应在运行时使用。
 export const STATUS_OPTIONS = {
     'ITR': [
         'Not Started',

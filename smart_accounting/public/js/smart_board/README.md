@@ -136,10 +136,15 @@ app_include_css = [
 ```
 
 ### 常量配置 (constants.js)
-- **PROJECT_TYPES**: 业务类型列表
-- **STATUS_OPTIONS**: 各业务类型的状态选项
+- **PROJECT_TYPE_ICONS**: Project Type 的 icon 映射（仅展示层）
+- **STATUS_COLORS**: Status → 颜色映射（仅展示层；未知 status 走默认灰色）
+- **STATUS_OPTIONS（DEPRECATED）**: 历史遗留的“按业务类型写死状态列表”，运行时不再使用
 - **DEFAULT_COLUMNS**: 各业务类型的默认列配置
-- **API_ENDPOINTS**: API端点配置
+
+> ✅ **Status 选项的单一真相（Source of Truth）**  
+> Smart Board 的 Status 可选值来自后端 **DocType meta**（`Project.status` 的 options，包含 Property Setter / Customize Form），并支持按 Board（Project Type）配置允许的子集：  
+> - 前端：`services/boardStatusService.js`  
+> - 后端：`smart_accounting/api/board_settings.py` (`get_project_type_status_config`)
 
 ## 🚀 下一步开发
 
