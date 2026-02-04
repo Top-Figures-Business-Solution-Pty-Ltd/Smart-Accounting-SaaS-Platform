@@ -1,0 +1,520 @@
+/**
+ * ProjectQueryService
+ * - Read/query paths for Projects/Tasks used by Smart Board.
+ * - Keeps caching + dedupe local (does not depend on UI/components).
+ */
+
+import { ApiService } from './api.js';
+import { Perf } from '../utils/perf.js';
+
+export class ProjectQueryService {
+  static _warnedMissingFields = false;
+  static _extraFields = null;
+  static _inflightList = new Map(); // key -> Promise(result)
+
+  static _stableKey(obj) {
+    // Create a stable-ish string key (sort object keys, normalize arrays)
+    const normalize = (v) => {
+      if (Array.isArray(v)) return v.map(normalize);
+      if (v && typeof v === 'object') {
+        const out = {};
+        for (const k of Object.keys(v).sort()) out[k] = normalize(v[k]);
+        return out;
+      }
+      return v;
+    };
+    try {
+      return JSON.stringify(normalize(obj));
+    } catch (e) {
+      return String(Date.now());
+    }
+  }
+
+  /**
+   * 获取Projects列表
+   */
+  static async fetchProjects(filters = {}) {
+    const fullFields = [
+      'name',
+      'project_name',
+      'customer',
+      'company',
+      'project_type',
+      'status',
+      'priority',
+      'expected_start_date',
+      'expected_end_date',
+      'estimated_costing',
+      'notes',
+      'is_active',
+      'modified',
+      'auto_repeat',
+      'custom_entity_type',
+      'custom_team_members',
+      'custom_fiscal_year',
+      'custom_target_month',
+      'custom_lodgement_due_date',
+      'custom_project_frequency',
+      'custom_softwares',
+    ];
+
+    const minimalFields = [
+      'name',
+      'project_name',
+      'customer',
+      'company',
+      'project_type',
+      'status',
+      'expected_start_date',
+      'expected_end_date',
+      'notes',
+      'is_active',
+    ];
+
+    // PERF:
+    // If caller provides an explicit fields list (derived from visible columns),
+    // we should respect it and avoid inflating payloads.
+    const explicitFields = Array.isArray(filters?.fields) ? filters.fields.filter(Boolean) : [];
+    const hasExplicit = explicitFields.length > 0;
+
+    // Include optional extra fields (website-safe, best-effort) only for the legacy "full fields" path.
+    if (!hasExplicit) {
+      const extra = await this._getExtraFields();
+      if (Array.isArray(extra) && extra.length) {
+        for (const f of extra) {
+          if (f && !fullFields.includes(f)) fullFields.push(f);
+        }
+      }
+    }
+
+    const fetchWithFields = async (fields) => {
+      // Advanced groups (supports nested AND/OR across groups).
+      const hasGroups = Array.isArray(filters?.advanced_groups) && filters.advanced_groups.length > 0;
+      let nameIn = null;
+      if (hasGroups) {
+        try {
+          const r = await frappe.call({
+            method: 'smart_accounting.api.project_board.query_project_names_advanced',
+            args: {
+              project_type: filters.project_type || null,
+              groups: filters.advanced_groups,
+              limit: filters.limit || 2000,
+              // Smart Board default: active-only (Archive => is_active="No" should disappear).
+              is_active_only: filters.is_active === true ? 1 : 0,
+              search: filters.search || null,
+            },
+          });
+          const msg = r?.message || {};
+          const noRestriction = !!msg?.no_restriction;
+          const names = msg?.names ?? msg;
+
+          if (noRestriction) {
+            nameIn = null;
+          } else if (Array.isArray(names) && names.length) {
+            nameIn = names;
+          } else {
+            return [];
+          }
+        } catch (e) {
+          // fall back to old path
+        }
+      }
+
+      const or_filters = this.buildOrFilters(filters);
+      const limitStart = Number.isFinite(Number(filters?.limit_start)) ? Number(filters.limit_start) : 0;
+      const limit = Number.isFinite(Number(filters?.limit)) ? Number(filters.limit) : 100;
+      const args = {
+        doctype: 'Project',
+        fields,
+        filters: this.buildFilters({ ...filters, ...(nameIn ? { name_in: nameIn } : {}) }),
+        ...(or_filters && or_filters.length ? { or_filters } : {}),
+        order_by: 'modified desc',
+        limit_start: Math.max(0, limitStart),
+        limit_page_length: Math.max(1, limit),
+      };
+
+      // Total count for UI ("Loaded X / total") and correctness checks.
+      // Only needed on the first page; load-more can reuse the stored total.
+      const shouldCount = Number(args?.limit_start || 0) === 0;
+      const countArgs = shouldCount
+        ? {
+            ...args,
+            fields: ['count(name) as cnt'],
+            limit_start: 0,
+            limit_page_length: 1,
+          }
+        : null;
+
+      // In-flight de-dupe: same query fired repeatedly (e.g. rapid view/filter changes)
+      // should share a single request to reduce server load and client work.
+      const key = this._stableKey({
+        doctype: 'Project',
+        // field order doesn't matter for response shape in our usage; sort for stable key
+        fields: Array.isArray(fields) ? fields.map(String).sort() : fields,
+        filters: args.filters,
+        or_filters: args.or_filters || [],
+        order_by: args.order_by,
+        limit_start: args.limit_start,
+        limit_page_length: args.limit_page_length,
+      });
+
+      if (this._inflightList.has(key)) return await this._inflightList.get(key);
+
+      const p = (async () => {
+        return await Perf.timeAsync(
+          'projects.get_list',
+          async () => {
+            const listPromise = frappe.call({
+              method: 'frappe.client.get_list',
+              type: 'POST',
+              args,
+            });
+            const countPromise = countArgs
+              ? frappe
+                  .call({
+                    method: 'frappe.client.get_list',
+                    type: 'POST',
+                    args: countArgs,
+                  })
+                  .catch(() => null)
+              : Promise.resolve(null);
+
+            const response = await listPromise;
+            const rows = response?.message || [];
+
+            let total_count = null;
+            try {
+              const cr = await countPromise;
+              const cnt = cr?.message?.[0]?.cnt;
+              const n = cnt == null ? null : Number(cnt);
+              total_count = n == null || !Number.isFinite(n) ? null : n;
+            } catch (e) {
+              total_count = null;
+            }
+
+            // Hydrate child tables (get_list doesn't include Table/child rows).
+            // Only do it if the current visible columns actually need them.
+            const needsTeam = Array.isArray(fields) && fields.includes('custom_team_members');
+            const needsSoft = Array.isArray(fields) && fields.includes('custom_softwares');
+            if (needsTeam || needsSoft) {
+              try {
+                await this._hydrateChildTables(rows);
+              } catch (e) {}
+            }
+            return { items: rows, meta: { total_count } };
+          },
+          () => ({
+            project_type: String(filters?.project_type || ''),
+            limit_start: Number(args?.limit_start || 0),
+            limit: Number(args?.limit_page_length || 0),
+            fields_count: Array.isArray(fields) ? fields.length : null,
+          })
+        );
+      })();
+
+      this._inflightList.set(key, p);
+      try {
+        return await p;
+      } finally {
+        // Only delete if it still points to the same promise (avoid races)
+        if (this._inflightList.get(key) === p) this._inflightList.delete(key);
+      }
+    };
+
+    try {
+      // If caller gave explicit fields (usually derived from visible columns), use them.
+      if (hasExplicit) return await fetchWithFields(explicitFields);
+      return await fetchWithFields(fullFields);
+    } catch (error) {
+      console.error('Failed to fetch projects (full fields):', error);
+
+      // If custom fields are missing on site meta, fallback so UI still works.
+      try {
+        if (!this._warnedMissingFields) {
+          this._warnedMissingFields = true;
+          frappe.show_alert?.({
+            message: __('Some Project custom fields are missing on this site. Falling back to a minimal field set.'),
+            indicator: 'orange',
+          });
+        }
+        return await fetchWithFields(minimalFields);
+      } catch (error2) {
+        console.error('Failed to fetch projects (minimal fields):', error2);
+        frappe.show_alert?.({
+          message: __('Failed to load projects'),
+          indicator: 'red',
+        });
+        return { items: [], meta: { total_count: null } };
+      }
+    }
+  }
+
+  static async _hydrateChildTables(projects) {
+    const list = Array.isArray(projects) ? projects : [];
+    const names = list.map((p) => p?.name).filter(Boolean);
+    if (!names.length) return;
+
+    // Use website-safe backend API to avoid PermissionError on child tables
+    try {
+      const r = await frappe.call({
+        method: 'smart_accounting.api.project_board.hydrate_project_children',
+        args: { projects: names },
+      });
+      const msg = r?.message || {};
+      const team = msg?.team || {};
+      const softwares = msg?.softwares || {};
+      for (const p of list) {
+        if (!p?.name) continue;
+        p.custom_team_members = team[p.name] || [];
+        p.custom_softwares = softwares[p.name] || [];
+      }
+    } catch (e) {
+      // Fail-safe: keep UI functional even if child hydration is unavailable
+    }
+  }
+
+  static async _getExtraFields() {
+    // Cache per page load
+    if (Array.isArray(this._extraFields)) return this._extraFields;
+    this._extraFields = [];
+
+    // Engagement Letter attach field (if present on site meta)
+    try {
+      const r = await frappe.call({
+        method: 'frappe.desk.form.load.getdoctype',
+        type: 'GET',
+        args: { doctype: 'Project' },
+      });
+      const docs = r?.docs || [];
+      const meta = docs.find((d) => d?.name === 'Project') || docs[0];
+      const fields = meta?.fields || [];
+      const f = fields.find(
+        (x) =>
+          (x?.fieldtype === 'Attach' || x?.fieldtype === 'Attach Image') &&
+          String(x?.label || '').trim() === 'Engagement Letter'
+      );
+      if (f?.fieldname) this._extraFields.push(String(f.fieldname));
+    } catch (e) {}
+
+    return this._extraFields;
+  }
+
+  /**
+   * 获取单个Project详情
+   */
+  static async getProject(name) {
+    return ApiService.getDoc('Project', name);
+  }
+
+  static async getTaskCounts(projects) {
+    const names = Array.isArray(projects) ? projects : [];
+    if (!names.length) return {};
+    try {
+      const r = await frappe.call({
+        method: 'smart_accounting.api.project_board.get_task_counts',
+        args: { projects: names },
+      });
+      return r?.message?.counts || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  static async getTasksForProjects(projects, fields = [], limitPerProject = 200) {
+    const names = Array.isArray(projects) ? projects : [];
+    if (!names.length) return {};
+    try {
+      const r = await frappe.call({
+        method: 'smart_accounting.api.project_board.get_tasks_for_projects',
+        args: { projects: names, fields, limit_per_project: limitPerProject },
+      });
+      return r?.message?.tasks || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  static async getBoardFiscalStartMonth(projects) {
+    const names = Array.isArray(projects) ? projects : [];
+    if (!names.length) return { start_month: null, counts: {}, by_project: {} };
+    try {
+      const r = await frappe.call({
+        method: 'smart_accounting.api.project_board.get_board_fiscal_start_month',
+        args: { projects: names },
+      });
+      return r?.message || { start_month: null, counts: {}, by_project: {} };
+    } catch (e) {
+      return { start_month: null, counts: {}, by_project: {} };
+    }
+  }
+
+  static async getMyProjectsWithRoles() {
+    const r = await frappe.call({
+      method: 'smart_accounting.api.project_board.get_my_projects_with_roles',
+      args: {},
+    });
+    return r?.message?.projects || [];
+  }
+
+  /**
+   * 构建筛选条件
+   */
+  static buildFilters(filters) {
+    const result = [];
+
+    // project_type筛选
+    if (filters.project_type) {
+      result.push(['project_type', '=', filters.project_type]);
+    }
+
+    // status筛选（支持多选）
+    if (filters.status) {
+      if (Array.isArray(filters.status)) {
+        // IMPORTANT: empty array should mean "no status filter"
+        if (filters.status.length) result.push(['status', 'in', filters.status]);
+      } else if (String(filters.status).trim()) {
+        result.push(['status', '=', filters.status]);
+      }
+    }
+
+    // company筛选
+    if (filters.company && String(filters.company).trim()) {
+      result.push(['company', '=', filters.company]);
+    }
+
+    // customer筛选
+    if (filters.customer && String(filters.customer).trim()) {
+      result.push(['customer', '=', filters.customer]);
+    }
+
+    // fiscal_year筛选
+    if (filters.fiscal_year && String(filters.fiscal_year).trim()) {
+      result.push(['custom_fiscal_year', '=', filters.fiscal_year]);
+    }
+
+    // 日期范围筛选
+    if (filters.date_from && String(filters.date_from).trim()) {
+      result.push(['custom_lodgement_due_date', '>=', filters.date_from]);
+    }
+    if (filters.date_to && String(filters.date_to).trim()) {
+      result.push(['custom_lodgement_due_date', '<=', filters.date_to]);
+    }
+
+    // 搜索关键词
+    if (filters.search) {
+      result.push(['project_name', 'like', `%${filters.search}%`]);
+    }
+
+    // 只显示活跃的项目（Smart Board 默认只展示 Active）
+    if (filters.is_active === true) {
+      result.push(['is_active', '=', 'Yes']);
+    }
+
+    // name IN (from advanced groups resolution)
+    if (Array.isArray(filters.name_in) && filters.name_in.length) {
+      result.push(['name', 'in', filters.name_in]);
+    }
+
+    // Advanced rules (AND rules)
+    const rules = Array.isArray(filters?.advanced_rules) ? filters.advanced_rules : [];
+    for (const r of rules) {
+      const join = (r?.join || '').toLowerCase();
+      if (join === 'or') continue; // OR rules handled by buildOrFilters
+      const triple = this._ruleToFilterTriple(r);
+      if (triple) result.push(triple);
+    }
+
+    return result;
+  }
+
+  /**
+   * Build OR filters from advanced_rules.
+   * Semantics in frappe.get_list:
+   * - filters are ANDed
+   * - or_filters are ORed (then ANDed with filters)
+   */
+  static buildOrFilters(filters) {
+    const out = [];
+    const rules = Array.isArray(filters?.advanced_rules) ? filters.advanced_rules : [];
+    for (const r of rules) {
+      const join = (r?.join || '').toLowerCase();
+      if (join !== 'or') continue;
+      const triple = this._ruleToFilterTriple(r);
+      if (triple) out.push(triple);
+    }
+    return out;
+  }
+
+  static _ruleToFilterTriple(rule) {
+    const field = (rule?.field || '').trim();
+    const cond = (rule?.condition || '').trim();
+    const value = rule?.value;
+    if (!field || !cond) return null;
+
+    const needsValue = !['is_empty', 'is_not_empty'].includes(cond);
+    const v = value == null ? '' : String(value);
+    if (needsValue && !v) return null;
+
+    switch (cond) {
+      case 'equals':
+        return [field, '=', v];
+      case 'not_equals':
+        return [field, '!=', v];
+      case 'contains':
+        return [field, 'like', `%${v}%`];
+      case 'not_contains':
+        return [field, 'not like', `%${v}%`];
+      case 'starts_with':
+        return [field, 'like', `${v}%`];
+      case 'before':
+        return [field, '<', v];
+      case 'after':
+        return [field, '>', v];
+      case 'on_or_before':
+        return [field, '<=', v];
+      case 'on_or_after':
+        return [field, '>=', v];
+      case 'is_empty':
+        return [field, '=', ''];
+      case 'is_not_empty':
+        return [field, '!=', ''];
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * 获取Project统计信息
+   */
+  static async getStats(projectType) {
+    try {
+      const result = await this.fetchProjects({ project_type: projectType });
+      const projects = Array.isArray(result?.items) ? result.items : Array.isArray(result) ? result : [];
+
+      const stats = {
+        total: projects.length,
+        by_status: {},
+        by_company: {},
+      };
+
+      projects.forEach((project) => {
+        // 按状态统计
+        if (project.status) {
+          stats.by_status[project.status] = (stats.by_status[project.status] || 0) + 1;
+        }
+
+        // 按公司统计
+        if (project.company) {
+          stats.by_company[project.company] = (stats.by_company[project.company] || 0) + 1;
+        }
+      });
+
+      return stats;
+    } catch (error) {
+      console.error('Failed to get stats:', error);
+      return null;
+    }
+  }
+}
+
+
