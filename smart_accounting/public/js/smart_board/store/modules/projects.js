@@ -37,6 +37,7 @@ export const ProjectsModule = {
             currentProject: null,
             offset: 0,
             hasMore: true,
+            totalCount: null,
             // Used to reset pagination when filters change
             lastQueryKey: '',
             lastFilters: null,
@@ -70,6 +71,11 @@ export const ProjectsModule = {
 
         setHasMore(state, hasMore) {
             state.hasMore = !!hasMore;
+        },
+
+        setTotalCount(state, v) {
+            const n = (v == null) ? null : Number(v);
+            state.totalCount = (n == null || !Number.isFinite(n)) ? null : n;
         },
 
         setOffset(state, offset) {
@@ -148,13 +154,18 @@ export const ProjectsModule = {
                 store.commit('projects/setLastFilters', filters || {});
                 store.commit('projects/setHasMore', true);
                 store.commit('projects/setOffset', 0);
+                store.commit('projects/setTotalCount', null);
                 const limit = Number.isFinite(Number(filters?.limit)) ? Number(filters.limit) : 100;
-                const projects = await ProjectService.fetchProjects(filters);
+                const result = await ProjectService.fetchProjects(filters);
+                const projects = Array.isArray(result?.items) ? result.items : (Array.isArray(result) ? result : []);
+                const total = result?.meta?.total_count;
                 // Drop stale results (e.g. user switched board again while this request was in-flight).
                 if (Number(state.activeRequestSeq || 0) !== seq) return state;
                 if (state.lastQueryKey !== key) return state;
                 store.commit('projects/setProjects', projects);
-                store.commit('projects/setHasMore', Array.isArray(projects) && projects.length >= limit);
+                store.commit('projects/setTotalCount', total);
+                if (total != null) store.commit('projects/setHasMore', (projects || []).length < Number(total));
+                else store.commit('projects/setHasMore', Array.isArray(projects) && projects.length >= limit);
                 return state;
             } catch (error) {
                 // Only surface errors for the latest request.
@@ -185,11 +196,16 @@ export const ProjectsModule = {
             try {
                 const offset = Number(state.offset || 0);
                 const limit = Number.isFinite(Number(effectiveFilters?.limit)) ? Number(effectiveFilters.limit) : 100;
-                const next = await ProjectService.fetchProjects({ ...(effectiveFilters || {}), limit_start: offset, limit });
+                const result = await ProjectService.fetchProjects({ ...(effectiveFilters || {}), limit_start: offset, limit });
+                const next = Array.isArray(result?.items) ? result.items : (Array.isArray(result) ? result : []);
+                const total = result?.meta?.total_count;
                 // If the query changed while loading more, drop the result.
                 if (state.lastQueryKey !== key) return state;
                 store.commit('projects/appendProjects', next);
-                store.commit('projects/setHasMore', Array.isArray(next) && next.length >= limit);
+                if (total != null) store.commit('projects/setTotalCount', total);
+                const totalNow = (total != null) ? Number(total) : state.totalCount;
+                if (totalNow != null) store.commit('projects/setHasMore', (state.items || []).length < Number(totalNow));
+                else store.commit('projects/setHasMore', Array.isArray(next) && next.length >= limit);
             } catch (e) {
                 // Do not hard-fail; just stop auto-loading for now.
                 store.commit('projects/setHasMore', false);

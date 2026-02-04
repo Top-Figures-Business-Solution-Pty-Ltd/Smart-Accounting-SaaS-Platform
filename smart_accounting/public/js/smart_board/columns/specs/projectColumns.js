@@ -529,9 +529,6 @@ export function makeProjectColumnSpecs() {
     // (16) Fiscal Year - read-only
     { field: 'custom_fiscal_year', isEditable: false },
 
-    // (10) %Complete - not urgent; keep read-only for now (future interface)
-    { field: 'percent_complete', isEditable: false },
-
     // (6) Software - complex (Table MultiSelect) => later spec will override editor+commit
     {
       field: 'custom_softwares',

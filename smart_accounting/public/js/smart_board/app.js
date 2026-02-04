@@ -19,6 +19,7 @@ import { isDesk } from './utils/env.js';
 import { getUrlState, setUrlState } from './utils/urlState.js';
 import { Perf } from './utils/perf.js';
 import { ClientsService } from './services/clientsService.js';
+import { sanitizeProjectColumnsConfig } from './utils/deprecatedColumns.js';
 
 export class SmartBoardApp {
     constructor(container) {
@@ -212,7 +213,7 @@ export class SmartBoardApp {
                     return [];
                 };
 
-                const cols = parseColumns(view?.columns);
+                const cols = sanitizeProjectColumnsConfig(parseColumns(view?.columns));
                 // Base fields are always fetched even if not visible in Columns Manager.
                 // IMPORTANT: `custom_fiscal_year` is required for Task Monthly Status interactions
                 // (cells need a fiscal year to call setMonthlyStatus), so never omit it.

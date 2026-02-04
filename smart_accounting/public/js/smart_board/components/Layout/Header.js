@@ -15,9 +15,11 @@ export class Header {
         this.options = options;
         this.currentView = options.currentView || 'ITR';
         this.onAction = options.onAction || (() => {});
+        this._unsub = null;
         
         this.render();
         this.bindEvents();
+        this.subscribeToStore();
     }
     
     isBoardView() {
@@ -77,7 +79,6 @@ export class Header {
     }
     
     getViewSubtitle() {
-        // 可以显示统计信息，如"12 active projects"
         return '';
     }
     
@@ -122,9 +123,64 @@ export class Header {
         // Re-render to switch toolbars between board/page modes
         this.render();
         this.bindEvents();
+        this._updateCountsSubtitle();
+    }
+
+    subscribeToStore() {
+        const store = this.options?.store;
+        if (!store?.subscribe) return;
+        if (this._unsub) {
+            try { this._unsub(); } catch (e) {}
+            this._unsub = null;
+        }
+        this._unsub = store.subscribe(() => this._updateCountsSubtitle());
+        this._updateCountsSubtitle();
+    }
+
+    _updateCountsSubtitle() {
+        try {
+            const el = this.container?.querySelector?.('.view-subtitle');
+            if (!el) return;
+
+            // Only show counts for board views (Project Type boards)
+            if (!this.isBoardView()) {
+                el.textContent = '';
+                return;
+            }
+
+            const state = this.options?.store?.getState?.() || {};
+            const p = state?.projects || {};
+            const loaded = Array.isArray(p?.items) ? p.items.length : 0;
+            const total = (p?.totalCount == null) ? null : Number(p.totalCount);
+            const loading = !!p?.loading;
+            const loadingMore = !!p?.loadingMore;
+            const hasMore = p?.hasMore !== false;
+
+            if (loading && loaded === 0) {
+                el.textContent = 'Loading…';
+                return;
+            }
+
+            if (total != null && Number.isFinite(total)) {
+                const all = loaded >= total;
+                el.textContent = all
+                    ? `Loaded ${loaded} / ${total} · All loaded`
+                    : `Loaded ${loaded} / ${total}${loadingMore ? ' · Loading…' : ''}`;
+                return;
+            }
+
+            // Fallback when total is unknown
+            if (!hasMore && !loadingMore) {
+                el.textContent = `Loaded ${loaded} · All loaded`;
+                return;
+            }
+            el.textContent = `Loaded ${loaded}${loadingMore ? ' · Loading…' : ''}`;
+        } catch (e) {}
     }
     
     destroy() {
+        try { this._unsub?.(); } catch (e) {}
+        this._unsub = null;
         this.container.innerHTML = '';
     }
 }

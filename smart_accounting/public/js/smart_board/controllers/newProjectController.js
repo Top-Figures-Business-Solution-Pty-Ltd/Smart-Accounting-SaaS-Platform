@@ -8,6 +8,7 @@ import { ProjectCreateService } from '../services/projectCreateService.js';
 import { openNewClientFlow } from './newClientController.js';
 import { notify } from '../services/uiAdapter.js';
 import { isDesk } from '../utils/env.js';
+import { BoardStatusService } from '../services/boardStatusService.js';
 
 export async function openNewProjectFlow({ app, viewType } = {}) {
   // Desk keeps the existing behavior (open ERPNext form).
@@ -35,7 +36,22 @@ export async function openNewProjectFlow({ app, viewType } = {}) {
       });
     },
     onSubmit: async (payload) => {
-      const doc = await ProjectCreateService.createProject(payload);
+      // Ensure status is always valid under the global status pool.
+      // Some sites still default Project.status to "Open" which will fail validation once the pool changes.
+      let status = String(payload?.status || '').trim();
+      if (!status) {
+        try {
+          const opts = await BoardStatusService.getEffectiveOptions({
+            projectType: payload?.project_type,
+            currentValue: '',
+          });
+          status = String((opts && opts[0]) || '').trim() || 'Not started';
+        } catch (e) {
+          status = 'Not started';
+        }
+      }
+
+      const doc = await ProjectCreateService.createProject({ ...payload, status });
       notify('Project created', 'green');
       // Refresh current board list so newly created row appears and columns/hydration are consistent.
       const last = store?.getState?.()?.projects?.lastFilters || null;

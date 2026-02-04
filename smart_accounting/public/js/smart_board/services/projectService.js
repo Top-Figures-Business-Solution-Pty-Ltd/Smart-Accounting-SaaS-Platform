@@ -42,7 +42,6 @@ export class ProjectService {
                     'estimated_costing',
                     'notes',
                     'is_active',
-                    'percent_complete',
                     'modified',
                     'auto_repeat',
                     'custom_entity_type',
@@ -128,6 +127,16 @@ export class ProjectService {
                 limit_start: Math.max(0, limitStart),
                 limit_page_length: Math.max(1, limit)
             };
+
+            // Total count for UI ("Loaded X / total") and correctness checks.
+            // Only needed on the first page; load-more can reuse the stored total.
+            const shouldCount = Number(args?.limit_start || 0) === 0;
+            const countArgs = shouldCount ? {
+                ...args,
+                fields: ['count(name) as cnt'],
+                limit_start: 0,
+                limit_page_length: 1,
+            } : null;
             
             // In-flight de-dupe: same query fired repeatedly (e.g. rapid view/filter changes)
             // should share a single request to reduce server load and client work.
@@ -146,13 +155,32 @@ export class ProjectService {
 
             const p = (async () => {
                 return await Perf.timeAsync('projects.get_list', async () => {
-                    const response = await frappe.call({
+                    const listPromise = frappe.call({
                         method: 'frappe.client.get_list',
                         type: 'POST',
                         args
                     });
+                    const countPromise = countArgs
+                        ? frappe.call({
+                            method: 'frappe.client.get_list',
+                            type: 'POST',
+                            args: countArgs
+                        }).catch(() => null)
+                        : Promise.resolve(null);
 
-                    const rows = response.message || [];
+                    const response = await listPromise;
+                    const rows = response?.message || [];
+
+                    let total_count = null;
+                    try {
+                        const cr = await countPromise;
+                        const cnt = cr?.message?.[0]?.cnt;
+                        const n = (cnt == null) ? null : Number(cnt);
+                        total_count = (n == null || !Number.isFinite(n)) ? null : n;
+                    } catch (e) {
+                        total_count = null;
+                    }
+
                     // Hydrate child tables (get_list doesn't include Table/child rows).
                     // Only do it if the current visible columns actually need them.
                     const needsTeam = Array.isArray(fields) && fields.includes('custom_team_members');
@@ -162,7 +190,7 @@ export class ProjectService {
                             await this._hydrateChildTables(rows);
                         } catch (e) {}
                     }
-                    return rows;
+                    return { items: rows, meta: { total_count } };
                 }, () => ({
                     project_type: String(filters?.project_type || ''),
                     limit_start: Number(args?.limit_start || 0),
@@ -203,7 +231,7 @@ export class ProjectService {
                 message: __('Failed to load projects'),
                 indicator: 'red'
             });
-            return [];
+            return { items: [], meta: { total_count: null } };
             }
         }
     }

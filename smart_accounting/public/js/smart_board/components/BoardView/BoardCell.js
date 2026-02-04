@@ -134,9 +134,6 @@ export class BoardCell {
             case 'is_active':
                 return this.formatActive(value);
 
-            case 'percent_complete':
-                return this.formatPercent(value);
-
             case 'modified':
                 return this.formatDate(value);
 
@@ -226,12 +223,6 @@ export class BoardCell {
         const text = yes ? 'Yes' : 'No';
         const cls = yes ? 'company-badge company-tg' : 'company-badge company-tf';
         return `<span class="${cls}">${text}</span>`;
-    }
-
-    formatPercent(pct) {
-        const n = Number(pct);
-        if (!Number.isFinite(n)) return this.escapeHtml(pct);
-        return `${Math.round(n)}%`;
     }
     
     formatCompany(company) {

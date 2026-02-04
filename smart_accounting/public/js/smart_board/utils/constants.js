@@ -69,7 +69,24 @@ export const STATUS_OPTIONS = {
 
 // Status 颜色映射
 export const STATUS_COLORS = {
+    // New global status pool (2026-02)
+    'Not started': '#6b7280', // slate/gray
+    'Working on it': '#f59e0b', // amber
+    'Waiting for client': '#a855f7', // purple
+    'R&D': '#06b6d4', // cyan
+    'Ready for manager review': '#3b82f6', // blue
+    'Review points to be actioned': '#ef4444', // red
+    'Ready for partner review': '#6366f1', // indigo
+    'Ready to send to client': '#0ea5e9', // sky
+    'Sent to client for signature': '#8b5cf6', // violet
+    'Hold': '#64748b', // slate
+    'Waiting of payment': '#ca8a04', // dark yellow
+    'Lodged': '#22c55e', // green
+    'Done': '#16a34a', // dark green
+
+    // Legacy statuses (kept for backward compatibility)
     'Not Started': '#6c757d',
+    'Open': '#6c757d',
     'Working': '#007bff',
     'Ready for Review': '#ffc107',
     'Under Review': '#17a2b8',
@@ -77,7 +94,6 @@ export const STATUS_COLORS = {
     'Query from ATO': '#fd7e14',
     'Query from AusIndustry': '#fd7e14',
     'Resubmit': '#dc3545',
-    'Lodged': '#28a745',
     'Approved': '#28a745',
     'Completed': '#28a745',
     'Cancelled': '#6c757d'

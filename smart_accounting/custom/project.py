@@ -22,6 +22,34 @@ class CustomProject(Project):
         super().after_insert()
         if self.custom_project_frequency and self.custom_project_frequency != "One-off":
             self.create_auto_repeat()
+
+    def before_insert(self):
+        """
+        Ensure Project.status is valid against current DocType options.
+
+        Why:
+        - ERPNext standard Project.status default is "Open".
+        - Smart Accounting overrides the status pool via Property Setter (removing "Open").
+        - When inserting via API (/smart), status may be missing and defaults to "Open",
+          causing validation errors.
+        """
+        try:
+            f = self.meta.get_field("status") if getattr(self, "meta", None) else None
+            raw = str(getattr(f, "options", "") or "")
+            opts = [x.strip() for x in raw.split("\n") if str(x).strip()]
+        except Exception:
+            opts = []
+
+        if not opts:
+            return
+
+        cur = str(getattr(self, "status", "") or "").strip()
+        if cur in opts:
+            return
+
+        # Prefer our canonical default if present
+        preferred = "Not started"
+        self.status = preferred if preferred in opts else opts[0]
     
     def create_auto_repeat(self):
         """根据custom_project_frequency创建Auto Repeat"""
@@ -46,6 +74,69 @@ class CustomProject(Project):
         except Exception as e:
             frappe.log_error(f"Failed to create Auto Repeat for {self.name}: {str(e)}")
             frappe.throw(f"创建 Auto Repeat 失败: {str(e)}")
+
+    def update_percent_complete(self):
+        """
+        ERPNext 默认会在 update_percent_complete 里把 Project.status 强制设为：
+        - percent_complete == 100 -> "Completed"
+        - else -> "Open"
+
+        Smart Accounting 将 Project.status 作为自定义工作流状态池（不包含 Open/Completed）。
+        因此必须阻止 ERPNext 自动覆盖 status，否则会触发 Select options 校验失败。
+        """
+        previous_status = (self.status or "").strip()
+
+        # Keep ERPNext percent calculation behavior
+        super().update_percent_complete()
+
+        # Restore / normalize status to a valid option in current status pool
+        try:
+            f = self.meta.get_field("status") if getattr(self, "meta", None) else None
+            raw = str(getattr(f, "options", "") or "")
+            options = [x.strip() for x in raw.split("\n") if str(x).strip()]
+        except Exception:
+            options = []
+
+        if not options:
+            return
+
+        options_lower = {o.lower(): o for o in options}
+
+        def pick(opt: str) -> str | None:
+            if not opt:
+                return None
+            opt = opt.strip()
+            if opt in options:
+                return opt
+            return options_lower.get(opt.lower())
+
+        # 1) If user had a valid status before, keep it (do not auto-overwrite)
+        kept = pick(previous_status)
+        if kept:
+            self.status = kept
+            return
+
+        # 2) If current status happens to be valid, keep it
+        kept = pick(self.status)
+        if kept:
+            self.status = kept
+            return
+
+        # 3) Map ERPNext legacy statuses -> nearest equivalents (best-effort)
+        legacy_map = {
+            "open": "Not started",
+            "completed": "Done",
+            "cancelled": "Hold",
+            "not started": "Not started",
+        }
+        mapped = legacy_map.get(previous_status.lower()) if previous_status else None
+        kept = pick(mapped) if mapped else None
+        if kept:
+            self.status = kept
+            return
+
+        # 4) Default fallback
+        self.status = pick("Not started") or options[0]
     
     def validate(self):
         """修改frequency时同步Auto Repeat"""
@@ -132,7 +223,8 @@ class CustomProject(Project):
             })
         
         # 4. 重置状态
-        self.status = "Not Started"
+        # Must match current global status pool (Property Setter)
+        self.status = "Not started"
         self.percent_complete = 0
         self.notes = ""
 

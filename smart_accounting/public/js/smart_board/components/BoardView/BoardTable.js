@@ -22,6 +22,7 @@ import { buildRowModel } from './rowModel.js';
 import { ProjectService } from '../../services/projectService.js';
 import { confirmDialog, notify } from '../../services/uiAdapter.js';
 import { escapeHtml } from '../../utils/dom.js';
+import { sanitizeProjectColumnsConfig } from '../../utils/deprecatedColumns.js';
 
 export class BoardTable {
     constructor(container, options = {}) {
@@ -287,12 +288,13 @@ export class BoardTable {
     }
 
     buildColumnsFromConfig(columnsConfig) {
+        const sanitized = sanitizeProjectColumnsConfig(columnsConfig);
         const widths = loadColumnWidths(this.viewType) || {};
         // Include hidden defs so Saved View columns still render with proper labels.
         const defs = this.getAvailableColumnDefs(true);
         const map = new Map(defs.map(d => [d.field, d]));
 
-        const cols = (columnsConfig || [])
+        const cols = (sanitized || [])
             .map((c) => {
                 const field = c?.field;
                 if (!field) return null;
@@ -331,7 +333,8 @@ export class BoardTable {
         this._savedView = view;
 
         const both = this._normalizeSavedViewColumns(view.columns);
-        const cfg = both.project || [];
+        const cfgRaw = both.project || [];
+        const cfg = sanitizeProjectColumnsConfig(cfgRaw);
         const taskCfg = both.tasks || [];
         const nextTaskCols = this._migrateTaskColumns(taskCfg);
         this._taskCols = nextTaskCols;
@@ -341,7 +344,8 @@ export class BoardTable {
             const raw = view?.columns;
             const isLegacyArray = Array.isArray(raw);
             const tasksEmpty = !(Array.isArray(taskCfg) && taskCfg.length);
-            if (view?.name && (isLegacyArray || tasksEmpty)) {
+            const droppedDeprecated = Array.isArray(cfgRaw) && cfgRaw.length !== cfg.length;
+            if (view?.name && (isLegacyArray || tasksEmpty || droppedDeprecated)) {
                 await ViewService.updateView(view.name, { columns: { project: cfg || [], tasks: nextTaskCols } });
                 this._setSavedViewColumnsInMemory({ project: cfg || [], tasks: nextTaskCols });
             }
@@ -730,11 +734,12 @@ export class BoardTable {
     }
     
     bindScroll() {
-        const body = this.container.querySelector('#boardTableBody');
-        if (!body) return;
+        // Vertical scrolling is handled by the outer container (this.container = .board-table-container)
+        const scrollEl = this.container;
+        if (!scrollEl) return;
 
         if (this._onScroll) {
-            body.removeEventListener('scroll', this._onScroll);
+            scrollEl.removeEventListener('scroll', this._onScroll);
             this._onScroll = null;
         }
 
@@ -745,19 +750,19 @@ export class BoardTable {
             }
 
             // Infinite scroll (pagination): when near bottom, fetch next page.
-            this._maybeLoadMore?.(body);
+            this._maybeLoadMore?.(scrollEl);
 
             // Virtual mode only: update visible window.
             if (this.isVirtual()) {
                 this.scheduleRowsUpdate();
             }
         };
-        body.addEventListener('scroll', this._onScroll, { passive: true });
+        scrollEl.addEventListener('scroll', this._onScroll, { passive: true });
     }
 
     _maybeLoadMore(bodyEl) {
-        const body = bodyEl || this.container.querySelector('#boardTableBody');
-        if (!body || !this.store) return;
+        const scrollEl = bodyEl || this.container;
+        if (!scrollEl || !this.store) return;
 
         // Expanded rows disable virtualization; still allow loading more.
         const st = this.store.getState?.()?.projects;
@@ -767,13 +772,13 @@ export class BoardTable {
 
         // Avoid auto-loading more on initial render (when scrollTop is 0 but content is short).
         // Only load more after the user actually scrolls a bit.
-        if ((body.scrollTop || 0) < 8) return;
+        if ((scrollEl.scrollTop || 0) < 8) return;
 
         // Throttle to avoid hammering on fast scroll
         const now = Date.now();
         if (now - (this._lastLoadMoreAt || 0) < 350) return;
 
-        const nearBottom = (body.scrollTop + body.clientHeight) >= (body.scrollHeight - 320);
+        const nearBottom = (scrollEl.scrollTop + scrollEl.clientHeight) >= (scrollEl.scrollHeight - 320);
         if (!nearBottom) return;
 
         this._lastLoadMoreAt = now;
@@ -1172,9 +1177,14 @@ export class BoardTable {
             return;
         }
 
-        const viewport = this.container.querySelector('#boardTableBody');
-        const viewportHeight = viewport?.clientHeight || 600;
-        const scrollTop = viewport?.scrollTop || 0;
+        // Virtualization viewport = outer scroll container
+        const scrollEl = this.container;
+        const viewportHeight = scrollEl?.clientHeight || 600;
+        const rawScrollTop = scrollEl?.scrollTop || 0;
+        // Convert outer scrollTop into a row-area scrollTop (exclude header + wrapper offsets)
+        const bodyEl = this.container.querySelector('#boardTableBody');
+        const bodyTop = Number(bodyEl?.offsetTop || 0) || 0;
+        const scrollTop = Math.max(0, rawScrollTop - bodyTop);
         const total = this._rowModel?.count?.() ?? (this.projects || []).length;
 
         // Keep virtualization stable even when many rows are expanded:
