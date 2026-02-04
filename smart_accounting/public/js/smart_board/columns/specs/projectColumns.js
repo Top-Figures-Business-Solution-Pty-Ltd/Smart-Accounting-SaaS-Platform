@@ -529,6 +529,14 @@ export function makeProjectColumnSpecs() {
     // (16) Fiscal Year - read-only
     { field: 'custom_fiscal_year', isEditable: false },
 
+    // (20) System/meta fields that should never be edited from the board
+    // - They are either computed, managed by the system, or not part of the Smart Board editing UX yet.
+    { field: 'modified', isEditable: false },
+    { field: 'auto_repeat', isEditable: false },
+    { field: 'is_active', isEditable: false },
+    { field: 'custom_customer_entity', isEditable: false },
+    { field: 'custom_team_members', isEditable: false },
+
     // (6) Software - complex (Table MultiSelect) => later spec will override editor+commit
     {
       field: 'custom_softwares',

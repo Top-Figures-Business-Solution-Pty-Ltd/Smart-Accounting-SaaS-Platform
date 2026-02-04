@@ -207,6 +207,17 @@ const TASK_COLUMN_SPECS = {
       return TASK_COLUMN_SPECS.custom_task_members.commit({ task, taskName, field: 'custom_task_members', value });
     }
   },
+
+  // System/meta fields (read-only)
+  modified: {
+    isEditable: false,
+  },
+  name: {
+    isEditable: false,
+  },
+  project: {
+    isEditable: false,
+  },
 };
 
 export function getTaskColumnSpec(field) {

@@ -94,7 +94,7 @@ export class ProjectService {
                             project_type: filters.project_type || null,
                             groups: filters.advanced_groups,
                             limit: filters.limit || 2000,
-                            // Default: do NOT force is_active=Yes; match ERPNext list behavior unless explicitly enabled.
+                            // Smart Board default: active-only (Archive => is_active="No" should disappear).
                             is_active_only: filters.is_active === true ? 1 : 0,
                             search: filters.search || null,
                         }
@@ -483,8 +483,7 @@ export class ProjectService {
             result.push(['project_name', 'like', `%${filters.search}%`]);
         }
         
-        // 只显示活跃的项目
-        // Default: do NOT force is_active=Yes; match ERPNext list behavior unless explicitly enabled.
+        // 只显示活跃的项目（Smart Board 默认只展示 Active）
         if (filters.is_active === true) {
             result.push(['is_active', '=', 'Yes']);
         }
@@ -567,7 +566,10 @@ export class ProjectService {
      */
     static async getStats(projectType) {
         try {
-            const projects = await this.fetchProjects({ project_type: projectType });
+            const result = await this.fetchProjects({ project_type: projectType });
+            const projects = Array.isArray(result?.items)
+                ? result.items
+                : (Array.isArray(result) ? result : []);
             
             const stats = {
                 total: projects.length,
