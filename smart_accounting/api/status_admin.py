@@ -186,3 +186,172 @@ def migrate_project_statuses(dry_run: int = 1, default_status: str = "Not starte
 	return {"dry_run": False, "updated": updated, "default": default, "pool_count": len(pool)}
 
 
+# ============================================================
+# Task.status pool helpers (bench-only; NOT whitelisted)
+# ============================================================
+
+def _task_status_pool() -> list[str]:
+	# Keep this list small + Monday-like for internal task tracking.
+	return [
+		"Not started yet",
+		"Working on it",
+		"Stuck",
+		"Done",
+	]
+
+
+def apply_task_status_pool() -> dict:
+	"""
+	Set Task.status options to the Smart Accounting task status pool.
+	Intended to run via:
+	  bench --site <site> execute smart_accounting.api.status_admin.apply_task_status_pool
+	"""
+	# Delete any existing conflicting property setters (regardless of schema)
+	frappe.db.delete("Property Setter", {"name": "Task-status-options"})
+	frappe.db.delete("Property Setter", {"doc_type": "Task", "property": "options", "field_name": "status"})
+	frappe.db.delete("Property Setter", {"doc_type": "Task", "property": "options", "row_name": "status"})
+
+	pool = _task_status_pool()
+	value = "\n".join(pool)
+
+	make_property_setter = frappe.get_attr("frappe.custom.doctype.property_setter.property_setter.make_property_setter")
+	ps = make_property_setter(
+		"Task",
+		"status",
+		"options",
+		value,
+		"Text",
+		for_doctype=False,
+		validate_fields_for_doctype=False,
+		is_system_generated=False,
+	)
+
+	# Ensure default value is valid
+	try:
+		frappe.db.delete("Property Setter", {"name": "Task-status-default"})
+		frappe.db.delete(
+			"Property Setter",
+			{"doc_type": "Task", "property": "default", "field_name": "status"},
+		)
+	except Exception:
+		pass
+	make_property_setter(
+		"Task",
+		"status",
+		"default",
+		"Not started yet",
+		"Text",
+		for_doctype=False,
+		validate_fields_for_doctype=False,
+		is_system_generated=False,
+	)
+
+	try:
+		frappe.clear_cache(doctype="Task")
+	except Exception:
+		pass
+
+	return {"property_setter": ps.name, "count": len(pool)}
+
+
+def get_task_status_stats() -> dict:
+	"""Return current Task.status distribution (including legacy/invalid values)."""
+	rows = frappe.db.sql(
+		"""
+		select status, count(*) as cnt
+		from `tabTask`
+		group by status
+		order by cnt desc
+		""",
+		as_dict=True,
+	)
+	total = sum(int(r.get("cnt") or 0) for r in (rows or []))
+	return {"total": total, "items": rows or []}
+
+
+def migrate_task_statuses(dry_run: int = 1, default_status: str = "Not started yet") -> dict:
+	"""
+	Migrate legacy Task.status values to the new pool so existing documents can be saved.
+
+	Run (dry-run first):
+	  bench --site <site> execute smart_accounting.api.status_admin.migrate_task_statuses
+	  bench --site <site> execute smart_accounting.api.status_admin.migrate_task_statuses --kwargs "{'dry_run':0}"
+	"""
+	pool = _task_status_pool()
+	pool_set = {s for s in pool if str(s).strip()}
+	default = str(default_status or "Not started yet").strip() or "Not started yet"
+	if default not in pool_set:
+		default = "Not started yet"
+
+	# Best-effort mapping from common ERPNext Task statuses to the new pool.
+	mapping = {
+		"Open": "Not started yet",
+		"Not Started": "Not started yet",
+		"Working": "Working on it",
+		"Working On It": "Working on it",
+		"Pending Review": "Working on it",
+		"Overdue": "Stuck",
+		"Stuck": "Stuck",
+		"Completed": "Done",
+		"Done": "Done",
+		"Cancelled": "Done",
+		"Canceled": "Done",
+		"Closed": "Done",
+	}
+
+	rows = frappe.db.sql(
+		"""
+		select status, count(*) as cnt
+		from `tabTask`
+		group by status
+		""",
+		as_dict=True,
+	)
+
+	plan = []
+	for r in rows or []:
+		raw = r.get("status")  # can be None
+		cnt = int(r.get("cnt") or 0)
+		cur = str(raw or "").strip()
+		if not cur:
+			target = default
+		elif cur in pool_set:
+			target = cur
+		elif cur in mapping:
+			target = mapping[cur]
+		else:
+			target = default
+		if target != cur:
+			plan.append({"from": raw, "to": target, "count": cnt})
+
+	planned = sum(int(x.get("count") or 0) for x in plan)
+	if int(dry_run or 0):
+		unknown = [x for x in plan if str(x.get("from") or "").strip() and str(x.get("from")).strip() not in mapping]
+		return {
+			"dry_run": True,
+			"pool": pool,
+			"default": default,
+			"to_update": planned,
+			"changes": plan,
+			"unknown_legacy": unknown[:50],
+		}
+
+	updated = 0
+	for ch in plan:
+		src = ch.get("from")
+		dst = ch.get("to")
+		if src is None:
+			frappe.db.sql("update `tabTask` set status=%s where status is null", (dst,))
+		else:
+			src_str = str(src or "")
+			frappe.db.sql("update `tabTask` set status=%s where status=%s", (dst, src_str))
+		updated += int(ch.get("count") or 0)
+
+	frappe.db.commit()
+	try:
+		frappe.clear_cache(doctype="Task")
+	except Exception:
+		pass
+	return {"dry_run": False, "updated": updated, "default": default, "pool_count": len(pool)}
+
+

@@ -158,5 +158,37 @@
   "property_type": "Text",
   "row_name": null,
   "value": "Not started"
+ },
+ {
+  "default_value": null,
+  "doc_type": "Task",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "status",
+  "is_system_generated": 0,
+  "modified": "2026-02-04 16:30:43.776536",
+  "module": null,
+  "name": "Task-status-options",
+  "property": "options",
+  "property_type": "Text",
+  "row_name": null,
+  "value": "Not started yet\nWorking on it\nStuck\nDone"
+ },
+ {
+  "default_value": null,
+  "doc_type": "Task",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "status",
+  "is_system_generated": 0,
+  "modified": "2026-02-04 16:30:43.951101",
+  "module": null,
+  "name": "Task-status-default",
+  "property": "default",
+  "property_type": "Text",
+  "row_name": null,
+  "value": "Not started yet"
  }
 ]

@@ -74,7 +74,9 @@ export const STATUS_OPTIONS = {
 export const STATUS_COLORS = {
     // New global status pool (2026-02)
     'Not started': '#6b7280', // slate/gray
+    'Not started yet': '#6b7280', // task pool
     'Working on it': '#f59e0b', // amber
+    'Stuck': '#ef4444', // task pool (red)
     'Waiting for client': '#a855f7', // purple
     'R&D': '#06b6d4', // cyan
     'Ready for manager review': '#3b82f6', // blue

@@ -111,7 +111,7 @@ export class Sidebar {
     }
     
     selectView(view) {
-        if (view === this.currentView) return;
+        const isReselect = view === this.currentView;
         
         // Special action: go to Project Type list
         if (view === '__create_project_type__') {
@@ -120,11 +120,13 @@ export class Sidebar {
             return;
         }
 
-        this.currentView = view;
-        this.highlightCurrentView();
+        if (!isReselect) {
+            this.currentView = view;
+            this.highlightCurrentView();
+        }
         
         // 触发回调
-        this.onViewChange(view);
+        this.onViewChange(view, { reselect: isReselect });
     }
     
     highlightCurrentView() {

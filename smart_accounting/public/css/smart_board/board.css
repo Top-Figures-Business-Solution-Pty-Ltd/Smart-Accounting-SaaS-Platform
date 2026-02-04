@@ -397,6 +397,33 @@
     margin-bottom: 8px;
 }
 
+.sb-task-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 8px;
+}
+
+.sb-task-delete-btn {
+    border: 0;
+    background: transparent;
+    padding: 2px 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--smart-board-text-muted);
+    opacity: 0;
+}
+
+/* Show delete button on row hover (keep UI clean) */
+.sb-task-table tr:hover .sb-task-delete-btn {
+    opacity: 1;
+}
+
+.sb-task-delete-btn:hover {
+    background: rgba(239, 68, 68, 0.08);
+    color: #ef4444;
+}
+
 .sb-task-title {
     font-weight: 600;
     font-size: 13px;

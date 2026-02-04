@@ -25,7 +25,25 @@ export class ProjectCommandService {
    * 删除Project
    */
   static async deleteProject(name) {
-    return ApiService.deleteDoc('Project', name);
+    const n = String(name || '').trim();
+    if (!n) throw new Error('Missing project');
+    const r = await frappe.call({
+      method: 'smart_accounting.api.project_board.delete_project_cascade',
+      type: 'POST',
+      args: {
+        project: n,
+        dry_run: 0,
+        delete_tasks_first: 1,
+        delete_auto_repeat: 1,
+        cascade_subtasks: 1,
+      }
+    });
+    const msg = r?.message || {};
+    if (msg?.ok) return msg;
+    const reason = msg?.reason ? String(msg.reason) : 'project_delete_failed';
+    const error = msg?.error ? String(msg.error) : '';
+    const detail = error || reason;
+    throw new Error(detail || 'Delete project failed');
   }
 
   /**

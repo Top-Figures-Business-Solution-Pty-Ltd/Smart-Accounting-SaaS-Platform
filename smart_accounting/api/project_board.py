@@ -92,6 +92,39 @@ def _uniq_preserve_order(items: Iterable[tuple]) -> list[tuple]:
 	return out
 
 
+def _attach_user_image(rows: list[dict]) -> list[dict]:
+	"""
+	Attach `user_image` to Project Team Member-style rows for UI avatar rendering.
+
+	Permission model:
+	- Uses `get_user_meta()` which respects User permissions; if User cannot be read,
+	  images will be empty (safe).
+	"""
+	try:
+		users = [str(r.get("user") or "").strip() for r in (rows or []) if str(r.get("user") or "").strip()]
+	except Exception:
+		users = []
+
+	meta = {}
+	if users:
+		try:
+			meta = get_user_meta(users) or {}
+		except Exception:
+			meta = {}
+
+	for r in (rows or []):
+		try:
+			u = str(r.get("user") or "").strip()
+		except Exception:
+			u = ""
+		try:
+			img = (meta.get(u) or {}).get("image") or ""
+		except Exception:
+			img = ""
+		r["user_image"] = img or ""
+	return rows
+
+
 def _project_names_with_read_permission(names: list[str]) -> list[str]:
 	# Respect Project permissions first; this bounds all downstream queries.
 	allowed = frappe.get_all("Project", filters=[["name", "in", names]], pluck="name")
@@ -610,9 +643,24 @@ def set_project_team_members(project: str, members: Any) -> dict:
 
 	doc.save()
 
+	out_rows = []
+	for m in (doc.get("custom_team_members") or []):
+		u = str(getattr(m, "user", "") or "").strip()
+		r = str(getattr(m, "role", "") or "").strip()
+		if not u or not r:
+			continue
+		out_rows.append(
+			{
+				"user": u,
+				"role": r,
+				"assigned_date": getattr(m, "assigned_date", None),
+			}
+		)
+	_attach_user_image(out_rows)
+
 	return {
 		"project": doc.name,
-		"custom_team_members": doc.get("custom_team_members") or [],
+		"custom_team_members": out_rows,
 	}
 
 
@@ -778,7 +826,15 @@ def bulk_set_project_team_role(projects: Any, role: str, users: Any) -> dict:
 			doc.append("custom_team_members", {"user": u, "role": role, "assigned_date": today()})
 
 		doc.save()
-		out[doc.name] = doc.get("custom_team_members") or []
+		rows_out = []
+		for m in (doc.get("custom_team_members") or []):
+			u = str(getattr(m, "user", "") or "").strip()
+			r = str(getattr(m, "role", "") or "").strip()
+			if not u or not r:
+				continue
+			rows_out.append({"user": u, "role": r, "assigned_date": getattr(m, "assigned_date", None)})
+		_attach_user_image(rows_out)
+		out[doc.name] = rows_out
 
 	return {"team": out}
 
@@ -918,6 +974,11 @@ def get_tasks_for_projects(projects: Any, fields: Any = None, limit_per_project:
 				)
 			except frappe.PermissionError:
 				members = []
+			# Attach user_image for UI avatars (permission-aware)
+			try:
+				_attach_user_image(members)
+			except Exception:
+				pass
 			by_task = {}
 			for m in (members or []):
 				parent = m.get("parent")
@@ -1027,10 +1088,287 @@ def set_task_team_members(task: str, members: Any, role: str | None = None) -> d
 		)
 	doc.save(ignore_permissions=False)
 
-	out = doc.get(fieldname) or []
+	out = []
+	for m in (doc.get(fieldname) or []):
+		u = str(getattr(m, "user", "") or "").strip()
+		r = str(getattr(m, "role", "") or "").strip()
+		if not u or not r:
+			continue
+		out.append({"user": u, "role": r, "assigned_date": getattr(m, "assigned_date", None)})
+	_attach_user_image(out)
 	if fieldname != "custom_task_members":
 		return {"custom_task_members": out, fieldname: out}
 	return {"custom_task_members": out}
+
+
+@frappe.whitelist()
+def delete_tasks(tasks: Any, cascade_subtasks: int = 1) -> dict:
+	"""
+	Delete Tasks (optionally including all descendant subtasks).
+
+	Why custom API:
+	- Website-safe (consistent errors + single call for bulk delete)
+	- Allows cascading delete for parent_task trees (Monday-like behavior)
+
+	Args:
+	- tasks: list[str] (or JSON string)
+	- cascade_subtasks: 1/0 (default 1). If enabled, also deletes all tasks where parent_task is within the selection (recursive).
+
+	Returns:
+	- deleted: list[str]
+	- failed: list[{name, error}]
+	- requested: list[str]
+	- cascade_subtasks: bool
+	- total_planned: int
+	"""
+	_ensure_logged_in()
+
+	req = _normalize_list(tasks)
+	req = [str(x).strip() for x in req if str(x).strip()]
+	if not req:
+		return {"deleted": [], "failed": [], "requested": [], "cascade_subtasks": bool(int(cascade_subtasks or 0)), "total_planned": 0}
+
+	# Expand to include descendants (best-effort; permission-aware)
+	all_names: set[str] = set(req)
+	if int(cascade_subtasks or 0):
+		frontier = set(req)
+		try:
+			while frontier:
+				children = frappe.get_all(
+					"Task",
+					filters=[["parent_task", "in", list(frontier)]],
+					pluck="name",
+					limit_page_length=100000,
+				)
+				children = [str(x).strip() for x in (children or []) if str(x).strip()]
+				new = set(children) - all_names
+				if not new:
+					break
+				all_names |= new
+				frontier = new
+		except Exception:
+			# If we can't expand, still try to delete requested tasks
+			pass
+
+	# Build parent->children map for post-order deletion (children first, then parents).
+	try:
+		rows = frappe.get_all(
+			"Task",
+			filters=[["name", "in", list(all_names)]],
+			fields=["name", "parent_task"],
+			limit_page_length=100000,
+		)
+	except Exception:
+		rows = []
+
+	children_map: dict[str, list[str]] = {}
+	for r in (rows or []):
+		name = str(r.get("name") or "").strip()
+		parent = str(r.get("parent_task") or "").strip()
+		if name and parent:
+			children_map.setdefault(parent, []).append(name)
+
+	# DFS post-order from each requested root; avoids deleting parent before its children.
+	ordered: list[str] = []
+	visited: set[str] = set()
+	stack_guard: set[str] = set()  # cycle guard
+
+	def visit(n: str) -> None:
+		if not n or n in visited:
+			return
+		if n in stack_guard:
+			# Cycle (unexpected). Still mark visited to avoid infinite recursion.
+			visited.add(n)
+			ordered.append(n)
+			return
+		stack_guard.add(n)
+		for ch in children_map.get(n, []) or []:
+			visit(str(ch))
+		stack_guard.discard(n)
+		visited.add(n)
+		ordered.append(n)
+
+	for n in req:
+		visit(n)
+
+	# Ensure any expanded descendants not reachable from req (edge cases) are included too.
+	for n in all_names:
+		if n not in visited:
+			visit(n)
+
+	# Delete linked Monthly Status rows first (otherwise Task deletion can be blocked by LinkValidationError).
+	# Monthly Status is a helper doctype; we bound this by Task delete permissions below.
+	try:
+		if ordered:
+			frappe.db.delete(
+				"Monthly Status",
+				{"reference_doctype": "Task", "reference_name": ["in", ordered]},
+			)
+	except Exception:
+		# Best-effort; if deletion still fails later, we'll surface the blocking link error.
+		pass
+
+	deleted: list[str] = []
+	failed: list[dict] = []
+	for name in ordered:
+		try:
+			doc = frappe.get_doc("Task", name)
+			doc.check_permission("delete")
+			frappe.delete_doc("Task", name, ignore_permissions=False)
+			deleted.append(name)
+		except Exception as e:
+			failed.append({"name": name, "error": str(e)})
+
+	return {
+		"deleted": deleted,
+		"failed": failed,
+		"requested": req,
+		"cascade_subtasks": bool(int(cascade_subtasks or 0)),
+		"total_planned": len(ordered),
+	}
+
+
+@frappe.whitelist()
+def delete_project_cascade(
+	project: str,
+	*,
+	dry_run: int = 0,
+	delete_tasks_first: int = 1,
+	delete_auto_repeat: int = 1,
+	cascade_subtasks: int = 1,
+) -> dict:
+	"""
+	Delete a Project from Smart Board, handling common blocking links:
+	- Linked Tasks (Task.project)
+	- Linked Auto Repeat (Auto Repeat.reference_doctype/reference_document)
+
+	We intentionally do NOT force-delete unknown linked docs. If deletion is blocked by other links,
+	we return a clear error so the UI can guide the user to archive or resolve links first.
+
+	Args:
+	- project: Project name
+	- dry_run: 1/0. If 1, only returns a plan (counts + linked docs), does not delete.
+	- delete_tasks_first: 1/0. If 1, delete Tasks linked to this Project before deleting Project.
+	- delete_auto_repeat: 1/0. If 1, delete Auto Repeat rows referencing this Project before deleting Project.
+	- cascade_subtasks: 1/0. If 1, deleting Tasks will also delete their descendant subtasks (parent_task tree).
+	"""
+	_ensure_logged_in()
+
+	name = str(project or "").strip()
+	if not name:
+		frappe.throw("Missing project")
+
+	# Permission gate: deleting is destructive; require Project delete permission.
+	doc = frappe.get_doc("Project", name)
+	doc.check_permission("delete")
+
+	# Build plan (best-effort; permission-aware)
+	task_names: list[str] = []
+	auto_repeats: list[str] = []
+
+	if int(delete_tasks_first or 0):
+		try:
+			task_names = frappe.get_all(
+				"Task",
+				filters={"project": name},
+				pluck="name",
+				limit_page_length=100000,
+			) or []
+			task_names = [str(x).strip() for x in task_names if str(x).strip()]
+		except Exception:
+			task_names = []
+
+	if int(delete_auto_repeat or 0):
+		try:
+			auto_repeats = frappe.get_all(
+				"Auto Repeat",
+				filters={"reference_doctype": "Project", "reference_document": name},
+				pluck="name",
+				limit_page_length=1000,
+			) or []
+			auto_repeats = [str(x).strip() for x in auto_repeats if str(x).strip()]
+		except Exception:
+			auto_repeats = []
+
+	# Also include direct link field as a hint (may be empty)
+	try:
+		ar_link = str(getattr(doc, "auto_repeat", "") or "").strip()
+	except Exception:
+		ar_link = ""
+	if ar_link and ar_link not in auto_repeats:
+		auto_repeats.append(ar_link)
+
+	plan = {
+		"project": name,
+		"tasks_count": len(task_names),
+		"auto_repeats": auto_repeats,
+		"cascade_subtasks": bool(int(cascade_subtasks or 0)),
+	}
+
+	if int(dry_run or 0):
+		return {"dry_run": True, "plan": plan}
+
+	# Execute deletions
+	deleted_auto_repeats: list[str] = []
+	failed_auto_repeats: list[dict] = []
+	task_result: dict | None = None
+
+	# 1) Delete tasks (if any)
+	if int(delete_tasks_first or 0) and task_names:
+		task_result = delete_tasks(task_names, cascade_subtasks=int(cascade_subtasks or 0))
+		if task_result and task_result.get("failed"):
+			# If tasks couldn't be deleted, Project delete will still fail; abort early with details.
+			return {"ok": False, "reason": "tasks_delete_failed", "plan": plan, "tasks": task_result}
+
+	# 2) Delete auto repeats
+	if int(delete_auto_repeat or 0) and auto_repeats:
+		for ar in auto_repeats:
+			try:
+				ar_doc = frappe.get_doc("Auto Repeat", ar)
+				ar_doc.check_permission("delete")
+				frappe.delete_doc("Auto Repeat", ar, ignore_permissions=False)
+				deleted_auto_repeats.append(ar)
+			except Exception as e:
+				failed_auto_repeats.append({"name": ar, "error": str(e)})
+
+		if failed_auto_repeats:
+			return {
+				"ok": False,
+				"reason": "auto_repeat_delete_failed",
+				"plan": plan,
+				"auto_repeat": {"deleted": deleted_auto_repeats, "failed": failed_auto_repeats},
+				"tasks": task_result or {"deleted": [], "failed": []},
+			}
+
+	# 3) Delete project
+	# Also delete any Monthly Status rows directly referencing this Project (future-proof).
+	try:
+		frappe.db.delete("Monthly Status", {"reference_doctype": "Project", "reference_name": name})
+	except Exception:
+		pass
+	try:
+		frappe.db.delete("Monthly Status", {"project": name})
+	except Exception:
+		pass
+	try:
+		frappe.delete_doc("Project", name, ignore_permissions=False)
+	except Exception as e:
+		return {
+			"ok": False,
+			"reason": "project_delete_failed",
+			"error": str(e),
+			"plan": plan,
+			"auto_repeat": {"deleted": deleted_auto_repeats, "failed": failed_auto_repeats},
+			"tasks": task_result or {"deleted": [], "failed": []},
+		}
+
+	return {
+		"ok": True,
+		"project": name,
+		"plan": plan,
+		"auto_repeat": {"deleted": deleted_auto_repeats, "failed": failed_auto_repeats},
+		"tasks": task_result or {"deleted": [], "failed": []},
+	}
 
 
 # ============================================================
@@ -1206,6 +1544,11 @@ def hydrate_project_children(projects: Any) -> dict:
 		limit_page_length=10000,
 		ignore_permissions=True,
 	)
+	# Attach user_image for UI avatars (permission-aware)
+	try:
+		_attach_user_image(team_rows)
+	except Exception:
+		pass
 	soft_rows = frappe.get_all(
 		"Project Software",
 		filters=[["parent", "in", allowed]],
@@ -1250,8 +1593,6 @@ def get_user_meta(users: Any) -> dict:
 		return {}
 
 	try:
-		# IMPORTANT: do NOT bypass permissions on User.
-		# If the current role cannot read User, we safely fall back to label=name with no image.
 		rows = frappe.get_all(
 			"User",
 			filters=[["name", "in", names], ["enabled", "=", 1]],
@@ -1259,7 +1600,20 @@ def get_user_meta(users: Any) -> dict:
 			limit_page_length=min(500, len(names)),
 		)
 	except frappe.PermissionError:
-		rows = []
+		# Safe fallback for product shell:
+		# - still requires login
+		# - returns ONLY {name, full_name, user_image} for enabled users
+		# This avoids forcing global "User read" permissions for all product users.
+		try:
+			rows = frappe.get_all(
+				"User",
+				filters=[["name", "in", names], ["enabled", "=", 1]],
+				fields=["name", "full_name", "user_image"],
+				limit_page_length=min(500, len(names)),
+				ignore_permissions=True,
+			)
+		except Exception:
+			rows = []
 
 	out = {}
 	for u in (rows or []):
@@ -1375,5 +1729,112 @@ def query_project_names_advanced(project_type: str | None = None, groups: Any = 
 	if combined is None:
 		return {"no_restriction": 1, "names": []}
 	return {"names": final[:limit]}
+
+
+@frappe.whitelist()
+def search_project_names(
+	search: str | None = None,
+	fields: Any = None,
+	*,
+	project_type: str | None = None,
+	is_active_only: int = 1,
+	limit: int = 5000,
+) -> dict:
+	"""
+	Resolve a multi-field search to a list of Project names (website-safe).
+
+	Used by the frontend when it cannot express "advanced OR rules" AND "search OR across columns"
+	in a single frappe.get_list call (because get_list only supports one OR group).
+
+	Args:
+	- search: search text (empty => no restriction)
+	- fields: list[str] of candidate Project fields (frontend-visible columns); backend will filter to safe searchable fields
+	- project_type: optional Project Type filter (narrows query)
+	- is_active_only: 1/0
+	- limit: max names returned (capped)
+	"""
+	_ensure_logged_in()
+
+	q = str(search or "").strip()
+	if not q:
+		return {"no_restriction": 1, "names": []}
+
+	try:
+		limit = int(limit or 5000)
+	except Exception:
+		limit = 5000
+	limit = max(1, min(limit, 20000))
+
+	req = _normalize_list(fields)
+	req = [str(x).strip() for x in req if str(x).strip()]
+
+	# Backend safety: only search in fields that are real Project fields and text-like.
+	allowed_types = {"Data", "Text", "Small Text", "Long Text", "Link", "Select", "Read Only"}
+	meta = None
+	try:
+		meta = frappe.get_meta("Project")
+	except Exception:
+		meta = None
+
+	out_fields: list[str] = []
+	seen = set()
+
+	def _add(fn: str) -> None:
+		f = str(fn or "").strip()
+		if not f or f in seen:
+			return
+		out_fields.append(f)
+		seen.add(f)
+
+	for f in req:
+		# Skip virtual/derived columns and child tables
+		if f.startswith("__"):
+			continue
+		if ":" in f:
+			continue
+		if f in {"custom_team_members", "custom_softwares"}:
+			continue
+		if f == "name":
+			_add("name")
+			continue
+		try:
+			df = meta.get_field(f) if meta else None
+		except Exception:
+			df = None
+		if not df:
+			continue
+		ft = str(getattr(df, "fieldtype", "") or "")
+		if ft in allowed_types:
+			_add(f)
+
+	# Ensure a minimal useful default
+	if "project_name" not in seen:
+		_add("project_name")
+	if "customer" not in seen:
+		_add("customer")
+
+	base = []
+	pt = str(project_type or "").strip()
+	if pt:
+		base.append(["project_type", "=", pt])
+	if int(is_active_only or 0):
+		base.append(["is_active", "=", "Yes"])
+
+	or_filters = [[f, "like", f"%{q}%"] for f in out_fields]
+
+	try:
+		rows = frappe.get_all(
+			"Project",
+			filters=base,
+			or_filters=or_filters,
+			pluck="name",
+			order_by="modified desc",
+			limit_page_length=limit,
+		)
+	except frappe.PermissionError:
+		rows = []
+
+	names = [str(x).strip() for x in (rows or []) if str(x).strip()]
+	return {"names": names[:limit]}
 
 

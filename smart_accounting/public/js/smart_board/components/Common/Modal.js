@@ -11,6 +11,18 @@
 import { escapeHtml } from '../../utils/dom.js';
 
 export class Modal {
+  static _openModals = new Set();
+
+  static closeAll() {
+    try {
+      // Copy first to avoid mutation during iteration
+      const list = Array.from(Modal._openModals || []);
+      for (const m of list) {
+        try { m?.close?.(); } catch (e) {}
+      }
+    } catch (e) {}
+  }
+
   constructor({ title = 'Modal', contentEl, footerEl, onClose } = {}) {
     this.title = title;
     this.contentEl = contentEl || document.createElement('div');
@@ -43,6 +55,7 @@ export class Modal {
     document.body.appendChild(overlay);
     this._overlay = overlay;
     this._modal = overlay.querySelector('.sb-modal');
+    try { Modal._openModals.add(this); } catch (e) {}
 
     // Scroll lock
     this._lockScroll(true);
@@ -124,6 +137,7 @@ export class Modal {
       document.removeEventListener('keydown', this._onKeyDown);
       this._onKeyDown = null;
     }
+    try { Modal._openModals.delete(this); } catch (e) {}
     this._overlay?.remove();
     this._overlay = null;
     this._modal = null;

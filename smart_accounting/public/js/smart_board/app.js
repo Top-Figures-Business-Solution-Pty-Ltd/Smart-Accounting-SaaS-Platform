@@ -6,6 +6,7 @@
 import { Sidebar } from './components/Layout/Sidebar.js';
 import { Header } from './components/Layout/Header.js';
 import { MainContent } from './components/Layout/MainContent.js';
+import { Modal } from './components/Common/Modal.js';
 import { PROJECT_TYPE_ICONS, DEFAULT_PROJECT_TYPE_ICON, DEFAULT_COLUMNS } from './utils/constants.js';
 import { Store } from './store/store.js';
 import { ProjectTypeService } from './services/projectTypeService.js';
@@ -74,7 +75,7 @@ export class SmartBoardApp {
         this.sidebar = new Sidebar(sidebarContainer, {
             projectTypes: this.projectTypes,
             currentView: this.currentView,
-            onViewChange: (viewType) => this.handleViewChange(viewType),
+            onViewChange: (viewType, opts) => this.handleViewChange(viewType, opts),
             onBoardSettings: () => this.handleHeaderAction('board_settings')
         });
         
@@ -283,8 +284,15 @@ export class SmartBoardApp {
         this.mainContent?.updateView(this.currentView);
     }
     
-    handleViewChange(viewType) {
+    handleViewChange(viewType, { reselect = false } = {}) {
         console.log('View changed to:', viewType);
+        // Reselect behavior:
+        // - Clicking the already-active view should still be useful (Monday-like).
+        // - We treat it as "close overlays / return focus to the board" without re-fetching data.
+        if (reselect && String(viewType || '') === String(this.currentView || '')) {
+            try { Modal.closeAll?.(); } catch (e) {}
+            return;
+        }
         // Leaving a client-scoped view: clear the transient customer filter so it doesn't "stick" everywhere.
         // This matches user expectation: customer filter added from Clients navigation should not persist when switching boards/pages.
         if (this._scopedCustomer) {

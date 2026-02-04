@@ -1,7 +1,9 @@
 import { getTaskColumnSpec } from '../../columns/specs/taskColumns.js';
 import { ProjectService } from '../../services/projectService.js';
 import { confirmDialog, notify } from '../../services/uiAdapter.js';
+import { TaskService } from '../../services/taskService.js';
 import { escapeHtml } from '../../utils/dom.js';
+import { getErrorMessage } from '../../utils/errorMessage.js';
 
 /**
  * Keep BoardTable.js smaller by moving task-expand / task-subtable logic here.
@@ -239,7 +241,17 @@ export function installBoardTableTaskFeatures(BoardTable) {
 								val = escapeHtml(v ?? '—');
 							}
 							const afford = editable ? `<span class="sb-afford sb-afford--task">${this._getTaskAffordance(c.field)}</span>` : '';
-							return `<td class="${cls}"${attrs}><div class="cell-content">${val}${afford}</div></td>`;
+
+							// Single-task delete button: only in the first data column (Monday-like minimal chrome).
+							let actions = afford;
+							if (c === taskCols[0]) {
+								actions = `<span class="sb-task-actions">${afford}
+                  <button type="button" class="sb-task-delete-btn" data-project="${escapeHtml(name)}" data-task="${escapeHtml(tn)}" title="Delete task" aria-label="Delete task">🗑</button>
+                </span>`;
+								val = `<span class="cell-label">${val}</span>`;
+							}
+
+							return `<td class="${cls}"${attrs}><div class="cell-content">${val}${actions}</div></td>`;
 						})
 						.join('');
 					const selTd = `<td class="sb-task-select-col"><input type="checkbox" class="sb-task-select" data-project="${escapeHtml(name)}" data-task="${escapeHtml(tn)}" ${selected ? 'checked' : ''} aria-label="Select task" /></td>`;
@@ -308,6 +320,193 @@ export function installBoardTableTaskFeatures(BoardTable) {
 		} catch (e) {
 			console.error(e);
 			notify('Failed to create task', 'red');
+		}
+	};
+
+	BoardTable.prototype._getSelectedTaskNames = function () {
+		const out = [];
+		const seen = new Set();
+		for (const set of (this._taskSelected?.values?.() || [])) {
+			for (const tn of (set || [])) {
+				const t = String(tn || '').trim();
+				if (!t || seen.has(t)) continue;
+				out.push(t);
+				seen.add(t);
+			}
+		}
+		return out;
+	};
+
+	BoardTable.prototype._updateTaskBulkBar = function () {
+		const bar = this.container?.querySelector?.('#sbTaskBulkBar');
+		const countEl = this.container?.querySelector?.('#sbTaskBulkCount');
+		if (!bar || !countEl) return;
+		const n = this._getSelectedTaskNames?.().length || 0;
+		countEl.textContent = String(n);
+		bar.style.display = n > 0 ? 'block' : 'none';
+
+		// Disable while busy
+		bar.querySelectorAll?.('button[data-action]')?.forEach?.((btn) => {
+			btn.disabled = !!this._taskBulkWorking;
+		});
+
+		// Reposition if project bulkbar is also visible (avoid overlap)
+		try {
+			const projBar = this.container?.querySelector?.('#sbBulkBar');
+			const projVisible = projBar && projBar.style.display !== 'none';
+			const taskVisible = bar.style.display !== 'none';
+			if (taskVisible && projVisible) {
+				bar.style.bottom = '86px';
+			} else {
+				bar.style.bottom = '22px';
+			}
+		} catch (e) {}
+	};
+
+	BoardTable.prototype._clearTaskSelection = function (projectName) {
+		const pn = String(projectName || '').trim();
+		if (!pn) return;
+		const set = this._taskSelected?.get?.(pn);
+		if (set) set.clear();
+
+		const grid = this.container?.querySelector?.(`.sb-task-row[data-project-name="${CSS.escape(pn)}"] .sb-task-grid`);
+		if (grid) {
+			grid.querySelectorAll?.('input.sb-task-select')?.forEach?.((cb) => {
+				cb.checked = false;
+				cb.closest('tr')?.classList.remove('sb-task-selected');
+			});
+			const all = grid.querySelector?.('input.sb-task-select-all');
+			if (all) all.checked = false;
+		}
+		this._updateTaskBulkBar();
+	};
+
+	BoardTable.prototype._clearAllTaskSelections = function () {
+		for (const [pn] of (this._taskSelected?.entries?.() || [])) {
+			this._clearTaskSelection(pn);
+		}
+		this._updateTaskBulkBar();
+	};
+
+	BoardTable.prototype._removeTasksFromLocal = function (projectName, deletedNames = []) {
+		const pn = String(projectName || '').trim();
+		if (!pn) return;
+		const delSet = new Set((Array.isArray(deletedNames) ? deletedNames : []).map((x) => String(x || '').trim()).filter(Boolean));
+		if (!delSet.size) return;
+
+		// Remove from local task list (if loaded)
+		const cur = this._tasksByProject?.get?.(pn);
+		if (Array.isArray(cur) && cur.length) {
+			this._tasksByProject.set(pn, cur.filter((t) => !delSet.has(String(t?.name || '').trim())));
+		}
+
+		// Remove monthly status cache (if present)
+		try {
+			for (const tn of delSet) {
+				this._msMatrixByTask?.delete?.(tn);
+			}
+		} catch (e) {}
+
+		// Update counts/badge
+		try {
+			const prev = Number(this._taskCounts?.get?.(pn) || 0);
+			const next = Math.max(0, prev - delSet.size);
+			this._taskCounts?.set?.(pn, next);
+			const p = this._projectByName?.get?.(pn);
+			if (p) p.__sb_task_count = next;
+		} catch (e) {}
+	};
+
+	BoardTable.prototype._handleDeleteTask = async function (projectName, taskName) {
+		const pn = String(projectName || '').trim();
+		const tn = String(taskName || '').trim();
+		if (!pn || !tn) return;
+
+		const ok = await confirmDialog(`Delete 1 task? This will also delete its sub-tasks. This cannot be undone.`);
+		if (!ok) return;
+
+		try {
+			const r = await TaskService.deleteTasks([tn], { cascadeSubtasks: true });
+			const deleted = Array.isArray(r?.deleted) ? r.deleted : [];
+			const failed = Array.isArray(r?.failed) ? r.failed : [];
+
+			if (deleted.length) {
+				this._removeTasksFromLocal(pn, deleted);
+				// If the deleted task was selected, clear it.
+				this._taskSelected?.get?.(pn)?.delete?.(tn);
+				this._updateTaskBulkBar();
+				this.scheduleRowsUpdate();
+				notify('Task deleted', 'green');
+			}
+			if (failed.length) {
+				const msg = failed?.[0]?.error || 'Delete task failed';
+				notify(getErrorMessage(msg) || 'Delete task failed', 'red');
+			}
+		} catch (e) {
+			console.error(e);
+			notify(getErrorMessage(e) || 'Delete task failed', 'red');
+		}
+	};
+
+	BoardTable.prototype._handleBulkDeleteTasks = async function (projectName) {
+		// Global bulk delete: delete all selected tasks across expanded projects.
+		const names = this._getSelectedTaskNames?.() || [];
+		if (!names.length) return;
+		const ok = await confirmDialog(`Delete ${names.length} tasks? This will also delete their sub-tasks and Monthly Status. This cannot be undone.`);
+		if (!ok) return;
+
+		// Affected projects = those with any selection
+		const affected = [];
+		for (const [pn, set] of (this._taskSelected?.entries?.() || [])) {
+			if (set && set.size) affected.push(String(pn));
+		}
+
+		try {
+			this._taskBulkWorking = true;
+			this._updateTaskBulkBar();
+			const r = await TaskService.deleteTasks(names, { cascadeSubtasks: true });
+			const deleted = Array.isArray(r?.deleted) ? r.deleted : [];
+			const failed = Array.isArray(r?.failed) ? r.failed : [];
+
+			if (deleted.length) {
+				// Remove from all loaded task tables (best-effort)
+				const delSet = new Set(deleted.map(String));
+				for (const pn of affected) {
+					const list = this._tasksByProject?.get?.(pn) || [];
+					const delInThisProject = (list || []).map((t) => String(t?.name || '').trim()).filter((tn) => tn && delSet.has(tn));
+					if (delInThisProject.length) this._removeTasksFromLocal(pn, delInThisProject);
+				}
+			}
+
+			// Refresh accurate task counts for affected projects (subtasks may have been deleted too).
+			try {
+				if (affected.length) {
+					const counts = await ProjectService.getTaskCounts(affected);
+					for (const pn of affected) {
+						const c = Number(counts?.[pn] || 0);
+						this._taskCounts?.set?.(pn, c);
+						const p = this._projectByName?.get?.(pn);
+						if (p) p.__sb_task_count = c;
+					}
+				}
+			} catch (e2) {}
+
+			// Clear selections no matter what; failed ones remain and can be re-selected.
+			this._clearAllTaskSelections();
+			this.scheduleRowsUpdate();
+
+			if (failed.length) {
+				const msg = failed?.[0]?.error || 'Bulk delete tasks failed';
+				notify(getErrorMessage(msg) || 'Bulk delete tasks failed', 'red');
+				return;
+			}
+			notify(`Deleted ${deleted.length} tasks`, 'green');
+		} catch (e) {
+			console.error(e);
+			notify(getErrorMessage(e) || 'Bulk delete tasks failed', 'red');
+		} finally {
+			this._taskBulkWorking = false;
+			this._updateTaskBulkBar();
 		}
 	};
 }

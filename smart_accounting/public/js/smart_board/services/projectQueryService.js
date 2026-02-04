@@ -6,6 +6,7 @@
 
 import { ApiService } from './api.js';
 import { Perf } from '../utils/perf.js';
+import { DoctypeMetaService } from './doctypeMetaService.js';
 
 export class ProjectQueryService {
   static _warnedMissingFields = false;
@@ -88,9 +89,14 @@ export class ProjectQueryService {
     }
 
     const fetchWithFields = async (fields) => {
+      const limitStart = Number.isFinite(Number(filters?.limit_start)) ? Number(filters.limit_start) : 0;
+      const limit = Number.isFinite(Number(filters?.limit)) ? Number(filters.limit) : 100;
+      // For pre-resolving name lists (advanced groups / multi-field search), use a higher cap than page size.
+      const resolveLimit = Math.max(2000, Math.min(10000, limit * 50));
+
       // Advanced groups (supports nested AND/OR across groups).
       const hasGroups = Array.isArray(filters?.advanced_groups) && filters.advanced_groups.length > 0;
-      let nameIn = null;
+      let nameIn = null; // final restriction list (AND)
       if (hasGroups) {
         try {
           const r = await frappe.call({
@@ -98,10 +104,11 @@ export class ProjectQueryService {
             args: {
               project_type: filters.project_type || null,
               groups: filters.advanced_groups,
-              limit: filters.limit || 2000,
+              limit: resolveLimit,
               // Smart Board default: active-only (Archive => is_active="No" should disappear).
               is_active_only: filters.is_active === true ? 1 : 0,
-              search: filters.search || null,
+              // Search is resolved separately (multi-field) and intersected as name_in.
+              search: null,
             },
           });
           const msg = r?.message || {};
@@ -113,21 +120,127 @@ export class ProjectQueryService {
           } else if (Array.isArray(names) && names.length) {
             nameIn = names;
           } else {
-            return [];
+            return { items: [], meta: { total_count: 0 } };
           }
         } catch (e) {
           // fall back to old path
         }
       }
 
-      const or_filters = this.buildOrFilters(filters);
-      const limitStart = Number.isFinite(Number(filters?.limit_start)) ? Number(filters.limit_start) : 0;
-      const limit = Number.isFinite(Number(filters?.limit)) ? Number(filters.limit) : 100;
+      // Advanced rules OR filters (legacy advanced_rules join=or)
+      const advOrFilters = this.buildOrFilters(filters);
+
+      // Search: multi-field, derived from current visible columns when possible.
+      const rawSearch = String(filters?.search || '').trim();
+      const hasSearch = !!rawSearch;
+      let fallbackSearchProjectName = '';
+      const searchCandidates = Array.isArray(filters?.search_fields)
+        ? filters.search_fields
+        : (Array.isArray(filters?.fields) ? filters.fields : fields);
+      const searchFields = Array.isArray(searchCandidates)
+        ? searchCandidates.map(String).map((s) => s.trim()).filter(Boolean)
+        : [];
+
+      const cleanSearchFields = await (async () => {
+        const seen = new Set();
+        const out = [];
+
+        // Only search in text-like fields (Date/Datetime filters with "%q%" can throw "Invalid Date").
+        const allowedTypes = new Set(['Data', 'Text', 'Small Text', 'Long Text', 'Link', 'Select', 'Read Only']);
+        let meta = null;
+        try {
+          meta = await DoctypeMetaService.getMeta('Project');
+        } catch (e) {
+          meta = null;
+        }
+        const fieldsMeta = Array.isArray(meta?.fields) ? meta.fields : [];
+        const typeByField = new Map(fieldsMeta.map((f) => [String(f?.fieldname || ''), String(f?.fieldtype || '')]));
+
+        const add = (f) => {
+          const s = String(f || '').trim();
+          if (!s || seen.has(s)) return;
+          // Skip virtual/derived and child table fields
+          if (s.startsWith('__')) return;
+          if (s.includes(':')) return;
+          if (s === 'custom_team_members' || s === 'custom_softwares') return;
+
+          // name is special (not always a DocField in meta.fields)
+          if (s !== 'name') {
+            const t = typeByField.get(s) || '';
+            if (allowedTypes.size && t && !allowedTypes.has(t)) return;
+            if (!t && s !== 'project_name' && s !== 'customer') return; // unknown field: skip
+          }
+
+          out.push(s);
+          seen.add(s);
+        };
+
+        // Always include core identifiers
+        add('name');
+        add('project_name');
+        add('customer');
+        for (const f of searchFields) add(f);
+
+        // Fail-safe minimal set
+        if (!out.length) return ['name', 'project_name', 'customer'];
+        return out;
+      })();
+
+      const searchOrFilters = hasSearch
+        ? cleanSearchFields.map((f) => [f, 'like', `%${rawSearch}%`])
+        : [];
+
+      const hasAdvOr = Array.isArray(advOrFilters) && advOrFilters.length > 0;
+      const hasSearchOr = Array.isArray(searchOrFilters) && searchOrFilters.length > 0;
+
+      // Frappe get_list supports only ONE `or_filters` group. If both advanced OR rules and search OR exist,
+      // we pre-resolve search matches to a name_in list and keep advanced OR rules as-is.
+      if (hasSearch && hasAdvOr && hasSearchOr) {
+        try {
+          const r = await frappe.call({
+            method: 'smart_accounting.api.project_board.search_project_names',
+            args: {
+              search: rawSearch,
+              fields: cleanSearchFields,
+              project_type: filters.project_type || null,
+              is_active_only: filters.is_active === true ? 1 : 0,
+              limit: resolveLimit,
+            }
+          });
+          const msg = r?.message || {};
+          const names = Array.isArray(msg?.names) ? msg.names : (Array.isArray(msg) ? msg : []);
+
+          if (Array.isArray(names) && names.length) {
+            if (Array.isArray(nameIn) && nameIn.length) {
+              // Intersect with advanced group restriction
+              const set = new Set(nameIn.map(String));
+              const inter = names.map(String).filter((x) => set.has(String(x)));
+              nameIn = inter.length ? inter : [];
+            } else {
+              nameIn = names;
+            }
+          } else {
+            // Search yields no matches => empty result
+            return { items: [], meta: { total_count: 0 } };
+          }
+        } catch (e) {
+          // Fail-safe: if search resolution fails, fall back to legacy behavior (project_name only)
+          // by narrowing search to project_name in the main query.
+          fallbackSearchProjectName = rawSearch;
+        }
+      }
+
+      // Effective or_filters:
+      // - If advanced OR exists, keep it (search may have been converted to name_in above)
+      // - Else if search OR exists, use it
+      // - Else none
+      const effectiveOrFilters = hasAdvOr ? advOrFilters : (hasSearchOr ? searchOrFilters : []);
+
       const args = {
         doctype: 'Project',
         fields,
-        filters: this.buildFilters({ ...filters, ...(nameIn ? { name_in: nameIn } : {}) }),
-        ...(or_filters && or_filters.length ? { or_filters } : {}),
+        filters: this.buildFilters({ ...filters, ...(fallbackSearchProjectName ? { __sb_search_fallback_project_name: fallbackSearchProjectName } : {}), ...(nameIn ? { name_in: nameIn } : {}) }),
+        ...(effectiveOrFilters && effectiveOrFilters.length ? { or_filters: effectiveOrFilters } : {}),
         order_by: 'modified desc',
         limit_start: Math.max(0, limitStart),
         limit_page_length: Math.max(1, limit),
@@ -400,10 +513,14 @@ export class ProjectQueryService {
       result.push(['custom_lodgement_due_date', '<=', filters.date_to]);
     }
 
-    // 搜索关键词
-    if (filters.search) {
-      result.push(['project_name', 'like', `%${filters.search}%`]);
-    }
+    // NOTE (2026-02):
+    // Global search is resolved as:
+    // - OR across multiple visible columns (via `or_filters`) when possible
+    // - OR pre-resolution to `name_in` when advanced OR rules are present
+    // So we intentionally do NOT apply `filters.search` here (otherwise it would AND-restrict to project_name only).
+    // Fail-safe: allow explicit fallback to legacy project_name-only search.
+    const fallbackSearch = String(filters?.__sb_search_fallback_project_name || '').trim();
+    if (fallbackSearch) result.push(['project_name', 'like', `%${fallbackSearch}%`]);
 
     // 只显示活跃的项目（Smart Board 默认只展示 Active）
     if (filters.is_active === true) {

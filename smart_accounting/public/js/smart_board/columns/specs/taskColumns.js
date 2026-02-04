@@ -4,14 +4,17 @@
  */
 import { InlineTextEditor } from '../../components/Common/editors/InlineTextEditor.js';
 import { InlineSelectEditor } from '../../components/Common/editors/InlineSelectEditor.js';
+import { InlineMenuSelectEditor } from '../../components/Common/editors/InlineMenuSelectEditor.js';
 import { InlineDateEditor } from '../../components/Common/editors/InlineDateEditor.js';
 import { DoctypeMetaService } from '../../services/doctypeMetaService.js';
 import { LinkInput } from '../../components/Common/LinkInput.js';
 import { MultiLinkPicker } from '../../components/Common/MultiLinkPicker.js';
 import { ProjectService } from '../../services/projectService.js';
 import { notify } from '../../services/uiAdapter.js';
+import { STATUS_COLORS } from '../../utils/constants.js';
 
-const TASK_STATUS_FALLBACK = ['Not Started', 'Working On It', 'Stuck', 'Done'];
+// Source of truth is Task.status options (Property Setter); this is only a fail-safe fallback.
+const TASK_STATUS_FALLBACK = ['Not started yet', 'Working on it', 'Stuck', 'Done'];
 const TASK_PRIORITY_FALLBACK = ['Low', 'Medium', 'High', 'Urgent'];
 
 function mountEditorHelpers(manager, mountEl, editorInstance) {
@@ -43,6 +46,49 @@ function taskSelectEditor({ cellEl, task, manager, field, doctype, fieldname, fa
     ed.render();
     mountEditorHelpers(manager, contentEl, ed);
   });
+  mountEditorHelpers(manager, contentEl, ed);
+  return ed;
+}
+
+function taskStatusMenuEditor({ cellEl, task, manager, field }) {
+  const contentEl = cellEl.querySelector('.cell-content') || cellEl;
+  const current = task?.[field] || '';
+
+  // Render immediately so UI responds instantly
+  const ed = new InlineMenuSelectEditor(contentEl, {
+    options: current ? [{ value: current, label: current, color: STATUS_COLORS[current] || '' }] : [],
+    initialValue: current,
+  });
+
+  // Commit on selection
+  contentEl.addEventListener(
+    'sb:menu-select',
+    (e) => {
+      e.stopPropagation?.();
+      manager?.commitAndClose?.('menu-select');
+    },
+    { once: true }
+  );
+  // Close on outside click
+  contentEl.addEventListener(
+    'sb:menu-close',
+    () => {
+      manager?.commitAndClose?.('menu-close');
+    },
+    { once: true }
+  );
+
+  // Async options from DocType meta (if available)
+  getOptions('Task', 'status', TASK_STATUS_FALLBACK).then((opts) => {
+    if (!contentEl?.isConnected) return;
+    const list = Array.isArray(opts) ? opts : [];
+    // Ensure current value is always present
+    const final = current && !list.includes(current) ? [current].concat(list) : list;
+    ed.options = (final || []).map((s) => ({ value: s, label: s, color: STATUS_COLORS[s] || '' }));
+    ed.render();
+    mountEditorHelpers(manager, contentEl, ed);
+  });
+
   mountEditorHelpers(manager, contentEl, ed);
   return ed;
 }
@@ -139,15 +185,7 @@ const TASK_COLUMN_SPECS = {
   status: {
     isEditable: true,
     afford: 'select',
-    renderEditor: ({ cellEl, task, manager, field }) => taskSelectEditor({
-      cellEl,
-      task,
-      manager,
-      field,
-      doctype: 'Task',
-      fieldname: 'status',
-      fallback: TASK_STATUS_FALLBACK
-    })
+    renderEditor: ({ cellEl, task, manager, field }) => taskStatusMenuEditor({ cellEl, task, manager, field })
   },
   priority: {
     isEditable: true,

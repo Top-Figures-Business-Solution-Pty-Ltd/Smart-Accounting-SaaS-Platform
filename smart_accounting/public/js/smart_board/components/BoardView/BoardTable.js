@@ -409,6 +409,17 @@ export class BoardTable {
                 </div>
               </div>
             </div>
+            <div class="sb-bulkbar" id="sbTaskBulkBar" style="display:none;">
+              <div class="sb-bulkbar__inner">
+                <div class="sb-bulkbar__left">
+                  <span class="sb-bulkbar__count"><span id="sbTaskBulkCount">0</span> tasks selected</span>
+                </div>
+                <div class="sb-bulkbar__actions">
+                  <button type="button" class="btn btn-danger btn-sm" data-action="task-bulk-delete">Delete</button>
+                  <button type="button" class="btn btn-light btn-sm" data-action="task-bulk-clear">Clear</button>
+                </div>
+              </div>
+            </div>
         `;
         
         this.bindEvents();
@@ -459,6 +470,17 @@ export class BoardTable {
                     e.preventDefault();
                     e.stopPropagation();
                     this._openTaskMonthlyStatusMenu(msCell);
+                    return;
+                }
+                // Task delete / bulk delete actions inside expanded task table
+                // (task bulk bar moved to fixed bottom bar; handled elsewhere)
+                const taskDelBtn = e.target?.closest?.('.sb-task-delete-btn');
+                if (taskDelBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const projectName = taskDelBtn.getAttribute('data-project') || '';
+                    const taskName = taskDelBtn.getAttribute('data-task') || '';
+                    if (projectName && taskName) this._handleDeleteTask?.(projectName, taskName);
                     return;
                 }
                 const addTaskBtn = e.target?.closest?.('.sb-add-task-btn');
@@ -543,6 +565,8 @@ export class BoardTable {
                             cb.closest('tr')?.classList.remove('sb-task-selected');
                         }
                     }
+                    // Update task bulk bar (global)
+                    this._updateTaskBulkBar?.();
                     return;
                 }
 
@@ -566,6 +590,7 @@ export class BoardTable {
                         const boxes = Array.from(grid.querySelectorAll('input.sb-task-select'));
                         all.checked = boxes.length > 0 && boxes.every((b) => b.checked);
                     }
+                    this._updateTaskBulkBar?.();
                 }
             });
         }
@@ -577,6 +602,7 @@ export class BoardTable {
         // Bulk select events
         this.bindBulkSelect();
         this.bindBulkBar();
+        this.bindTaskBulkBar?.();
 
         // Virtual scroll
         this.bindScroll();
@@ -944,6 +970,9 @@ export class BoardTable {
         bar.querySelectorAll('button[data-action]')?.forEach?.((btn) => {
             btn.disabled = !!this._bulkWorking;
         });
+
+        // If task bulk bar is visible, it may need to reposition to avoid overlap.
+        try { this._updateTaskBulkBar?.(); } catch (e) {}
     }
 
     bindBulkBar() {
@@ -965,6 +994,34 @@ export class BoardTable {
         };
         bar.addEventListener('click', this._onBulkBarClick);
         this.updateBulkBar();
+    }
+
+    bindTaskBulkBar() {
+        const bar = this.container.querySelector('#sbTaskBulkBar');
+        if (!bar) return;
+
+        if (this._onTaskBulkBarClick) {
+            bar.removeEventListener('click', this._onTaskBulkBarClick);
+            this._onTaskBulkBarClick = null;
+        }
+
+        this._onTaskBulkBarClick = (e) => {
+            const btn = e.target?.closest?.('button[data-action]');
+            const action = btn?.dataset?.action;
+            if (!action) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (action === 'task-bulk-clear') {
+                this._clearAllTaskSelections?.();
+                return;
+            }
+            if (action === 'task-bulk-delete') {
+                this._handleBulkDeleteTasks?.();
+                return;
+            }
+        };
+        bar.addEventListener('click', this._onTaskBulkBarClick);
+        this._updateTaskBulkBar?.();
     }
 
     _getSelectedNames() {
@@ -996,7 +1053,7 @@ export class BoardTable {
         }
 
         if (action === 'bulk-delete') {
-            const ok = await confirmDialog(`Delete ${names.length} projects? This cannot be undone.`);
+            const ok = await confirmDialog(`Delete ${names.length} projects? This will also delete linked tasks and Auto Repeat. This cannot be undone.`);
             if (!ok) return;
             await this._bulkDelete();
             return;
@@ -1052,7 +1109,8 @@ export class BoardTable {
             this._clearSelection();
         } catch (e) {
             console.error(e);
-            notify('Bulk delete failed', 'red');
+            const { getErrorMessage } = await import('../../utils/errorMessage.js');
+            notify(getErrorMessage(e) || 'Bulk delete failed', 'red');
         } finally {
             this._bulkWorking = false;
             this.updateBulkBar();
