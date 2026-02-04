@@ -5,6 +5,7 @@
  */
 import { escapeHtml } from '../../utils/dom.js';
 import { Modal } from '../Common/Modal.js';
+import { notify } from '../../services/uiAdapter.js';
 
 export class ColumnsManagerModal {
   constructor({ title = 'Manage Columns', sections = [], activeKey = null, onSave, onClose } = {}) {
@@ -191,7 +192,7 @@ export class ColumnsManagerModal {
     for (const s of (this.sections || [])) {
       const enabled = (s.columns || []).filter((c) => c.enabled);
       if (enabled.length === 0) {
-        alert(`至少需要保留 1 列：${s.label}`);
+        notify(`至少需要保留 1 列：${s.label}`, 'red');
         return;
       }
       out[s.key] = enabled;

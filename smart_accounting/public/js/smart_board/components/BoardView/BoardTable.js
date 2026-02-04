@@ -1355,7 +1355,7 @@ export class BoardTable {
 
     openColumnManager() {
         if (!this.isBoardView(this.viewType)) {
-            alert('Columns 只在 Boards（Project Type）里可用。');
+            notify('Columns 只在 Boards（Project Type）里可用。', 'orange');
             return;
         }
         if (this._openingColMgr) return;
