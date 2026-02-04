@@ -4,6 +4,7 @@
  */
 
 import { isDesk, hasDialog } from '../utils/env.js';
+import { ToastService } from './toastService.js';
 
 export function notify(message, indicator = 'blue') {
   if (isDesk() && typeof frappe?.show_alert === 'function') {
@@ -11,7 +12,7 @@ export function notify(message, indicator = 'blue') {
     return;
   }
   // Website fallback
-  alert(message);
+  ToastService.notify(message, indicator);
 }
 
 export function confirmDialog(message) {
@@ -29,7 +30,7 @@ export function msgprint(message) {
     frappe.msgprint(message);
     return;
   }
-  alert(message);
+  ToastService.msgprint(message, 'blue');
 }
 
 export function openDialog(DialogClassArgs) {

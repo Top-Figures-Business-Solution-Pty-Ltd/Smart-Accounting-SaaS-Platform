@@ -272,7 +272,9 @@ def set_project_type_status_config(project_type: str | None = None, statuses: An
 		return {"ok": True, "cleared": True, "saved_count": 0}
 
 	# If identical to pool, treat as "no custom config"
-	if pool and clean == pool:
+	# NOTE: treat "all selected" as "no custom config", regardless of order.
+	# Order can differ between UI selection and DocType meta pool order.
+	if pool and set(clean) == pool_set:
 		cfg = _get_status_config_map()
 		if pt in cfg:
 			cfg.pop(pt, None)

@@ -218,6 +218,96 @@
     border-color: rgba(220, 38, 38, 0.45);
 }
 
+/* ============================================
+   Toast (Website notifications)
+   ============================================ */
+.sb-toast-root {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 20000;
+    pointer-events: none; /* don't block the UI; toasts enable pointer events individually */
+    max-width: min(420px, calc(100vw - 32px));
+}
+
+.sb-toast {
+    pointer-events: auto;
+    background: #ffffff;
+    border: 1px solid var(--smart-board-border);
+    border-left-width: 4px;
+    border-radius: 14px;
+    box-shadow: var(--smart-board-shadow-md);
+    overflow: hidden;
+    transform: translateY(-4px);
+    opacity: 0;
+    animation: sbToastIn 160ms ease forwards;
+}
+
+.sb-toast--leave {
+    animation: sbToastOut 180ms ease forwards;
+}
+
+.sb-toast__body {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 12px;
+}
+
+.sb-toast__message {
+    flex: 1;
+    min-width: 0;
+    color: var(--smart-board-text);
+    font-size: 14px;
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.sb-toast__close {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--smart-board-text-muted);
+    cursor: pointer;
+    border-radius: 10px;
+    width: 28px;
+    height: 28px;
+    line-height: 26px;
+    font-size: 18px;
+    padding: 0;
+    flex: 0 0 auto;
+}
+
+.sb-toast__close:hover {
+    background: rgba(15, 23, 42, 0.04);
+    border-color: rgba(15, 23, 42, 0.08);
+    color: var(--smart-board-text);
+}
+
+.sb-toast__bar {
+    height: 2px;
+    background: rgba(15, 23, 42, 0.10);
+}
+
+/* Indicator colors */
+.sb-toast--green { border-left-color: #16a34a; }
+.sb-toast--red { border-left-color: #dc2626; }
+.sb-toast--yellow { border-left-color: #f59e0b; }
+.sb-toast--blue { border-left-color: var(--smart-board-primary); }
+.sb-toast--gray { border-left-color: rgba(15, 23, 42, 0.35); }
+
+@keyframes sbToastIn {
+    from { transform: translateY(-4px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes sbToastOut {
+    from { transform: translateY(0); opacity: 1; }
+    to { transform: translateY(-4px); opacity: 0; }
+}
+
 /* Activity Log */
 .sb-activity__bar {
     display: flex;

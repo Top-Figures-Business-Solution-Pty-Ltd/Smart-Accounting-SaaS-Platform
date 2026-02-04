@@ -5,6 +5,7 @@
  * - Excludes non-filterable virtual/derived columns.
  */
 import { ViewService } from '../services/viewService.js';
+import { isDeprecatedProjectField, sanitizeProjectColumnsConfig } from './deprecatedColumns.js';
 
 const MONTHS = [
   'January','February','March','April','May','June',
@@ -33,6 +34,8 @@ function isFilterableField(field) {
   if (f.startsWith('__sb_')) return false;
   // Derived team role columns (not a real Project field)
   if (f.startsWith('team:')) return false;
+  // Deprecated fields should never appear in Filters
+  if (isDeprecatedProjectField(f)) return false;
   // Exclude fields that should never appear in Filters
   if (f === 'custom_engagement_letter') return false;
   if (f === 'notes') return false;
@@ -79,7 +82,7 @@ export async function buildAdvancedFilterColumns({ viewType, statusOptions }) {
       fallbackTitle: `${viewType} Board`,
       fallbackColumns: [],
     });
-    const cols = parseSavedViewColumns(view?.columns);
+    const cols = sanitizeProjectColumnsConfig(parseSavedViewColumns(view?.columns));
     const seen = new Set();
 
     const out = [];
