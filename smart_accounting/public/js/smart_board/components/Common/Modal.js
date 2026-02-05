@@ -136,6 +136,12 @@ export class Modal {
   }
 
   close() {
+    const wasOpen = !!this._overlay;
+    const hadListener = !!this._onKeyDown;
+    // Important: open() calls close() for idempotency. When the modal was never opened,
+    // we must NOT fire onClose() (it would break promise-based flows).
+    if (!wasOpen && !hadListener) return;
+
     if (this._onKeyDown) {
       document.removeEventListener('keydown', this._onKeyDown);
       this._onKeyDown = null;
@@ -144,15 +150,24 @@ export class Modal {
     this._overlay?.remove();
     this._overlay = null;
     this._modal = null;
-    this._lockScroll(false);
 
-    // Restore focus
+    // Nested modals: only unlock scroll when the last modal is closed.
     try {
-      this._lastActive?.focus?.();
-    } catch (e) {}
+      const remaining = Modal._openModals?.size || 0;
+      if (wasOpen && remaining === 0) this._lockScroll(false);
+    } catch (e) {
+      if (wasOpen) this._lockScroll(false);
+    }
+
+    // Restore focus (only when closing a real overlay)
+    if (wasOpen) {
+      try {
+        this._lastActive?.focus?.();
+      } catch (e) {}
+    }
     this._lastActive = null;
 
-    this.onClose();
+    if (wasOpen) this.onClose();
   }
 }
 
