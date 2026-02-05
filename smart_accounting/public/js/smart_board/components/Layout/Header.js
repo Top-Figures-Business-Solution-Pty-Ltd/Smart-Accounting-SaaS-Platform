@@ -142,13 +142,44 @@ export class Header {
             const el = this.container?.querySelector?.('.view-subtitle');
             if (!el) return;
 
+            const view = String(this.currentView || '');
+
+            const state = this.options?.store?.getState?.() || {};
+
+            // Clients view: show loaded/total like boards (same UX)
+            if (view === 'clients') {
+                const c = state?.clients || {};
+                const loaded = Array.isArray(c?.items) ? c.items.length : 0;
+                const total = (c?.totalCount == null) ? null : Number(c.totalCount);
+                const loading = !!c?.loading;
+                const loadingMore = !!c?.loadingMore;
+                const hasMore = c?.hasMore !== false;
+
+                if (loading && loaded === 0) {
+                    el.textContent = 'Loading…';
+                    return;
+                }
+                if (total != null && Number.isFinite(total)) {
+                    const all = loaded >= total;
+                    el.textContent = all
+                        ? `Loaded ${loaded} / ${total} · All loaded`
+                        : `Loaded ${loaded} / ${total}${loadingMore ? ' · Loading…' : ''}`;
+                    return;
+                }
+                if (!hasMore && !loadingMore) {
+                    el.textContent = `Loaded ${loaded} · All loaded`;
+                    return;
+                }
+                el.textContent = `Loaded ${loaded}${loadingMore ? ' · Loading…' : ''}`;
+                return;
+            }
+
             // Only show counts for board views (Project Type boards)
             if (!this.isBoardView()) {
                 el.textContent = '';
                 return;
             }
 
-            const state = this.options?.store?.getState?.() || {};
             const p = state?.projects || {};
             const loaded = Array.isArray(p?.items) ? p.items.length : 0;
             const total = (p?.totalCount == null) ? null : Number(p.totalCount);

@@ -962,7 +962,7 @@ export class BoardTable {
         const bar = this.container.querySelector('#sbBulkBar');
         const countEl = this.container.querySelector('#sbBulkCount');
         if (!bar || !countEl) return;
-        const n = this._selected?.size || 0;
+        const n = this._getSelectedNames?.().length || 0;
         countEl.textContent = String(n);
         bar.style.display = n > 0 ? 'block' : 'none';
 
@@ -1025,7 +1025,13 @@ export class BoardTable {
     }
 
     _getSelectedNames() {
-        return Array.from(this._selected || []).filter(Boolean);
+        // Only keep selections that still exist in the current dataset.
+        // This prevents ghost selections after rows are removed from the list (archive/delete/move board).
+        const existing = this._projectByName instanceof Map ? this._projectByName : new Map();
+        return Array.from(this._selected || []).filter((n) => {
+            const name = String(n || '').trim();
+            return !!name && existing.has(name);
+        });
     }
 
     _clearSelection() {

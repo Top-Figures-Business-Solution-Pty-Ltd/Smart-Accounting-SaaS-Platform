@@ -41,6 +41,9 @@ export class Modal {
 
     const overlay = document.createElement('div');
     overlay.className = 'sb-modal-overlay';
+    // Treat modal as an "editor portal" so inline EditingManager won't auto-commit
+    // when user interacts with a modal triggered from a table cell.
+    overlay.setAttribute('data-sb-editor-portal', '1');
     overlay.innerHTML = `
       <div class="sb-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(this.title)}">
         <div class="sb-modal__header">

@@ -10,8 +10,11 @@ import { MultiLinkPicker } from '../../components/Common/MultiLinkPicker.js';
 import { uploadAttachmentToField } from '../../services/fileUploadService.js';
 import { DoctypeMetaService } from '../../services/doctypeMetaService.js';
 import { BoardStatusService } from '../../services/boardStatusService.js';
-import { confirmDialog } from '../../services/uiAdapter.js';
+import { confirmDialog, notify } from '../../services/uiAdapter.js';
 import { escapeHtml } from '../../utils/dom.js';
+import { openProjectTypeChangeFlow } from '../../controllers/projectTypeChangeController.js';
+import { getErrorMessage } from '../../utils/errorMessage.js';
+import { ProjectService } from '../../services/projectService.js';
 
 function _fileNameFromUrl(url) {
   const s = String(url || '').trim();
@@ -523,8 +526,77 @@ export function makeProjectColumnSpecs() {
     // (11) Entity - read-only
     { field: 'custom_entity_type', isEditable: false },
 
-    // (12) Project Type - read-only
-    { field: 'project_type', isEditable: false },
+    // (12) Project Type - editable via modal (double confirm)
+    {
+      field: 'project_type',
+      isEditable: true,
+      // Do NOT bulk-sync project_type: it's effectively a "move board" action and too risky to apply to many rows by accident.
+      bulkSync: false,
+      renderCell: ({ project }) => {
+        const v = String(project?.project_type || '').trim();
+        if (!v) return '<span class="text-muted">—</span><span class="sb-afford sb-afford--select">▾</span>';
+        return `
+          <span class="sb-primary-text">${escapeHtml(v)}</span>
+          <span class="sb-afford sb-afford--select">▾</span>
+        `;
+      },
+      renderEditor: ({ project, manager }) => {
+        // Modal-based editor: we don't bind blur/enter on an input because focus moves to the modal.
+        const ed = {
+          _value: String(project?.project_type || '').trim(),
+          _modal: null,
+          getValue() { return this._value; },
+          destroy() {
+            try { this._modal?.close?.(); } catch (e) {}
+            this._modal = null;
+          },
+        };
+        manager?.bindActiveEditor?.(null, ed);
+
+        let picked = false;
+        (async () => {
+          ed._modal = await openProjectTypeChangeFlow({
+            project,
+            onSelected: async (next) => {
+              const v = String(next || '').trim();
+              if (!v) return;
+              picked = true;
+              ed._value = v;
+              await manager?.commitAndClose?.('project-type-modal');
+            },
+            onClosed: () => {
+              if (picked) return;
+              manager?.cancel?.();
+            },
+          });
+        })();
+
+        return ed;
+      },
+      async commit({ project, projectName, value, store }) {
+        const from = String(project?.project_type || '').trim();
+        const to = String(value || '').trim();
+        if (!to) return;
+        if (to === from) return;
+        try {
+          await ProjectService.updateProject(projectName, { project_type: to });
+          store?.commit?.('projects/updateProject', { name: projectName, project_type: to });
+
+          // If we're on a board scoped to one project_type, moving it should remove it from the current list.
+          const curBoardType = String(store?.getState?.()?.projects?.lastFilters?.project_type || '').trim();
+          if (curBoardType && to !== curBoardType) {
+            store?.commit?.('projects/removeProject', projectName);
+            // Keep total count roughly consistent (best-effort).
+            const total = store?.getState?.()?.projects?.totalCount;
+            const n = (total == null) ? null : Number(total);
+            if (n != null && Number.isFinite(n)) store?.commit?.('projects/setTotalCount', Math.max(0, n - 1));
+          }
+          notify(`Project Type updated to ${to}`, 'green');
+        } catch (e) {
+          notify(getErrorMessage(e) || 'Update Project Type failed', 'red');
+        }
+      },
+    },
 
     // (15) Frequency - read-only for now (but spec exists)
     { field: 'custom_project_frequency', isEditable: false },
