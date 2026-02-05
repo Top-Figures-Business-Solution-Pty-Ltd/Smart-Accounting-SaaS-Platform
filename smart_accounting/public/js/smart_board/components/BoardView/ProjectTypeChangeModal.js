@@ -14,6 +14,7 @@ export class ProjectTypeChangeModal {
 
     this._modal = null;
     this._root = null;
+    this._submitting = false;
   }
 
   async open() {
@@ -109,6 +110,7 @@ export class ProjectTypeChangeModal {
 
   async _handleContinue() {
     this._setError('');
+    if (this._submitting) return;
     const p = this.project || {};
     const current = String(p?.project_type || '').trim();
     const next = String(this._root?.querySelector?.('#sbProjTypeNew')?.value || '').trim();
@@ -125,8 +127,30 @@ export class ProjectTypeChangeModal {
     const ok = await this._confirmSecondStep({ current, next });
     if (!ok) return;
 
-    await this.onConfirm({ current, next });
-    this.close();
+    // UX: show progress so user doesn't feel the confirm button "did nothing".
+    this._submitting = true;
+    const btnCancel = this._modal?._overlay?.querySelector?.('#sbProjTypeCancel');
+    const btnContinue = this._modal?._overlay?.querySelector?.('#sbProjTypeContinue');
+    const prevContinueText = btnContinue?.textContent || '';
+    if (btnCancel) btnCancel.disabled = true;
+    if (btnContinue) {
+      btnContinue.disabled = true;
+      btnContinue.textContent = 'Saving…';
+    }
+
+    try {
+      await this.onConfirm({ current, next });
+      this.close();
+    } catch (e) {
+      // Fail-safe: keep modal open and show an inline error.
+      this._setError(e?.message || String(e) || 'Update failed');
+      this._submitting = false;
+      if (btnCancel) btnCancel.disabled = false;
+      if (btnContinue) {
+        btnContinue.disabled = false;
+        btnContinue.textContent = prevContinueText || 'Continue';
+      }
+    }
   }
 
   async _confirmSecondStep({ current, next }) {
