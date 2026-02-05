@@ -125,6 +125,89 @@ def _attach_user_image(rows: list[dict]) -> list[dict]:
 	return rows
 
 
+def _attach_customer_name(project_rows: list[dict]) -> list[dict]:
+	"""
+	Attach `customer_name` onto Project list rows based on Project.customer (Customer.name).
+
+	Rationale:
+	- Project.customer stores Customer.name (ID/docname), which may not be human-friendly when
+	  Customer Naming By = Naming Series (e.g. CUST-0001).
+	- Smart Board UI should display the readable Client Name consistently across environments.
+
+	Behavior:
+	- Best-effort only: on any error, rows are returned unchanged.
+	- Adds:
+	  - customer_name: Customer.customer_name (fallback to Project.customer)
+	"""
+	rows = list(project_rows or [])
+	if not rows:
+		return rows
+
+	ids = []
+	for r in rows:
+		try:
+			c = str(r.get("customer") or "").strip()
+		except Exception:
+			c = ""
+		if c:
+			ids.append(c)
+	if not ids:
+		return rows
+
+	# de-dupe (stable order)
+	seen = set()
+	uniq = []
+	for x in ids:
+		if x in seen:
+			continue
+		seen.add(x)
+		uniq.append(x)
+
+	by_id: dict[str, str] = {}
+
+	# Permission-aware first; fall back to ignore_permissions for website shell.
+	try:
+		crows = frappe.get_list(
+			"Customer",
+			filters=[["name", "in", uniq]],
+			fields=["name", "customer_name"],
+			limit_page_length=len(uniq),
+		)
+	except frappe.PermissionError:
+		try:
+			crows = frappe.get_list(
+				"Customer",
+				filters=[["name", "in", uniq]],
+				fields=["name", "customer_name"],
+				limit_page_length=len(uniq),
+				ignore_permissions=True,
+			)
+		except Exception:
+			crows = []
+	except Exception:
+		crows = []
+
+	for c in (crows or []):
+		cid = str(c.get("name") or "").strip()
+		label = str(c.get("customer_name") or "").strip()
+		if cid:
+			by_id[cid] = label or cid
+
+	for r in rows:
+		try:
+			cid = str(r.get("customer") or "").strip()
+		except Exception:
+			cid = ""
+		if not cid:
+			continue
+		# Preserve existing customer_name if caller already provided it.
+		if r.get("customer_name"):
+			continue
+		r["customer_name"] = by_id.get(cid) or cid
+
+	return rows
+
+
 def _project_names_with_read_permission(names: list[str]) -> list[str]:
 	# Respect Project permissions first; this bounds all downstream queries.
 	allowed = frappe.get_all("Project", filters=[["name", "in", names]], pluck="name")
@@ -234,6 +317,85 @@ def _get_project_fy_start_months(project_rows: list[dict]) -> tuple[dict[str, in
 			counts[start] = int(counts.get(start, 0)) + 1
 
 	return by_project, counts
+
+
+@frappe.whitelist()
+def get_projects_list(
+	fields: Any = None,
+	filters: Any = None,
+	or_filters: Any = None,
+	order_by: str | None = "modified desc",
+	limit_start: int = 0,
+	limit_page_length: int = 100,
+) -> dict:
+	"""
+	Website-safe Project list query for Smart Board.
+
+	Why:
+	- `Project.customer` stores Customer.name (ID/docname). In some sites this is a naming series
+	  (e.g. CUST-0001) and is not user-friendly.
+	- This API returns the same Project rows as `frappe.client.get_list('Project')` but also
+	  attaches `customer_name` for UI display.
+
+	Notes:
+	- This is a READ path only.
+	- It is designed to be a drop-in replacement for the frontend's get_list call.
+	- Best-effort: on mapping failure we keep returning the base Project rows.
+
+	Returns:
+	- { items: [ {field: value, ..., customer_name?}, ... ] }
+	"""
+	_ensure_logged_in()
+
+	# Normalize inputs (frappe.call may send JSON strings)
+	try:
+		fields = frappe.parse_json(fields) if isinstance(fields, str) else fields
+	except Exception:
+		pass
+	try:
+		filters = frappe.parse_json(filters) if isinstance(filters, str) else filters
+	except Exception:
+		pass
+	try:
+		or_filters = frappe.parse_json(or_filters) if isinstance(or_filters, str) else or_filters
+	except Exception:
+		pass
+
+	req_fields = _normalize_list(fields)
+	req_filters = filters if isinstance(filters, (list, dict)) else []
+	req_or_filters = _normalize_list(or_filters)
+
+	try:
+		limit_start = int(limit_start or 0)
+	except Exception:
+		limit_start = 0
+	try:
+		limit_page_length = int(limit_page_length or 100)
+	except Exception:
+		limit_page_length = 100
+	limit_start = max(0, limit_start)
+	limit_page_length = max(1, min(1000, limit_page_length))
+
+	try:
+		rows = frappe.get_list(
+			"Project",
+			fields=req_fields or ["name"],
+			filters=req_filters,
+			or_filters=req_or_filters,
+			order_by=str(order_by or "modified desc"),
+			limit_start=limit_start,
+			limit_page_length=limit_page_length,
+		)
+	except frappe.PermissionError:
+		# Keep old behavior: return empty if user cannot read Project.
+		return {"items": []}
+
+	try:
+		_attach_customer_name(rows)
+	except Exception:
+		pass
+
+	return {"items": rows or []}
 
 
 @frappe.whitelist()

@@ -278,9 +278,18 @@ export class ProjectQueryService {
           'projects.get_list',
           async () => {
             const listPromise = frappe.call({
-              method: 'frappe.client.get_list',
+              // Smart Board Project list API (adds customer_name for UI display).
+              // Keeps filters/or_filters semantics identical to frappe.client.get_list.
+              method: 'smart_accounting.api.project_board.get_projects_list',
               type: 'POST',
-              args,
+              args: {
+                fields: args?.fields,
+                filters: args?.filters,
+                or_filters: args?.or_filters || [],
+                order_by: args?.order_by,
+                limit_start: args?.limit_start,
+                limit_page_length: args?.limit_page_length,
+              },
             });
             const countPromise = countArgs
               ? frappe
@@ -293,7 +302,7 @@ export class ProjectQueryService {
               : Promise.resolve(null);
 
             const response = await listPromise;
-            const rows = response?.message || [];
+            const rows = response?.message?.items || response?.message || [];
 
             let total_count = null;
             try {

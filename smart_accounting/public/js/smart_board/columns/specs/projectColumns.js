@@ -378,7 +378,10 @@ export function makeProjectColumnSpecs() {
       field: 'customer',
       isEditable: false,
       renderCell: ({ project }) => {
-        const text = escapeHtml(project?.customer || '—');
+        // UI should show human-friendly Client Name:
+        // - Prefer backend-attached `customer_name` (Customer.customer_name)
+        // - Fallback to `customer` (Customer ID/docname) for compatibility
+        const text = escapeHtml(project?.customer_name || project?.customer || '—');
         return `<span class="sb-primary-text">${text}</span>`;
       }
     },
