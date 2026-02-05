@@ -131,6 +131,13 @@ export class ProjectTypeChangeModal {
 
   async _confirmSecondStep({ current, next }) {
     return await new Promise((resolve) => {
+      let settled = false;
+      const done = (v) => {
+        if (settled) return;
+        settled = true;
+        resolve(!!v);
+      };
+
       const p = this.project || {};
       const content = document.createElement('div');
       content.innerHTML = `
@@ -156,17 +163,18 @@ export class ProjectTypeChangeModal {
         title: 'Confirm Project Type Change',
         contentEl: content,
         footerEl: footer,
-        onClose: () => resolve(false),
+        // If user closes via ESC / clicking overlay / X, treat as cancelled.
+        onClose: () => done(false),
       });
       modal.open();
 
       footer.querySelector('#sbProjTypeBack')?.addEventListener('click', () => {
+        done(false);
         modal.close();
-        resolve(false);
       });
       footer.querySelector('#sbProjTypeConfirm')?.addEventListener('click', () => {
+        done(true);
         modal.close();
-        resolve(true);
       });
     });
   }
