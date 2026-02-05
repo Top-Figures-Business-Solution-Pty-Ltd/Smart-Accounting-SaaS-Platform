@@ -20,14 +20,17 @@ frappe.pages["project-management"].on_page_load = function (wrapper) {
 
 	// 按需加载 CSS（只影响当前 Page，避免全局污染）
 	frappe.require([
-		"/assets/smart_accounting/css/smart_board/main.css",
-		"/assets/smart_accounting/css/smart_board/layout.css",
-		"/assets/smart_accounting/css/smart_board/board.css",
-		"/assets/smart_accounting/css/smart_board/components.css",
+		// Add a cache-buster so Desk navigation (SPA) doesn't keep old CSS/JS in memory.
+		// Desk provides `window._version_number` (build_version) from app.html.
+		`/assets/smart_accounting/css/smart_board/main.css?v=${encodeURIComponent(window._version_number || '')}`,
+		`/assets/smart_accounting/css/smart_board/layout.css?v=${encodeURIComponent(window._version_number || '')}`,
+		`/assets/smart_accounting/css/smart_board/board.css?v=${encodeURIComponent(window._version_number || '')}`,
+		`/assets/smart_accounting/css/smart_board/components.css?v=${encodeURIComponent(window._version_number || '')}`,
 	]).then(() => {
 		// 按需加载模块化 SPA（ESM）
 		// 这里使用 dynamic import，保持 smart_board/ 目录的 import/export 结构不被破坏
-		const entry = "/assets/smart_accounting/js/smart_board/index.js";
+		// IMPORTANT: add cache-buster for ESM modules; otherwise browser can aggressively cache by URL.
+		const entry = `/assets/smart_accounting/js/smart_board/index.js?v=${encodeURIComponent(window._version_number || '')}`;
 		import(entry)
 			.then(() => {
 				// index.js 会注册 smart_accounting.show_smart_board()
