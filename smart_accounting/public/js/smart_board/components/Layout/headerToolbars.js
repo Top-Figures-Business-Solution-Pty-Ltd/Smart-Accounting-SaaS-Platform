@@ -17,7 +17,7 @@ export function renderHeaderActions(view, { isBoardView }) {
                     id="headerSearchInput"
                 />
             </div>
-            <button class="btn btn-default btn-filter" id="btnFilter">Filter</button>
+            <button class="btn btn-default btn-filter" id="btnFilter">Filter<span class="filter-badge" id="filterBadge"></span></button>
             <button class="btn btn-default btn-columns" id="btnManageColumns">Columns</button>
             <button class="btn btn-primary btn-new-project" id="btnNewProject">New Project</button>
         `;

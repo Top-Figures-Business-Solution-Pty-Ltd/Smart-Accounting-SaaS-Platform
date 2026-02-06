@@ -205,6 +205,26 @@
     box-shadow: var(--smart-board-focus);
 }
 
+/* Filter badge */
+.btn-filter {
+    position: relative;
+}
+.filter-badge {
+    display: none;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 6px;
+    border-radius: 9px;
+    background: var(--smart-board-primary, #0073ea);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 18px;
+    text-align: center;
+    vertical-align: middle;
+}
+
 /* ============================================
    Content
    ============================================ */

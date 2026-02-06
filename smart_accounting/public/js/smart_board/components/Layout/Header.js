@@ -8,6 +8,7 @@ import { isProductView } from '../../utils/viewTypes.js';
 import { AdvancedFilterModal } from '../BoardView/AdvancedFilterModal.js';
 import { buildAdvancedFilterColumns } from '../../utils/filterColumns.js';
 import { BoardStatusService } from '../../services/boardStatusService.js';
+import { countActiveFilters } from '../../utils/filterCount.js';
 
 export class Header {
     constructor(container, options = {}) {
@@ -124,6 +125,7 @@ export class Header {
         this.render();
         this.bindEvents();
         this._updateCountsSubtitle();
+        this._updateFilterBadge();
     }
 
     subscribeToStore() {
@@ -133,8 +135,30 @@ export class Header {
             try { this._unsub(); } catch (e) {}
             this._unsub = null;
         }
-        this._unsub = store.subscribe(() => this._updateCountsSubtitle());
+        this._unsub = store.subscribe(() => {
+            this._updateCountsSubtitle();
+            this._updateFilterBadge();
+        });
         this._updateCountsSubtitle();
+        this._updateFilterBadge();
+    }
+
+    _updateFilterBadge() {
+        try {
+            const badge = this.container?.querySelector?.('#filterBadge');
+            if (!badge) return;
+
+            const filters = this.options?.store?.getState?.()?.filters || {};
+            const count = countActiveFilters(filters);
+
+            if (count > 0) {
+                badge.textContent = String(count);
+                badge.style.display = 'inline-block';
+            } else {
+                badge.textContent = '';
+                badge.style.display = 'none';
+            }
+        } catch (e) {}
     }
 
     _updateCountsSubtitle() {
