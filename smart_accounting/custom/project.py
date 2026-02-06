@@ -160,7 +160,9 @@ class CustomProject(Project):
         # 3) Map ERPNext legacy statuses -> nearest equivalents (best-effort)
         legacy_map = {
             "open": "Not started",
-            "completed": "Done",
+            # Project no longer uses "Done"; "Lodged" is the terminal status.
+            "completed": "Lodged",
+            "done": "Lodged",
             "cancelled": "Hold",
             "not started": "Not started",
         }
@@ -174,13 +176,34 @@ class CustomProject(Project):
         self.status = pick("Not started") or options[0]
     
     def validate(self):
-        """修改frequency时同步Auto Repeat"""
+        """Project validation hooks for Smart Board flows."""
         super().validate()
+        # Keep derived entity display in sync for non-desk flows (/smart).
+        # Desk fetch_from is client-side; API updates need server-side alignment.
+        self._sync_entity_type_from_customer_entity()
+
         # Avoid double-creating Auto Repeat during insert: after_insert handles initial creation.
-        if self.is_new():
-            return
-        if self.has_value_changed("custom_project_frequency"):
+        if not self.is_new() and self.has_value_changed("custom_project_frequency"):
             self.sync_auto_repeat_frequency()
+
+    def _sync_entity_type_from_customer_entity(self):
+        """If Project.custom_customer_entity is set, keep Project.custom_entity_type aligned."""
+        try:
+            en = str(getattr(self, "custom_customer_entity", "") or "").strip()
+        except Exception:
+            en = ""
+        if not en:
+            return
+        try:
+            t = frappe.db.get_value("Customer Entity", en, "entity_type", cache=False)
+        except Exception:
+            t = None
+        t = str(t or "").strip()
+        if not t:
+            return
+        cur = str(getattr(self, "custom_entity_type", "") or "").strip()
+        if cur != t:
+            self.custom_entity_type = t
     
     def sync_auto_repeat_frequency(self):
         """同步frequency到Auto Repeat"""
@@ -285,6 +308,11 @@ class CustomProject(Project):
         
         # 3. 继承关键字段（用户可修改）
         self.custom_entity_type = reference_doc.custom_entity_type
+        # Keep link to Customer Entity (override) consistent on recurring projects
+        try:
+            self.custom_customer_entity = reference_doc.custom_customer_entity
+        except Exception:
+            pass
         
         # 继承团队成员子表
         self.custom_team_members = []  # 清空现有成员

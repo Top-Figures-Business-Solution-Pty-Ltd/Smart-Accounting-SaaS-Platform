@@ -5,6 +5,7 @@
 
 import { formatDate, getStatusColor } from '../../utils/helpers.js';
 import { columnRegistry } from '../../columns/registry.js';
+import { getUserInitials } from '../../utils/userInitials.js';
 
 export class BoardCell {
     constructor(project, column) {
@@ -173,13 +174,15 @@ export class BoardCell {
         
         // 显示头像和名字
         const avatars = teamMembers.slice(0, 3).map(member => {
-            const name = this.extractName(member.user);
-            const initial = name.charAt(0).toUpperCase();
+            const fullName = String(member?.user_full_name || '').trim();
+            const fallbackName = this.extractName(member?.user);
+            const title = fullName || fallbackName || String(member?.user || '');
+            const initial = getUserInitials({ fullName, user: fallbackName }) || (fallbackName || 'U').charAt(0).toUpperCase();
             const img = member?.user_image || '';
             if (img) {
-                return `<img class="user-avatar user-avatar--img" src="${this.escapeHtml(img)}" title="${name}" alt="" />`;
+                return `<img class="user-avatar user-avatar--img" src="${this.escapeHtml(img)}" title="${this.escapeHtml(title)}" alt="" />`;
             }
-            return `<span class="user-avatar" title="${name}">${initial}</span>`;
+            return `<span class="user-avatar" title="${this.escapeHtml(title)}">${this.escapeHtml(initial)}</span>`;
         }).join('');
         
         const moreCount = teamMembers.length - 3;

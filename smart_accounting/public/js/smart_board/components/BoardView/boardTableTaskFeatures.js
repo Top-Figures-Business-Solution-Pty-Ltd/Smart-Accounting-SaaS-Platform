@@ -4,6 +4,7 @@ import { confirmDialog, notify } from '../../services/uiAdapter.js';
 import { TaskService } from '../../services/taskService.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { getErrorMessage } from '../../utils/errorMessage.js';
+import { getUserInitials } from '../../utils/userInitials.js';
 
 /**
  * Keep BoardTable.js smaller by moving task-expand / task-subtable logic here.
@@ -47,13 +48,15 @@ export function installBoardTableTaskFeatures(BoardTable) {
 		const avatars = members
 			.slice(0, 3)
 			.map((member) => {
-				const name = this._extractName(member?.user || '');
-				const initial = (name || '').charAt(0).toUpperCase();
+				const fullName = String(member?.user_full_name || '').trim();
+				const fallbackName = this._extractName(member?.user || '');
+				const title = fullName || fallbackName || String(member?.user || '');
+				const initial = getUserInitials({ fullName, user: fallbackName }) || (fallbackName || 'U').charAt(0).toUpperCase();
 				const img = member?.user_image || '';
 				if (img) {
-					return `<img class="user-avatar user-avatar--img" src="${escapeHtml(String(img))}" title="${escapeHtml(name)}" alt="" />`;
+					return `<img class="user-avatar user-avatar--img" src="${escapeHtml(String(img))}" title="${escapeHtml(title)}" alt="" />`;
 				}
-				return `<span class="user-avatar" title="${escapeHtml(name)}">${escapeHtml(initial)}</span>`;
+				return `<span class="user-avatar" title="${escapeHtml(title)}">${escapeHtml(initial)}</span>`;
 			})
 			.join('');
 		const moreCount = members.length - 3;

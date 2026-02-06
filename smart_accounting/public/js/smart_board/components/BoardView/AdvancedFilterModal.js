@@ -11,6 +11,8 @@
 import { escapeHtml } from '../../utils/dom.js';
 import { Modal } from '../Common/Modal.js';
 import { LinkInput } from '../Common/LinkInput.js';
+import { MultiLinkPicker } from '../Common/MultiLinkPicker.js';
+import { MentionService } from '../../services/mentionService.js';
 
 const CONDITIONS = {
   text: [
@@ -38,6 +40,13 @@ const CONDITIONS = {
     { value: 'is_not_empty', label: 'is not empty' },
   ],
   link: [
+    { value: 'equals', label: 'is' },
+    { value: 'not_equals', label: 'is not' },
+    { value: 'is_empty', label: 'is empty' },
+    { value: 'is_not_empty', label: 'is not empty' },
+  ],
+  // Website-safe User picker (team role filters)
+  user: [
     { value: 'equals', label: 'is' },
     { value: 'not_equals', label: 'is not' },
     { value: 'is_empty', label: 'is empty' },
@@ -381,6 +390,47 @@ export class AdvancedFilterModal {
         onChange: (v) => { rule.value = v; }
       });
       this._linkInputs.set(rule.id, li);
+      return;
+    }
+
+    if (type === 'user') {
+      const mount = document.createElement('div');
+      valueHost.appendChild(mount);
+      const initial = rule.value ? [String(rule.value)] : [];
+      const picker = new MultiLinkPicker(mount, {
+        doctype: 'User',
+        placeholder: meta?.placeholder || 'Select user...',
+        initialValues: initial,
+        max: 1,
+        // Website-safe user search (does not require User read perm)
+        searchProvider: async (txt) => {
+          const list = await MentionService.searchUsers(txt, { limit: 12 });
+          return (list || []).map((u) => u?.name).filter(Boolean);
+        },
+        defaultList: async () => {
+          const list = await MentionService.searchUsers('', { limit: 20 });
+          return (list || []).map((u) => u?.name).filter(Boolean);
+        },
+        resolveMeta: async (values) => {
+          try {
+            const arr = Array.isArray(values) ? values.filter(Boolean) : [];
+            if (!arr.length) return {};
+            const r = await frappe.call({
+              method: 'smart_accounting.api.project_board.get_user_meta',
+              args: { users: arr }
+            });
+            return r?.message || {};
+          } catch (e) {
+            return {};
+          }
+        },
+        onChange: () => {
+          const v = picker.getValue?.() || [];
+          rule.value = (Array.isArray(v) && v.length) ? String(v[0]) : '';
+        }
+      });
+      // Store picker for cleanup
+      this._linkInputs.set(rule.id, picker);
       return;
     }
 

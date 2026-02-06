@@ -156,7 +156,7 @@ export class TaskEditingManager {
       }
 
       if (spec && typeof spec.commit === 'function') {
-        await spec.commit({ task, taskName, field, value, reason });
+        await spec.commit({ task, taskName, field, value, reason, editor: this._editorInstance });
       } else {
         await this.updateTask(taskName, { [field]: value });
       }

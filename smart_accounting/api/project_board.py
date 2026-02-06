@@ -94,7 +94,7 @@ def _uniq_preserve_order(items: Iterable[tuple]) -> list[tuple]:
 
 def _attach_user_image(rows: list[dict]) -> list[dict]:
 	"""
-	Attach `user_image` to Project Team Member-style rows for UI avatar rendering.
+	Attach `user_image` + `user_full_name` to Project Team Member-style rows for UI avatar rendering.
 
 	Permission model:
 	- Uses `get_user_meta()` which respects User permissions; if User cannot be read,
@@ -118,10 +118,15 @@ def _attach_user_image(rows: list[dict]) -> list[dict]:
 		except Exception:
 			u = ""
 		try:
-			img = (meta.get(u) or {}).get("image") or ""
+			m = meta.get(u) or {}
+			img = m.get("image") or ""
+			label = m.get("label") or ""
 		except Exception:
 			img = ""
+			label = ""
 		r["user_image"] = img or ""
+		# Full name (for initials like "JR" instead of "J")
+		r["user_full_name"] = label or ""
 	return rows
 
 
@@ -206,6 +211,23 @@ def _attach_customer_name(project_rows: list[dict]) -> list[dict]:
 		r["customer_name"] = by_id.get(cid) or cid
 
 	return rows
+
+
+def _attach_effective_entity_type(project_rows: list[dict]) -> list[dict]:
+	"""
+	Attach Project.custom_entity_type for UI display when missing.
+	Uses:
+	- Project.custom_customer_entity override -> Customer Entity.entity_type
+	- fallback -> Customer primary entity (Customer Entity where parent=<customer> and is_primary=1)
+	"""
+	try:
+		from smart_accounting.api.project_entity import attach_effective_entity_type
+	except Exception:
+		return project_rows
+	try:
+		return attach_effective_entity_type(project_rows)
+	except Exception:
+		return project_rows
 
 
 def _project_names_with_read_permission(names: list[str]) -> list[str]:
@@ -365,6 +387,16 @@ def get_projects_list(
 	req_filters = filters if isinstance(filters, (list, dict)) else []
 	req_or_filters = _normalize_list(or_filters)
 
+	# Ensure enrich paths have the necessary inputs (adds minimal payload, safe for callers)
+	try:
+		if req_fields and "customer" not in req_fields:
+			req_fields.append("customer")
+		# Entity display depends on Customer Entity override/fallback.
+		if req_fields and "custom_entity_type" in req_fields and "custom_customer_entity" not in req_fields:
+			req_fields.append("custom_customer_entity")
+	except Exception:
+		pass
+
 	try:
 		limit_start = int(limit_start or 0)
 	except Exception:
@@ -394,6 +426,16 @@ def get_projects_list(
 		_attach_customer_name(rows)
 	except Exception:
 		pass
+	# Only enrich entity display when caller asked for it (avoid extra DB reads).
+	try:
+		need_entity = bool(req_fields) and ("custom_entity_type" in req_fields or "custom_customer_entity" in req_fields)
+	except Exception:
+		need_entity = False
+	if need_entity:
+		try:
+			_attach_effective_entity_type(rows)
+		except Exception:
+			pass
 
 	return {"items": rows or []}
 
@@ -1856,6 +1898,79 @@ def query_project_names_advanced(project_type: str | None = None, groups: Any = 
 			f.append(["project_name", "like", f"%{search}%"])
 		return f
 
+	def _is_team_field(fn: str) -> bool:
+		return str(fn or "").strip().startswith("team:")
+
+	def _team_role(fn: str) -> str:
+		s = str(fn or "").strip()
+		if ":" not in s:
+			return ""
+		return s.split(":", 1)[1].strip()
+
+	_base_names: set[str] | None = None
+
+	def _get_base_names() -> set[str]:
+		"""
+		Base universe for special/derived filters (team:Role).
+		Permission-aware (Project read perms).
+		"""
+		nonlocal _base_names
+		if _base_names is not None:
+			return _base_names
+		try:
+			rows = frappe.get_all("Project", filters=base_filters(), pluck="name", limit_page_length=limit)
+		except Exception:
+			rows = []
+		_base_names = set([str(x).strip() for x in (rows or []) if str(x).strip()])
+		return _base_names
+
+	def _team_rule_names(role: str, cond: str, v: str | None) -> set[str]:
+		"""
+		Resolve a single derived rule team:<Role> to a set of Project names.
+		- equals: has (role,user)
+		- not_equals: does NOT have (role,user)  (includes empty)
+		- is_not_empty: has any user for role
+		- is_empty: has no user for role
+		"""
+		role = str(role or "").strip()
+		cond = str(cond or "").strip()
+		val = str(v or "").strip()
+		base_names = _get_base_names()
+		if not role or not base_names:
+			return set()
+
+		filters: dict[str, Any] = {
+			"parenttype": "Project",
+			"parentfield": "custom_team_members",
+			"role": role,
+			"parent": ["in", list(base_names)],
+		}
+		if cond in ("equals", "not_equals") and val:
+			filters["user"] = val
+
+		try:
+			rows = frappe.get_all(
+				"Project Team Member",
+				filters=filters,
+				pluck="parent",
+				ignore_permissions=True,
+				limit_page_length=min(100000, max(1, len(base_names))),
+			)
+		except Exception:
+			rows = []
+		matched = set([str(x).strip() for x in (rows or []) if str(x).strip()])
+
+		if cond == "equals":
+			return matched
+		if cond == "not_equals":
+			return set(base_names) - matched
+		if cond == "is_not_empty":
+			# NOTE: for this condition we query by role only (no user filter)
+			return matched
+		if cond == "is_empty":
+			return set(base_names) - matched
+		return set()
+
 	combined: set[str] | None = None
 	for idx, g in enumerate(parsed_groups):
 		if not isinstance(g, dict):
@@ -1863,19 +1978,52 @@ def query_project_names_advanced(project_type: str | None = None, groups: Any = 
 		join = (g.get("join") or ("where" if idx == 0 else "and")).lower()
 		rules = _normalize_list(g.get("rules"))
 		group_filters = base_filters()
+		team_name_in: set[str] | None = None
 		for r in rules:
 			if not isinstance(r, dict):
 				continue
+			field = (r.get("field") or "").strip()
+			cond = (r.get("condition") or "").strip()
+			val = r.get("value")
+			needs = cond not in ("is_empty", "is_not_empty")
+			v = "" if val is None else str(val)
+			if needs and not v:
+				continue
+
+			# Derived columns: team:<Role>
+			if _is_team_field(field):
+				role = _team_role(field)
+				names_for_rule = _team_rule_names(role, cond, v)
+				if team_name_in is None:
+					team_name_in = names_for_rule
+				else:
+					team_name_in &= names_for_rule
+				# Short-circuit: impossible group
+				if team_name_in is not None and not team_name_in:
+					break
+				continue
+
 			t = rule_to_triple(r)
 			if t:
 				group_filters.append(t)
 
 		# If group has no valid rules beyond base, skip it.
-		if len(group_filters) == len(base_filters()):
+		# NOTE: derived team:Role rules don't add to group_filters until we apply name_in below.
+		if len(group_filters) == len(base_filters()) and team_name_in is None:
 			continue
 
-		rows = frappe.get_all("Project", filters=group_filters, pluck="name", limit_page_length=limit)
-		names = set(rows or [])
+		# Apply derived team rules restriction (AND)
+		if team_name_in is not None:
+			# Empty intersection => no results for this group
+			if not team_name_in:
+				names = set()
+			else:
+				group_filters.append(["name", "in", list(team_name_in)])
+				rows = frappe.get_all("Project", filters=group_filters, pluck="name", limit_page_length=limit)
+				names = set(rows or [])
+		else:
+			rows = frappe.get_all("Project", filters=group_filters, pluck="name", limit_page_length=limit)
+			names = set(rows or [])
 
 		if combined is None:
 			combined = names

@@ -273,7 +273,7 @@ export class EditingManager {
       // Allow per-column custom commit (complex fields / derived columns).
       // If not provided, fall back to store action (frappe.client.set_value).
       if (spec && typeof spec.commit === 'function') {
-        await spec.commit({ project, projectName, field, value, reason, store: this.store });
+        await spec.commit({ project, projectName, field, value, reason, store: this.store, editor: this._editorInstance });
         return;
       }
 

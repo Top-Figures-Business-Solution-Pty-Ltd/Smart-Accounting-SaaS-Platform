@@ -240,6 +240,12 @@ export class SmartBoardApp {
                         fields.add('custom_team_members');
                         continue;
                     }
+                    // Entity display is derived from the Customer Entity link (override)
+                    if (f === 'custom_entity_type') {
+                        fields.add('custom_customer_entity');
+                        fields.add('custom_entity_type');
+                        continue;
+                    }
                     fields.add(f);
                 }
                 merged.fields = Array.from(fields);

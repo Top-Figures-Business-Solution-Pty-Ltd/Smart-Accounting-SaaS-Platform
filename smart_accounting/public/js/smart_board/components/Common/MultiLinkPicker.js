@@ -19,6 +19,7 @@ export class MultiLinkPicker {
       initialValues = [],
       defaultList = null, // async () => string[]
       resolveMeta = null, // async (values: string[]) => Record<string, { label?: string, image?: string }>
+      searchProvider = null, // async (txt: string) => string[]  (optional override for search_link)
       onChange,
       max = null,
     } = {}
@@ -29,6 +30,7 @@ export class MultiLinkPicker {
     this.values = Array.isArray(initialValues) ? initialValues.filter(Boolean) : [];
     this.defaultList = typeof defaultList === 'function' ? defaultList : null;
     this.resolveMeta = typeof resolveMeta === 'function' ? resolveMeta : null;
+    this.searchProvider = typeof searchProvider === 'function' ? searchProvider : null;
     this.onChange = onChange || (() => {});
     this.max = (max == null) ? null : Number(max);
  
@@ -201,17 +203,23 @@ export class MultiLinkPicker {
  
     const seq = ++this._seq;
     try {
-      const r = await frappe.call({
-        method: 'frappe.desk.search.search_link',
-        args: {
-          doctype: this.doctype,
-          txt,
-          page_length: 12,
-        },
-      });
- 
+      let results = [];
+      if (this.searchProvider) {
+        const list = await this.searchProvider(txt);
+        results = Array.isArray(list) ? list.filter(Boolean) : [];
+      } else {
+        const r = await frappe.call({
+          method: 'frappe.desk.search.search_link',
+          args: {
+            doctype: this.doctype,
+            txt,
+            page_length: 12,
+          },
+        });
+        results = (r.message || []).map((row) => row.value).filter(Boolean);
+      }
+  
       if (seq !== this._seq) return; // stale
-      const results = (r.message || []).map((row) => row.value).filter(Boolean);
       this._cache.set(key, results);
       this._renderMenu(results);
     } catch (e) {

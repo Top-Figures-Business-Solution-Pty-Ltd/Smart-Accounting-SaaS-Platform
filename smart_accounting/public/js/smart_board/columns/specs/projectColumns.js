@@ -14,8 +14,10 @@ import { confirmDialog, notify } from '../../services/uiAdapter.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { openProjectTypeChangeFlow } from '../../controllers/projectTypeChangeController.js';
 import { openProjectFrequencyChangeFlow } from '../../controllers/projectFrequencyChangeController.js';
+import { openProjectEntityChangeFlow } from '../../controllers/projectEntityChangeController.js';
 import { getErrorMessage } from '../../utils/errorMessage.js';
 import { ProjectService } from '../../services/projectService.js';
+import { ProjectEntityService } from '../../services/projectEntityService.js';
 
 function _fileNameFromUrl(url) {
   const s = String(url || '').trim();
@@ -524,8 +526,75 @@ export function makeProjectColumnSpecs() {
       }
     },
 
-    // (11) Entity - read-only
-    { field: 'custom_entity_type', isEditable: false },
+    // (11) Entity - editable via modal (select customer entity row)
+    {
+      field: 'custom_entity_type',
+      isEditable: true,
+      // Avoid bulk sync: entity is a "per-project" association; accidental mass changes are risky.
+      bulkSync: false,
+      renderCell: ({ project }) => {
+        const v = String(project?.custom_entity_type || '').trim();
+        if (!v) return '<span class="text-muted">—</span><span class="sb-afford sb-afford--select">▾</span>';
+        return `
+          <span class="sb-primary-text">${escapeHtml(v)}</span>
+          <span class="sb-afford sb-afford--select">▾</span>
+        `;
+      },
+      renderEditor: ({ project, manager }) => {
+        const ed = {
+          _value: String(project?.custom_entity_type || '').trim(),
+          _entityName: String(project?.custom_customer_entity || '').trim(),
+          _modal: null,
+          getValue() { return this._value; },
+          destroy() {
+            try { this._modal?.close?.(); } catch (e) {}
+            this._modal = null;
+          },
+        };
+        manager?.bindActiveEditor?.(null, ed);
+
+        let picked = false;
+        (async () => {
+          ed._modal = await openProjectEntityChangeFlow({
+            project,
+            onSelected: async ({ entityName, entityRow }) => {
+              const en = String(entityName || '').trim();
+              if (!en) return;
+              picked = true;
+              ed._entityName = en;
+              // Prefer label from selected row (immediate UI refresh)
+              const t = String(entityRow?.entity_type || '').trim();
+              if (t) ed._value = t;
+              await manager?.commitAndClose?.('project-entity-modal');
+            },
+            onClosed: () => {
+              if (picked) return;
+              manager?.cancel?.();
+            },
+          });
+        })();
+
+        return ed;
+      },
+      async commit({ project, projectName, value, store, editor }) {
+        const currentEntity = String(project?.custom_customer_entity || '').trim();
+        const nextEntity = String(editor?._entityName || '').trim();
+        if (!nextEntity) return;
+        if (nextEntity === currentEntity) return;
+        try {
+          const r = await ProjectEntityService.setProjectEntity(projectName, nextEntity);
+          const entityType = String(r?.custom_entity_type || value || '').trim();
+          store?.commit?.('projects/updateProject', {
+            name: projectName,
+            custom_customer_entity: String(r?.custom_customer_entity || nextEntity).trim(),
+            custom_entity_type: entityType,
+          });
+          notify('Entity updated', 'green');
+        } catch (e) {
+          notify(getErrorMessage(e) || 'Update entity failed', 'red');
+        }
+      },
+    },
 
     // (12) Project Type - editable via modal (double confirm)
     {

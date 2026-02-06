@@ -4,6 +4,7 @@
  */
 import { ChangePasswordForm } from './ChangePasswordForm.js';
 import { ProfileForm } from './ProfileForm.js';
+import { ProjectEntitySyncTools } from './ProjectEntitySyncTools.js';
 
 export class SettingsApp {
   constructor(container, { initialTab } = {}) {
@@ -14,8 +15,11 @@ export class SettingsApp {
   }
 
   init() {
+    const showDebug = this._isDebugEnabled() && this._isProbablyAdmin();
+    if (!showDebug && this._active === 'debug') this._active = 'profile';
     const isProfile = this._active === 'profile';
     const isPassword = this._active === 'password';
+    const isDebug = this._active === 'debug';
     this.container.innerHTML = `
       <div class="sb-page">
         <div class="sb-settings">
@@ -24,6 +28,7 @@ export class SettingsApp {
             <button class="sb-settings__tab ${isPassword ? 'sb-settings__tab--active' : ''}" type="button" data-key="password">Change Password</button>
             <button class="sb-settings__tab" type="button" data-key="prefs" disabled title="Coming soon">Personal Preferences</button>
             <button class="sb-settings__tab" type="button" data-key="notifs" disabled title="Coming soon">Notification Preferences</button>
+            ${showDebug ? `<button class="sb-settings__tab ${isDebug ? 'sb-settings__tab--active' : ''}" type="button" data-key="debug">Debug Tools</button>` : ''}
           </div>
           <div class="sb-settings__content" id="sbSettingsContent"></div>
         </div>
@@ -69,9 +74,39 @@ export class SettingsApp {
       this._form.render();
       return;
     }
+    if (this._active === 'debug') {
+      this._form = new ProjectEntitySyncTools(mount);
+      this._form.render();
+      return;
+    }
     // Password (fallback)
     this._form = new ChangePasswordForm(mount);
     this._form.render();
+  }
+
+  _isDebugEnabled() {
+    try {
+      const u = new URL(window.location.href);
+      const qp = String(u.searchParams.get('sb_debug') || '').trim();
+      if (qp === '1' || qp.toLowerCase() === 'true') return true;
+    } catch (e) {}
+    try {
+      const v = String(window?.localStorage?.getItem?.('sb_debug') || '').trim();
+      if (v === '1' || v.toLowerCase() === 'true') return true;
+    } catch (e) {}
+    return false;
+  }
+
+  _isProbablyAdmin() {
+    try {
+      const user = String(frappe?.session?.user || '').trim();
+      if (user === 'Administrator') return true;
+    } catch (e) {}
+    try {
+      const roles = (frappe?.boot?.user?.roles) || frappe?.user_roles || [];
+      if (Array.isArray(roles) && roles.map(String).includes('System Manager')) return true;
+    } catch (e) {}
+    return false;
   }
 
   destroy() {
