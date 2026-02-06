@@ -13,6 +13,7 @@ import { BoardStatusService } from '../../services/boardStatusService.js';
 import { confirmDialog, notify } from '../../services/uiAdapter.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { openProjectTypeChangeFlow } from '../../controllers/projectTypeChangeController.js';
+import { openProjectFrequencyChangeFlow } from '../../controllers/projectFrequencyChangeController.js';
 import { getErrorMessage } from '../../utils/errorMessage.js';
 import { ProjectService } from '../../services/projectService.js';
 
@@ -598,8 +599,65 @@ export function makeProjectColumnSpecs() {
       },
     },
 
-    // (15) Frequency - read-only for now (but spec exists)
-    { field: 'custom_project_frequency', isEditable: false },
+    // (15) Frequency - editable via modal (double confirm)
+    {
+      field: 'custom_project_frequency',
+      isEditable: true,
+      renderCell: ({ project }) => {
+        const v = String(project?.custom_project_frequency || '').trim();
+        if (!v) return '<span class="text-muted">—</span><span class="sb-afford sb-afford--select">▾</span>';
+        return `
+          <span class="sb-primary-text">${escapeHtml(v)}</span>
+          <span class="sb-afford sb-afford--select">▾</span>
+        `;
+      },
+      renderEditor: ({ project, manager }) => {
+        // Modal-based editor: focus moves to the modal, so no inputEl binding here.
+        const ed = {
+          _value: String(project?.custom_project_frequency || '').trim(),
+          _modal: null,
+          getValue() { return this._value; },
+          destroy() {
+            try { this._modal?.close?.(); } catch (e) {}
+            this._modal = null;
+          },
+        };
+        manager?.bindActiveEditor?.(null, ed);
+
+        let picked = false;
+        (async () => {
+          ed._modal = await openProjectFrequencyChangeFlow({
+            project,
+            onSelected: async (next) => {
+              const v = String(next || '').trim();
+              if (!v) return;
+              picked = true;
+              ed._value = v;
+              await manager?.commitAndClose?.('project-frequency-modal');
+            },
+            onClosed: () => {
+              if (picked) return;
+              manager?.cancel?.();
+            },
+          });
+        })();
+
+        return ed;
+      },
+      async commit({ project, projectName, value, store }) {
+        const from = String(project?.custom_project_frequency || '').trim();
+        const to = String(value || '').trim();
+        if (!to) return;
+        if (to === from) return;
+        try {
+          await ProjectService.updateProject(projectName, { custom_project_frequency: to });
+          store?.commit?.('projects/updateProject', { name: projectName, custom_project_frequency: to });
+          notify(`Frequency updated to ${to}`, 'green');
+        } catch (e) {
+          notify(getErrorMessage(e) || 'Update frequency failed', 'red');
+        }
+      },
+    },
 
     // (16) Fiscal Year - read-only
     { field: 'custom_fiscal_year', isEditable: false },

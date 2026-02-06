@@ -5,7 +5,7 @@ Project DocType Override
 """
 
 import frappe
-from frappe.utils import getdate, add_months, get_last_day
+from frappe.utils import getdate, add_months, add_days, get_last_day
 from erpnext.projects.doctype.project.project import Project
 
 
@@ -21,7 +21,7 @@ class CustomProject(Project):
         """Project创建后自动创建Auto Repeat"""
         super().after_insert()
         if self.custom_project_frequency and self.custom_project_frequency != "One-off":
-            self.create_auto_repeat()
+            self.create_auto_repeat(persist_project_link=True)
 
     def before_insert(self):
         """
@@ -51,22 +51,57 @@ class CustomProject(Project):
         preferred = "Not started"
         self.status = preferred if preferred in opts else opts[0]
     
-    def create_auto_repeat(self):
+    def _normalize_auto_repeat_frequency(self, freq: str | None) -> str:
+        """
+        Map Project.custom_project_frequency -> Auto Repeat.frequency option.
+
+        Auto Repeat options (Frappe core):
+        - Daily / Weekly / Monthly / Quarterly / Half-yearly / Yearly
+        Project options (Smart Accounting):
+        - Yearly / Half-Yearly / Quarterly / Monthly / Weekly / One-off
+        """
+        s = str(freq or "").strip()
+        if not s:
+            return ""
+        key = s.strip().lower()
+        if key in {"one-off", "one off"}:
+            return ""
+        if key in {"half-yearly", "half yearly", "halfyearly"}:
+            return "Half-yearly"
+        if key in {"yearly"}:
+            return "Yearly"
+        if key in {"quarterly"}:
+            return "Quarterly"
+        if key in {"monthly"}:
+            return "Monthly"
+        if key in {"weekly"}:
+            return "Weekly"
+        if key in {"daily"}:
+            return "Daily"
+        return s
+
+    def create_auto_repeat(self, *, persist_project_link: bool = True) -> str | None:
         """根据custom_project_frequency创建Auto Repeat"""
         try:
+            freq = self._normalize_auto_repeat_frequency(self.custom_project_frequency)
+            if not freq:
+                return None
+
             auto_repeat = frappe.new_doc("Auto Repeat")
             auto_repeat.reference_doctype = "Project"
             auto_repeat.reference_document = self.name
-            auto_repeat.frequency = self.custom_project_frequency  # Monthly/Quarterly/Yearly
+            auto_repeat.frequency = freq  # Weekly/Monthly/Quarterly/Half-yearly/Yearly
             auto_repeat.start_date = self.expected_start_date or frappe.utils.today()
             
             # 可选：根据业务需求设置end_date
             # auto_repeat.end_date = self.expected_end_date
             
             auto_repeat.insert(ignore_permissions=True)
-            
-            # 更新Project的auto_repeat字段
-            frappe.db.set_value("Project", self.name, "auto_repeat", auto_repeat.name)
+
+            # Link back to Project (persist depending on caller context)
+            self.auto_repeat = auto_repeat.name
+            if persist_project_link:
+                frappe.db.set_value("Project", self.name, "auto_repeat", auto_repeat.name)
             # NOTE: Do not show msgprint popups on insert; it harms /smart UX.
             # Keep only server-side logs; the feature still works.
             frappe.logger("smart_accounting").info("Auto Repeat created: %s for Project %s", auto_repeat.name, self.name)
@@ -141,27 +176,51 @@ class CustomProject(Project):
     def validate(self):
         """修改frequency时同步Auto Repeat"""
         super().validate()
-        if self.has_value_changed("custom_project_frequency") and self.auto_repeat:
+        # Avoid double-creating Auto Repeat during insert: after_insert handles initial creation.
+        if self.is_new():
+            return
+        if self.has_value_changed("custom_project_frequency"):
             self.sync_auto_repeat_frequency()
     
     def sync_auto_repeat_frequency(self):
         """同步frequency到Auto Repeat"""
         try:
-            if self.custom_project_frequency == "One-off":
-                # 改为One-off，禁用Auto Repeat
-                frappe.db.set_value("Auto Repeat", self.auto_repeat, "disabled", 1)
-                frappe.logger("smart_accounting").info("Auto Repeat disabled: %s for Project %s", self.auto_repeat, self.name)
-            else:
-                auto_repeat = frappe.get_doc("Auto Repeat", self.auto_repeat)
-                auto_repeat.frequency = self.custom_project_frequency
+            freq_raw = str(self.custom_project_frequency or "").strip()
+            freq = self._normalize_auto_repeat_frequency(freq_raw)
+            ar_name = str(self.auto_repeat or "").strip()
+
+            # One-off (or empty): disable Auto Repeat if present
+            if not freq_raw or freq_raw in {"One-off", "One off"} or not freq:
+                if ar_name and frappe.db.exists("Auto Repeat", ar_name):
+                    frappe.db.set_value("Auto Repeat", ar_name, "disabled", 1)
+                    frappe.logger("smart_accounting").info("Auto Repeat disabled: %s for Project %s", ar_name, self.name)
+                return
+
+            # Non one-off: update existing Auto Repeat if it exists
+            if ar_name and frappe.db.exists("Auto Repeat", ar_name):
+                auto_repeat = frappe.get_doc("Auto Repeat", ar_name)
+                auto_repeat.frequency = freq
                 auto_repeat.disabled = 0
+                # Ensure start_date is set (required)
+                if not auto_repeat.start_date:
+                    auto_repeat.start_date = self.expected_start_date or frappe.utils.today()
                 auto_repeat.save(ignore_permissions=True)
                 frappe.logger("smart_accounting").info(
                     "Auto Repeat updated: %s frequency=%s for Project %s",
-                    self.auto_repeat,
-                    self.custom_project_frequency,
+                    ar_name,
+                    freq,
                     self.name,
                 )
+                return
+
+            # Missing link or Auto Repeat deleted: create one (and link on this save)
+            created = self.create_auto_repeat(persist_project_link=False)
+            frappe.logger("smart_accounting").info(
+                "Auto Repeat created: %s frequency=%s for Project %s",
+                created,
+                freq,
+                self.name,
+            )
         except Exception as e:
             frappe.log_error(f"Failed to sync Auto Repeat for {self.name}: {str(e)}")
             frappe.throw(f"同步 Auto Repeat 失败: {str(e)}")
@@ -187,11 +246,21 @@ class CustomProject(Project):
                 parts.append(f"({entity_short})")
         
         # 生成period
-        if auto_repeat_doc.frequency == "Monthly":
+        if auto_repeat_doc.frequency == "Weekly":
+            # ISO week number (e.g. Week 6 2026)
+            try:
+                wk = date.isocalendar().week
+            except Exception:
+                wk = None
+            period = f"Week {wk} {date.year}" if wk else f"Week {date.year}"
+        elif auto_repeat_doc.frequency == "Monthly":
             period = date.strftime("%B %Y")  # "August 2025"
         elif auto_repeat_doc.frequency == "Quarterly":
             quarter = (date.month - 1) // 3 + 1
             period = f"Q{quarter} FY{date.year % 100}"
+        elif auto_repeat_doc.frequency == "Half-yearly":
+            half = 1 if int(date.month or 1) <= 6 else 2
+            period = f"H{half} FY{date.year % 100}"
         else:
             period = f"FY{date.year % 100}"
         
@@ -203,10 +272,14 @@ class CustomProject(Project):
         
         # 2. 更新日期
         self.expected_start_date = date
-        if auto_repeat_doc.frequency == "Monthly":
+        if auto_repeat_doc.frequency == "Weekly":
+            self.expected_end_date = add_days(date, 6)
+        elif auto_repeat_doc.frequency == "Monthly":
             self.expected_end_date = get_last_day(date)
         elif auto_repeat_doc.frequency == "Quarterly":
             self.expected_end_date = get_last_day(add_months(date, 3))
+        elif auto_repeat_doc.frequency == "Half-yearly":
+            self.expected_end_date = get_last_day(add_months(date, 6))
         else:
             self.expected_end_date = get_last_day(add_months(date, 12))
         
