@@ -23,7 +23,8 @@
    Table Header
    ============================================ */
 .board-table-header {
-    background: rgba(15, 23, 42, 0.03);
+    /* Opaque header: avoid content showing through while sticky (fix "transparent overlap" on scroll) */
+    background: var(--smart-board-surface-2);
     border-bottom: 1px solid var(--smart-board-border);
     /* Header should follow body horizontal scroll (single scroll source) */
     overflow-x: hidden;
@@ -43,7 +44,8 @@
 .board-table > thead > tr > th {
     position: sticky;
     top: 0;
-    background: rgba(15, 23, 42, 0.03);
+    /* Must be opaque; otherwise row text "ghosts" under the header while scrolling */
+    background: var(--smart-board-surface-2);
     font-weight: 600;
     font-size: 13px;
     text-transform: uppercase;
