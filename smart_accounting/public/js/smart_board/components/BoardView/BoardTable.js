@@ -1059,7 +1059,7 @@ export class BoardTable {
         }
 
         if (action === 'bulk-delete') {
-            const ok = await confirmDialog(`Delete ${names.length} projects? This will also delete linked tasks and Auto Repeat. This cannot be undone.`);
+            const ok = await confirmDialog(`Delete ${names.length} projects? This will also delete linked tasks. This cannot be undone.`);
             if (!ok) return;
             await this._bulkDelete();
             return;

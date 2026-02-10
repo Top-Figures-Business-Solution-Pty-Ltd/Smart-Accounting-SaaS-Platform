@@ -18,6 +18,7 @@ export function renderHeaderActions(view, { isBoardView }) {
                 />
             </div>
             <button class="btn btn-default btn-filter" id="btnFilter">Filter<span class="filter-badge" id="filterBadge"></span></button>
+            <button class="btn btn-default btn-automation" id="btnAutomation">Automation</button>
             <button class="btn btn-default btn-columns" id="btnManageColumns">Columns</button>
             <button class="btn btn-primary btn-new-project" id="btnNewProject">New Project</button>
         `;
@@ -66,6 +67,7 @@ export function bindHeaderActions(rootEl, view, { isBoardView, onAction, onShowF
         rootEl.querySelector('#btnNewProject')?.addEventListener('click', () => onAction?.('new_project'));
         rootEl.querySelector('#btnManageColumns')?.addEventListener('click', () => onAction?.('manage_columns'));
         rootEl.querySelector('#btnFilter')?.addEventListener('click', () => onShowFilter?.());
+        rootEl.querySelector('#btnAutomation')?.addEventListener('click', () => onAction?.('automation'));
 
         const searchInput = rootEl.querySelector('#headerSearchInput');
         if (searchInput) {

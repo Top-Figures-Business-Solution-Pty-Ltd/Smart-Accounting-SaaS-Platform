@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 Project DocType Override
-扩展ERPNext原生Project，支持Auto Repeat自动创建和团队继承
+扩展ERPNext原生Project，支持Smart Board工作流和Board Automation
 """
 
+import json
 import frappe
 from frappe.utils import getdate, add_months, add_days, get_last_day
 from erpnext.projects.doctype.project.project import Project
@@ -12,16 +13,10 @@ from erpnext.projects.doctype.project.project import Project
 class CustomProject(Project):
     """
     自定义Project类
-    - after_insert: 根据custom_project_frequency自动创建Auto Repeat
-    - validate: 同步custom_project_frequency到Auto Repeat
-    - on_recurring: Auto Repeat创建新Project时自动生成名称和继承配置
+    - before_insert: 确保status在合法选项内
+    - validate: 实体同步 + Board Automation 执行
+    - update_percent_complete: 阻止ERPNext自动覆盖status
     """
-    
-    def after_insert(self):
-        """Project创建后自动创建Auto Repeat"""
-        super().after_insert()
-        if self.custom_project_frequency and self.custom_project_frequency != "One-off":
-            self.create_auto_repeat(persist_project_link=True)
 
     def before_insert(self):
         """
@@ -50,65 +45,6 @@ class CustomProject(Project):
         # Prefer our canonical default if present
         preferred = "Not started"
         self.status = preferred if preferred in opts else opts[0]
-    
-    def _normalize_auto_repeat_frequency(self, freq: str | None) -> str:
-        """
-        Map Project.custom_project_frequency -> Auto Repeat.frequency option.
-
-        Auto Repeat options (Frappe core):
-        - Daily / Weekly / Monthly / Quarterly / Half-yearly / Yearly
-        Project options (Smart Accounting):
-        - Yearly / Half-Yearly / Quarterly / Monthly / Weekly / One-off
-        """
-        s = str(freq or "").strip()
-        if not s:
-            return ""
-        key = s.strip().lower()
-        if key in {"one-off", "one off"}:
-            return ""
-        if key in {"half-yearly", "half yearly", "halfyearly"}:
-            return "Half-yearly"
-        if key in {"yearly"}:
-            return "Yearly"
-        if key in {"quarterly"}:
-            return "Quarterly"
-        if key in {"monthly"}:
-            return "Monthly"
-        if key in {"weekly"}:
-            return "Weekly"
-        if key in {"daily"}:
-            return "Daily"
-        return s
-
-    def create_auto_repeat(self, *, persist_project_link: bool = True) -> str | None:
-        """根据custom_project_frequency创建Auto Repeat"""
-        try:
-            freq = self._normalize_auto_repeat_frequency(self.custom_project_frequency)
-            if not freq:
-                return None
-
-            auto_repeat = frappe.new_doc("Auto Repeat")
-            auto_repeat.reference_doctype = "Project"
-            auto_repeat.reference_document = self.name
-            auto_repeat.frequency = freq  # Weekly/Monthly/Quarterly/Half-yearly/Yearly
-            auto_repeat.start_date = self.expected_start_date or frappe.utils.today()
-            
-            # 可选：根据业务需求设置end_date
-            # auto_repeat.end_date = self.expected_end_date
-            
-            auto_repeat.insert(ignore_permissions=True)
-
-            # Link back to Project (persist depending on caller context)
-            self.auto_repeat = auto_repeat.name
-            if persist_project_link:
-                frappe.db.set_value("Project", self.name, "auto_repeat", auto_repeat.name)
-            # NOTE: Do not show msgprint popups on insert; it harms /smart UX.
-            # Keep only server-side logs; the feature still works.
-            frappe.logger("smart_accounting").info("Auto Repeat created: %s for Project %s", auto_repeat.name, self.name)
-            
-        except Exception as e:
-            frappe.log_error(f"Failed to create Auto Repeat for {self.name}: {str(e)}")
-            frappe.throw(f"创建 Auto Repeat 失败: {str(e)}")
 
     def update_percent_complete(self):
         """
@@ -182,9 +118,9 @@ class CustomProject(Project):
         # Desk fetch_from is client-side; API updates need server-side alignment.
         self._sync_entity_type_from_customer_entity()
 
-        # Avoid double-creating Auto Repeat during insert: after_insert handles initial creation.
-        if not self.is_new() and self.has_value_changed("custom_project_frequency"):
-            self.sync_auto_repeat_frequency()
+        # Board Automation: run automations on existing projects
+        if not self.is_new():
+            self._run_board_automations()
 
     def _sync_entity_type_from_customer_entity(self):
         """If Project.custom_customer_entity is set, keep Project.custom_entity_type aligned."""
@@ -205,127 +141,193 @@ class CustomProject(Project):
         if cur != t:
             self.custom_entity_type = t
     
-    def sync_auto_repeat_frequency(self):
-        """同步frequency到Auto Repeat"""
+    # =========================================================================
+    # Board Automation Engine
+    # =========================================================================
+
+    def _run_board_automations(self):
+        """
+        Execute all enabled Board Automation rules that match the current change.
+        Called during validate() so changes are saved in a single DB write.
+
+        Guards:
+        1. frappe.flags (request-level): prevents re-firing even if doc.save() is
+           called multiple times within the same HTTP request (different doc instances).
+        2. Per-document instance flag: prevents re-entrance within the same instance.
+        3. Snapshot: captures user's original status before any automation modifies it.
+        """
+        # Request-level guard: one automation execution per project per request
+        flag_key = f'_sb_automation_done_{self.name}'
+        if frappe.flags.get(flag_key):
+            return
+        frappe.flags[flag_key] = True
+
+        # Per-document instance guard (belt + suspenders)
+        if getattr(self, '_sb_automation_done', False):
+            return
+        self._sb_automation_done = True
+
+        # Snapshot the user's original status change BEFORE any automation modifies it
+        self._sb_original_status = str(self.status or "").strip()
+        self._sb_status_changed = self.has_value_changed("status")
         try:
-            freq_raw = str(self.custom_project_frequency or "").strip()
-            freq = self._normalize_auto_repeat_frequency(freq_raw)
-            ar_name = str(self.auto_repeat or "").strip()
-
-            # One-off (or empty): disable Auto Repeat if present
-            if not freq_raw or freq_raw in {"One-off", "One off"} or not freq:
-                if ar_name and frappe.db.exists("Auto Repeat", ar_name):
-                    frappe.db.set_value("Auto Repeat", ar_name, "disabled", 1)
-                    frappe.logger("smart_accounting").info("Auto Repeat disabled: %s for Project %s", ar_name, self.name)
-                return
-
-            # Non one-off: update existing Auto Repeat if it exists
-            if ar_name and frappe.db.exists("Auto Repeat", ar_name):
-                auto_repeat = frappe.get_doc("Auto Repeat", ar_name)
-                auto_repeat.frequency = freq
-                auto_repeat.disabled = 0
-                # Ensure start_date is set (required)
-                if not auto_repeat.start_date:
-                    auto_repeat.start_date = self.expected_start_date or frappe.utils.today()
-                auto_repeat.save(ignore_permissions=True)
-                frappe.logger("smart_accounting").info(
-                    "Auto Repeat updated: %s frequency=%s for Project %s",
-                    ar_name,
-                    freq,
-                    self.name,
-                )
-                return
-
-            # Missing link or Auto Repeat deleted: create one (and link on this save)
-            created = self.create_auto_repeat(persist_project_link=False)
-            frappe.logger("smart_accounting").info(
-                "Auto Repeat created: %s frequency=%s for Project %s",
-                created,
-                freq,
-                self.name,
+            automations = frappe.get_all(
+                "Board Automation",
+                filters={"enabled": 1},
+                fields=["name", "trigger_type", "trigger_config", "actions",
+                         "execution_count"],
             )
-        except Exception as e:
-            frappe.log_error(f"Failed to sync Auto Repeat for {self.name}: {str(e)}")
-            frappe.throw(f"同步 Auto Repeat 失败: {str(e)}")
-    
-    def on_recurring(self, reference_doc, auto_repeat_doc):
-        """
-        Auto Repeat创建新Project时触发
-        自动生成名称、更新日期、继承配置
-        """
-        
-        # 1. 生成新名称（包含entity信息）
-        date = getdate(auto_repeat_doc.next_schedule_date)
-        
-        # 构建名称部分
-        parts = [self.customer]
-        
-        # 如果有entity，添加到名称中
-        if self.custom_entity_type:
-            # 从entity_name提取简短标识
-            # 例如："Client A Pty Ltd" -> "(Pty Ltd)"
-            entity_short = self.custom_entity_type.replace(self.customer, "").strip()
-            if entity_short:
-                parts.append(f"({entity_short})")
-        
-        # 生成period
-        if auto_repeat_doc.frequency == "Weekly":
-            # ISO week number (e.g. Week 6 2026)
+        except Exception:
+            # DocType may not exist yet during migration
+            return
+
+        for auto in automations:
             try:
-                wk = date.isocalendar().week
-            except Exception:
-                wk = None
-            period = f"Week {wk} {date.year}" if wk else f"Week {date.year}"
-        elif auto_repeat_doc.frequency == "Monthly":
-            period = date.strftime("%B %Y")  # "August 2025"
-        elif auto_repeat_doc.frequency == "Quarterly":
-            quarter = (date.month - 1) // 3 + 1
-            period = f"Q{quarter} FY{date.year % 100}"
-        elif auto_repeat_doc.frequency == "Half-yearly":
-            half = 1 if int(date.month or 1) <= 6 else 2
-            period = f"H{half} FY{date.year % 100}"
-        else:
-            period = f"FY{date.year % 100}"
-        
-        parts.append(period)
-        parts.append(self.project_type)
-        
-        self.project_name = " - ".join(parts)
-        # 结果："Client A (Pty Ltd) - August 2025 - BAS"
-        
-        # 2. 更新日期
-        self.expected_start_date = date
-        if auto_repeat_doc.frequency == "Weekly":
-            self.expected_end_date = add_days(date, 6)
-        elif auto_repeat_doc.frequency == "Monthly":
-            self.expected_end_date = get_last_day(date)
-        elif auto_repeat_doc.frequency == "Quarterly":
-            self.expected_end_date = get_last_day(add_months(date, 3))
-        elif auto_repeat_doc.frequency == "Half-yearly":
-            self.expected_end_date = get_last_day(add_months(date, 6))
-        else:
-            self.expected_end_date = get_last_day(add_months(date, 12))
-        
-        # 3. 继承关键字段（用户可修改）
-        self.custom_entity_type = reference_doc.custom_entity_type
-        # Keep link to Customer Entity (override) consistent on recurring projects
+                if self._trigger_matches(auto):
+                    self._execute_actions(auto)
+            except Exception as e:
+                frappe.log_error(
+                    f"Board Automation {auto.get('name')} failed for Project {self.name}: {str(e)}",
+                    "Board Automation Error",
+                )
+
+    def _trigger_matches(self, auto):
+        """Check if this automation's trigger matches the current document change.
+        Uses the snapshot taken before any automation modified fields."""
+        trigger_type = str(auto.get("trigger_type") or "").strip()
+
+        if trigger_type == "status_change":
+            config = _parse_json(auto.get("trigger_config"))
+            to_value = str(config.get("to_value") or "").strip()
+            if not to_value:
+                return False
+            # Use snapshot to avoid interference from prior action resets
+            if not getattr(self, '_sb_status_changed', False):
+                return False
+            return getattr(self, '_sb_original_status', '') == to_value
+
+        return False
+
+    def _execute_actions(self, auto):
+        """Execute all actions in the automation's actions array."""
+        actions_raw = auto.get("actions")
+        actions = _parse_json_array(actions_raw)
+        if not actions:
+                return
+
+        for action in actions:
+            action_type = str(action.get("action_type") or "").strip()
+            config = action.get("config") or {}
+            if isinstance(config, str):
+                config = _parse_json(config)
+
+            if action_type == "roll_due_date":
+                self._action_roll_due_date(config, auto)
+            elif action_type == "reset_status":
+                self._action_reset_status(config, auto)
+            else:
+                frappe.logger("smart_accounting").warning(
+                    "Board Automation %s: unknown action_type '%s'", auto.get("name"), action_type
+                )
+
+        # Update execution stats (once per automation, not per action)
         try:
-            self.custom_customer_entity = reference_doc.custom_customer_entity
+            frappe.db.set_value(
+                "Board Automation",
+                auto.get("name"),
+                {
+                    "execution_count": (auto.get("execution_count") or 0) + 1,
+                    "last_triggered": frappe.utils.now_datetime(),
+                },
+                update_modified=False,
+            )
         except Exception:
             pass
-        
-        # 继承团队成员子表
-        self.custom_team_members = []  # 清空现有成员
-        for member in reference_doc.custom_team_members:
-            self.append('custom_team_members', {
-                'user': member.user,
-                'role': member.role,
-                'assigned_date': frappe.utils.today()
-            })
-        
-        # 4. 重置状态
-        # Must match current global status pool (Property Setter)
-        self.status = "Not started"
-        self.percent_complete = 0
-        self.notes = ""
 
+    def _action_roll_due_date(self, config, auto):
+        """Action: Roll Lodgement Due forward by the project's frequency."""
+        target_field = "custom_lodgement_due_date"
+
+        freq = str(getattr(self, "custom_project_frequency", "") or "").strip()
+        current_date = getattr(self, target_field, None)
+
+        if not freq or freq in ("One-off", "One off", ""):
+            return
+        if not current_date:
+                return
+
+        current_date = getdate(current_date)
+        new_date = _roll_date_by_frequency(current_date, freq)
+
+        if new_date and new_date != current_date:
+            self.set(target_field, new_date)
+            frappe.logger("smart_accounting").info(
+                "Board Automation %s: rolled %s from %s to %s for Project %s",
+                auto.get("name"), target_field, current_date, new_date, self.name,
+            )
+    
+    def _action_reset_status(self, config, auto):
+        """Action: Reset project status to a configured value."""
+        reset_to = str(config.get("reset_to") or "Not started").strip()
+        if not reset_to:
+            return
+
+        try:
+            f = self.meta.get_field("status") if getattr(self, "meta", None) else None
+            raw = str(getattr(f, "options", "") or "")
+            pool = [x.strip() for x in raw.split("\n") if str(x).strip()]
+        except Exception:
+            pool = []
+
+        if pool and reset_to in pool:
+            self.status = reset_to
+        elif pool:
+            self.status = pool[0]
+
+
+# =========================================================================
+# Module-level helpers
+# =========================================================================
+
+def _parse_json(val):
+    """Safely parse a JSON string or return dict as-is."""
+    if isinstance(val, dict):
+        return val
+    if isinstance(val, str):
+        try:
+            return json.loads(val)
+        except Exception:
+            return {}
+    return {}
+
+
+def _parse_json_array(val):
+    """Safely parse a JSON string as a list, or return list as-is."""
+    if isinstance(val, list):
+        return val
+    if isinstance(val, str):
+        try:
+            parsed = json.loads(val)
+            return parsed if isinstance(parsed, list) else []
+        except Exception:
+            return []
+    return []
+
+
+def _roll_date_by_frequency(current_date, frequency: str):
+    """Calculate the next date based on frequency."""
+    freq = str(frequency or "").strip().lower()
+    d = getdate(current_date)
+
+    if freq in ("weekly",):
+        return add_days(d, 7)
+    if freq in ("monthly",):
+        return add_months(d, 1)
+    if freq in ("quarterly",):
+        return add_months(d, 3)
+    if freq in ("half-yearly", "half yearly", "halfyearly"):
+        return add_months(d, 6)
+    if freq in ("yearly",):
+        return add_months(d, 12)
+
+    return None

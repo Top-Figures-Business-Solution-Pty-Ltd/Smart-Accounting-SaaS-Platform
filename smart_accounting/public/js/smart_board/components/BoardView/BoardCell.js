@@ -138,8 +138,6 @@ export class BoardCell {
             case 'modified':
                 return this.formatDate(value);
 
-            case 'auto_repeat':
-                return this.escapeHtml(value);
 
             case 'company':
                 return this.formatCompany(value);

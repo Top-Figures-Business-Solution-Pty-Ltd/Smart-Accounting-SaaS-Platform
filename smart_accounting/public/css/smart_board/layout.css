@@ -225,6 +225,119 @@
     vertical-align: middle;
 }
 
+/* Automation Modal */
+.sb-automation__hint {
+    font-size: 13px;
+    margin-bottom: 16px;
+}
+.sb-automation__list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.sb-automation__rule {
+    border: 1px solid var(--smart-board-border, #e0e4e8);
+    border-radius: 10px;
+    padding: 14px;
+    background: var(--smart-board-card, #fff);
+}
+.sb-automation__rule-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+.sb-automation__toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+}
+.sb-automation__toggle input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--smart-board-primary, #0073ea);
+}
+.sb-automation__toggle-label {
+    font-size: 12px;
+    color: var(--smart-board-primary, #0073ea);
+}
+.sb-auto__delete {
+    border: none;
+    background: none;
+    font-size: 18px;
+    color: #999;
+    cursor: pointer;
+    padding: 2px 8px;
+    line-height: 1;
+}
+.sb-auto__delete:hover {
+    color: #e44;
+}
+.sb-automation__rule-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.sb-automation__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.sb-automation__label {
+    font-weight: 600;
+    font-size: 13px;
+    min-width: 44px;
+    color: var(--smart-board-primary, #0073ea);
+}
+.sb-automation__row .form-control {
+    flex: 1;
+    min-width: 160px;
+    max-width: 280px;
+    font-size: 13px;
+    padding: 8px 10px;
+    height: auto;
+    min-height: 36px;
+    border-radius: 8px;
+}
+.sb-automation__rule-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+    gap: 10px;
+}
+.sb-automation__empty {
+    padding: 24px 0;
+    text-align: center;
+    font-size: 14px;
+}
+.sb-automation__and-label {
+    font-weight: 600;
+    font-size: 12px;
+    min-width: 44px;
+    color: #999;
+}
+.sb-automation__rule-actions-bar {
+    margin-top: 6px;
+    padding-left: 52px;
+}
+.sb-automation__action-row .sb-auto__remove-action {
+    border: none;
+    background: none;
+    font-size: 16px;
+    color: #999;
+    cursor: pointer;
+    padding: 2px 6px;
+    line-height: 1;
+}
+.sb-automation__action-row .sb-auto__remove-action:hover {
+    color: #e44;
+}
+
 /* ============================================
    Content
    ============================================ */

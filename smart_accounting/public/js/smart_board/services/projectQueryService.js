@@ -49,7 +49,7 @@ export class ProjectQueryService {
       'notes',
       'is_active',
       'modified',
-      'auto_repeat',
+
       'custom_entity_type',
       'custom_team_members',
       'custom_fiscal_year',

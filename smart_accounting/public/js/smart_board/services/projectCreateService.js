@@ -29,7 +29,7 @@ export class ProjectCreateService {
       const r = await frappe.call({
         method: 'frappe.client.insert',
         type: 'POST',
-        // Prevent server-side msgprint popups (e.g. Auto Repeat created) from interrupting /smart UX.
+        // Prevent server-side msgprint popups from interrupting /smart UX.
         silent: true,
         args: { doc }
       });

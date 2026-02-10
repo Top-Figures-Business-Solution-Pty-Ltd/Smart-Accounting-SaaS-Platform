@@ -277,6 +277,16 @@ export class EditingManager {
         return;
       }
 
+      // Dedup guard: prevent the exact same save from firing twice in quick succession.
+      // This protects against menu-select + blur/menu-close race conditions that can
+      // produce two identical API calls within the same user interaction.
+      const dedupKey = `${projectName}:${field}:${value}`;
+      if (this._lastCommitKey === dedupKey && Date.now() - (this._lastCommitTime || 0) < 2000) {
+        return;
+      }
+      this._lastCommitKey = dedupKey;
+      this._lastCommitTime = Date.now();
+
       if (this.store?.dispatch) {
         await this.store.dispatch('projects/updateProjectField', { name: projectName, field, value });
       }

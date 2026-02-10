@@ -1,0 +1,374 @@
+/**
+ * AutomationModal (Monday-like)
+ * - Lists existing automation rules with enable/disable toggles
+ * - Each rule: When [trigger] → Then [action1] And [action2] ...
+ * - Actions are independent units, combined via "And" button
+ * - Website-safe (Modal + native HTML)
+ */
+import { escapeHtml } from '../../utils/dom.js';
+import { Modal } from '../Common/Modal.js';
+
+export class AutomationModal {
+  constructor({ meta = {}, items = [], onSave, onToggle, onDelete, onClose } = {}) {
+    this.meta = meta || {};
+    this.items = Array.isArray(items) ? items.map((it) => ({
+      ...it,
+      actions: Array.isArray(it.actions) ? [...it.actions] : [],
+    })) : [];
+    this.onSave = onSave || (async () => {});
+    this.onToggle = onToggle || (async () => {});
+    this.onDelete = onDelete || (async () => {});
+    this.onClose = onClose || (() => {});
+
+    this._modal = null;
+    this._root = null;
+    this._saving = false;
+  }
+
+  open() {
+    this.close();
+
+    const content = document.createElement('div');
+    content.className = 'sb-automation';
+    content.innerHTML = `
+      <div class="sb-automation__hint text-muted">
+        Configure automations: When a trigger fires → execute actions automatically.
+      </div>
+      <div class="sb-automation__list" id="sbAutoList"></div>
+      <div style="margin-top:12px;">
+        <button class="btn btn-default" type="button" id="sbAutoAdd">+ Add Automation</button>
+      </div>
+    `;
+
+    this._modal = new Modal({
+      title: 'Automations',
+      contentEl: content,
+      onClose: () => this.onClose(),
+    });
+    this._modal.open();
+    this._root = content;
+
+    this._renderList();
+    content.querySelector('#sbAutoAdd')?.addEventListener('click', () => this._addNew());
+  }
+
+  close() {
+    this._modal?.close?.();
+    this._modal = null;
+    this._root = null;
+  }
+
+  // =========================================================================
+  // Rendering
+  // =========================================================================
+
+  _renderList() {
+    const wrap = this._root?.querySelector('#sbAutoList');
+    if (!wrap) return;
+
+    if (!this.items.length) {
+      wrap.innerHTML = `
+        <div class="sb-automation__empty text-muted">
+          No automations configured yet. Click "+ Add Automation" to create one.
+        </div>
+      `;
+      return;
+    }
+
+    wrap.innerHTML = this.items.map((item, idx) => this._ruleHTML(item, idx)).join('');
+    this._bindRuleEvents(wrap);
+  }
+
+  _ruleHTML(item, idx) {
+    const triggers = this.meta?.triggers || {};
+    const enabled = item.enabled ? 'checked' : '';
+    const triggerType = item.trigger_type || '';
+    const triggerConfig = (typeof item.trigger_config === 'object') ? item.trigger_config : {};
+    const name = item.name || '';
+    const actions = Array.isArray(item.actions) ? item.actions : [];
+
+    // Trigger type dropdown
+    const triggerOpts = Object.entries(triggers).map(([k, v]) =>
+      `<option value="${escapeHtml(k)}" ${k === triggerType ? 'selected' : ''}>${escapeHtml(v.label || k)}</option>`
+    ).join('');
+
+    // Trigger config fields
+    const triggerConfigHTML = this._configFieldsHTML(triggers[triggerType], triggerConfig, `trigger_${idx}`);
+
+    // Actions rows
+    const actionsHTML = actions.length
+      ? actions.map((a, ai) => this._actionRowHTML(a, idx, ai, ai > 0)).join('')
+      : this._actionRowHTML({}, idx, 0, false);
+
+    return `
+      <div class="sb-automation__rule" data-idx="${idx}" data-name="${escapeHtml(name)}">
+        <div class="sb-automation__rule-header">
+          <label class="sb-automation__toggle">
+            <input type="checkbox" class="sb-auto__enabled" data-idx="${idx}" ${enabled} />
+            <span class="sb-automation__toggle-label">${enabled ? 'ON' : 'OFF'}</span>
+          </label>
+          <button class="btn btn-default sb-auto__delete" data-idx="${idx}" type="button" title="Delete">×</button>
+        </div>
+        <div class="sb-automation__rule-body">
+          <div class="sb-automation__row">
+            <span class="sb-automation__label">When</span>
+            <select class="form-control sb-auto__trigger-type" data-idx="${idx}">
+              <option value="" disabled ${!triggerType ? 'selected' : ''}>Select trigger</option>
+              ${triggerOpts}
+            </select>
+            ${triggerConfigHTML}
+          </div>
+          ${actionsHTML}
+        </div>
+        <div class="sb-automation__rule-actions-bar">
+          <button class="btn btn-default btn-sm sb-auto__add-action" data-idx="${idx}" type="button">+ And</button>
+        </div>
+        <div class="sb-automation__rule-footer">
+          <button class="btn btn-primary btn-sm sb-auto__save" data-idx="${idx}" type="button">Save</button>
+          ${item.execution_count ? `<span class="text-muted" style="font-size:11px;">Executed ${item.execution_count} times</span>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  _actionRowHTML(action, ruleIdx, actionIdx, showAnd) {
+    const allActions = this.meta?.actions || {};
+    const actionType = action?.action_type || '';
+    const actionConfig = action?.config || {};
+
+    const actionOpts = Object.entries(allActions).map(([k, v]) =>
+      `<option value="${escapeHtml(k)}" ${k === actionType ? 'selected' : ''}>${escapeHtml(v.label || k)}</option>`
+    ).join('');
+
+    const configHTML = this._configFieldsHTML(allActions[actionType], actionConfig, `action_${ruleIdx}_${actionIdx}`);
+
+    const andLabel = showAnd ? '<span class="sb-automation__and-label">And</span>' : '<span class="sb-automation__label">Then</span>';
+    const removeBtn = showAnd
+      ? `<button class="btn btn-default sb-auto__remove-action" data-idx="${ruleIdx}" data-aidx="${actionIdx}" type="button" title="Remove">×</button>`
+      : '';
+
+    return `
+      <div class="sb-automation__row sb-automation__action-row" data-idx="${ruleIdx}" data-aidx="${actionIdx}">
+        ${andLabel}
+        <select class="form-control sb-auto__action-type" data-idx="${ruleIdx}" data-aidx="${actionIdx}">
+          <option value="" disabled ${!actionType ? 'selected' : ''}>Select action</option>
+          ${actionOpts}
+        </select>
+        ${configHTML}
+        ${removeBtn}
+      </div>
+    `;
+  }
+
+  _configFieldsHTML(typeMeta, config, prefix) {
+    if (!typeMeta?.config_fields?.length) return '';
+
+    return typeMeta.config_fields.map((cf) => {
+      const key = cf.key || '';
+      const currentVal = config?.[key] ?? cf.default ?? '';
+      const id = `${prefix}_${key}`;
+
+      if (cf.type === 'select' && Array.isArray(cf.options)) {
+        const opts = cf.options.map((o) => {
+          const val = typeof o === 'string' ? o : (o.value || '');
+          const label = typeof o === 'string' ? o : (o.label || val);
+          return `<option value="${escapeHtml(val)}" ${val === currentVal ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+        }).join('');
+        return `
+          <select class="form-control sb-auto__config" data-prefix="${escapeHtml(prefix)}" data-key="${escapeHtml(key)}" id="${escapeHtml(id)}">
+            <option value="" disabled ${!currentVal ? 'selected' : ''}>${escapeHtml(cf.label || key)}</option>
+            ${opts}
+          </select>
+        `;
+      }
+
+      return `
+        <input class="form-control sb-auto__config" type="text"
+          data-prefix="${escapeHtml(prefix)}" data-key="${escapeHtml(key)}" id="${escapeHtml(id)}"
+          placeholder="${escapeHtml(cf.label || key)}" value="${escapeHtml(String(currentVal))}" />
+      `;
+    }).join('');
+  }
+
+  // =========================================================================
+  // Events
+  // =========================================================================
+
+  _bindRuleEvents(wrap) {
+    wrap.querySelectorAll('.sb-auto__enabled').forEach((el) => {
+      el.addEventListener('change', (e) => this._handleToggle(e));
+    });
+    wrap.querySelectorAll('.sb-auto__delete').forEach((el) => {
+      el.addEventListener('click', (e) => this._handleDelete(e));
+    });
+    wrap.querySelectorAll('.sb-auto__save').forEach((el) => {
+      el.addEventListener('click', (e) => this._handleSave(e));
+    });
+    wrap.querySelectorAll('.sb-auto__trigger-type').forEach((el) => {
+      el.addEventListener('change', (e) => this._handleTriggerTypeChange(e));
+    });
+    wrap.querySelectorAll('.sb-auto__action-type').forEach((el) => {
+      el.addEventListener('change', (e) => this._handleActionTypeChange(e));
+    });
+    wrap.querySelectorAll('.sb-auto__add-action').forEach((el) => {
+      el.addEventListener('click', (e) => this._handleAddAction(e));
+    });
+    wrap.querySelectorAll('.sb-auto__remove-action').forEach((el) => {
+      el.addEventListener('click', (e) => this._handleRemoveAction(e));
+    });
+  }
+
+  async _handleToggle(e) {
+    const idx = parseInt(e.target?.dataset?.idx, 10);
+    const item = this.items[idx];
+    if (!item?.name) return;
+
+    const enabled = e.target.checked;
+    const label = e.target?.parentElement?.querySelector('.sb-automation__toggle-label');
+    if (label) label.textContent = enabled ? 'ON' : 'OFF';
+
+    try {
+      await this.onToggle(item.name, enabled);
+      item.enabled = enabled ? 1 : 0;
+    } catch (err) {
+      e.target.checked = !enabled;
+      if (label) label.textContent = enabled ? 'OFF' : 'ON';
+    }
+  }
+
+  async _handleDelete(e) {
+    const idx = parseInt(e.target?.dataset?.idx, 10);
+    const item = this.items[idx];
+    if (!item) return;
+
+    if (item.name) {
+      try { await this.onDelete(item.name); } catch (err) { return; }
+    }
+    this.items.splice(idx, 1);
+    this._renderList();
+  }
+
+  async _handleSave(e) {
+    if (this._saving) return;
+    const idx = parseInt(e.target?.dataset?.idx, 10);
+    const item = this.items[idx];
+    if (!item) return;
+
+    const ruleEl = this._root?.querySelector(`.sb-automation__rule[data-idx="${idx}"]`);
+    if (!ruleEl) return;
+
+    const triggerType = ruleEl.querySelector('.sb-auto__trigger-type')?.value || '';
+    if (!triggerType) return;
+
+    // Read trigger config
+    const triggerConfig = {};
+    ruleEl.querySelectorAll(`.sb-auto__config[data-prefix="trigger_${idx}"]`).forEach((el) => {
+      const key = el.dataset.key;
+      if (key) triggerConfig[key] = el.value || '';
+    });
+
+    // Read all action rows
+    const actions = [];
+    const actionRows = ruleEl.querySelectorAll('.sb-automation__action-row');
+    actionRows.forEach((row) => {
+      const aidx = parseInt(row.dataset.aidx, 10);
+      const actionType = row.querySelector('.sb-auto__action-type')?.value || '';
+      if (!actionType) return;
+
+      const config = {};
+      row.querySelectorAll(`.sb-auto__config[data-prefix="action_${idx}_${aidx}"]`).forEach((el) => {
+        const key = el.dataset.key;
+        if (key) config[key] = el.value || '';
+      });
+
+      actions.push({ action_type: actionType, config });
+    });
+
+    if (!actions.length) return;
+
+    const enabled = ruleEl.querySelector('.sb-auto__enabled')?.checked ? 1 : 0;
+
+    this._saving = true;
+    const btn = e.target;
+    const prevText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    try {
+      const result = await this.onSave({
+        name: item.name || '',
+        enabled,
+        trigger_type: triggerType,
+        trigger_config: triggerConfig,
+        actions,
+      });
+
+      item.name = result?.name || item.name;
+      item.enabled = enabled;
+      item.trigger_type = triggerType;
+      item.trigger_config = triggerConfig;
+      item.actions = actions;
+
+      // Re-render to update data-name
+      this._renderList();
+    } catch (err) {
+      // handled by controller
+    } finally {
+      this._saving = false;
+      btn.disabled = false;
+      btn.textContent = prevText;
+    }
+  }
+
+  _handleTriggerTypeChange(e) {
+    const idx = parseInt(e.target?.dataset?.idx, 10);
+    const item = this.items[idx];
+    if (!item) return;
+    item.trigger_type = e.target.value || '';
+    item.trigger_config = {};
+    this._renderList();
+  }
+
+  _handleActionTypeChange(e) {
+    const idx = parseInt(e.target?.dataset?.idx, 10);
+    const aidx = parseInt(e.target?.dataset?.aidx, 10);
+    const item = this.items[idx];
+    if (!item) return;
+
+    if (!Array.isArray(item.actions)) item.actions = [];
+    while (item.actions.length <= aidx) item.actions.push({});
+    item.actions[aidx] = { action_type: e.target.value || '', config: {} };
+    this._renderList();
+  }
+
+  _handleAddAction(e) {
+    const idx = parseInt(e.target?.dataset?.idx, 10);
+    const item = this.items[idx];
+    if (!item) return;
+    if (!Array.isArray(item.actions)) item.actions = [];
+    item.actions.push({ action_type: '', config: {} });
+    this._renderList();
+  }
+
+  _handleRemoveAction(e) {
+    const idx = parseInt(e.target?.dataset?.idx, 10);
+    const aidx = parseInt(e.target?.dataset?.aidx, 10);
+    const item = this.items[idx];
+    if (!item || !Array.isArray(item.actions)) return;
+    item.actions.splice(aidx, 1);
+    if (!item.actions.length) item.actions.push({ action_type: '', config: {} });
+    this._renderList();
+  }
+
+  _addNew() {
+    this.items.push({
+      name: '',
+      enabled: 1,
+      trigger_type: '',
+      trigger_config: {},
+      actions: [{ action_type: '', config: {} }],
+      execution_count: 0,
+    });
+    this._renderList();
+  }
+}

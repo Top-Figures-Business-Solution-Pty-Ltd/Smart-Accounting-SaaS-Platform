@@ -3,7 +3,7 @@
  * - UI-only: pick a new Project Frequency for a Project, with a double-confirm step.
  *
  * Notes:
- * - Changing frequency impacts Auto Repeat. Backend will sync/create/disable automatically.
+ * - Changing frequency impacts Board Automation (due date roll cycles).
  */
 import { Modal } from '../Common/Modal.js';
 import { escapeHtml } from '../../utils/dom.js';
@@ -50,7 +50,7 @@ export class ProjectFrequencyChangeModal {
         </div>
 
         <div class="text-muted" style="font-size:12px; margin-top:10px;">
-          Backend will automatically sync Auto Repeat (create/update/disable) for this project.
+          Frequency determines the cycle length for automation-based due date rolling.
         </div>
 
         <div class="sb-newproj__error text-danger" id="sbProjFreqErr" style="display:none;"></div>
@@ -117,13 +117,11 @@ export class ProjectFrequencyChangeModal {
     `;
   }
 
-  _autoRepeatImpactText({ current, next }) {
-    const cur = String(current || '').trim();
+  _frequencyImpactText({ current, next }) {
     const nxt = String(next || '').trim();
     if (!nxt) return '';
-    if (nxt === 'One-off') return 'Auto Repeat will be disabled (if present).';
-    if (!cur || cur === 'One-off') return 'Auto Repeat will be created or enabled automatically.';
-    return 'Auto Repeat will be updated automatically.';
+    if (nxt === 'One-off') return 'Due date automation will not apply to one-off projects.';
+    return 'Due date automation will use this frequency for the roll cycle.';
   }
 
   async _handleContinue() {
@@ -180,7 +178,7 @@ export class ProjectFrequencyChangeModal {
       };
 
       const p = this.project || {};
-      const impact = this._autoRepeatImpactText({ current, next });
+      const impact = this._frequencyImpactText({ current, next });
       const content = document.createElement('div');
       content.innerHTML = `
         <div style="font-size:14px; line-height:1.5;">

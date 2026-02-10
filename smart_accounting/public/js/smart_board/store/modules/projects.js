@@ -228,8 +228,25 @@ export const ProjectsModule = {
         
         async updateProjectField(state, { name, field, value }, store) {
             try {
-                await ProjectService.updateProject(name, { [field]: value });
-                store.commit('projects/updateProject', { name, [field]: value });
+                const updatedDoc = await ProjectService.updateProject(name, { [field]: value });
+
+                // Merge ALL fields from the backend response into the store.
+                // This ensures automation side-effects (e.g. due date roll + status reset)
+                // are reflected immediately without a full reload.
+                const patch = { name, [field]: value };
+                if (updatedDoc && typeof updatedDoc === 'object') {
+                    // Pick commonly-affected fields from the response
+                    const syncFields = [
+                        'status', 'custom_lodgement_due_date', 'expected_end_date',
+                        'custom_project_frequency', 'modified',
+                    ];
+                    for (const f of syncFields) {
+                        if (f in updatedDoc && updatedDoc[f] !== undefined) {
+                            patch[f] = updatedDoc[f];
+                        }
+                    }
+                }
+                store.commit('projects/updateProject', patch);
                 
                 frappe.show_alert({
                     message: __('Updated successfully'),

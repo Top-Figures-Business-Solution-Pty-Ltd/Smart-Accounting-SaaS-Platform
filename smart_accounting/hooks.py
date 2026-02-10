@@ -115,7 +115,8 @@ fixtures = [
                 "Customer Entity",
                 "Monthly Status",
 				"Project Team Member",
-				"Project Software"
+				"Project Software",
+				"Board Automation"
             ]]
         ]
     }

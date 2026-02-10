@@ -734,7 +734,7 @@ export function makeProjectColumnSpecs() {
     // (20) System/meta fields that should never be edited from the board
     // - They are either computed, managed by the system, or not part of the Smart Board editing UX yet.
     { field: 'modified', isEditable: false },
-    { field: 'auto_repeat', isEditable: false },
+
     { field: 'is_active', isEditable: false },
     { field: 'custom_customer_entity', isEditable: false },
     { field: 'custom_team_members', isEditable: false },
