@@ -6,7 +6,7 @@ Project DocType Override
 
 import json
 import frappe
-from frappe.utils import getdate, add_months, add_days, get_last_day
+from frappe.utils import getdate, add_months, add_days
 from erpnext.projects.doctype.project.project import Project
 
 
