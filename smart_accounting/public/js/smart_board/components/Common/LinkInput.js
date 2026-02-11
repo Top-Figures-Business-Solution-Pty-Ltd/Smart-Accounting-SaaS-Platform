@@ -2,6 +2,7 @@
  * LinkInput (Website-safe)
  * - Uses frappe.desk.search.search_link for dynamic search
  * - Debounced input, caches results, discards stale responses
+ * - Shows description (e.g. customer_name) as primary display, value (ID) as secondary
  */
 import { escapeHtml } from '../../utils/dom.js';
 import { debounce } from '../../utils/helpers.js';
@@ -14,7 +15,7 @@ export class LinkInput {
     this.value = initialValue || null;
     this.onChange = onChange || (() => {});
 
-    this._cache = new Map(); // key: txt -> results
+    this._cache = new Map(); // key: txt -> [{value, description}]
     this._seq = 0;
     this._open = false;
     this._onDocClick = null;
@@ -56,7 +57,11 @@ export class LinkInput {
       this._search(txt);
     }, 300);
 
-    this._input.addEventListener('input', onInput);
+    this._input.addEventListener('input', () => {
+      // Clear stored value when user types (they're searching for something new)
+      this.value = null;
+      onInput();
+    });
     this._input.addEventListener('focus', () => {
       const txt = (this._input.value || '').trim();
       this._search(txt);
@@ -67,9 +72,7 @@ export class LinkInput {
       if (!item) return;
       e.preventDefault();
       const val = item.dataset.value || null;
-      this.setValue(val);
-      this.closeMenu();
-      this.onChange(this.value);
+      this._selectItem(val);
     });
 
     this._onDocClick = (e) => {
@@ -93,7 +96,6 @@ export class LinkInput {
   }
 
   async _search(txt) {
-    // Empty: just show selected value; keep menu closed.
     if (!this._menu) return;
 
     if (!txt) {
@@ -119,11 +121,13 @@ export class LinkInput {
       });
 
       if (seq !== this._seq) return; // stale
-      const results = (r.message || []).map((row) => row.value).filter(Boolean);
+      const results = (r.message || []).map((row) => ({
+        value: row.value || '',
+        description: row.description || '',
+      })).filter((r) => r.value);
       this._cache.set(key, results);
       this._renderMenu(results);
     } catch (e) {
-      // fail silent; don't spam
       if (seq !== this._seq) return;
       this._renderMenu([]);
     }
@@ -132,10 +136,30 @@ export class LinkInput {
   _renderMenu(items) {
     if (!this._menu) return;
     const list = Array.isArray(items) ? items : [];
-    this._menu.innerHTML = list.length
-      ? list.map((v) => `<div class="sb-linkinput__item" data-value="${escapeHtml(v)}">${escapeHtml(v)}</div>`).join('')
-      : `<div class="sb-linkinput__empty text-muted">No results</div>`;
+    if (!list.length) {
+      this._menu.innerHTML = `<div class="sb-linkinput__empty text-muted">No results</div>`;
+      this.openMenu();
+      return;
+    }
+
+    this._menu.innerHTML = list.map((item) => {
+      const val = item.value || '';
+      return `
+        <div class="sb-linkinput__item" data-value="${escapeHtml(val)}">
+          <span class="sb-linkinput__item-primary">${escapeHtml(val)}</span>
+        </div>
+      `;
+    }).join('');
     this.openMenu();
+  }
+
+  _selectItem(value) {
+    this.value = value || null;
+    if (this._input) {
+      this._input.value = this.value || '';
+    }
+    this.closeMenu();
+    this.onChange(this.value);
   }
 
   _repositionMenu() {
@@ -198,5 +222,3 @@ export class LinkInput {
     this.mountEl.innerHTML = '';
   }
 }
-
-
