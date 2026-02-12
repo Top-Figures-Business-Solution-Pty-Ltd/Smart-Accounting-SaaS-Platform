@@ -54,7 +54,7 @@ function metaForField(field, { viewType, statusOptions, companyOptions }) {
   }
 
   // Known fields => proper editor type
-  if (f === 'customer') return { ...base, label: 'Client Name', type: 'link', doctype: 'Customer', placeholder: 'Search Client...' };
+  if (f === 'customer') return { ...base, label: 'Client Name', type: 'link', doctype: 'Customer', displayField: 'customer_name', placeholder: 'Search Client...' };
   if (f === 'project_name') return { ...base, label: 'Project Name', type: 'text' };
   if (f === 'project_type') return { ...base, label: 'Project Type', type: 'link', doctype: 'Project Type', placeholder: 'Search Project Type...' };
   if (f === 'status') return { ...base, label: 'Status', type: 'select', options: statusOptions || [] };

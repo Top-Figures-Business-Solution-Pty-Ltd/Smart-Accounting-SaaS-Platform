@@ -146,6 +146,7 @@ export class NewProjectModal {
       doctype,
       placeholder: `Search ${displayLabel}...`,
       initialValue: initialValue || null,
+      displayField: doctype === 'Customer' ? 'customer_name' : null,
       onChange: () => {},
     });
     this._linkInputs.push(li);

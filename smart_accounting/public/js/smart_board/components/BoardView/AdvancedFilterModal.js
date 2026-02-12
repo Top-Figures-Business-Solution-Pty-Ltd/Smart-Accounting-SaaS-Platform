@@ -386,6 +386,7 @@ export class AdvancedFilterModal {
       const li = new LinkInput(mount, {
         doctype: meta?.doctype || 'Customer',
         placeholder: meta?.placeholder || 'Search...',
+        displayField: meta?.displayField || null,
         initialValue: rule.value || null,
         onChange: (v) => { rule.value = v; }
       });

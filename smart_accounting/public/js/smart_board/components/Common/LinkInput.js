@@ -1,21 +1,24 @@
 /**
  * LinkInput (Website-safe)
- * - Uses frappe.desk.search.search_link for dynamic search
- * - Debounced input, caches results, discards stale responses
- * - Shows description (e.g. customer_name) as primary display, value (ID) as secondary
+ * - Supports optional displayField (e.g. 'customer_name' for Customer doctype)
+ *   to show human-readable names while storing the document ID (name).
+ * - Falls back to frappe.desk.search.search_link when no displayField is set.
+ * - Debounced input, caches results, discards stale responses.
  */
 import { escapeHtml } from '../../utils/dom.js';
 import { debounce } from '../../utils/helpers.js';
 
 export class LinkInput {
-  constructor(mountEl, { doctype, placeholder = 'Search...', initialValue = null, onChange } = {}) {
+  constructor(mountEl, { doctype, placeholder = 'Search...', initialValue = null, displayField = null, onChange } = {}) {
     this.mountEl = mountEl;
     this.doctype = doctype;
     this.placeholder = placeholder;
-    this.value = initialValue || null;
+    this.displayField = displayField || null; // e.g. 'customer_name'
+    this.value = initialValue || null;       // stored value (document name/ID)
+    this._displayValue = null;               // human-readable label for display
     this.onChange = onChange || (() => {});
 
-    this._cache = new Map(); // key: txt -> [{value, description}]
+    this._cache = new Map();
     this._seq = 0;
     this._open = false;
     this._onDocClick = null;
@@ -26,7 +29,12 @@ export class LinkInput {
     this._render();
     this._createPortalMenu();
     this._bind();
-    this.setValue(this.value);
+    // If initialValue + displayField: resolve display name
+    if (this.value && this.displayField) {
+      this._resolveDisplayValue(this.value);
+    } else {
+      this.setValue(this.value);
+    }
   }
 
   _render() {
@@ -37,7 +45,7 @@ export class LinkInput {
     `;
     this._root = this.mountEl.querySelector('.sb-linkinput');
     this._input = this.mountEl.querySelector('.sb-linkinput__input');
-    this._menu = null; // portal
+    this._menu = null;
   }
 
   _createPortalMenu() {
@@ -58,8 +66,8 @@ export class LinkInput {
     }, 300);
 
     this._input.addEventListener('input', () => {
-      // Clear stored value when user types (they're searching for something new)
       this.value = null;
+      this._displayValue = null;
       onInput();
     });
     this._input.addEventListener('focus', () => {
@@ -72,7 +80,8 @@ export class LinkInput {
       if (!item) return;
       e.preventDefault();
       const val = item.dataset.value || null;
-      this._selectItem(val);
+      const display = item.dataset.display || '';
+      this._selectItem(val, display);
     });
 
     this._onDocClick = (e) => {
@@ -83,25 +92,16 @@ export class LinkInput {
     };
     document.addEventListener('click', this._onDocClick);
 
-    // Reposition menu on scroll/resize so it always stays aligned
-    this._onDocScroll = () => {
-      if (this._open) this._repositionMenu();
-    };
+    this._onDocScroll = () => { if (this._open) this._repositionMenu(); };
     document.addEventListener('scroll', this._onDocScroll, true);
 
-    this._onWinResize = () => {
-      if (this._open) this._repositionMenu();
-    };
+    this._onWinResize = () => { if (this._open) this._repositionMenu(); };
     window.addEventListener('resize', this._onWinResize);
   }
 
   async _search(txt) {
     if (!this._menu) return;
-
-    if (!txt) {
-      this.closeMenu();
-      return;
-    }
+    if (!txt) { this.closeMenu(); return; }
 
     const key = txt.toLowerCase();
     if (this._cache.has(key)) {
@@ -110,21 +110,43 @@ export class LinkInput {
     }
 
     const seq = ++this._seq;
-    try {
-      const r = await frappe.call({
-        method: 'frappe.desk.search.search_link',
-        args: {
-          doctype: this.doctype,
-          txt,
-          page_length: 10
-        }
-      });
 
-      if (seq !== this._seq) return; // stale
-      const results = (r.message || []).map((row) => ({
-        value: row.value || '',
-        description: row.description || '',
-      })).filter((r) => r.value);
+    try {
+      let results;
+
+      if (this.displayField) {
+        // Use get_list to fetch both name and displayField
+        const r = await frappe.call({
+          method: 'frappe.client.get_list',
+          args: {
+            doctype: this.doctype,
+            fields: ['name', this.displayField],
+            or_filters: [
+              ['name', 'like', `%${txt}%`],
+              [this.displayField, 'like', `%${txt}%`],
+            ],
+            limit_page_length: 10,
+            order_by: `${this.displayField} asc`,
+          }
+        });
+        if (seq !== this._seq) return;
+        results = (r.message || []).map((row) => ({
+          value: row.name || '',
+          display: row[this.displayField] || row.name || '',
+        })).filter((r) => r.value);
+      } else {
+        // Default: use search_link (works for any doctype)
+        const r = await frappe.call({
+          method: 'frappe.desk.search.search_link',
+          args: { doctype: this.doctype, txt, page_length: 10 }
+        });
+        if (seq !== this._seq) return;
+        results = (r.message || []).map((row) => ({
+          value: row.value || '',
+          display: row.value || '',
+        })).filter((r) => r.value);
+      }
+
       this._cache.set(key, results);
       this._renderMenu(results);
     } catch (e) {
@@ -144,22 +166,48 @@ export class LinkInput {
 
     this._menu.innerHTML = list.map((item) => {
       const val = item.value || '';
+      const display = item.display || val;
+      const showId = (display !== val);
       return `
-        <div class="sb-linkinput__item" data-value="${escapeHtml(val)}">
-          <span class="sb-linkinput__item-primary">${escapeHtml(val)}</span>
+        <div class="sb-linkinput__item" data-value="${escapeHtml(val)}" data-display="${escapeHtml(display)}">
+          <span class="sb-linkinput__item-primary">${escapeHtml(display)}</span>
+          ${showId ? `<span class="sb-linkinput__item-secondary">${escapeHtml(val)}</span>` : ''}
         </div>
       `;
     }).join('');
     this.openMenu();
   }
 
-  _selectItem(value) {
+  _selectItem(value, display) {
     this.value = value || null;
+    this._displayValue = display || null;
     if (this._input) {
-      this._input.value = this.value || '';
+      this._input.value = this._displayValue || this.value || '';
     }
     this.closeMenu();
     this.onChange(this.value);
+  }
+
+  /**
+   * Resolve display value for an existing ID (e.g. when initialValue is set).
+   */
+  async _resolveDisplayValue(name) {
+    if (!name || !this.displayField) {
+      this.setValue(name);
+      return;
+    }
+    try {
+      const r = await frappe.call({
+        method: 'frappe.client.get_value',
+        args: { doctype: this.doctype, fieldname: this.displayField, filters: { name } }
+      });
+      const displayVal = r?.message?.[this.displayField] || name;
+      this.value = name;
+      this._displayValue = displayVal;
+      if (this._input) this._input.value = displayVal;
+    } catch (e) {
+      this.setValue(name);
+    }
   }
 
   _repositionMenu() {
@@ -193,28 +241,18 @@ export class LinkInput {
     this._open = false;
   }
 
-  getValue() {
-    return this.value;
-  }
+  getValue() { return this.value; }
 
   setValue(value) {
     this.value = value || null;
+    this._displayValue = null;
     if (this._input) this._input.value = this.value || '';
   }
 
   destroy() {
-    if (this._onDocClick) {
-      document.removeEventListener('click', this._onDocClick);
-      this._onDocClick = null;
-    }
-    if (this._onDocScroll) {
-      document.removeEventListener('scroll', this._onDocScroll, true);
-      this._onDocScroll = null;
-    }
-    if (this._onWinResize) {
-      window.removeEventListener('resize', this._onWinResize);
-      this._onWinResize = null;
-    }
+    if (this._onDocClick) { document.removeEventListener('click', this._onDocClick); this._onDocClick = null; }
+    if (this._onDocScroll) { document.removeEventListener('scroll', this._onDocScroll, true); this._onDocScroll = null; }
+    if (this._onWinResize) { window.removeEventListener('resize', this._onWinResize); this._onWinResize = null; }
     if (this._menuPortal?.parentNode) {
       try { this._menuPortal.parentNode.removeChild(this._menuPortal); } catch (e) {}
     }
