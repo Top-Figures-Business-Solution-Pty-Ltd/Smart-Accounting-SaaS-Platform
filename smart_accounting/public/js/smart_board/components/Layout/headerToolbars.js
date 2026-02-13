@@ -34,6 +34,7 @@ export function renderHeaderActions(view, { isBoardView }) {
                     id="headerClientSearchInput"
                 />
             </div>
+            <button class="btn btn-default" id="btnExportClientsCsv">Export CSV</button>
             <button class="btn btn-default" id="btnClientsColumns">Columns</button>
             <button class="btn btn-primary" id="btnNewClient">New Client</button>
         `;
@@ -82,6 +83,7 @@ export function bindHeaderActions(rootEl, view, { isBoardView, onAction, onShowF
 
     rootEl.querySelector('#btnNewClient')?.addEventListener('click', () => onAction?.('new_client'));
     rootEl.querySelector('#btnClientsColumns')?.addEventListener('click', () => onAction?.('clients_columns'));
+    rootEl.querySelector('#btnExportClientsCsv')?.addEventListener('click', () => onAction?.('export_clients_csv'));
 
     const clientSearch = rootEl.querySelector('#headerClientSearchInput');
     if (clientSearch) {

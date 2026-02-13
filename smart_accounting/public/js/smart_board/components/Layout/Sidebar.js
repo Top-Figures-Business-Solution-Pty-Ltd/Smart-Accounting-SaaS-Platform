@@ -10,7 +10,9 @@ export class Sidebar {
         this.projectTypes = options.projectTypes || [];
         this.currentView = options.currentView || 'ITR';
         this.onViewChange = options.onViewChange || (() => {});
+        this.onBoardMenuAction = options.onBoardMenuAction || (() => {});
         this._onContainerClick = null;
+        this._openBoardMenuFor = '';
         
         this.render();
         this.bindEvents();
@@ -83,10 +85,18 @@ export class Sidebar {
         }
 
         return this.projectTypes.map(type => `
-            <a href="#" class="nav-item" data-view="${type.value}">
-                <span class="nav-icon">${type.icon}</span>
-                <span class="nav-label">${type.label}</span>
-            </a>
+            <div class="sb-board-item ${this._openBoardMenuFor === type.value ? 'is-open' : ''}" data-board-item="${type.value}">
+                <a href="#" class="nav-item" data-view="${type.value}">
+                    <span class="nav-icon">${type.icon}</span>
+                    <span class="nav-label">${type.label}</span>
+                </a>
+                <button type="button" class="sb-board-item__more" data-role="board-menu-trigger" data-view="${type.value}" aria-label="Board menu">⋯</button>
+                <div class="sb-board-item__menu" data-role="board-menu" data-view="${type.value}">
+                    <button type="button" data-role="board-menu-item" data-action="export_csv" data-view="${type.value}">
+                        Export to Excel (CSV)
+                    </button>
+                </div>
+            </div>
         `).join('');
     }
     
@@ -100,12 +110,37 @@ export class Sidebar {
                 try { this.options?.onBoardSettings?.(); } catch (e2) {}
                 return;
             }
+            const boardMenuTrigger = e.target?.closest?.('[data-role="board-menu-trigger"]');
+            if (boardMenuTrigger) {
+                e.preventDefault();
+                e.stopPropagation();
+                const view = String(boardMenuTrigger.getAttribute('data-view') || '');
+                const isSame = this._openBoardMenuFor === view;
+                this._openBoardMenuFor = isSame ? '' : view;
+                this.render();
+                return;
+            }
+            const boardMenuItem = e.target?.closest?.('[data-role="board-menu-item"]');
+            if (boardMenuItem) {
+                e.preventDefault();
+                e.stopPropagation();
+                const action = String(boardMenuItem.getAttribute('data-action') || '');
+                const view = String(boardMenuItem.getAttribute('data-view') || '');
+                this._openBoardMenuFor = '';
+                this.render();
+                try { this.onBoardMenuAction(action, view); } catch (e2) {}
+                return;
+            }
             const navItem = e.target.closest('.nav-item');
             if (navItem) {
                 e.preventDefault();
                 const view = navItem.dataset.view;
+                this._openBoardMenuFor = '';
                 this.selectView(view);
+                return;
             }
+            this._openBoardMenuFor = '';
+            this.render();
         };
         this.container.addEventListener('click', this._onContainerClick);
     }

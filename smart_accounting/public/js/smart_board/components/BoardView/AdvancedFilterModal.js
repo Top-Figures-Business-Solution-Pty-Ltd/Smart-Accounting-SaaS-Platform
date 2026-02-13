@@ -13,6 +13,7 @@ import { Modal } from '../Common/Modal.js';
 import { LinkInput } from '../Common/LinkInput.js';
 import { MultiLinkPicker } from '../Common/MultiLinkPicker.js';
 import { MentionService } from '../../services/mentionService.js';
+import { deleteFilterPreset, getFilterPresets, saveFilterPreset } from '../../utils/filterPresets.js';
 
 const CONDITIONS = {
   text: [
@@ -63,8 +64,9 @@ function _isNonEmptyString(v) {
 }
 
 export class AdvancedFilterModal {
-  constructor({ title = 'Filter', columns = [], initial = {}, onApply, onClose } = {}) {
+  constructor({ title = 'Filter', viewKey = 'global', columns = [], initial = {}, onApply, onClose } = {}) {
     this.title = title;
+    this.viewKey = String(viewKey || 'global');
     this.columns = Array.isArray(columns) ? columns : [];
     this.initial = initial || {};
     this.onApply = onApply || (() => {});
@@ -76,6 +78,8 @@ export class AdvancedFilterModal {
     this._linkInputs = new Map(); // key: rowId -> LinkInput
     this._rowsEl = null;
     this._boundRowsEvents = false;
+    this._presetId = '';
+    this._presets = [];
   }
 
   _normalizeInitialGroups(initial) {
@@ -123,8 +127,17 @@ export class AdvancedFilterModal {
   open() {
     this.close();
     const content = document.createElement('div');
+    this._presets = getFilterPresets(this.viewKey);
     content.innerHTML = `
       <div class="sb-advfilter">
+        <div class="sb-advfilter__saved">
+          <select class="form-control sb-advfilter__saved-select" id="sbAdvPresetSelect">
+            <option value="">Saved filters</option>
+            ${this._presets.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('')}
+          </select>
+          <button class="btn btn-default" type="button" id="sbAdvPresetSave">Save as</button>
+          <button class="btn btn-default" type="button" id="sbAdvPresetDelete">Delete</button>
+        </div>
         <div class="sb-advfilter__hint text-muted">Column / Condition / Value（支持 AND / OR 多条）。</div>
         <div class="sb-advfilter__rows" id="sbAdvFilterRows"></div>
         <div style="margin-top:10px;">
@@ -164,6 +177,9 @@ export class AdvancedFilterModal {
     footer.querySelector('#sbAdvClear')?.addEventListener('click', () => this._clear());
     content.querySelector('#sbAdvAddRow')?.addEventListener('click', () => this._addRow());
     content.querySelector('#sbAdvAddGroup')?.addEventListener('click', () => this._addGroup());
+    content.querySelector('#sbAdvPresetSave')?.addEventListener('click', () => this._savePreset());
+    content.querySelector('#sbAdvPresetDelete')?.addEventListener('click', () => this._deletePreset());
+    content.querySelector('#sbAdvPresetSelect')?.addEventListener('change', (e) => this._applyPreset(e?.target?.value));
 
     // Bind delegated events ONCE (avoid duplicated handlers on re-render)
     this._bindRowsEventsOnce();
@@ -474,13 +490,14 @@ export class AdvancedFilterModal {
   }
 
   _clear() {
+    this._presetId = '';
+    this._syncPresetSelect();
     this._groups = this._normalizeInitialGroups({});
     this._renderRows();
   }
 
-  _apply() {
-    // Persist UI rules back to store so it can be reopened with same configuration
-    const cleanedGroups = (this._groups || [])
+  _serializeGroups() {
+    return (this._groups || [])
       .map((g, gi) => {
         const rules = (g.rules || [])
           .filter((r) => {
@@ -495,7 +512,6 @@ export class AdvancedFilterModal {
             condition: r.condition,
             value: r.value,
           }));
-
         return {
           id: g.id,
           join: gi === 0 ? 'where' : (g.join || 'and'),
@@ -503,7 +519,70 @@ export class AdvancedFilterModal {
         };
       })
       .filter((g) => (g.rules || []).length > 0);
+  }
 
+  _savePreset() {
+    const current = this._serializeGroups();
+    if (!current.length) {
+      frappe.show_alert?.({ message: __('No filters to save'), indicator: 'orange' });
+      return;
+    }
+    const suggested = (() => {
+      const found = this._presets.find((x) => String(x?.id || '') === String(this._presetId || ''));
+      return found?.name || '';
+    })();
+    const name = window.prompt('Preset name', suggested);
+    if (!name || !String(name).trim()) return;
+    const saved = saveFilterPreset(this.viewKey, {
+      id: this._presetId || '',
+      name,
+      advanced_groups: current,
+    });
+    if (!saved) return;
+    this._presetId = saved.id;
+    this._presets = getFilterPresets(this.viewKey);
+    this._refreshPresetOptions();
+    frappe.show_alert?.({ message: __('Filter saved'), indicator: 'green' });
+  }
+
+  _deletePreset() {
+    if (!this._presetId) return;
+    const ok = deleteFilterPreset(this.viewKey, this._presetId);
+    if (!ok) return;
+    this._presetId = '';
+    this._presets = getFilterPresets(this.viewKey);
+    this._refreshPresetOptions();
+    frappe.show_alert?.({ message: __('Filter deleted'), indicator: 'green' });
+  }
+
+  _applyPreset(id) {
+    const target = String(id || '').trim();
+    this._presetId = target;
+    if (!target) return;
+    const p = this._presets.find((x) => String(x?.id || '') === target);
+    if (!p) return;
+    this._groups = this._normalizeInitialGroups({ advanced_groups: p.advanced_groups || [] });
+    this._renderRows();
+  }
+
+  _refreshPresetOptions() {
+    const sel = this._root?.querySelector?.('#sbAdvPresetSelect');
+    if (!sel) return;
+    sel.innerHTML = `
+      <option value="">Saved filters</option>
+      ${this._presets.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('')}
+    `;
+    this._syncPresetSelect();
+  }
+
+  _syncPresetSelect() {
+    const sel = this._root?.querySelector?.('#sbAdvPresetSelect');
+    if (!sel) return;
+    sel.value = this._presetId || '';
+  }
+
+  _apply() {
+    const cleanedGroups = this._serializeGroups();
     const payload = { advanced_groups: cleanedGroups };
     this.onApply(payload);
     this.close();

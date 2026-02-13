@@ -6,6 +6,7 @@
  */
 import { ViewService } from '../services/viewService.js';
 import { CompanyService } from '../services/companyService.js';
+import { DoctypeMetaService } from '../services/doctypeMetaService.js';
 import { isDeprecatedProjectField, sanitizeProjectColumnsConfig } from './deprecatedColumns.js';
 
 const MONTHS = [
@@ -43,7 +44,7 @@ function isFilterableField(field) {
   return true;
 }
 
-function metaForField(field, { viewType, statusOptions, companyOptions }) {
+function metaForField(field, { viewType, statusOptions, companyOptions, projectMeta }) {
   const f = String(field || '').trim();
   const base = { field: f, label: f, type: 'text' };
 
@@ -69,7 +70,22 @@ function metaForField(field, { viewType, statusOptions, companyOptions }) {
   if (f === 'custom_lodgement_due_date') return { ...base, label: 'Lodgement Due', type: 'date' };
   if (f === 'expected_end_date') return { ...base, label: 'End Date', type: 'date' };
 
-  // Default: treat as text
+  // Dynamic inference from Project meta: all Select fields should use select editor in filter.
+  const df = Array.isArray(projectMeta?.fields)
+    ? projectMeta.fields.find((x) => String(x?.fieldname || '').trim() === f)
+    : null;
+  const ft = String(df?.fieldtype || '').trim();
+  if (ft === 'Select') {
+    const opts = String(df?.options || '')
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (opts.length) return { ...base, label: String(df?.label || f), type: 'select', options: opts };
+  }
+  if (ft === 'Date' || ft === 'Datetime') return { ...base, label: String(df?.label || f), type: 'date' };
+  if (ft === 'Link') return { ...base, label: String(df?.label || f), type: 'link', doctype: String(df?.options || ''), placeholder: `Search ${String(df?.label || f)}...` };
+
+  // Default: text
   return base;
 }
 
@@ -79,21 +95,27 @@ function metaForField(field, { viewType, statusOptions, companyOptions }) {
  */
 export async function buildAdvancedFilterColumns({ viewType, statusOptions }) {
   let companyOptions = [];
+  let projectMeta = null;
   try {
     companyOptions = await CompanyService.fetchCompanies();
   } catch (e) {
     companyOptions = [];
   }
+  try {
+    projectMeta = await DoctypeMetaService.getMeta('Project');
+  } catch (e) {
+    projectMeta = null;
+  }
 
   const fallback = [
-    metaForField('customer', { viewType, statusOptions, companyOptions }),
-    metaForField('project_name', { viewType, statusOptions, companyOptions }),
-    metaForField('status', { viewType, statusOptions, companyOptions }),
-    metaForField('company', { viewType, statusOptions, companyOptions }),
-    metaForField('custom_target_month', { viewType, statusOptions, companyOptions }),
-    metaForField('custom_fiscal_year', { viewType, statusOptions, companyOptions }),
-    metaForField('custom_lodgement_due_date', { viewType, statusOptions, companyOptions }),
-    metaForField('expected_end_date', { viewType, statusOptions, companyOptions }),
+    metaForField('customer', { viewType, statusOptions, companyOptions, projectMeta }),
+    metaForField('project_name', { viewType, statusOptions, companyOptions, projectMeta }),
+    metaForField('status', { viewType, statusOptions, companyOptions, projectMeta }),
+    metaForField('company', { viewType, statusOptions, companyOptions, projectMeta }),
+    metaForField('custom_target_month', { viewType, statusOptions, companyOptions, projectMeta }),
+    metaForField('custom_fiscal_year', { viewType, statusOptions, companyOptions, projectMeta }),
+    metaForField('custom_lodgement_due_date', { viewType, statusOptions, companyOptions, projectMeta }),
+    metaForField('expected_end_date', { viewType, statusOptions, companyOptions, projectMeta }),
   ];
 
   try {
@@ -110,7 +132,7 @@ export async function buildAdvancedFilterColumns({ viewType, statusOptions }) {
       const f = String(c?.field || '').trim();
       if (!isFilterableField(f)) continue;
       if (seen.has(f)) continue;
-      out.push({ ...metaForField(f, { viewType, statusOptions, companyOptions }), label: c?.label || undefined });
+      out.push({ ...metaForField(f, { viewType, statusOptions, companyOptions, projectMeta }), label: c?.label || undefined });
       seen.add(f);
     }
 

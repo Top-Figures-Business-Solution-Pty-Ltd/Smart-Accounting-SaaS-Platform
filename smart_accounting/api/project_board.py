@@ -2077,9 +2077,10 @@ def search_project_names(
 
 	req = _normalize_list(fields)
 	req = [str(x).strip() for x in req if str(x).strip()]
+	req_set = set(req)
 
 	# Backend safety: only search in fields that are real Project fields and text-like.
-	allowed_types = {"Data", "Text", "Small Text", "Long Text", "Link", "Select", "Read Only"}
+	allowed_types = {"Data", "Text", "Text Editor", "Small Text", "Long Text", "Link", "Select", "Read Only"}
 	meta = None
 	try:
 		meta = frappe.get_meta("Project")
@@ -2123,6 +2124,11 @@ def search_project_names(
 	if "customer" not in seen:
 		_add("customer")
 
+	# customer_name is not a Project field. If caller includes customer/customer_name,
+	# also match Customer.customer_name and map back to Project.customer IDs.
+	need_customer_name_lookup = ("customer" in req_set) or ("customer_name" in req_set)
+	need_software_lookup = ("custom_softwares" in req_set) or ("software" in req_set)
+
 	base = []
 	pt = str(project_type or "").strip()
 	if pt:
@@ -2132,6 +2138,7 @@ def search_project_names(
 
 	or_filters = [[f, "like", f"%{q}%"] for f in out_fields]
 
+	names: set[str] = set()
 	try:
 		rows = frappe.get_all(
 			"Project",
@@ -2141,10 +2148,64 @@ def search_project_names(
 			order_by="modified desc",
 			limit_page_length=limit,
 		)
+		names |= {str(x).strip() for x in (rows or []) if str(x).strip()}
 	except frappe.PermissionError:
-		rows = []
+		pass
 
-	names = [str(x).strip() for x in (rows or []) if str(x).strip()]
-	return {"names": names[:limit]}
+	if need_customer_name_lookup:
+		try:
+			cids = frappe.get_all(
+				"Customer",
+				filters=[["customer_name", "like", f"%{q}%"]],
+				pluck="name",
+				limit_page_length=limit,
+			)
+		except Exception:
+			cids = []
+		cids = [str(x).strip() for x in (cids or []) if str(x).strip()]
+		if cids:
+			cfilters = list(base) + [["customer", "in", cids]]
+			try:
+				rows2 = frappe.get_all(
+					"Project",
+					filters=cfilters,
+					pluck="name",
+					order_by="modified desc",
+					limit_page_length=limit,
+				)
+				names |= {str(x).strip() for x in (rows2 or []) if str(x).strip()}
+			except frappe.PermissionError:
+				pass
+
+	if need_software_lookup:
+		try:
+			ps_rows = frappe.get_all(
+				"Project Software",
+				filters=[["software", "like", f"%{q}%"]],
+				fields=["parent"],
+				ignore_permissions=True,
+				limit_page_length=limit,
+			)
+		except Exception:
+			ps_rows = []
+		pnames = [str(r.get("parent") or "").strip() for r in (ps_rows or []) if str(r.get("parent") or "").strip()]
+		if pnames:
+			pnames = list(dict.fromkeys(pnames))
+			pfilters = list(base) + [["name", "in", pnames]]
+			try:
+				rows3 = frappe.get_all(
+					"Project",
+					filters=pfilters,
+					pluck="name",
+					order_by="modified desc",
+					limit_page_length=limit,
+				)
+				names |= {str(x).strip() for x in (rows3 or []) if str(x).strip()}
+			except frappe.PermissionError:
+				pass
+
+	out = list(names)
+	out.sort()
+	return {"names": out[:limit]}
 
 

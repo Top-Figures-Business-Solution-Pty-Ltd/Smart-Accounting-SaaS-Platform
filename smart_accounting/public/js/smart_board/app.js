@@ -21,6 +21,7 @@ import { getUrlState, setUrlState } from './utils/urlState.js';
 import { Perf } from './utils/perf.js';
 import { ClientsService } from './services/clientsService.js';
 import { sanitizeProjectColumnsConfig } from './utils/deprecatedColumns.js';
+import { exportCurrentClientsCSV, exportCurrentProjectsCSV } from './utils/csvExport.js';
 
 export class SmartBoardApp {
     constructor(container) {
@@ -76,7 +77,8 @@ export class SmartBoardApp {
             projectTypes: this.projectTypes,
             currentView: this.currentView,
             onViewChange: (viewType, opts) => this.handleViewChange(viewType, opts),
-            onBoardSettings: () => this.handleHeaderAction('board_settings')
+            onBoardSettings: () => this.handleHeaderAction('board_settings'),
+            onBoardMenuAction: (action, viewType) => this.handleBoardMenuAction(action, viewType),
         });
         
         // 初始化头部
@@ -442,6 +444,35 @@ export class SmartBoardApp {
 
     showClientsColumnManager() {
         return this.mainContent?.openClientsColumnsManager?.();
+    }
+
+    async handleBoardMenuAction(action, viewType) {
+        const act = String(action || '').trim();
+        const vt = String(viewType || '').trim();
+        if (!act || !vt) return;
+        if (act === 'export_csv') {
+            if (this.currentView !== vt) {
+                this.currentView = vt;
+                this.sidebar?.updateView?.(vt);
+                this.header?.updateView?.(vt);
+                this.mainContent?.updateView?.(vt);
+                await this.loadViewData(vt);
+            }
+            await this.exportCurrentProjectsCSV();
+        }
+    }
+
+    async exportCurrentProjectsCSV() {
+        return exportCurrentProjectsCSV({
+            store: this.store,
+            viewType: this.currentView,
+        });
+    }
+
+    async exportCurrentClientsCSV() {
+        return exportCurrentClientsCSV({
+            store: this.store,
+        });
     }
 
     openSettingsTab(tabKey) {

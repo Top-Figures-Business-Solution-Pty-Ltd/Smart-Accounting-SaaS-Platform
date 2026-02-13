@@ -156,7 +156,7 @@ export class ProjectQueryService {
         const out = [];
 
         // Only search in text-like fields (Date/Datetime filters with "%q%" can throw "Invalid Date").
-        const allowedTypes = new Set(['Data', 'Text', 'Small Text', 'Long Text', 'Link', 'Select', 'Read Only']);
+        const allowedTypes = new Set(['Data', 'Text', 'Text Editor', 'Small Text', 'Long Text', 'Link', 'Select', 'Read Only']);
         let meta = null;
         try {
           meta = await DoctypeMetaService.getMeta('Project');
@@ -202,16 +202,21 @@ export class ProjectQueryService {
 
       const hasAdvOr = Array.isArray(advOrFilters) && advOrFilters.length > 0;
       const hasSearchOr = Array.isArray(searchOrFilters) && searchOrFilters.length > 0;
+      const hasSpecialSearchField = searchFields.some((f) => ['custom_softwares', 'software', 'customer_name'].includes(String(f || '').trim()));
+      let searchResolvedToNameIn = false;
 
       // Frappe get_list supports only ONE `or_filters` group. If both advanced OR rules and search OR exist,
       // we pre-resolve search matches to a name_in list and keep advanced OR rules as-is.
-      if (hasSearch && hasAdvOr && hasSearchOr) {
+      // Also pre-resolve when search includes special fields (e.g. custom_softwares) that cannot be
+      // represented by direct Project `or_filters`.
+      if (hasSearch && ((hasAdvOr && hasSearchOr) || hasSpecialSearchField)) {
         try {
+          const backendSearchFields = Array.from(new Set([...(searchFields || []), ...(cleanSearchFields || [])]));
           const r = await frappe.call({
             method: 'smart_accounting.api.project_board.search_project_names',
             args: {
               search: rawSearch,
-              fields: cleanSearchFields,
+              fields: backendSearchFields,
               project_type: filters.project_type || null,
               is_active_only: filters.is_active === true ? 1 : 0,
               limit: resolveLimit,
@@ -229,6 +234,7 @@ export class ProjectQueryService {
             } else {
               nameIn = names;
             }
+            searchResolvedToNameIn = true;
           } else {
             // Search yields no matches => empty result
             return { items: [], meta: { total_count: 0 } };
@@ -244,7 +250,7 @@ export class ProjectQueryService {
       // - If advanced OR exists, keep it (search may have been converted to name_in above)
       // - Else if search OR exists, use it
       // - Else none
-      const effectiveOrFilters = hasAdvOr ? advOrFilters : (hasSearchOr ? searchOrFilters : []);
+      const effectiveOrFilters = hasAdvOr ? advOrFilters : (searchResolvedToNameIn ? [] : (hasSearchOr ? searchOrFilters : []));
       const resolvedOrderBy =
         String(filters?.order_by || '').trim() ||
         this._resolveBoardOrderBy(filters?.first_column);

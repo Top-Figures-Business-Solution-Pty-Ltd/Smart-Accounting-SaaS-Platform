@@ -190,22 +190,6 @@ def get_clients(search: str | None = None, limit_start: int = 0, limit_page_leng
 	last_project_type: dict[str, str] = {n: "" for n in names}
 
 	if names:
-		# Project counts per customer (permission-aware)
-		try:
-			rows = frappe.get_all(
-				"Project",
-				filters={"customer": ["in", names]},
-				fields=["customer", "count(name) as project_count"],
-				group_by="customer",
-				limit_page_length=100000,
-			)
-			for r in rows or []:
-				cn = r.get("customer")
-				if cn in project_counts:
-					project_counts[cn] = int(r.get("project_count") or 0)
-		except Exception:
-			pass
-
 		# Active-only counts (best-effort; field exists in your Project customizations)
 		try:
 			rows2 = frappe.get_all(
@@ -221,6 +205,8 @@ def get_clients(search: str | None = None, limit_start: int = 0, limit_page_leng
 					active_project_counts[cn] = int(r.get("project_count") or 0)
 		except Exception:
 			pass
+		# Product rule: Clients table "Projects" should not count archived projects.
+		project_counts = dict(active_project_counts)
 
 		# Last project type (most recently modified project) per customer
 		try:

@@ -771,6 +771,17 @@
     margin-bottom: 10px;
 }
 
+.sb-advfilter__saved {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.sb-advfilter__saved-select {
+    min-width: 220px;
+}
+
 .sb-advfilter__row {
     display: grid;
     grid-template-columns: 110px 200px 160px 1fr 44px;

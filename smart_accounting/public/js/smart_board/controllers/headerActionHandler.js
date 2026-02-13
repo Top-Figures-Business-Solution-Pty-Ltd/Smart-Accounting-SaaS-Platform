@@ -20,6 +20,10 @@ export async function handleHeaderAction(app, action, data) {
       return app?.showColumnManager?.();
     case 'automation':
       return openAutomationFlow();
+    case 'export_projects_csv':
+      return app?.exportCurrentProjectsCSV?.();
+    case 'export_clients_csv':
+      return app?.exportCurrentClientsCSV?.();
     case 'board_settings':
       return openBoardSettingsFlow({ app });
     case 'new_client':

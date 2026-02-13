@@ -97,6 +97,7 @@ export class Header {
 
         const modal = new AdvancedFilterModal({
             title: `Filter · ${this.currentView}`,
+            viewKey: this.currentView,
             columns,
             initial,
             onApply: (values) => this.onAction('filter', {
