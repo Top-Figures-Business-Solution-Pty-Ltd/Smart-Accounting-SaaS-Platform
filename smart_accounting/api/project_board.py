@@ -346,7 +346,7 @@ def get_projects_list(
 	fields: Any = None,
 	filters: Any = None,
 	or_filters: Any = None,
-	order_by: str | None = "modified desc",
+	order_by: str | None = "customer asc, name asc",
 	limit_start: int = 0,
 	limit_page_length: int = 100,
 ) -> dict:
@@ -414,7 +414,7 @@ def get_projects_list(
 			fields=req_fields or ["name"],
 			filters=req_filters,
 			or_filters=req_or_filters,
-			order_by=str(order_by or "modified desc"),
+			order_by=str(order_by or "customer asc, name asc"),
 			limit_start=limit_start,
 			limit_page_length=limit_page_length,
 		)

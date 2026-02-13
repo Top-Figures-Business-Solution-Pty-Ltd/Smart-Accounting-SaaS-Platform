@@ -215,6 +215,20 @@ export class SmartBoardApp {
                 };
 
                 const cols = sanitizeProjectColumnsConfig(parseColumns(view?.columns));
+                // Derive the current first visible project column from Saved View config.
+                // Sorting rule:
+                // - first column = project_name => sort by project_name
+                // - first column = customer/client name => sort by customer
+                // - otherwise => default sort by customer
+                let firstProjectColumn = 'customer';
+                for (const c of (cols || [])) {
+                    const f = String(c?.field || '').trim();
+                    if (!f) continue;
+                    if (f.startsWith('__sb_')) continue;
+                    firstProjectColumn = f;
+                    break;
+                }
+                merged.first_column = firstProjectColumn;
                 // Base fields are always fetched even if not visible in Columns Manager.
                 // IMPORTANT: `custom_fiscal_year` is required for Task Monthly Status interactions
                 // (cells need a fiscal year to call setMonthlyStatus), so never omit it.

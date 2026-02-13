@@ -162,7 +162,7 @@ def get_clients(search: str | None = None, limit_start: int = 0, limit_page_leng
 		fields=fields,
 		filters=filters,
 		or_filters=or_filters,
-		order_by="modified desc",
+		order_by="customer_name asc, name asc",
 		limit_start=limit_start,
 		limit_page_length=limit_page_length,
 	)

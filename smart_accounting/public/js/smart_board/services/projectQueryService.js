@@ -31,6 +31,16 @@ export class ProjectQueryService {
     }
   }
 
+  static _resolveBoardOrderBy(firstColumnField) {
+    const f = String(firstColumnField || '').trim().toLowerCase();
+    if (f === 'project_name') return 'project_name asc, name asc';
+    if (f === 'customer' || f === 'customer_name' || f === 'client_name' || f === 'client') {
+      return 'customer asc, name asc';
+    }
+    // Default: client name column semantics (Project.customer field).
+    return 'customer asc, name asc';
+  }
+
   /**
    * 获取Projects列表
    */
@@ -235,13 +245,16 @@ export class ProjectQueryService {
       // - Else if search OR exists, use it
       // - Else none
       const effectiveOrFilters = hasAdvOr ? advOrFilters : (hasSearchOr ? searchOrFilters : []);
+      const resolvedOrderBy =
+        String(filters?.order_by || '').trim() ||
+        this._resolveBoardOrderBy(filters?.first_column);
 
       const args = {
         doctype: 'Project',
         fields,
         filters: this.buildFilters({ ...filters, ...(fallbackSearchProjectName ? { __sb_search_fallback_project_name: fallbackSearchProjectName } : {}), ...(nameIn ? { name_in: nameIn } : {}) }),
         ...(effectiveOrFilters && effectiveOrFilters.length ? { or_filters: effectiveOrFilters } : {}),
-        order_by: 'modified desc',
+        order_by: resolvedOrderBy,
         limit_start: Math.max(0, limitStart),
         limit_page_length: Math.max(1, limit),
       };
