@@ -6,7 +6,7 @@ Project DocType Override
 
 import json
 import frappe
-from frappe.utils import getdate, add_months, add_days
+from frappe.utils import getdate, add_months, add_days, get_last_day
 from erpnext.projects.doctype.project.project import Project
 
 
@@ -315,19 +315,29 @@ def _parse_json_array(val):
 
 
 def _roll_date_by_frequency(current_date, frequency: str):
-    """Calculate the next date based on frequency."""
+    """Calculate the next date based on frequency.
+
+    EOM rule:
+    - If current_date is the last day of its month, keep result at target month-end
+      for month-based frequencies (monthly/quarterly/half-yearly/yearly).
+    """
     freq = str(frequency or "").strip().lower()
     d = getdate(current_date)
+    is_eom = d == get_last_day(d)
 
     if freq in ("weekly",):
         return add_days(d, 7)
     if freq in ("monthly",):
-        return add_months(d, 1)
+        nd = add_months(d, 1)
+        return get_last_day(nd) if is_eom else nd
     if freq in ("quarterly",):
-        return add_months(d, 3)
+        nd = add_months(d, 3)
+        return get_last_day(nd) if is_eom else nd
     if freq in ("half-yearly", "half yearly", "halfyearly"):
-        return add_months(d, 6)
+        nd = add_months(d, 6)
+        return get_last_day(nd) if is_eom else nd
     if freq in ("yearly",):
-        return add_months(d, 12)
+        nd = add_months(d, 12)
+        return get_last_day(nd) if is_eom else nd
 
     return None
