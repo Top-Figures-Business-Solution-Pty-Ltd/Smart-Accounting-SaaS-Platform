@@ -52,7 +52,7 @@ class CustomProject(Project):
         - percent_complete == 100 -> "Completed"
         - else -> "Open"
 
-        Smart Accounting 将 Project.status 作为自定义工作流状态池（不包含 Open/Completed）。
+        Smart Accounting 将 Project.status 作为自定义工作流状态池（不包含 Open）。
         因此必须阻止 ERPNext 自动覆盖 status，否则会触发 Select options 校验失败。
         """
         previous_status = (self.status or "").strip()
@@ -96,9 +96,10 @@ class CustomProject(Project):
         # 3) Map ERPNext legacy statuses -> nearest equivalents (best-effort)
         legacy_map = {
             "open": "Not started",
-            # Project no longer uses "Done"; "Lodged" is the terminal status.
-            "completed": "Lodged",
-            "done": "Lodged",
+            # Project terminal status is "Completed".
+            "completed": "Completed",
+            "done": "Completed",
+            "lodged": "Completed",
             "cancelled": "Hold",
             "not started": "Not started",
         }
@@ -466,6 +467,7 @@ _AUDIT_TRACK_FIELDS = {
     "project_type",
     "custom_project_frequency",
     "custom_fiscal_year",
+    "custom_reset_date",
     "is_active",
     "custom_team_members",
     "custom_softwares",

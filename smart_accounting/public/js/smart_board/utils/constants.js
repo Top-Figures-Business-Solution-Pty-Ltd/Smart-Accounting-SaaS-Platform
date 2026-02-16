@@ -29,7 +29,6 @@ export const STATUS_OPTIONS = {
         'Working',
         'Ready for Review',
         'Under Review',
-        'Lodged',
         'Completed',
         'Cancelled'
     ],
@@ -39,7 +38,6 @@ export const STATUS_OPTIONS = {
         'Ready for Review',
         'Query from ATO',
         'Resubmit',
-        'Lodged',
         'Completed',
         'Cancelled'
     ],
@@ -86,8 +84,9 @@ export const STATUS_COLORS = {
     'Sent to client for signature': '#8b5cf6', // violet
     'Hold': '#64748b', // slate
     'Waiting of payment': '#ca8a04', // dark yellow
-    'Lodged': '#22c55e', // green
-    'Done': '#16a34a', // dark green
+    'Completed': '#22c55e', // green
+    'Lodged': '#22c55e', // legacy alias
+    'Done': '#16a34a', // legacy alias
 
     // Legacy statuses (kept for backward compatibility)
     'Not Started': '#6c757d',
@@ -100,7 +99,6 @@ export const STATUS_COLORS = {
     'Query from AusIndustry': '#fd7e14',
     'Resubmit': '#dc3545',
     'Approved': '#28a745',
-    'Completed': '#28a745',
     'Cancelled': '#6c757d'
 };
 
@@ -151,6 +149,7 @@ export const PROJECT_COLUMN_CATALOG = [
     { field: 'custom_project_frequency', label: 'Frequency', width: 120 },
     { field: 'custom_target_month', label: 'Target Month', width: 130 },
     { field: 'custom_fiscal_year', label: 'Fiscal Year', width: 120 },
+    { field: 'custom_reset_date', label: 'Reset Date', width: 130 },
 
     // Money / notes / archive
     { field: 'estimated_costing', label: 'Budget', width: 120 },

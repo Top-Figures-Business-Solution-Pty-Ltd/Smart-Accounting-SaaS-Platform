@@ -6,11 +6,12 @@ import frappe
 def execute():
 	"""
 	Migrate Project.status:
-	- "Done" -> "Lodged"
+	- "Done" -> "Completed"
+	- "Lodged" -> "Completed"
 
 	Rationale:
-	Smart Accounting uses "Lodged" as the terminal Project status.
-	We removed "Done" from the Project.status options (Property Setter), so existing rows must be migrated.
+	Smart Accounting uses "Completed" as the terminal Project status.
+	Older datasets may still contain "Done"/"Lodged".
 
 	Idempotent: safe to run multiple times.
 	"""
@@ -21,16 +22,16 @@ def execute():
 			"""
 			update `tabProject`
 			set status=%s
-			where status=%s
+			where status in (%s, %s)
 			""",
-			("Lodged", "Done"),
+			("Completed", "Done", "Lodged"),
 		)
 	except Exception:
 		# Best-effort; don't block migration
 		pass
 
-	# 2) Clean board status subset config (remove "Done" from allowed lists)
-	# This avoids "configured" boards keeping an obsolete status in their saved subset.
+	# 2) Clean board status subset config (remove obsolete status values)
+	# This avoids configured boards keeping stale values in saved subsets.
 	try:
 		from smart_accounting.api.board_settings import _get_project_status_pool, _get_status_config_map, _set_status_config_map
 	except Exception:
@@ -52,7 +53,7 @@ def execute():
 			seen = set()
 			for x in raw:
 				s = str(x or "").strip()
-				if not s or s == "Done" or s in seen:
+				if not s or s in {"Done", "Lodged"} or s in seen:
 					continue
 				# If pool is known, keep only statuses that exist (prevents typos from lingering).
 				if pool_set and s not in pool_set:

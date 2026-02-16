@@ -409,6 +409,7 @@ _PROJECT_ACTIVITY_FIELDS = {
 	"project_type",
 	"custom_project_frequency",
 	"custom_fiscal_year",
+	"custom_reset_date",
 	"is_active",
 	"custom_team_members",
 	"custom_softwares",

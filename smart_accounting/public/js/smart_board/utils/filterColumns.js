@@ -68,6 +68,7 @@ function metaForField(field, { viewType, statusOptions, companyOptions, projectM
   if (f === 'custom_fiscal_year') return { ...base, label: 'Fiscal Year', type: 'link', doctype: 'Fiscal Year', placeholder: 'Search Fiscal Year...' };
   if (f === 'custom_target_month') return { ...base, label: 'Target Month', type: 'select', options: MONTHS };
   if (f === 'custom_lodgement_due_date') return { ...base, label: 'Lodgement Due', type: 'date' };
+  if (f === 'custom_reset_date') return { ...base, label: 'Reset Date', type: 'date' };
   if (f === 'expected_end_date') return { ...base, label: 'End Date', type: 'date' };
 
   // Dynamic inference from Project meta: all Select fields should use select editor in filter.
@@ -121,6 +122,7 @@ export async function buildAdvancedFilterColumns({ viewType, statusOptions }) {
     metaForField('custom_target_month', { viewType, statusOptions, companyOptions, projectMeta }),
     metaForField('custom_fiscal_year', { viewType, statusOptions, companyOptions, projectMeta }),
     metaForField('custom_lodgement_due_date', { viewType, statusOptions, companyOptions, projectMeta }),
+    metaForField('custom_reset_date', { viewType, statusOptions, companyOptions, projectMeta }),
     metaForField('expected_end_date', { viewType, statusOptions, companyOptions, projectMeta }),
   ];
 

@@ -72,7 +72,7 @@ def _get_project_status_pool() -> list[str]:
         raw = str(getattr(f, "options", "") or "")
         return [x.strip() for x in raw.split("\n") if str(x).strip()]
     except Exception:
-        return ["Not started", "Working", "Lodged"]
+        return ["Not started", "Working on it", "Completed"]
 
 
 @frappe.whitelist()

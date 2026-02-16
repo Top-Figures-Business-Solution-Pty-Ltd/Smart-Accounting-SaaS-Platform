@@ -65,6 +65,7 @@ export class ProjectQueryService {
       'custom_fiscal_year',
       'custom_target_month',
       'custom_lodgement_due_date',
+      'custom_reset_date',
       'custom_project_frequency',
       'custom_softwares',
     ];

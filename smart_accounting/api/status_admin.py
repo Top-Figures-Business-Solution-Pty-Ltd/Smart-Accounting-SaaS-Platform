@@ -24,8 +24,7 @@ def _status_pool() -> list[str]:
 		"Sent to client for signature",
 		"Hold",
 		"Waiting of payment",
-		"Lodged",
-		"Done",
+		"Completed",
 	]
 
 
@@ -122,11 +121,12 @@ def migrate_project_statuses(dry_run: int = 1, default_status: str = "Not starte
 		"Query from ATO": "Waiting for client",
 		"Query from AusIndustry": "Waiting for client",
 		"Resubmit": "Working on it",
-		"Approved": "Done",
-		"Completed": "Done",
+		"Approved": "Completed",
+		"Completed": "Completed",
+		"Done": "Completed",
+		"Lodged": "Completed",
 		"Cancelled": "Hold",
 		"Canceled": "Hold",
-		"Lodged": "Lodged",
 	}
 
 	rows = frappe.db.sql(

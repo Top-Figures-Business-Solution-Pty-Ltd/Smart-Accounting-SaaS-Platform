@@ -122,6 +122,7 @@ export class BoardCell {
                 return this.formatTeam(value);
             
             case 'custom_lodgement_due_date':
+            case 'custom_reset_date':
             case 'expected_end_date':
             case 'expected_start_date':
                 return this.formatDate(value);

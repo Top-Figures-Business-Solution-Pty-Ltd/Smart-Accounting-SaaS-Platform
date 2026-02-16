@@ -482,6 +482,18 @@ export function makeProjectColumnSpecs() {
       }
     },
 
+    // Reset Date - date
+    {
+      field: 'custom_reset_date',
+      isEditable: true,
+      renderEditor: ({ cellEl, project, manager, field }) => {
+        const contentEl = cellEl.querySelector('.cell-content') || cellEl;
+        const ed = new InlineDateEditor(contentEl, { initialValue: project?.[field] || '' });
+        mountEditorHelpers(manager, contentEl, ed);
+        return ed;
+      }
+    },
+
     // (5) Notes - textarea expand
     {
       field: 'notes',
