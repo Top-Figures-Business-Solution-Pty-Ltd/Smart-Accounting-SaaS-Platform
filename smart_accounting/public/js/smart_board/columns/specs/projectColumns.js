@@ -163,6 +163,36 @@ async function getCompanyOptions() {
   return _companyOptionsLoading;
 }
 
+let _fiscalYearOptionsCache = null;
+let _fiscalYearOptionsLoading = null;
+async function getFiscalYearOptions() {
+  if (Array.isArray(_fiscalYearOptionsCache)) return _fiscalYearOptionsCache;
+  if (_fiscalYearOptionsLoading) return _fiscalYearOptionsLoading;
+  _fiscalYearOptionsLoading = (async () => {
+    try {
+      const r = await frappe.call({
+        method: 'frappe.client.get_list',
+        type: 'POST',
+        args: {
+          doctype: 'Fiscal Year',
+          fields: ['name'],
+          order_by: 'year_start_date desc, name desc',
+          limit_page_length: 200
+        }
+      });
+      const list = (r?.message || []).map((x) => x?.name).filter(Boolean);
+      _fiscalYearOptionsCache = list;
+      return list;
+    } catch (e) {
+      _fiscalYearOptionsCache = [];
+      return [];
+    } finally {
+      _fiscalYearOptionsLoading = null;
+    }
+  })();
+  return _fiscalYearOptionsLoading;
+}
+
 function companyMenuEditor({ cellEl, project, manager, field }) {
   const contentEl = cellEl.querySelector('.cell-content') || cellEl;
 
@@ -734,7 +764,40 @@ export function makeProjectColumnSpecs() {
     },
 
     // (16) Fiscal Year - read-only
-    { field: 'custom_fiscal_year', isEditable: false },
+    {
+      field: 'custom_fiscal_year',
+      isEditable: true,
+      renderEditor: ({ cellEl, project, manager, field }) => {
+        const contentEl = cellEl.querySelector('.cell-content') || cellEl;
+        const ed = new InlineMenuSelectEditor(contentEl, {
+          options: [{ value: project?.[field] || '', label: project?.[field] || '—' }].filter((x) => x.value),
+          initialValue: project?.[field] || ''
+        });
+
+        contentEl.addEventListener('sb:menu-select', (e) => {
+          e.stopPropagation?.();
+          manager?.commitAndClose?.('menu-select');
+        }, { once: true });
+        contentEl.addEventListener('sb:menu-close', () => {
+          manager?.commitAndClose?.('menu-close');
+        }, { once: true });
+
+        getFiscalYearOptions().then((opts) => {
+          if (!contentEl?.isConnected) return;
+          if (Array.isArray(opts) && opts.length) {
+            ed.options = opts.map((x) => ({ value: x, label: x }));
+            ed.render();
+            mountEditorHelpers(manager, contentEl, ed);
+          } else {
+            try { ed.destroy?.(); } catch (e2) {}
+            linkEditor({ cellEl, project, field, manager, doctype: 'Fiscal Year', placeholder: 'Search Fiscal Year...' });
+          }
+        });
+
+        mountEditorHelpers(manager, contentEl, ed);
+        return ed;
+      }
+    },
 
     // (20) System/meta fields that should never be edited from the board
     // - They are either computed, managed by the system, or not part of the Smart Board editing UX yet.
