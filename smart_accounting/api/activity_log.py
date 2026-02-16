@@ -69,6 +69,52 @@ def _is_password_valid(password: str | None) -> bool:
 	return pwd == secret
 
 
+def _safe_json(v: Any) -> dict:
+	try:
+		if isinstance(v, dict):
+			return v
+		if isinstance(v, str):
+			return frappe.parse_json(v) or {}
+	except Exception:
+		pass
+	return {}
+
+
+def _field_label_map(doctype: str) -> dict[str, str]:
+	try:
+		meta = frappe.get_meta(doctype)
+	except Exception:
+		return {}
+	out: dict[str, str] = {}
+	for f in (meta.fields or []):
+		fn = _clean_str(getattr(f, "fieldname", ""))
+		lb = _clean_str(getattr(f, "label", "")) or fn
+		if fn:
+			out[fn] = lb
+	return out
+
+
+def _short(v: Any) -> str:
+	s = _clean_str(v)
+	if len(s) <= 120:
+		return s
+	return f"{s[:117]}..."
+
+
+def _parse_sb_activity_comment(content: Any) -> dict | None:
+	raw = _clean_str(content)
+	prefix = "SB_ACTIVITY::"
+	if not raw.startswith(prefix):
+		return None
+	try:
+		obj = frappe.parse_json(raw[len(prefix) :]) or {}
+		if isinstance(obj, dict):
+			return obj
+	except Exception:
+		return None
+	return None
+
+
 @frappe.whitelist()
 def get_activity_users() -> dict:
 	_ensure_logged_in()
@@ -219,5 +265,154 @@ def get_activity_log(
 			"unlocked": unlocked,
 		},
 	}
+
+
+@frappe.whitelist()
+def get_project_activity(project: str, limit_start: int = 0, limit_page_length: int = 100) -> dict:
+	"""
+	Project-centric activity feed for Smart Board popup.
+	Returns update rows (who/when/field/from/to) parsed from Version.data.
+	"""
+	_ensure_logged_in()
+	name = _clean_str(project)
+	if not name:
+		frappe.throw("project is required")
+	if not frappe.has_permission("Project", "read", name):
+		frappe.throw("Not permitted", frappe.PermissionError)
+
+	limit_start = max(0, _normalize_int(limit_start, 0))
+	limit_page_length = max(1, min(300, _normalize_int(limit_page_length, 100)))
+
+	labels = _field_label_map("Project")
+	user_cache: dict[str, str] = {}
+	items: list[dict] = []
+
+	# Creation event (single)
+	try:
+		created = frappe.db.get_value("Project", name, ["owner", "creation"], as_dict=True) or {}
+		if created.get("creation"):
+			user_name = _clean_str(created.get("owner"))
+			items.append(
+				{
+					"action": "create",
+					"field": "Project",
+					"field_label": "Project",
+					"from_value": "",
+					"to_value": "Created",
+					"user": user_name,
+					"user_label": _get_user_fullname(user_name, user_cache) or user_name or "Unknown",
+					"timestamp": created.get("creation"),
+				}
+			)
+	except Exception:
+		pass
+
+	# Update events
+	comment_rows = frappe.get_all(
+		"Comment",
+		filters={
+			"reference_doctype": "Project",
+			"reference_name": name,
+			"comment_type": "Info",
+		},
+		fields=["owner", "creation", "content"],
+		order_by="creation desc",
+		limit_page_length=5000,
+	)
+	for r in (comment_rows or []):
+		payload = _parse_sb_activity_comment(r.get("content"))
+		if not payload:
+			continue
+		field = _clean_str(payload.get("field"))
+		if field and field not in _PROJECT_ACTIVITY_FIELDS:
+			continue
+		user_name = _clean_str(r.get("owner"))
+		items.append(
+			{
+				"action": "update",
+				"field": field,
+				"field_label": _clean_str(payload.get("field_label")) or labels.get(field) or field,
+				"from_value": _short(payload.get("from_value")),
+				"to_value": _short(payload.get("to_value")),
+				"user": user_name,
+				"user_label": _get_user_fullname(user_name, user_cache) or user_name or "Unknown",
+				"timestamp": r.get("creation"),
+			}
+		)
+
+	# Backward-compat fallback: old Version rows (only when no new structured comments yet)
+	if not any((x.get("action") == "update") for x in items):
+		rows = frappe.get_all(
+			"Version",
+			filters={"ref_doctype": "Project", "docname": name},
+			fields=["name", "owner", "creation", "data"],
+			order_by="creation desc",
+			limit_page_length=2000,
+		)
+
+		for r in (rows or []):
+			payload = _safe_json(r.get("data"))
+			changed = payload.get("changed") if isinstance(payload, dict) else None
+			if not isinstance(changed, list):
+				continue
+			user_name = _clean_str(r.get("owner"))
+			user_label = _get_user_fullname(user_name, user_cache) or user_name or "Unknown"
+			ts = r.get("creation")
+			for c in changed:
+				if not isinstance(c, (list, tuple)) or len(c) < 3:
+					continue
+				field = _clean_str(c[0])
+				if not field:
+					continue
+				if field not in _PROJECT_ACTIVITY_FIELDS:
+					continue
+				items.append(
+					{
+						"action": "update",
+						"field": field,
+						"field_label": labels.get(field) or field,
+						"from_value": _short(c[1]),
+						"to_value": _short(c[2]),
+						"user": user_name,
+						"user_label": user_label,
+						"timestamp": ts,
+					}
+				)
+
+	# Newest first
+	items.sort(key=lambda x: str(x.get("timestamp") or ""), reverse=True)
+	page = items[limit_start : limit_start + limit_page_length]
+	return {
+		"items": page,
+		"meta": {
+			"limit_start": limit_start,
+			"limit_page_length": limit_page_length,
+			"total_count": len(items),
+		},
+	}
+
+
+_PROJECT_ACTIVITY_FIELDS = {
+	"customer",
+	"project_name",
+	"status",
+	"expected_end_date",
+	"expected_start_date",
+	"notes",
+	"company",
+	"custom_lodgement_due_date",
+	"custom_target_month",
+	"priority",
+	"estimated_costing",
+	"custom_entity_type",
+	"custom_customer_entity",
+	"project_type",
+	"custom_project_frequency",
+	"custom_fiscal_year",
+	"is_active",
+	"custom_team_members",
+	"custom_softwares",
+	"custom_engagement_letter",
+}
 
 

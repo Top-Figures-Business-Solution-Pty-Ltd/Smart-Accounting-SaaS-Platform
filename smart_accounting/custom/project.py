@@ -113,6 +113,10 @@ class CustomProject(Project):
     
     def validate(self):
         """Project validation hooks for Smart Board flows."""
+        # Capture "before" snapshot once per request so we can build full audit rows
+        # later in on_update (works even when Version/track_changes is disabled).
+        if not self.is_new():
+            self._capture_activity_before_state()
         super().validate()
         # Keep derived entity display in sync for non-desk flows (/smart).
         # Desk fetch_from is client-side; API updates need server-side alignment.
@@ -121,6 +125,14 @@ class CustomProject(Project):
         # Board Automation: run automations on existing projects
         if not self.is_new():
             self._run_board_automations()
+
+        # Compute diffs after all business rules (including automations) settle.
+        if not self.is_new():
+            self._prepare_activity_changes()
+
+    def on_update(self):
+        """Persist project field-level activity rows."""
+        self._write_activity_comments()
 
     def _sync_entity_type_from_customer_entity(self):
         """If Project.custom_customer_entity is set, keep Project.custom_entity_type aligned."""
@@ -284,6 +296,78 @@ class CustomProject(Project):
         elif pool:
             self.status = pool[0]
 
+    # =========================================================================
+    # Activity audit (field-level)
+    # =========================================================================
+
+    def _capture_activity_before_state(self):
+        if getattr(self, "_sb_activity_before", None) is not None:
+            return
+        try:
+            prev = self.get_doc_before_save()
+            self._sb_activity_before = prev.as_dict() if prev else {}
+        except Exception:
+            self._sb_activity_before = {}
+
+    def _prepare_activity_changes(self):
+        before = getattr(self, "_sb_activity_before", None) or {}
+        if not isinstance(before, dict):
+            before = {}
+        out = []
+        for f in (self.meta.fields or []):
+            fieldname = str(getattr(f, "fieldname", "") or "").strip()
+            fieldtype = str(getattr(f, "fieldtype", "") or "").strip()
+            if not fieldname or fieldname in _AUDIT_SKIP_FIELDS:
+                continue
+            # Product rule: activity popup should focus on board-relevant columns only.
+            if fieldname not in _AUDIT_TRACK_FIELDS:
+                continue
+            try:
+                if not self.has_value_changed(fieldname):
+                    continue
+            except Exception:
+                pass
+            if fieldtype in _AUDIT_SKIP_FIELDTYPES:
+                continue
+            label = str(getattr(f, "label", "") or fieldname)
+
+            old_raw = before.get(fieldname)
+            new_raw = self.get(fieldname)
+            if fieldtype in {"Table", "Table MultiSelect"}:
+                old_v = _table_summary(fieldname, old_raw)
+                new_v = _table_summary(fieldname, new_raw)
+            else:
+                old_v = _short_text(_value_to_text(old_raw))
+                new_v = _short_text(_value_to_text(new_raw))
+            if old_v == new_v:
+                continue
+            out.append(
+                {
+                    "field": fieldname,
+                    "field_label": label,
+                    "from_value": old_v,
+                    "to_value": new_v,
+                }
+            )
+        self._sb_activity_changes = out
+
+    def _write_activity_comments(self):
+        changes = getattr(self, "_sb_activity_changes", None)
+        if not isinstance(changes, list) or not changes:
+            return
+        # Avoid flooding in pathological updates.
+        for ch in changes[:80]:
+            try:
+                payload = json.dumps(ch, ensure_ascii=False)
+                c = frappe.new_doc("Comment")
+                c.comment_type = "Info"
+                c.reference_doctype = "Project"
+                c.reference_name = self.name
+                c.content = f"SB_ACTIVITY::{payload}"
+                c.insert(ignore_permissions=True)
+            except Exception:
+                continue
+
 
 # =========================================================================
 # Module-level helpers
@@ -341,3 +425,141 @@ def _roll_date_by_frequency(current_date, frequency: str):
         return get_last_day(nd) if is_eom else nd
 
     return None
+
+
+_AUDIT_SKIP_FIELDS = {
+    "modified",
+    "modified_by",
+    "creation",
+    "owner",
+    "idx",
+    "_user_tags",
+    "_comments",
+    "_assign",
+    "_liked_by",
+}
+
+_AUDIT_SKIP_FIELDTYPES = {
+    "Section Break",
+    "Column Break",
+    "Tab Break",
+    "Fold",
+    "HTML",
+    "Button",
+}
+
+# Restrict to board domain columns to avoid noisy ERPNext internal recalculation logs.
+_AUDIT_TRACK_FIELDS = {
+    "customer",
+    "project_name",
+    "status",
+    "expected_end_date",
+    "expected_start_date",
+    "notes",
+    "company",
+    "custom_lodgement_due_date",
+    "custom_target_month",
+    "priority",
+    "estimated_costing",
+    "custom_entity_type",
+    "custom_customer_entity",
+    "project_type",
+    "custom_project_frequency",
+    "custom_fiscal_year",
+    "is_active",
+    "custom_team_members",
+    "custom_softwares",
+    "custom_engagement_letter",
+}
+
+
+def _short_text(v: str, max_len: int = 180) -> str:
+    s = str(v or "").strip()
+    if len(s) <= max_len:
+        return s
+    return f"{s[: max_len - 3]}..."
+
+
+def _value_to_text(v) -> str:
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v.strip()
+    if isinstance(v, (int, float)):
+        return str(v)
+    if isinstance(v, (list, tuple)):
+        return ", ".join([_value_to_text(x) for x in v if _value_to_text(x)])
+    if isinstance(v, dict):
+        try:
+            return json.dumps(v, ensure_ascii=False, sort_keys=True)
+        except Exception:
+            return str(v)
+    return str(v).strip()
+
+
+def _table_summary(fieldname: str, rows) -> str:
+    arr = rows if isinstance(rows, list) else []
+    if fieldname == "custom_team_members":
+        # role:user list, stable order
+        role_map = {}
+        for r in arr:
+            if not isinstance(r, dict):
+                try:
+                    r = r.as_dict()
+                except Exception:
+                    r = {}
+            role = str(r.get("role") or "").strip()
+            user = str(r.get("user") or "").strip()
+            if not role and not user:
+                continue
+            key = role or "(no role)"
+            role_map.setdefault(key, [])
+            if user:
+                role_map[key].append(user)
+        parts = []
+        for role in sorted(role_map.keys()):
+            users = sorted(set([u for u in role_map[role] if u]))
+            parts.append(f"{role}: {', '.join(users)}" if users else role)
+        return " | ".join(parts)
+    if fieldname == "custom_softwares":
+        vals = []
+        for r in arr:
+            if not isinstance(r, dict):
+                try:
+                    r = r.as_dict()
+                except Exception:
+                    # Fallback for values already represented as strings.
+                    v0 = str(r or "").strip()
+                    if v0:
+                        vals.append(v0)
+                    continue
+            v = str(r.get("software") or r.get("software_name") or r.get("name") or "").strip()
+            if v:
+                vals.append(v)
+        vals = sorted(set(vals))
+        return ", ".join(vals)
+    # Generic table fallback: normalized row count + key data preview
+    cleaned = []
+    for r in arr:
+        if not isinstance(r, dict):
+            try:
+                r = r.as_dict()
+            except Exception:
+                r = {}
+        row = {}
+        for k, v in (r or {}).items():
+            key = str(k or "").strip()
+            if not key or key in {"name", "parent", "parenttype", "parentfield", "idx", "owner", "creation", "modified", "modified_by", "docstatus", "doctype"}:
+                continue
+            txt = _value_to_text(v)
+            if txt:
+                row[key] = txt
+        if row:
+            cleaned.append(row)
+    cleaned.sort(key=lambda x: json.dumps(x, sort_keys=True, ensure_ascii=False))
+    if not cleaned:
+        return ""
+    try:
+        return _short_text(json.dumps(cleaned, ensure_ascii=False, sort_keys=True), max_len=300)
+    except Exception:
+        return _short_text(str(cleaned), max_len=300)

@@ -913,6 +913,21 @@
     filter: brightness(0.98);
 }
 
+.sb-activity-open-btn {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: var(--smart-board-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.sb-activity-open-btn:hover {
+    color: var(--smart-board-primary);
+}
+
 /* Cell affordance (hover hint for type) */
 .sb-afford {
     opacity: 0;

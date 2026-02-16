@@ -23,6 +23,7 @@ import { ProjectService } from '../../services/projectService.js';
 import { confirmDialog, notify } from '../../services/uiAdapter.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { sanitizeProjectColumnsConfig } from '../../utils/deprecatedColumns.js';
+import { ProjectActivityModal } from './ProjectActivityModal.js';
 
 export class BoardTable {
     constructor(container, options = {}) {
@@ -516,6 +517,15 @@ export class BoardTable {
                     if (project) {
                         this.openUpdates(project);
                     }
+                    return;
+                }
+                const actBtn = e.target?.closest?.('.sb-activity-open-btn');
+                if (actBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const projectName = actBtn.dataset.projectName;
+                    const project = this.projects.find(p => p.name === projectName);
+                    if (project) this.openProjectActivity(project);
                     return;
                 }
                 const row = e.target.closest('tr');
@@ -1162,6 +1172,15 @@ export class BoardTable {
         });
         this._updatesModal.open();
     }
+
+    openProjectActivity(project) {
+        this._projectActivityModal?.close?.();
+        this._projectActivityModal = new ProjectActivityModal({
+            project,
+            onClose: () => { this._projectActivityModal = null; }
+        });
+        this._projectActivityModal.open();
+    }
     
     subscribeToStore() {
         if (!this.store) return;
@@ -1582,6 +1601,8 @@ export class BoardTable {
         }
         this._updatesModal?.close?.();
         this._updatesModal = null;
+        this._projectActivityModal?.close?.();
+        this._projectActivityModal = null;
         this._colMgr?.close?.();
         this._colMgr = null;
         this.rows.forEach(row => row.destroy && row.destroy());

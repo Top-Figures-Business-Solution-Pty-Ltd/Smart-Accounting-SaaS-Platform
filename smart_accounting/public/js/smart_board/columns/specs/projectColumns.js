@@ -18,6 +18,7 @@ import { openProjectEntityChangeFlow } from '../../controllers/projectEntityChan
 import { getErrorMessage } from '../../utils/errorMessage.js';
 import { ProjectService } from '../../services/projectService.js';
 import { ProjectEntityService } from '../../services/projectEntityService.js';
+import { formatDate } from '../../utils/helpers.js';
 
 function _fileNameFromUrl(url) {
   const s = String(url || '').trim();
@@ -801,7 +802,15 @@ export function makeProjectColumnSpecs() {
 
     // (20) System/meta fields that should never be edited from the board
     // - They are either computed, managed by the system, or not part of the Smart Board editing UX yet.
-    { field: 'modified', isEditable: false },
+    {
+      field: 'modified',
+      isEditable: false,
+      renderCell: ({ project }) => {
+        const text = escapeHtml(formatDate(project?.modified) || '—');
+        const pn = escapeHtml(project?.name || '');
+        return `<button type="button" class="sb-activity-open-btn" data-project-name="${pn}" title="Open activity log">${text}</button>`;
+      }
+    },
 
     { field: 'is_active', isEditable: false },
     { field: 'custom_customer_entity', isEditable: false },

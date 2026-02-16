@@ -833,6 +833,69 @@
 }
 
 /* ============================================
+   Project Activity modal
+   ============================================ */
+.sb-project-activity__hint {
+    font-size: 12px;
+    margin-bottom: 10px;
+}
+
+.sb-project-activity__list {
+    max-height: 420px;
+    overflow: auto;
+    border: 1px solid var(--smart-board-border);
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: #fff;
+}
+
+.sb-project-activity__item {
+    padding: 8px 2px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.sb-project-activity__item:last-child {
+    border-bottom: 0;
+}
+
+.sb-project-activity__meta {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    margin-bottom: 4px;
+}
+
+.sb-project-activity__who {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.sb-project-activity__when {
+    font-size: 12px;
+    color: var(--smart-board-text-muted);
+}
+
+.sb-project-activity__body {
+    font-size: 13px;
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    flex-wrap: wrap;
+}
+
+.sb-project-activity__field {
+    font-weight: 600;
+}
+
+.sb-project-activity__from {
+    color: #b45309;
+}
+
+.sb-project-activity__to {
+    color: #047857;
+}
+
+/* ============================================
    LinkInput (dropdown search)
    ============================================ */
 .sb-linkinput {
