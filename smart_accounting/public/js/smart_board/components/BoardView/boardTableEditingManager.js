@@ -159,11 +159,13 @@ export class EditingManager {
       }
     });
 
-    // blur saves (per requirement)
-    inputEl.addEventListener('blur', () => {
-      if (!this._active) return;
-      this.commitAndClose('blur');
-    });
+    // blur saves (per requirement), except menu-like editors that handle close explicitly.
+    if (!editorInstance?.disableBlurCommit) {
+      inputEl.addEventListener('blur', () => {
+        if (!this._active) return;
+        this.commitAndClose('blur');
+      });
+    }
   }
 
   _mountDefaultEditor({ cellEl, field, project }) {

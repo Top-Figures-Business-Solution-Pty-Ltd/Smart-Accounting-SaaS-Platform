@@ -21,6 +21,8 @@ export class InlineMenuSelectEditor {
     this._onWinResize = null;
     this._onDocClick = null;
     this._value = null; // selected value during edit; null means unchanged
+    // Menu editors use explicit close/select events; blur-commit causes flicker on async option refresh.
+    this.disableBlurCommit = true;
     this.render();
   }
 
