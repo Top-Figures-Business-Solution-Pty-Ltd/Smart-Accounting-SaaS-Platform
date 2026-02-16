@@ -27,6 +27,7 @@ export class EditingManager {
     this._pendingCommit = false;
     this._onDocMouseDown = null;
     this._editorInstance = null;
+    this._pendingStartCell = null;
   }
 
   isEditing() {
@@ -68,6 +69,11 @@ export class EditingManager {
       try {
         this.rootEl?.dispatchEvent?.(new CustomEvent('sb:edit-finished', { detail: { reason } }));
       } catch (e) {}
+      const nextCell = this._pendingStartCell;
+      this._pendingStartCell = null;
+      if (nextCell && nextCell.isConnected) {
+        this.startEdit(nextCell);
+      }
     }
   }
 
@@ -76,7 +82,12 @@ export class EditingManager {
 
     // If editing another cell, commit first (requirement: click elsewhere saves)
     if (this._active && this._active.cellEl !== cellEl) {
+      this._pendingStartCell = cellEl;
       this.commitAndClose('switch-cell');
+      return;
+    }
+    if (this._active && this._active.cellEl === cellEl) {
+      return;
     }
 
     const row = cellEl.closest('tr');

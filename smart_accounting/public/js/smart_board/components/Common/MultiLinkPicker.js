@@ -9,6 +9,7 @@
  */
 import { escapeHtml } from '../../utils/dom.js';
 import { debounce } from '../../utils/helpers.js';
+import { computeOverlayPlacement } from '../../utils/overlayPlacement.js';
  
 export class MultiLinkPicker {
   constructor(
@@ -327,21 +328,22 @@ export class MultiLinkPicker {
   _repositionMenu() {
     if (!this._menu || !this._input) return;
     const rect = this._input.getBoundingClientRect();
-    const gap = 6;
-    const top = rect.bottom + gap;
-    const left = rect.left;
-    const width = rect.width;
+    const placement = computeOverlayPlacement(rect, {
+      preferredWidth: Math.max(240, rect.width),
+      minHeight: 160,
+      maxHeight: 320,
+      gap: 6,
+      viewportPadding: 8,
+      menuScrollHeight: Number(this._menu.scrollHeight || 260),
+    });
 
     // Fixed overlay
     this._menu.style.position = 'fixed';
-    this._menu.style.left = `${Math.max(8, left)}px`;
-    this._menu.style.top = `${Math.max(8, top)}px`;
-    this._menu.style.width = `${Math.max(240, width)}px`;
+    this._menu.style.left = `${placement.left}px`;
+    this._menu.style.top = `${placement.top}px`;
+    this._menu.style.width = `${placement.width}px`;
     this._menu.style.zIndex = '30000';
-
-    // Keep menu within viewport height
-    const maxH = Math.max(160, Math.min(320, window.innerHeight - top - 12));
-    this._menu.style.maxHeight = `${maxH}px`;
+    this._menu.style.maxHeight = `${placement.maxHeight}px`;
   }
 
   openMenu() {

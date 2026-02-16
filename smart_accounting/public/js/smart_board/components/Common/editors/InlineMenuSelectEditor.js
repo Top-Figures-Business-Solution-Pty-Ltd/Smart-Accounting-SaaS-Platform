@@ -7,6 +7,7 @@
  * - string[] OR { value: string, label?: string, color?: string }[]
  */
 import { escapeHtml } from '../../../utils/dom.js';
+import { computeOverlayPlacement } from '../../../utils/overlayPlacement.js';
 
 export class InlineMenuSelectEditor {
   constructor(mountEl, { options = [], initialValue = '', placeholder = null } = {}) {
@@ -102,20 +103,21 @@ export class InlineMenuSelectEditor {
   _reposition() {
     if (!this._portal || !this._root) return;
     const rect = this._root.getBoundingClientRect();
-    const gap = 6;
-    const top = rect.top - gap; // align to top of cell; looks like "expanded in-place"
-    const left = rect.left;
-    const width = Math.max(220, rect.width);
+    const placement = computeOverlayPlacement(rect, {
+      preferredWidth: Math.max(220, rect.width),
+      minHeight: 180,
+      maxHeight: 520,
+      gap: 6,
+      viewportPadding: 8,
+      menuScrollHeight: Number(this._portal.scrollHeight || 260),
+    });
 
     this._portal.style.position = 'fixed';
-    this._portal.style.left = `${Math.max(8, left)}px`;
-    this._portal.style.top = `${Math.max(8, top)}px`;
-    this._portal.style.width = `${width}px`;
+    this._portal.style.left = `${placement.left}px`;
+    this._portal.style.top = `${placement.top}px`;
+    this._portal.style.width = `${placement.width}px`;
     this._portal.style.zIndex = '30000';
-
-    // Do NOT hardcode fixed height; only constrain by viewport to avoid off-screen.
-    const maxH = Math.max(200, Math.min(window.innerHeight - Math.max(8, top) - 12, 520));
-    this._portal.style.maxHeight = `${maxH}px`;
+    this._portal.style.maxHeight = `${placement.maxHeight}px`;
     this._portal.style.overflow = 'auto';
   }
 
