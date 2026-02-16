@@ -39,6 +39,11 @@ function monthOptions() {
   ];
 }
 
+function monthOptionsWithClear() {
+  return [{ value: '', label: '— Clear —' }]
+    .concat(monthOptions().map((m) => ({ value: m, label: m })));
+}
+
 function priorityOptions() {
   // Keep minimal for now; can be sourced from Doctype meta later.
   return ['Low', 'Medium', 'High', 'Urgent'];
@@ -491,7 +496,7 @@ export function makeProjectColumnSpecs() {
       renderEditor: ({ cellEl, project, manager, field }) => {
         const contentEl = cellEl.querySelector('.cell-content') || cellEl;
         const ed = new InlineSelectEditor(contentEl, {
-          options: monthOptions(),
+          options: monthOptionsWithClear(),
           initialValue: project?.[field] || ''
         });
         mountEditorHelpers(manager, contentEl, ed);
