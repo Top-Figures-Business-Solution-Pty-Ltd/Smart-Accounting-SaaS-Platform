@@ -37,8 +37,8 @@ export class ProjectQueryService {
     if (f === 'customer' || f === 'customer_name' || f === 'client_name' || f === 'client') {
       return 'customer asc, name asc';
     }
-    // Default: client name column semantics (Project.customer field).
-    return 'customer asc, name asc';
+    // Default: project name (when first visible column is not client/project name).
+    return 'project_name asc, name asc';
   }
 
   /**

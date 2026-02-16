@@ -1502,6 +1502,22 @@ export class BoardTable {
 
                 this.columns = this.buildColumnsFromConfig(config);
                 this.render();
+
+                // Keep sorting in sync with the newly selected first visible project column
+                // without requiring a full page refresh.
+                const firstProjectColumn = (() => {
+                    for (const c of (config || [])) {
+                        const f = String(c?.field || '').trim();
+                        if (!f) continue;
+                        if (f.startsWith('__sb_')) continue;
+                        return f;
+                    }
+                    return 'project_name';
+                })();
+                try {
+                    this.store?.commit?.('projects/setFirstColumnAndResort', firstProjectColumn);
+                    this.scheduleRowsUpdate();
+                } catch (e) {}
             },
             onClose: () => {}
         });

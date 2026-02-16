@@ -221,8 +221,8 @@ export class SmartBoardApp {
                 // Sorting rule:
                 // - first column = project_name => sort by project_name
                 // - first column = customer/client name => sort by customer
-                // - otherwise => default sort by customer
-                let firstProjectColumn = 'customer';
+                // - otherwise => default sort by project_name
+                let firstProjectColumn = 'project_name';
                 for (const c of (cols || [])) {
                     const f = String(c?.field || '').trim();
                     if (!f) continue;

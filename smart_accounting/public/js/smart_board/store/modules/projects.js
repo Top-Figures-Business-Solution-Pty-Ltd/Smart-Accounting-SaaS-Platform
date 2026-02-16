@@ -24,6 +24,45 @@ function _stableQueryKey(filters) {
     try { return JSON.stringify(out); } catch (e) { return String(Date.now()); }
 }
 
+function _norm(v) {
+    return String(v == null ? '' : v).trim().toLowerCase();
+}
+
+function _isCustomerFirst(firstColumn) {
+    const f = _norm(firstColumn);
+    return f === 'customer' || f === 'customer_name' || f === 'client' || f === 'client_name';
+}
+
+function _isProjectNameFirst(firstColumn) {
+    return _norm(firstColumn) === 'project_name';
+}
+
+function _sortProjectsForBoard(items, firstColumn) {
+    const list = Array.isArray(items) ? items : [];
+    const byCustomer = _isCustomerFirst(firstColumn);
+    const byProject = _isProjectNameFirst(firstColumn) || !byCustomer;
+    list.sort((a, b) => {
+        if (byCustomer) {
+            const ac = _norm(a?.customer_name || a?.customer || '');
+            const bc = _norm(b?.customer_name || b?.customer || '');
+            if (ac < bc) return -1;
+            if (ac > bc) return 1;
+        }
+        if (byProject) {
+            const ap = _norm(a?.project_name || a?.name || '');
+            const bp = _norm(b?.project_name || b?.name || '');
+            if (ap < bp) return -1;
+            if (ap > bp) return 1;
+        }
+        const an = _norm(a?.name || '');
+        const bn = _norm(b?.name || '');
+        if (an < bn) return -1;
+        if (an > bn) return 1;
+        return 0;
+    });
+    return list;
+}
+
 export const ProjectsModule = {
     /**
      * 初始状态
@@ -53,7 +92,8 @@ export const ProjectsModule = {
      */
     mutations: {
         setProjects(state, projects) {
-            state.items = projects;
+            state.items = Array.isArray(projects) ? projects.slice() : [];
+            _sortProjectsForBoard(state.items, state?.lastFilters?.first_column);
             state.offset = Array.isArray(projects) ? projects.length : 0;
         },
         
@@ -93,6 +133,12 @@ export const ProjectsModule = {
             state.lastFilters = filters ? { ...(filters || {}) } : null;
         },
 
+        setFirstColumnAndResort(state, firstColumn) {
+            const f = String(firstColumn || '').trim();
+            state.lastFilters = { ...(state.lastFilters || {}), first_column: f };
+            _sortProjectsForBoard(state.items, f);
+        },
+
         setRequestSeq(state, seq) {
             const n = Number(seq);
             state.requestSeq = Number.isFinite(n) ? n : state.requestSeq;
@@ -113,6 +159,7 @@ export const ProjectsModule = {
                 state.items.push(p);
                 seen.add(name);
             }
+            _sortProjectsForBoard(state.items, state?.lastFilters?.first_column);
             state.offset = (state.items || []).length;
         },
         
