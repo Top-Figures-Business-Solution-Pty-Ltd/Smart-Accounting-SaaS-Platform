@@ -95,11 +95,17 @@ function metaForField(field, { viewType, statusOptions, companyOptions, projectM
  */
 export async function buildAdvancedFilterColumns({ viewType, statusOptions }) {
   let companyOptions = [];
+  let entityTypeOptions = [];
   let projectMeta = null;
   try {
     companyOptions = await CompanyService.fetchCompanies();
   } catch (e) {
     companyOptions = [];
+  }
+  try {
+    entityTypeOptions = await DoctypeMetaService.getSelectOptions('Customer Entity', 'entity_type');
+  } catch (e) {
+    entityTypeOptions = [];
   }
   try {
     projectMeta = await DoctypeMetaService.getMeta('Project');
@@ -132,7 +138,14 @@ export async function buildAdvancedFilterColumns({ viewType, statusOptions }) {
       const f = String(c?.field || '').trim();
       if (!isFilterableField(f)) continue;
       if (seen.has(f)) continue;
-      out.push({ ...metaForField(f, { viewType, statusOptions, companyOptions, projectMeta }), label: c?.label || undefined });
+      const byField = (() => {
+        if (f === 'custom_entity_type') {
+          const opts = Array.isArray(entityTypeOptions) ? entityTypeOptions.filter(Boolean) : [];
+          return { field: f, label: 'Entity', type: opts.length ? 'select' : 'text', options: opts };
+        }
+        return metaForField(f, { viewType, statusOptions, companyOptions, projectMeta });
+      })();
+      out.push({ ...byField, label: c?.label || byField.label || undefined });
       seen.add(f);
     }
 

@@ -1901,6 +1901,10 @@ def query_project_names_advanced(project_type: str | None = None, groups: Any = 
 	def _is_team_field(fn: str) -> bool:
 		return str(fn or "").strip().startswith("team:")
 
+	def _is_effective_entity_field(fn: str) -> bool:
+		s = str(fn or "").strip().lower()
+		return s in {"custom_entity_type", "entity_type", "entity"}
+
 	def _team_role(fn: str) -> str:
 		s = str(fn or "").strip()
 		if ":" not in s:
@@ -1908,6 +1912,7 @@ def query_project_names_advanced(project_type: str | None = None, groups: Any = 
 		return s.split(":", 1)[1].strip()
 
 	_base_names: set[str] | None = None
+	_base_project_rows: list[dict] | None = None
 
 	def _get_base_names() -> set[str]:
 		"""
@@ -1923,6 +1928,73 @@ def query_project_names_advanced(project_type: str | None = None, groups: Any = 
 			rows = []
 		_base_names = set([str(x).strip() for x in (rows or []) if str(x).strip()])
 		return _base_names
+
+	def _get_base_project_rows() -> list[dict]:
+		"""
+		Base projects with effective entity_type attached.
+		Used by derived rule custom_entity_type so filtering semantics match what users see in table.
+		"""
+		nonlocal _base_project_rows
+		if _base_project_rows is not None:
+			return _base_project_rows
+		try:
+			rows = frappe.get_all(
+				"Project",
+				filters=base_filters(),
+				fields=["name", "customer", "custom_customer_entity", "custom_entity_type"],
+				limit_page_length=limit,
+			)
+		except Exception:
+			rows = []
+		try:
+			# Keep filter semantics consistent with list display enrichment.
+			rows = _attach_effective_entity_type(rows or [])
+		except Exception:
+			pass
+		_base_project_rows = rows or []
+		return _base_project_rows
+
+	def _entity_rule_names(cond: str, v: str | None) -> set[str]:
+		"""
+		Resolve derived field rule: custom_entity_type (effective display value).
+		Supported conditions mirror select/text where sensible.
+		"""
+		cond = str(cond or "").strip()
+		val = str(v or "").strip()
+		rows = _get_base_project_rows()
+		if not rows:
+			return set()
+
+		base_names = set()
+		matched = set()
+		for r in rows:
+			pn = str(r.get("name") or "").strip()
+			if not pn:
+				continue
+			base_names.add(pn)
+			et = str(r.get("custom_entity_type") or "").strip()
+			ok = False
+			if cond == "equals":
+				ok = bool(val) and et == val
+			elif cond == "not_equals":
+				ok = bool(val) and et != val
+			elif cond == "is_empty":
+				ok = not et
+			elif cond == "is_not_empty":
+				ok = bool(et)
+			elif cond == "contains":
+				ok = bool(val) and (val in et)
+			elif cond == "not_contains":
+				ok = bool(val) and (val not in et)
+			elif cond == "starts_with":
+				ok = bool(val) and et.startswith(val)
+			if ok:
+				matched.add(pn)
+
+		# Keep semantics stable with other derived filters.
+		if cond == "not_equals" and val:
+			return set(base_names) & matched
+		return matched
 
 	def _team_rule_names(role: str, cond: str, v: str | None) -> set[str]:
 		"""
@@ -1978,7 +2050,7 @@ def query_project_names_advanced(project_type: str | None = None, groups: Any = 
 		join = (g.get("join") or ("where" if idx == 0 else "and")).lower()
 		rules = _normalize_list(g.get("rules"))
 		group_filters = base_filters()
-		team_name_in: set[str] | None = None
+		derived_name_in: set[str] | None = None
 		for r in rules:
 			if not isinstance(r, dict):
 				continue
@@ -1994,12 +2066,23 @@ def query_project_names_advanced(project_type: str | None = None, groups: Any = 
 			if _is_team_field(field):
 				role = _team_role(field)
 				names_for_rule = _team_rule_names(role, cond, v)
-				if team_name_in is None:
-					team_name_in = names_for_rule
+				if derived_name_in is None:
+					derived_name_in = names_for_rule
 				else:
-					team_name_in &= names_for_rule
+					derived_name_in &= names_for_rule
 				# Short-circuit: impossible group
-				if team_name_in is not None and not team_name_in:
+				if derived_name_in is not None and not derived_name_in:
+					break
+				continue
+
+			# Derived/virtual: effective Entity (display-level value)
+			if _is_effective_entity_field(field):
+				names_for_rule = _entity_rule_names(cond, v)
+				if derived_name_in is None:
+					derived_name_in = names_for_rule
+				else:
+					derived_name_in &= names_for_rule
+				if derived_name_in is not None and not derived_name_in:
 					break
 				continue
 
@@ -2009,16 +2092,16 @@ def query_project_names_advanced(project_type: str | None = None, groups: Any = 
 
 		# If group has no valid rules beyond base, skip it.
 		# NOTE: derived team:Role rules don't add to group_filters until we apply name_in below.
-		if len(group_filters) == len(base_filters()) and team_name_in is None:
+		if len(group_filters) == len(base_filters()) and derived_name_in is None:
 			continue
 
-		# Apply derived team rules restriction (AND)
-		if team_name_in is not None:
+		# Apply derived rules restriction (AND)
+		if derived_name_in is not None:
 			# Empty intersection => no results for this group
-			if not team_name_in:
+			if not derived_name_in:
 				names = set()
 			else:
-				group_filters.append(["name", "in", list(team_name_in)])
+				group_filters.append(["name", "in", list(derived_name_in)])
 				rows = frappe.get_all("Project", filters=group_filters, pluck="name", limit_page_length=limit)
 				names = set(rows or [])
 		else:
