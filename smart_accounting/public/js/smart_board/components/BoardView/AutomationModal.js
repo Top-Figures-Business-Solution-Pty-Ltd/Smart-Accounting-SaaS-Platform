@@ -13,6 +13,7 @@ export class AutomationModal {
     this.meta = meta || {};
     this.items = Array.isArray(items) ? items.map((it) => ({
       ...it,
+      triggers: this._normalizeTriggers(it),
       actions: Array.isArray(it.actions) ? [...it.actions] : [],
     })) : [];
     this.onSave = onSave || (async () => {});
@@ -82,18 +83,12 @@ export class AutomationModal {
   _ruleHTML(item, idx) {
     const triggers = this.meta?.triggers || {};
     const enabled = item.enabled ? 'checked' : '';
-    const triggerType = item.trigger_type || '';
-    const triggerConfig = (typeof item.trigger_config === 'object') ? item.trigger_config : {};
     const name = item.name || '';
+    const triggerRows = Array.isArray(item.triggers) && item.triggers.length
+      ? item.triggers
+      : [{ trigger_type: '', config: {} }];
     const actions = Array.isArray(item.actions) ? item.actions : [];
-
-    // Trigger type dropdown
-    const triggerOpts = Object.entries(triggers).map(([k, v]) =>
-      `<option value="${escapeHtml(k)}" ${k === triggerType ? 'selected' : ''}>${escapeHtml(v.label || k)}</option>`
-    ).join('');
-
-    // Trigger config fields
-    const triggerConfigHTML = this._configFieldsHTML(triggers[triggerType], triggerConfig, `trigger_${idx}`);
+    const triggersHTML = triggerRows.map((t, ti) => this._triggerRowHTML(t, idx, ti, ti > 0)).join('');
 
     // Actions rows
     const actionsHTML = actions.length
@@ -110,15 +105,11 @@ export class AutomationModal {
           <button class="btn btn-default sb-auto__delete" data-idx="${idx}" type="button" title="Delete">×</button>
         </div>
         <div class="sb-automation__rule-body">
-          <div class="sb-automation__row">
-            <span class="sb-automation__label">When</span>
-            <select class="form-control sb-auto__trigger-type" data-idx="${idx}">
-              <option value="" disabled ${!triggerType ? 'selected' : ''}>Select trigger</option>
-              ${triggerOpts}
-            </select>
-            ${triggerConfigHTML}
-          </div>
+          ${triggersHTML}
           ${actionsHTML}
+        </div>
+        <div class="sb-automation__rule-actions-bar">
+          <button class="btn btn-default btn-sm sb-auto__add-trigger" data-idx="${idx}" type="button">+ And Trigger</button>
         </div>
         <div class="sb-automation__rule-actions-bar">
           <button class="btn btn-default btn-sm sb-auto__add-action" data-idx="${idx}" type="button">+ And</button>
@@ -127,6 +118,31 @@ export class AutomationModal {
           <button class="btn btn-primary btn-sm sb-auto__save" data-idx="${idx}" type="button">Save</button>
           ${item.execution_count ? `<span class="text-muted" style="font-size:11px;">Executed ${item.execution_count} times</span>` : ''}
         </div>
+      </div>
+    `;
+  }
+
+  _triggerRowHTML(trigger, ruleIdx, triggerIdx, showAnd) {
+    const allTriggers = this.meta?.triggers || {};
+    const triggerType = trigger?.trigger_type || '';
+    const triggerConfig = trigger?.config || {};
+    const triggerOpts = Object.entries(allTriggers).map(([k, v]) =>
+      `<option value="${escapeHtml(k)}" ${k === triggerType ? 'selected' : ''}>${escapeHtml(v.label || k)}</option>`
+    ).join('');
+    const configHTML = this._configFieldsHTML(allTriggers[triggerType], triggerConfig, `trigger_${ruleIdx}_${triggerIdx}`);
+    const andLabel = showAnd ? '<span class="sb-automation__and-label">And</span>' : '<span class="sb-automation__label">When</span>';
+    const removeBtn = showAnd
+      ? `<button class="btn btn-default sb-auto__remove-trigger" data-idx="${ruleIdx}" data-tidx="${triggerIdx}" type="button" title="Remove">×</button>`
+      : '';
+    return `
+      <div class="sb-automation__row sb-automation__trigger-row" data-idx="${ruleIdx}" data-tidx="${triggerIdx}">
+        ${andLabel}
+        <select class="form-control sb-auto__trigger-type" data-idx="${ruleIdx}" data-tidx="${triggerIdx}">
+          <option value="" disabled ${!triggerType ? 'selected' : ''}>Select trigger</option>
+          ${triggerOpts}
+        </select>
+        ${configHTML}
+        ${removeBtn}
       </div>
     `;
   }
@@ -207,6 +223,12 @@ export class AutomationModal {
     wrap.querySelectorAll('.sb-auto__trigger-type').forEach((el) => {
       el.addEventListener('change', (e) => this._handleTriggerTypeChange(e));
     });
+    wrap.querySelectorAll('.sb-auto__add-trigger').forEach((el) => {
+      el.addEventListener('click', (e) => this._handleAddTrigger(e));
+    });
+    wrap.querySelectorAll('.sb-auto__remove-trigger').forEach((el) => {
+      el.addEventListener('click', (e) => this._handleRemoveTrigger(e));
+    });
     wrap.querySelectorAll('.sb-auto__action-type').forEach((el) => {
       el.addEventListener('change', (e) => this._handleActionTypeChange(e));
     });
@@ -257,15 +279,20 @@ export class AutomationModal {
     const ruleEl = this._root?.querySelector(`.sb-automation__rule[data-idx="${idx}"]`);
     if (!ruleEl) return;
 
-    const triggerType = ruleEl.querySelector('.sb-auto__trigger-type')?.value || '';
-    if (!triggerType) return;
-
-    // Read trigger config
-    const triggerConfig = {};
-    ruleEl.querySelectorAll(`.sb-auto__config[data-prefix="trigger_${idx}"]`).forEach((el) => {
-      const key = el.dataset.key;
-      if (key) triggerConfig[key] = el.value || '';
+    const triggers = [];
+    const triggerRows = ruleEl.querySelectorAll('.sb-automation__trigger-row');
+    triggerRows.forEach((row) => {
+      const tidx = parseInt(row.dataset.tidx, 10);
+      const triggerType = row.querySelector('.sb-auto__trigger-type')?.value || '';
+      if (!triggerType) return;
+      const config = {};
+      row.querySelectorAll(`.sb-auto__config[data-prefix="trigger_${idx}_${tidx}"]`).forEach((el) => {
+        const key = el.dataset.key;
+        if (key) config[key] = el.value || '';
+      });
+      triggers.push({ trigger_type: triggerType, config });
     });
+    if (!triggers.length) return;
 
     // Read all action rows
     const actions = [];
@@ -298,15 +325,16 @@ export class AutomationModal {
       const result = await this.onSave({
         name: item.name || '',
         enabled,
-        trigger_type: triggerType,
-        trigger_config: triggerConfig,
+        trigger_type: triggers[0]?.trigger_type || '',
+        trigger_config: { triggers },
         actions,
       });
 
       item.name = result?.name || item.name;
       item.enabled = enabled;
-      item.trigger_type = triggerType;
-      item.trigger_config = triggerConfig;
+      item.trigger_type = triggers[0]?.trigger_type || '';
+      item.trigger_config = { triggers };
+      item.triggers = triggers;
       item.actions = actions;
 
       // Re-render to update data-name
@@ -322,10 +350,35 @@ export class AutomationModal {
 
   _handleTriggerTypeChange(e) {
     const idx = parseInt(e.target?.dataset?.idx, 10);
+    const tidx = parseInt(e.target?.dataset?.tidx, 10);
     const item = this.items[idx];
     if (!item) return;
-    item.trigger_type = e.target.value || '';
-    item.trigger_config = {};
+    if (!Array.isArray(item.triggers)) item.triggers = [];
+    while (item.triggers.length <= tidx) item.triggers.push({ trigger_type: '', config: {} });
+    item.triggers[tidx] = { trigger_type: e.target.value || '', config: {} };
+    item.trigger_type = item.triggers[0]?.trigger_type || '';
+    item.trigger_config = { triggers: item.triggers };
+    this._renderList();
+  }
+
+  _handleAddTrigger(e) {
+    const idx = parseInt(e.target?.dataset?.idx, 10);
+    const item = this.items[idx];
+    if (!item) return;
+    if (!Array.isArray(item.triggers)) item.triggers = [];
+    item.triggers.push({ trigger_type: '', config: {} });
+    this._renderList();
+  }
+
+  _handleRemoveTrigger(e) {
+    const idx = parseInt(e.target?.dataset?.idx, 10);
+    const tidx = parseInt(e.target?.dataset?.tidx, 10);
+    const item = this.items[idx];
+    if (!item || !Array.isArray(item.triggers)) return;
+    item.triggers.splice(tidx, 1);
+    if (!item.triggers.length) item.triggers.push({ trigger_type: '', config: {} });
+    item.trigger_type = item.triggers[0]?.trigger_type || '';
+    item.trigger_config = { triggers: item.triggers };
     this._renderList();
   }
 
@@ -365,10 +418,24 @@ export class AutomationModal {
       name: '',
       enabled: 1,
       trigger_type: '',
-      trigger_config: {},
+      trigger_config: { triggers: [{ trigger_type: '', config: {} }] },
+      triggers: [{ trigger_type: '', config: {} }],
       actions: [{ action_type: '', config: {} }],
       execution_count: 0,
     });
     this._renderList();
+  }
+
+  _normalizeTriggers(item) {
+    const tc = (item && typeof item.trigger_config === 'object' && item.trigger_config) ? item.trigger_config : {};
+    const fromConfig = Array.isArray(tc?.triggers) ? tc.triggers : [];
+    if (fromConfig.length) {
+      return fromConfig
+        .filter((t) => t && typeof t === 'object')
+        .map((t) => ({ trigger_type: t.trigger_type || '', config: t.config || {} }));
+    }
+    const ttype = item?.trigger_type || '';
+    if (ttype) return [{ trigger_type: ttype, config: tc || {} }];
+    return [{ trigger_type: '', config: {} }];
   }
 }

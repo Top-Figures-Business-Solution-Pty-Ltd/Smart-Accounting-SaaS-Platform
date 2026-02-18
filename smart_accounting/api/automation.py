@@ -8,6 +8,7 @@ Website-safe (/smart) — all endpoints are whitelisted.
 import json
 import frappe
 from typing import Any
+from frappe.utils import today
 
 
 def _ensure_logged_in():
@@ -40,6 +41,38 @@ TRIGGER_TYPES = {
                 "type": "select",
                 "source": "project_status_pool",
             }
+        ],
+    },
+    "project_type_is": {
+        "label": "Project type is",
+        "config_fields": [
+            {
+                "key": "project_type",
+                "label": "Project Type",
+                "type": "select",
+                "source": "project_type_pool",
+            }
+        ],
+    },
+    "date_reaches": {
+        "label": "Date reaches",
+        "config_fields": [
+            {
+                "key": "date_field",
+                "label": "Date Field",
+                "type": "select",
+                "source": "project_date_fields",
+            },
+            {
+                "key": "mode",
+                "label": "When",
+                "type": "select",
+                "options": [
+                    {"value": "on", "label": "On date"},
+                    {"value": "on_or_after", "label": "On or after date"},
+                ],
+                "default": "on",
+            },
         ],
     },
 }
@@ -75,6 +108,36 @@ def _get_project_status_pool() -> list[str]:
         return ["Not started", "Working on it", "Completed"]
 
 
+def _get_project_type_pool() -> list[str]:
+    try:
+        rows = frappe.get_all("Project Type", fields=["name"], order_by="name asc", limit_page_length=5000)
+        return [str(r.get("name") or "").strip() for r in (rows or []) if str(r.get("name") or "").strip()]
+    except Exception:
+        return []
+
+
+def _get_project_date_field_options() -> list[dict]:
+    # Prefer dynamic Project Date fields; force-include Reset Date if present.
+    out: list[dict] = []
+    seen = set()
+    try:
+        meta = frappe.get_meta("Project")
+        for f in (meta.fields or []):
+            if str(getattr(f, "fieldtype", "") or "").strip() != "Date":
+                continue
+            fn = str(getattr(f, "fieldname", "") or "").strip()
+            if not fn or fn in seen:
+                continue
+            lb = str(getattr(f, "label", "") or fn).strip() or fn
+            out.append({"value": fn, "label": lb})
+            seen.add(fn)
+    except Exception:
+        pass
+    if "custom_reset_date" not in seen:
+        out.append({"value": "custom_reset_date", "label": "Reset Date"})
+    return out
+
+
 @frappe.whitelist()
 def get_automation_meta() -> dict:
     """
@@ -89,6 +152,12 @@ def get_automation_meta() -> dict:
             field = {**cf}
             if field.get("source") == "project_status_pool":
                 field["options"] = [{"value": s, "label": s} for s in status_pool]
+                del field["source"]
+            elif field.get("source") == "project_type_pool":
+                field["options"] = [{"value": s, "label": s} for s in _get_project_type_pool()]
+                del field["source"]
+            elif field.get("source") == "project_date_fields":
+                field["options"] = _get_project_date_field_options()
                 del field["source"]
             out.append(field)
         return out
@@ -167,6 +236,40 @@ def save_automation(
     if not isinstance(tc, dict):
         tc = {}
 
+    # Composite trigger support:
+    # - New: trigger_config.triggers = [{trigger_type, config}, ...]
+    # - Legacy: top-level trigger_type + trigger_config
+    raw_triggers = tc.get("triggers")
+    if isinstance(raw_triggers, str):
+        try:
+            raw_triggers = json.loads(raw_triggers)
+        except Exception:
+            raw_triggers = None
+    trigger_items = raw_triggers if isinstance(raw_triggers, list) else [
+        {"trigger_type": trigger_type, "config": tc}
+    ]
+    clean_triggers = []
+    for t in trigger_items:
+        if not isinstance(t, dict):
+            continue
+        tt = str(t.get("trigger_type") or "").strip()
+        if not tt or tt not in TRIGGER_TYPES:
+            continue
+        cfg = t.get("config") or {}
+        if isinstance(cfg, str):
+            try:
+                cfg = json.loads(cfg)
+            except Exception:
+                cfg = {}
+        if not isinstance(cfg, dict):
+            cfg = {}
+        clean_triggers.append({"trigger_type": tt, "config": cfg})
+    if not clean_triggers:
+        frappe.throw("At least one valid trigger is required")
+    # Persist both for backward compatibility; runtime reads trigger_config.triggers first.
+    tc = {"triggers": clean_triggers}
+    trigger_type = clean_triggers[0]["trigger_type"]
+
     # Parse actions array
     acts = actions
     if isinstance(acts, str):
@@ -218,6 +321,85 @@ def save_automation(
         "enabled": doc.enabled,
         "trigger_type": doc.trigger_type,
     }
+
+
+def _has_date_reaches_trigger(trigger_config: Any, trigger_type: str | None = None) -> bool:
+    tc = _parse_json(trigger_config)
+    trs = tc.get("triggers") if isinstance(tc, dict) else None
+    if isinstance(trs, list):
+        for t in trs:
+            if isinstance(t, dict) and str(t.get("trigger_type") or "").strip() == "date_reaches":
+                return True
+        return False
+    return str(trigger_type or "").strip() == "date_reaches"
+
+
+@frappe.whitelist()
+def run_due_date_automations_daily() -> dict:
+    """
+    Daily scheduler entry:
+    - Finds automations that include date_reaches trigger.
+    - Loads candidate projects where at least one configured date field == today.
+    - Executes actions once via CustomProject automation engine.
+    """
+    autos = frappe.get_all(
+        "Board Automation",
+        filters={"enabled": 1},
+        fields=["name", "trigger_type", "trigger_config"],
+        limit_page_length=1000,
+    )
+    date_autos = [a for a in (autos or []) if _has_date_reaches_trigger(a.get("trigger_config"), a.get("trigger_type"))]
+    if not date_autos:
+        return {"ok": True, "checked": 0, "updated": 0}
+
+    # Collect configured date fields from all date_reaches trigger clauses.
+    date_fields = set()
+    for a in date_autos:
+        tc = _parse_json(a.get("trigger_config"))
+        trs = tc.get("triggers") if isinstance(tc, dict) else None
+        if not isinstance(trs, list):
+            trs = [{"trigger_type": a.get("trigger_type"), "config": tc}]
+        for t in trs:
+            if not isinstance(t, dict):
+                continue
+            if str(t.get("trigger_type") or "").strip() != "date_reaches":
+                continue
+            cfg = t.get("config") or {}
+            if isinstance(cfg, str):
+                try:
+                    cfg = json.loads(cfg)
+                except Exception:
+                    cfg = {}
+            fn = str((cfg or {}).get("date_field") or "").strip()
+            if fn:
+                date_fields.add(fn)
+    if not date_fields:
+        return {"ok": True, "checked": 0, "updated": 0}
+
+    # Build OR filters: any configured date field equals today.
+    or_filters = [[f, "=", today()] for f in sorted(date_fields)]
+    rows = frappe.get_all(
+        "Project",
+        fields=["name"],
+        filters={"is_active": "Yes"},
+        or_filters=or_filters,
+        limit_page_length=20000,
+    )
+    names = [str(r.get("name") or "").strip() for r in (rows or []) if str(r.get("name") or "").strip()]
+    updated = 0
+    for name in names:
+        try:
+            doc = frappe.get_doc("Project", name)
+            # Execute now, then save once; skip validate-time second pass.
+            changed = bool(doc._run_board_automations({"event": "daily"}))
+            if changed:
+                doc.flags.skip_board_automation = True
+                doc.save(ignore_permissions=True)
+                updated += 1
+        except Exception:
+            continue
+
+    return {"ok": True, "checked": len(names), "updated": updated}
 
 
 @frappe.whitelist()

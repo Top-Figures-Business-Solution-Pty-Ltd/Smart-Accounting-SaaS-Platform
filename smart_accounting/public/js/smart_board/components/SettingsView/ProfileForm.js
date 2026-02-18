@@ -77,13 +77,15 @@ export class ProfileForm {
 
     // Sync topbar avatar (Smart Shell)
     try {
-      const top = document.getElementById('userAvatar');
-      if (top) {
-        if (img) {
-          top.innerHTML = `<img src="${img}" alt="" />`;
-        } else {
+      const syncShell = window?.smart_accounting?.set_shell_avatar;
+      if (typeof syncShell === 'function') {
+        syncShell({ full_name: name, email, user_image: img });
+      } else {
+        const top = document.getElementById('userAvatar');
+        if (top) {
           const initial = (name || email || 'U').charAt(0).toUpperCase();
-          top.textContent = initial;
+          if (img) top.innerHTML = `<img src="${img}" alt="" />`;
+          else top.textContent = initial;
         }
       }
     } catch (e) {}

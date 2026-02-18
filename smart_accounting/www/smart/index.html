@@ -81,17 +81,34 @@
   }
   .smart-shell__icon-btn:hover { background:#f3f4f6; }
   .smart-shell__avatar {
-    width: 34px; height: 34px; border-radius: 999px;
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
+    max-width: 34px;
+    max-height: 34px;
+    aspect-ratio: 1 / 1;
+    flex: 0 0 34px;
+    padding: 0;
+    line-height: 1;
     background: #0d6efd; color:#fff; font-weight: 700;
     display:flex; align-items:center; justify-content:center;
     user-select:none;
     border: 0;
+    border-radius: 50%;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+  .smart-shell__avatar.smart-shell__avatar--img {
+    background: #fff;
   }
   .smart-shell__avatar img {
     width: 100%;
     height: 100%;
+    aspect-ratio: 1 / 1;
     object-fit: cover;
-    border-radius: 999px;
+    border-radius: 50%;
+    display: block;
   }
   .smart-shell__popover {
     position: absolute;
@@ -151,6 +168,7 @@
   const userAvatar = document.getElementById("userAvatar");
   const profilePopover = document.getElementById("profilePopover");
   const btnMySettings = document.getElementById("btnMySettings");
+  const defaultUser = "{{ (frappe.session.user or '') | e }}";
 
   function hideAllPopovers() {
     popover.style.display = "none";
@@ -184,6 +202,49 @@
     // Reuse existing Smart Board view
     window.smart_accounting?.smart_board_instance?.handleViewChange?.("settings");
   });
+
+  function userInitial(nameOrEmail) {
+    const s = String(nameOrEmail || defaultUser || 'U').trim();
+    return (s.charAt(0) || 'U').toUpperCase();
+  }
+
+  function renderShellAvatar({ full_name, email, user_image } = {}) {
+    if (!userAvatar) return;
+    const name = String(full_name || '').trim();
+    const mail = String(email || '').trim();
+    const img = String(user_image || '').trim();
+    const fallback = userInitial(name || mail);
+
+    const setFallback = () => {
+      userAvatar.classList.remove('smart-shell__avatar--img');
+      userAvatar.textContent = fallback;
+      userAvatar.setAttribute('title', name || mail || defaultUser || '');
+    };
+
+    if (!img) {
+      setFallback();
+      return;
+    }
+
+    // Preload image first to avoid intermittent broken/empty avatar states.
+    const probe = new Image();
+    probe.onload = () => {
+      userAvatar.classList.add('smart-shell__avatar--img');
+      userAvatar.innerHTML = `<img src="${img}" alt="" />`;
+      userAvatar.setAttribute('title', name || mail || defaultUser || '');
+    };
+    probe.onerror = () => setFallback();
+    probe.src = img;
+  }
+
+  // Expose for Settings/Profile to update shell avatar after upload/remove.
+  window.smart_accounting = window.smart_accounting || {};
+  window.smart_accounting.set_shell_avatar = renderShellAvatar;
+
+  // Load current profile avatar on shell startup (without opening Settings).
+  frappe.call({ method: "smart_accounting.api.profile.get_my_profile" })
+    .then((r) => renderShellAvatar(r?.message || {}))
+    .catch(() => renderShellAvatar({}));
 
   // Surface module-load errors for debugging (Website doesn't have Desk console context)
   window.addEventListener("unhandledrejection", (ev) => {

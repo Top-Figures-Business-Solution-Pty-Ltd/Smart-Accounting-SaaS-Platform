@@ -50,11 +50,11 @@ override_doctype_class = {
 # }
 
 # Scheduled Tasks
-# scheduler_events = {
-#     "daily": [
-#         "smart_accounting.tasks.daily"
-#     ]
-# }
+scheduler_events = {
+    "daily": [
+        "smart_accounting.api.automation.run_due_date_automations_daily"
+    ]
+}
 
 # Fixtures
 # Export DocTypes and Custom Fields to fixtures for version control

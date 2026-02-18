@@ -125,7 +125,8 @@ class CustomProject(Project):
 
         # Board Automation: run automations on existing projects
         if not self.is_new():
-            self._run_board_automations()
+            if not getattr(getattr(self, "flags", None), "skip_board_automation", False):
+                self._run_board_automations({"event": "validate"})
 
         # Compute diffs after all business rules (including automations) settle.
         if not self.is_new():
@@ -158,7 +159,7 @@ class CustomProject(Project):
     # Board Automation Engine
     # =========================================================================
 
-    def _run_board_automations(self):
+    def _run_board_automations(self, context=None):
         """
         Execute all enabled Board Automation rules that match the current change.
         Called during validate() so changes are saved in a single DB write.
@@ -180,9 +181,11 @@ class CustomProject(Project):
             return
         self._sb_automation_done = True
 
-        # Snapshot the user's original status change BEFORE any automation modifies it
+        ev = str((context or {}).get("event") or "validate").strip()
+        # Snapshot the user's original status change BEFORE any automation modifies it.
+        # In daily scheduler context there is no "before-save" doc, so force changed=False.
         self._sb_original_status = str(self.status or "").strip()
-        self._sb_status_changed = self.has_value_changed("status")
+        self._sb_status_changed = False if ev == "daily" else self.has_value_changed("status")
         try:
             automations = frappe.get_all(
                 "Board Automation",
@@ -194,23 +197,45 @@ class CustomProject(Project):
             # DocType may not exist yet during migration
             return
 
+        changed_any = False
         for auto in automations:
             try:
-                if self._trigger_matches(auto):
-                    self._execute_actions(auto)
+                if self._trigger_matches(auto, context=context):
+                    changed_any = bool(self._execute_actions(auto)) or changed_any
             except Exception as e:
                 frappe.log_error(
                     f"Board Automation {auto.get('name')} failed for Project {self.name}: {str(e)}",
                     "Board Automation Error",
                 )
+        return changed_any
 
-    def _trigger_matches(self, auto):
+    def _trigger_matches(self, auto, context=None):
         """Check if this automation's trigger matches the current document change.
         Uses the snapshot taken before any automation modified fields."""
-        trigger_type = str(auto.get("trigger_type") or "").strip()
+        config = _parse_json(auto.get("trigger_config"))
+        triggers = config.get("triggers") if isinstance(config, dict) else None
+        if not isinstance(triggers, list) or not triggers:
+            triggers = [{
+                "trigger_type": str(auto.get("trigger_type") or "").strip(),
+                "config": config if isinstance(config, dict) else {},
+            }]
+        for tr in triggers:
+            if not isinstance(tr, dict):
+                return False
+            tt = str(tr.get("trigger_type") or "").strip()
+            tc = tr.get("config") or {}
+            if isinstance(tc, str):
+                tc = _parse_json(tc)
+            if not isinstance(tc, dict):
+                tc = {}
+            if not self._single_trigger_matches(tt, tc, context=context):
+                return False
+        return True
+
+    def _single_trigger_matches(self, trigger_type: str, config: dict, context=None) -> bool:
+        ev = str((context or {}).get("event") or "validate").strip()
 
         if trigger_type == "status_change":
-            config = _parse_json(auto.get("trigger_config"))
             to_value = str(config.get("to_value") or "").strip()
             if not to_value:
                 return False
@@ -219,6 +244,36 @@ class CustomProject(Project):
                 return False
             return getattr(self, '_sb_original_status', '') == to_value
 
+        if trigger_type == "project_type_is":
+            want = str(config.get("project_type") or "").strip()
+            if not want:
+                return False
+            return str(getattr(self, "project_type", "") or "").strip() == want
+
+        if trigger_type == "date_reaches":
+            field = str(config.get("date_field") or "").strip()
+            mode = str(config.get("mode") or "on").strip() or "on"
+            if not field:
+                return False
+            val = getattr(self, field, None)
+            if not val:
+                return False
+            d = getdate(val)
+            today_d = getdate(frappe.utils.today())
+            if ev == "daily":
+                # Daily runner should fire once on the exact date.
+                return d == today_d
+            # validate/manual save path
+            try:
+                changed = self.has_value_changed(field)
+            except Exception:
+                changed = False
+            if not changed:
+                return False
+            if mode == "on_or_after":
+                return d <= today_d
+            return d == today_d
+
         return False
 
     def _execute_actions(self, auto):
@@ -226,8 +281,9 @@ class CustomProject(Project):
         actions_raw = auto.get("actions")
         actions = _parse_json_array(actions_raw)
         if not actions:
-                return
+                return False
 
+        changed_any = False
         for action in actions:
             action_type = str(action.get("action_type") or "").strip()
             config = action.get("config") or {}
@@ -235,9 +291,13 @@ class CustomProject(Project):
                 config = _parse_json(config)
 
             if action_type == "roll_due_date":
+                prev = getattr(self, "custom_lodgement_due_date", None)
                 self._action_roll_due_date(config, auto)
+                changed_any = (getattr(self, "custom_lodgement_due_date", None) != prev) or changed_any
             elif action_type == "reset_status":
+                prev = str(getattr(self, "status", "") or "").strip()
                 self._action_reset_status(config, auto)
+                changed_any = (str(getattr(self, "status", "") or "").strip() != prev) or changed_any
             else:
                 frappe.logger("smart_accounting").warning(
                     "Board Automation %s: unknown action_type '%s'", auto.get("name"), action_type
@@ -256,6 +316,7 @@ class CustomProject(Project):
             )
         except Exception:
             pass
+        return changed_any
 
     def _action_roll_due_date(self, config, auto):
         """Action: Roll Lodgement Due forward by the project's frequency."""
