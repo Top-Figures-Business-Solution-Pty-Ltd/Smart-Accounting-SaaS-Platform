@@ -132,7 +132,7 @@ export class NewClientModal {
       : `<option value="Individual">Individual</option><option value="Company">Company</option>`;
 
     // Customer Entity.year_end options (configured in ERPNext)
-    const yearEnds = await DoctypeMetaService.getSelectOptions('Customer Entity', 'year_end');
+    const yearEnds = await DoctypeMetaService.getSelectOptions('Customer Entity', 'year_end', { force: true });
     const safeYears = (yearEnds || []).filter(Boolean);
     yearSel.innerHTML = `
       <option value="" disabled selected>Select year end</option>

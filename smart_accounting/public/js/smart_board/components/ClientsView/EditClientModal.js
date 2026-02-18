@@ -108,7 +108,7 @@ export class EditClientModal {
     if (!typeSel || !yearSel) return;
 
     // Customer Entity.entity_type options
-    const types = await DoctypeMetaService.getSelectOptions('Customer Entity', 'entity_type');
+    const types = await DoctypeMetaService.getSelectOptions('Customer Entity', 'entity_type', { force: true });
     const safeTypes = (types || []).filter(Boolean);
     const fallbackType = this.initial.entity_type ? [String(this.initial.entity_type)] : [];
     const typeOptions = safeTypes.length ? safeTypes : fallbackType;
@@ -117,7 +117,7 @@ export class EditClientModal {
       : `<option value="" disabled selected>No options</option>`;
 
     // Customer Entity.year_end options
-    const yearEnds = await DoctypeMetaService.getSelectOptions('Customer Entity', 'year_end');
+    const yearEnds = await DoctypeMetaService.getSelectOptions('Customer Entity', 'year_end', { force: true });
     const safeYears = (yearEnds || []).filter(Boolean);
     const fallbackYear = this.initial.year_end ? [String(this.initial.year_end)] : [];
     const yearOptions = safeYears.length ? safeYears : fallbackYear;
