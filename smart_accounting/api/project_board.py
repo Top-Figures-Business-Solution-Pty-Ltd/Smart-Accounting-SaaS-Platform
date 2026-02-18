@@ -387,6 +387,29 @@ def get_projects_list(
 	req_filters = filters if isinstance(filters, (list, dict)) else []
 	req_or_filters = _normalize_list(or_filters)
 
+	# Safety: drop unknown/non-column fields to avoid SQL 1054 when a site
+	# hasn't synced a newly introduced Custom Field yet (e.g. custom_reset_date).
+	try:
+		meta = frappe.get_meta("Project")
+		type_by_field = {
+			str(getattr(df, "fieldname", "") or "").strip(): str(getattr(df, "fieldtype", "") or "").strip()
+			for df in (meta.fields or [])
+			if str(getattr(df, "fieldname", "") or "").strip()
+		}
+		known = set(type_by_field.keys())
+		# Common built-ins that may not appear in meta.fields list.
+		known |= {"name", "owner", "creation", "modified", "modified_by", "docstatus", "idx", "_user_tags", "_comments", "_assign", "_liked_by"}
+		req_fields = [
+			f for f in req_fields
+			if (
+				(str(f or "").strip() in known)
+				and (type_by_field.get(str(f or "").strip(), "") not in {"Table", "Table MultiSelect"})
+			)
+		]
+	except Exception:
+		# Best-effort only; keep original behavior on meta failure.
+		pass
+
 	# Ensure enrich paths have the necessary inputs (adds minimal payload, safe for callers)
 	try:
 		if req_fields and "customer" not in req_fields:
