@@ -501,23 +501,24 @@ Partner
 4. 修改 **Options**（所有可能的状态）：
 
 ```
-Not Started
-Working
-Ready for Review
-Under Review
-Query from ATO
-Query from AusIndustry
-Resubmit
-Partner Review
-Lodged
-Approved
+Not started
+Working on it
+Waiting for client
+R&D
+Ready for manager review
+Review points to be actioned
+Ready for partner review
+Ready to send to client
+Sent to client for signature
+Hold
+Waiting of payment
 Completed
-Cancelled
 ```
 
 5. 点击 **Update**
 
-> **说明**：这是所有project_type的状态并集，包含ITR、BAS、R&D Grant等所有业务类型可能用到的状态
+> **说明**：状态选项以 `Project.status` 的 DocType meta（含 Property Setter）为单一真相。  
+> Board 侧做的是“允许子集”配置，不再推荐在前端脚本里硬编码状态映射。
 
 ---
 

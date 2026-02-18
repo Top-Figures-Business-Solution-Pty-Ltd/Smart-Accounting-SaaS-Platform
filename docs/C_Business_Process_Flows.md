@@ -193,8 +193,8 @@ USER:   Create Task ──► Collect Docs ──► Work ──► Review ─�
 | Send Invoice | Invoice Sent |
 | Review Signature | Waiting for Signature |
 | Review Payment | Waiting for Payment |
-| Lodge to ATO | Lodged |
-| (Complete) | Done |
+| Lodge to ATO | Completed |
+| (Complete) | Completed |
 
 ### 4.2 状态流转图
 
@@ -228,10 +228,7 @@ Signature           │               │
     └───────┬───────┘               │
             │                       │
             ▼                       │
-         Lodged                     │
-            │                       │
-            ▼                       │
-          Done                      │
+       Completed                    │
 ```
 
 ---

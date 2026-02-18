@@ -301,6 +301,140 @@ def migrate_saved_views_v2(*, dry_run: bool = True) -> dict:
 	return {"dry_run": bool(dry_run), "updated": updated, "skipped": skipped, "errors": errors}
 
 
+def sanitize_saved_view_columns(*, dry_run: bool = True, reference_doctype: str = "Project") -> dict:
+	"""
+	Bench helper: remove invalid column fieldnames from Saved View.columns safely.
+
+	Design goals:
+	- Never touch running behavior-critical virtual columns (team:* / __sb_*).
+	- Remove only fields that are not known in DocType meta (Project/Task) and not virtual.
+	- Keep schema shape unchanged: list OR {project:[], tasks:[]}.
+
+	Usage:
+	  bench --site <site> execute smart_accounting.api.project_board_admin.sanitize_saved_view_columns --kwargs "{'dry_run': true}"
+	  bench --site <site> execute smart_accounting.api.project_board_admin.sanitize_saved_view_columns --kwargs "{'dry_run': false}"
+	"""
+
+	def _parse_json(v: Any) -> Any:
+		if v is None:
+			return None
+		if isinstance(v, (dict, list)):
+			return v
+		if isinstance(v, str):
+			s = v.strip()
+			if not s:
+				return None
+			try:
+				return frappe.parse_json(s)
+			except Exception:
+				return None
+		return None
+
+	def _meta_fieldset(dt: str) -> set[str]:
+		try:
+			meta = frappe.get_meta(dt)
+			names = {str(getattr(df, "fieldname", "") or "").strip() for df in (meta.fields or [])}
+			names.discard("")
+			names |= {"name", "owner", "creation", "modified", "modified_by"}
+			return names
+		except Exception:
+			return set()
+
+	def _is_virtual(fieldname: str) -> bool:
+		f = str(fieldname or "").strip()
+		return bool(f) and (f.startswith("__sb_") or f.startswith("team:"))
+
+	def _clean_cols(cols: Any, allow: set[str]) -> tuple[list[dict], list[str]]:
+		arr = cols if isinstance(cols, list) else []
+		out: list[dict] = []
+		removed: list[str] = []
+		for c in arr:
+			if not isinstance(c, dict):
+				continue
+			f = str(c.get("field") or "").strip()
+			if not f:
+				continue
+			if _is_virtual(f) or f in allow:
+				out.append(c)
+			else:
+				removed.append(f)
+		return out, removed
+
+	ref = str(reference_doctype or "Project").strip() or "Project"
+	proj_fields = _meta_fieldset("Project")
+	task_fields = _meta_fieldset("Task")
+
+	rows = frappe.get_all(
+		"Saved View",
+		filters={"reference_doctype": ref},
+		fields=["name", "title", "columns", "modified"],
+		ignore_permissions=True,
+		limit_page_length=10000,
+	)
+
+	updated = []
+	skipped = []
+	errors = []
+
+	for r in (rows or []):
+		name = r.get("name")
+		try:
+			raw = _parse_json(r.get("columns"))
+			if raw is None:
+				skipped.append(name)
+				continue
+
+			removed_fields: list[str] = []
+			next_obj: Any = raw
+
+			if isinstance(raw, list):
+				cleaned, removed = _clean_cols(raw, proj_fields)
+				removed_fields.extend(removed)
+				next_obj = cleaned
+			elif isinstance(raw, dict):
+				next_obj = dict(raw)
+				if isinstance(raw.get("project"), list):
+					cleaned_p, removed_p = _clean_cols(raw.get("project"), proj_fields)
+					next_obj["project"] = cleaned_p
+					removed_fields.extend(removed_p)
+				if isinstance(raw.get("tasks"), list):
+					cleaned_t, removed_t = _clean_cols(raw.get("tasks"), task_fields)
+					next_obj["tasks"] = cleaned_t
+					removed_fields.extend(removed_t)
+			else:
+				skipped.append(name)
+				continue
+
+			# de-dup removed report
+			seen = set()
+			removed_unique = []
+			for f in removed_fields:
+				if f in seen:
+					continue
+				seen.add(f)
+				removed_unique.append(f)
+
+			if not removed_unique:
+				skipped.append(name)
+				continue
+
+			updated.append({
+				"name": name,
+				"title": r.get("title"),
+				"removed_fields": removed_unique,
+			})
+
+			if not dry_run:
+				frappe.db.set_value("Saved View", name, "columns", frappe.as_json(next_obj), update_modified=False)
+		except Exception as e:
+			errors.append({"name": name, "error": str(e)})
+
+	if (not dry_run) and updated:
+		frappe.db.commit()
+
+	return {"dry_run": bool(dry_run), "reference_doctype": ref, "updated": updated, "skipped": skipped, "errors": errors}
+
+
 def find_project_type_link_refs(project_type: str) -> dict:
 	"""
 	Bench helper: find any Link-field references that would block deleting a Project Type.

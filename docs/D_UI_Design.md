@@ -50,6 +50,14 @@
 - **附件（Engagement Letter）**
   - ✅ 整格点击上传、上传后显示文件名/链接、支持 Replace
   - ✅ 使用 Frappe 原生 `/api/method/upload_file`
+- **Automation（Monday-like）**
+  - ✅ Rule Builder：`When ... Then ... And ...`
+  - ✅ Trigger 支持复合 AND（多 trigger 组合）
+  - ✅ 支持 `Project type is` 与 `Date reaches` 触发条件
+- **Activity Log（Project）**
+  - ✅ 从 `Last Updated` 进入弹窗
+  - ✅ 展示 `when / who / column / from -> to`
+  - ✅ 文案按字段类型优化（如成员/软件显示 added/removed）
 
 ### 1.2 目标用户
 

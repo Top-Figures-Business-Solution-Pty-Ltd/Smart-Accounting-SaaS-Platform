@@ -126,13 +126,14 @@
 
 - `api/project_board.py`：Board 相关查询/写入（Project/Task/Monthly Status 等）
 - `api/board_settings.py`：Board Settings（Project Type order / status subset config）
-- `api/clients.py` / `api/profile.py` / `api/updates.py` / `api/mentions.py` / `api/notifications.py` / `api/activity_log.py`
+- `api/clients.py` / `api/profile.py` / `api/updates.py` / `api/mentions.py` / `api/notifications.py` / `api/activity_log.py` / `api/automation.py`
 
 原则：
 
 - **website-safe**：不依赖 Desk UI；返回结构稳定（dict/list）。
 - **权限清晰**：需要登录/权限的地方先 guard（例如 `_ensure_logged_in()`）。
 - **返回 shape 稳定**：前端依赖 `message` 结构时，尽量保持字段不随意改名。
+- **调度任务显式注册**：如日期触发类自动化（`date_reaches`）统一走 `hooks.py -> scheduler_events`，避免隐式副作用。
 
 ### `custom/`（DocType override：最小可控的后端业务规则）
 
@@ -274,12 +275,24 @@ components/pages  →  controllers  →  services  →  backend(api/*)
 
 - **Status 可选值**来自后端 DocType meta：`Project.status` 的 options（包含 Property Setter / Customize Form）。
 - Board 可配置“允许的子集”，但子集必须来自 pool（避免 typo）。
+- 当前终态为 **`Completed`**（历史值如 `Done`/`Lodged` 仅作兼容映射，不应作为新配置继续使用）。
 
 落地：
 
 - 后端：`api/board_settings.py` → `_get_project_status_pool()` / `get_project_type_status_config`
 - 前端：`services/boardStatusService.js` → `getEffectiveOptions()`
 - 展示层颜色：`utils/constants.js` → `STATUS_COLORS`
+
+## 9.1 Automation（2026-02 能力）
+
+- 规则存储：`Board Automation.trigger_config`（JSON）+ `actions`（JSON）
+- Trigger 支持：
+  - `status_change`
+  - `project_type_is`
+  - `date_reaches`（Date 字段到期）
+- 支持 **复合 Trigger（AND）**：`trigger_config.triggers[]`
+- 日期触发执行路径：
+  - `hooks.py -> scheduler_events.daily -> api.automation.run_due_date_automations_daily`
 
 ---
 
