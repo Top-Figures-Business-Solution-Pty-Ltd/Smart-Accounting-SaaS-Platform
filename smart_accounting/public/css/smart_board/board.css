@@ -281,23 +281,16 @@
 /* Monthly completion cells (Project) */
 .sb-ms-sum__cell {
     justify-content: flex-start;
-    gap: 8px;
     font-weight: 600;
     font-size: 12px;
     color: var(--smart-board-text-muted);
 }
 
-.sb-ms-sum__text {
-    min-width: 38px;
-    text-align: right;
-    color: var(--smart-board-text);
-    font-variant-numeric: tabular-nums;
-}
-
 .sb-ms-sum__bar {
     position: relative;
     height: 8px;
-    flex: 1 1 auto;
+    flex: 1 1 100%;
+    width: 100%;
     min-width: 72px;
     border-radius: 999px;
     background: #e9ecef;
@@ -310,6 +303,28 @@
     background: #10b981;
     border-radius: 999px;
     transition: width 0.15s ease;
+}
+
+.sb-ms-sum__bar::after {
+    content: attr(data-progress);
+    position: absolute;
+    left: 50%;
+    top: -24px;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.9);
+    color: #fff;
+    border-radius: 8px;
+    padding: 2px 8px;
+    font-size: 11px;
+    line-height: 16px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+.sb-ms-sum__bar:hover::after {
+    opacity: 1;
 }
 
 /* Simple popover menu */

@@ -36,8 +36,9 @@ export class BoardCell {
                     style="${left}"
                 >
                     <div class="cell-content sb-ms-sum__cell" data-done="${done}" data-total="${total}" data-percent="${pct.toFixed(1)}">
-                      <span class="sb-ms-sum__text">${text}</span>
-                      <span class="sb-ms-sum__bar"><span style="width:${pct.toFixed(1)}%"></span></span>
+                      <span class="sb-ms-sum__bar" data-progress="${escapeHtml(text)}">
+                        <span style="width:${pct.toFixed(1)}%"></span>
+                      </span>
                     </div>
                 </td>
             `;

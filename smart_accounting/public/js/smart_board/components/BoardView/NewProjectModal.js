@@ -182,8 +182,24 @@ export class NewProjectModal {
   }
 
   _readValueFromLinkInput(doctype) {
-    // LinkInput stores value in an input; we can query by placeholder-ish container order.
-    // We keep this deterministic by looking for the mount container id by doctype.
+    const li = this._linkInputsByDoctype.get(doctype);
+    if (li?.getValue) {
+      return String(li.getValue() || '').trim();
+    }
+    // Fallback for safety: read the visible input text.
+    const map = {
+      'Customer': '#sbNewProjCustomer',
+      'Company': '#sbNewProjCompany',
+      'Fiscal Year': '#sbNewProjFiscalYear',
+      'Project Type': '#sbNewProjType',
+    };
+    const sel = map[doctype];
+    const mount = sel ? this._root?.querySelector?.(sel) : null;
+    const input = mount?.querySelector?.('input');
+    return String(input?.value || '').trim();
+  }
+
+  _readDisplayTextFromLinkInput(doctype) {
     const map = {
       'Customer': '#sbNewProjCustomer',
       'Company': '#sbNewProjCompany',
@@ -226,7 +242,7 @@ export class NewProjectModal {
     const btn = this._root?.querySelector?.('#sbNewProjNewClient');
     if (btn) btn.disabled = true;
     try {
-      const initialName = this._readValueFromLinkInput('Customer');
+      const initialName = this._readDisplayTextFromLinkInput('Customer');
       await this.onCreateClient({
         initialName,
         onCreated: (item) => {
