@@ -20,6 +20,7 @@ import { columnRegistry } from '../../columns/registry.js';
 import { UpdatesModal } from './UpdatesModal.js';
 import { buildRowModel } from './rowModel.js';
 import { ProjectService } from '../../services/projectService.js';
+import { TaskService } from '../../services/taskService.js';
 import { confirmDialog, notify } from '../../services/uiAdapter.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { sanitizeProjectColumnsConfig } from '../../utils/deprecatedColumns.js';
@@ -404,6 +405,7 @@ export class BoardTable {
                   <span class="sb-bulkbar__count"><span id="sbBulkCount">0</span> selected</span>
                 </div>
                 <div class="sb-bulkbar__actions">
+                  <button type="button" class="btn btn-default btn-sm" data-action="bulk-add-task">Add Task</button>
                   <button type="button" class="btn btn-default btn-sm" data-action="bulk-archive">Archive</button>
                   <button type="button" class="btn btn-danger btn-sm" data-action="bulk-delete">Delete</button>
                   <button type="button" class="btn btn-light btn-sm" data-action="bulk-clear">Clear</button>
@@ -416,6 +418,7 @@ export class BoardTable {
                   <span class="sb-bulkbar__count"><span id="sbTaskBulkCount">0</span> tasks selected</span>
                 </div>
                 <div class="sb-bulkbar__actions">
+                  <button type="button" class="btn btn-default btn-sm" data-action="task-bulk-update">Update</button>
                   <button type="button" class="btn btn-danger btn-sm" data-action="task-bulk-delete">Delete</button>
                   <button type="button" class="btn btn-light btn-sm" data-action="task-bulk-clear">Clear</button>
                 </div>
@@ -1025,6 +1028,10 @@ export class BoardTable {
                 this._clearAllTaskSelections?.();
                 return;
             }
+            if (action === 'task-bulk-update') {
+                this._handleTaskBulkUpdate?.();
+                return;
+            }
             if (action === 'task-bulk-delete') {
                 this._handleBulkDeleteTasks?.();
                 return;
@@ -1058,6 +1065,11 @@ export class BoardTable {
 
         if (action === 'bulk-clear') {
             this._clearSelection();
+            return;
+        }
+
+        if (action === 'bulk-add-task') {
+            await this._bulkAddTaskToProjects();
             return;
         }
 
@@ -1127,6 +1139,48 @@ export class BoardTable {
             console.error(e);
             const { getErrorMessage } = await import('../../utils/errorMessage.js');
             notify(getErrorMessage(e) || 'Bulk delete failed', 'red');
+        } finally {
+            this._bulkWorking = false;
+            this.updateBulkBar();
+        }
+    }
+
+    async _bulkAddTaskToProjects() {
+        const names = this._getSelectedNames();
+        if (!names.length) return;
+        const subject = String(window.prompt('Task name for selected projects:', 'New Task') || '').trim();
+        if (!subject) return;
+        this._bulkWorking = true;
+        this.updateBulkBar();
+        try {
+            const r = await TaskService.bulkCreateForProjects(names, { subject });
+            const created = Array.isArray(r?.created) ? r.created : [];
+            const failed = Array.isArray(r?.failed) ? r.failed : [];
+            if (created.length) {
+                const byProject = {};
+                for (const row of created) {
+                    const p = String(row?.project || '').trim();
+                    if (!p) continue;
+                    byProject[p] = (Number(byProject[p] || 0) || 0) + 1;
+                }
+                for (const p of Object.keys(byProject)) {
+                    const prev = Number(this._taskCounts.get(p) || 0);
+                    const next = Math.max(0, prev + Number(byProject[p] || 0));
+                    this._taskCounts.set(p, next);
+                    const proj = this._projectByName.get(p);
+                    if (proj) proj.__sb_task_count = next;
+                    this._tasksByProject.delete(p);
+                    if (this._expanded.has(p)) await this.ensureTasksLoaded(p);
+                }
+                notify(`Created ${created.length} tasks`, 'green');
+            }
+            if (failed.length) {
+                notify(`Failed on ${failed.length} projects`, 'orange');
+            }
+            this.scheduleRowsUpdate();
+        } catch (e) {
+            console.error(e);
+            notify('Bulk add task failed', 'red');
         } finally {
             this._bulkWorking = false;
             this.updateBulkBar();

@@ -7,6 +7,7 @@ import { Modal } from '../Common/Modal.js';
 import { LinkInput } from '../Common/LinkInput.js';
 import { DoctypeMetaService } from '../../services/doctypeMetaService.js';
 import { getErrorMessage } from '../../utils/errorMessage.js';
+import { escapeHtml } from '../../utils/dom.js';
 
 export class NewProjectModal {
   constructor({ title = 'New Project', initial = {}, onSubmit, onCreateClient, onClose } = {}) {
@@ -58,6 +59,13 @@ export class NewProjectModal {
           <div id="sbNewProjType"></div>
         </div>
 
+        <div class="sb-newproj__row">
+          <label class="sb-newproj__label">Frequency</label>
+          <select class="form-control" id="sbNewProjFrequency">
+            <option value="" disabled selected>Loading...</option>
+          </select>
+        </div>
+
         <div class="sb-newproj__error text-danger" id="sbNewProjError" style="display:none;"></div>
       </div>
     `;
@@ -93,8 +101,9 @@ export class NewProjectModal {
     this._mountLink('sbNewProjFiscalYear', 'Fiscal Year', this.initial.custom_fiscal_year || this.initial.fiscal_year || null);
     this._mountLink('sbNewProjType', 'Project Type', this.initial.project_type || null);
 
-    // Preload DocType meta (best-effort) so future enhancements can derive required fields/options.
-    try { await DoctypeMetaService.getMeta('Project'); } catch (e) {}
+    // Load current Project metadata/options.
+    try { await DoctypeMetaService.getMeta('Project', { force: true }); } catch (e) {}
+    await this._loadSelectOptions();
 
     // Bind
     footer.querySelector('#sbNewProjCancel')?.addEventListener('click', () => this.close());
@@ -187,6 +196,31 @@ export class NewProjectModal {
     return String(input?.value || '').trim();
   }
 
+  async _loadSelectOptions() {
+    const freqSel = this._root?.querySelector?.('#sbNewProjFrequency');
+    if (!freqSel) return;
+    const fallback = ['Yearly', 'Quarterly', 'Monthly', 'Fortnightly', 'One-off'];
+    let safe = [];
+    try {
+      const opts = await DoctypeMetaService.getSelectOptions('Project', 'custom_project_frequency', { force: true });
+      safe = (opts || []).filter(Boolean);
+    } catch (e) {
+      safe = [];
+    }
+    const list = safe.length ? safe : fallback;
+    freqSel.innerHTML = list
+      .map((x) => {
+        const v = String(x || '').trim();
+        return `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`;
+      })
+      .join('');
+    const initial = String(this.initial.custom_project_frequency || this.initial.frequency || '').trim();
+    const preferred = initial && list.includes(initial)
+      ? initial
+      : (list.includes('Yearly') ? 'Yearly' : (list[0] || ''));
+    if (preferred) freqSel.value = preferred;
+  }
+
   async _handleCreateClient() {
     if (!this.onCreateClient) return;
     const btn = this._root?.querySelector?.('#sbNewProjNewClient');
@@ -216,6 +250,7 @@ export class NewProjectModal {
     const company = this._readValueFromLinkInput('Company');
     const custom_fiscal_year = this._readValueFromLinkInput('Fiscal Year');
     const project_type = this._readValueFromLinkInput('Project Type');
+    const custom_project_frequency = String(this._root?.querySelector?.('#sbNewProjFrequency')?.value || '').trim();
 
     const missing = [];
     if (!name) missing.push('Project Name');
@@ -231,7 +266,14 @@ export class NewProjectModal {
     const btn = this._modal?._overlay?.querySelector?.('#sbNewProjCreate');
     if (btn) btn.disabled = true;
     try {
-      await this.onSubmit({ project_name: name, customer, company, custom_fiscal_year, project_type });
+      await this.onSubmit({
+        project_name: name,
+        customer,
+        company,
+        custom_fiscal_year,
+        project_type,
+        custom_project_frequency: custom_project_frequency || 'Yearly',
+      });
       this.close();
     } catch (e) {
       const msg = getErrorMessage(e) || 'Create project failed';

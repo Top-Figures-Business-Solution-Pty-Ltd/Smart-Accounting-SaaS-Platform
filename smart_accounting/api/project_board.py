@@ -1171,7 +1171,7 @@ def get_tasks_for_projects(projects: Any, fields: Any = None, limit_per_project:
 			"Task",
 			filters=[["project", "in", allowed_projects]],
 			fields=final_fields,
-			order_by="modified desc",
+			order_by="subject asc, name asc",
 			limit_page_length=min(100000, limit_per_project * max(1, len(allowed_projects))),
 		)
 	except frappe.PermissionError:
@@ -1257,6 +1257,40 @@ def create_task_for_project(project: str, subject: str | None = None) -> dict:
 
 
 @frappe.whitelist()
+def bulk_create_task_for_projects(projects: Any, subject: str | None = None) -> dict:
+	"""
+	Create one Task with the same subject for many Projects.
+
+	Returns:
+	- created: list[{name, project, subject}]
+	- failed: list[{project, error}]
+	"""
+	_ensure_logged_in()
+	names = _normalize_list(projects)
+	names = [str(x).strip() for x in names if str(x).strip()]
+	if not names:
+		return {"created": [], "failed": []}
+
+	subj = str(subject or "").strip() or "New Task"
+	allowed = set(_project_names_with_read_permission(names) or [])
+	created = []
+	failed = []
+	for project in names:
+		if project not in allowed:
+			failed.append({"project": project, "error": "Not permitted"})
+			continue
+		try:
+			doc = frappe.new_doc("Task")
+			doc.project = project
+			doc.subject = subj
+			doc.insert(ignore_permissions=False)
+			created.append({"name": doc.name, "project": doc.project, "subject": doc.subject})
+		except Exception as e:
+			failed.append({"project": project, "error": str(e)})
+	return {"created": created, "failed": failed}
+
+
+@frappe.whitelist()
 def set_task_team_members(task: str, members: Any, role: str | None = None) -> dict:
 	"""
 	Update ONE role within Task team members (child table: Project Team Member).
@@ -1326,6 +1360,41 @@ def set_task_team_members(task: str, members: Any, role: str | None = None) -> d
 	if fieldname != "custom_task_members":
 		return {"custom_task_members": out, fieldname: out}
 	return {"custom_task_members": out}
+
+
+@frappe.whitelist()
+def bulk_set_task_field(tasks: Any, field: str, value: Any) -> dict:
+	"""
+	Bulk update one editable Task field across many Tasks.
+
+	Allowed fields:
+	- subject
+	- status
+	- priority
+	- exp_end_date
+	"""
+	_ensure_logged_in()
+	names = _normalize_list(tasks)
+	names = [str(x).strip() for x in names if str(x).strip()]
+	field = str(field or "").strip()
+	allowed = {"subject", "status", "priority", "exp_end_date"}
+	if not names:
+		return {"updated": [], "failed": []}
+	if field not in allowed:
+		frappe.throw("Unsupported task field")
+
+	updated = []
+	failed = []
+	for name in names:
+		try:
+			doc = frappe.get_doc("Task", name)
+			doc.check_permission("write")
+			doc.set(field, value)
+			doc.save(ignore_permissions=False)
+			updated.append(doc.name)
+		except Exception as e:
+			failed.append({"name": name, "error": str(e)})
+	return {"updated": updated, "failed": failed}
 
 
 @frappe.whitelist()

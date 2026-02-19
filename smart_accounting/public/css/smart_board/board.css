@@ -280,10 +280,36 @@
 
 /* Monthly completion cells (Project) */
 .sb-ms-sum__cell {
-    justify-content: center;
+    justify-content: flex-start;
+    gap: 8px;
     font-weight: 600;
     font-size: 12px;
     color: var(--smart-board-text-muted);
+}
+
+.sb-ms-sum__text {
+    min-width: 38px;
+    text-align: right;
+    color: var(--smart-board-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.sb-ms-sum__bar {
+    position: relative;
+    height: 8px;
+    flex: 1 1 auto;
+    min-width: 72px;
+    border-radius: 999px;
+    background: #e9ecef;
+    overflow: hidden;
+}
+
+.sb-ms-sum__bar > span {
+    display: block;
+    height: 100%;
+    background: #10b981;
+    border-radius: 999px;
+    transition: width 0.15s ease;
 }
 
 /* Simple popover menu */

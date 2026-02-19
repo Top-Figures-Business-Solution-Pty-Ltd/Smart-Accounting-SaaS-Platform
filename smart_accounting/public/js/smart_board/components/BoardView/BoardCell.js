@@ -22,8 +22,9 @@ export class BoardCell {
             const done = Number(m?.done || 0);
             const total = Number(m?.total || 0);
             const percent = Number.isFinite(Number(m?.percent)) ? Number(m.percent) : (total ? (done / total * 100) : 0);
-            const text = total ? `Done ${done}/${total} · ${percent.toFixed(0)}%` : '—';
-            const tip = total ? `Done ${done}/${total}, ${percent.toFixed(1)}%` : 'No tasks';
+            const pct = Math.max(0, Math.min(100, Number(percent) || 0));
+            const text = total ? `${done}/${total}` : '—';
+            const tip = total ? `Done ${done}/${total}, ${pct.toFixed(1)}%` : 'No tasks';
             const left = (this.column.frozen && this.column._stickyLeft != null) ? ` left: ${this.column._stickyLeft}px;` : '';
             const extraClass = columnRegistry.getCellClass({ project: this.project, column: this.column });
             const staticClass = this.column.__cellClass || '';
@@ -34,7 +35,10 @@ export class BoardCell {
                     title="${tip}"
                     style="${left}"
                 >
-                    <div class="cell-content sb-ms-sum__cell">${text}</div>
+                    <div class="cell-content sb-ms-sum__cell" data-done="${done}" data-total="${total}" data-percent="${pct.toFixed(1)}">
+                      <span class="sb-ms-sum__text">${text}</span>
+                      <span class="sb-ms-sum__bar"><span style="width:${pct.toFixed(1)}%"></span></span>
+                    </div>
                 </td>
             `;
         }

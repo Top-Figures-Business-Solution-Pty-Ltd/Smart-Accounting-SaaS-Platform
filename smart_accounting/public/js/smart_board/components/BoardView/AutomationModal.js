@@ -106,10 +106,10 @@ export class AutomationModal {
         </div>
         <div class="sb-automation__rule-body">
           ${triggersHTML}
+          <div class="sb-automation__rule-actions-bar">
+            <button class="btn btn-default btn-sm sb-auto__add-trigger" data-idx="${idx}" type="button">+ And Trigger</button>
+          </div>
           ${actionsHTML}
-        </div>
-        <div class="sb-automation__rule-actions-bar">
-          <button class="btn btn-default btn-sm sb-auto__add-trigger" data-idx="${idx}" type="button">+ And Trigger</button>
         </div>
         <div class="sb-automation__rule-actions-bar">
           <button class="btn btn-default btn-sm sb-auto__add-action" data-idx="${idx}" type="button">+ And</button>

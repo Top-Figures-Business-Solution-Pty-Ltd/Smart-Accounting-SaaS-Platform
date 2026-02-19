@@ -104,12 +104,12 @@ export async function buildAdvancedFilterColumns({ viewType, statusOptions }) {
     companyOptions = [];
   }
   try {
-    entityTypeOptions = await DoctypeMetaService.getSelectOptions('Customer Entity', 'entity_type');
+    entityTypeOptions = await DoctypeMetaService.getSelectOptions('Customer Entity', 'entity_type', { force: true });
   } catch (e) {
     entityTypeOptions = [];
   }
   try {
-    projectMeta = await DoctypeMetaService.getMeta('Project');
+    projectMeta = await DoctypeMetaService.getMeta('Project', { force: true });
   } catch (e) {
     projectMeta = null;
   }

@@ -2,6 +2,7 @@ import { getTaskColumnSpec } from '../../columns/specs/taskColumns.js';
 import { ProjectService } from '../../services/projectService.js';
 import { confirmDialog, notify } from '../../services/uiAdapter.js';
 import { TaskService } from '../../services/taskService.js';
+import { TaskBulkEditModal } from './TaskBulkEditModal.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { getErrorMessage } from '../../utils/errorMessage.js';
 import { getUserInitials } from '../../utils/userInitials.js';
@@ -511,6 +512,56 @@ export function installBoardTableTaskFeatures(BoardTable) {
 			this._taskBulkWorking = false;
 			this._updateTaskBulkBar();
 		}
+	};
+
+	BoardTable.prototype._handleTaskBulkUpdate = async function () {
+		const names = this._getSelectedTaskNames?.() || [];
+		if (!names.length) return;
+		if (this._taskBulkWorking) return;
+		if (this._taskBulkEditModal) {
+			try { this._taskBulkEditModal.close?.(); } catch (e) {}
+			this._taskBulkEditModal = null;
+		}
+		this._taskBulkEditModal = new TaskBulkEditModal({
+			count: names.length,
+			onApply: async ({ field, value }) => {
+				const affected = [];
+				for (const [pn, set] of (this._taskSelected?.entries?.() || [])) {
+					if (set && set.size) affected.push(String(pn));
+				}
+				try {
+					this._taskBulkWorking = true;
+					this._updateTaskBulkBar();
+					const r = await TaskService.bulkSetTaskField(names, field, value);
+					const updated = Array.isArray(r?.updated) ? r.updated : [];
+					const failed = Array.isArray(r?.failed) ? r.failed : [];
+					if (updated.length) {
+						// Reload affected expanded projects so data stays consistent (status badges/team renderers/etc).
+						for (const pn of affected) {
+							this._tasksByProject.delete(pn);
+							if (this._expanded?.has?.(pn)) {
+								await this.ensureTasksLoaded(pn);
+							}
+						}
+						this.scheduleRowsUpdate();
+						notify(`Updated ${updated.length} tasks`, 'green');
+					}
+					if (failed.length) {
+						const msg = failed?.[0]?.error || 'Task bulk update partially failed';
+						notify(getErrorMessage(msg) || 'Task bulk update partially failed', 'orange');
+					}
+					this._clearAllTaskSelections?.();
+				} catch (e) {
+					console.error(e);
+					notify(getErrorMessage(e) || 'Task bulk update failed', 'red');
+				} finally {
+					this._taskBulkWorking = false;
+					this._updateTaskBulkBar();
+				}
+			},
+			onClose: () => { this._taskBulkEditModal = null; },
+		});
+		await this._taskBulkEditModal.open();
 	};
 }
 
