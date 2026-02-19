@@ -14,6 +14,20 @@ import { getUserInitials } from '../../utils/userInitials.js';
 export function installBoardTableTaskFeatures(BoardTable) {
 	if (!BoardTable || !BoardTable.prototype) return;
 
+	BoardTable.prototype._sortTasksBySubject = function (tasks) {
+		const list = Array.isArray(tasks) ? [...tasks] : [];
+		list.sort((a, b) => {
+			const as = String(a?.subject || '').trim();
+			const bs = String(b?.subject || '').trim();
+			const bySubject = as.localeCompare(bs, undefined, { sensitivity: 'base' });
+			if (bySubject !== 0) return bySubject;
+			const an = String(a?.name || '').trim();
+			const bn = String(b?.name || '').trim();
+			return an.localeCompare(bn, undefined, { sensitivity: 'base' });
+		});
+		return list;
+	};
+
 	BoardTable.prototype._getTaskByName = function (projectName, taskName) {
 		if (!projectName || !taskName) return null;
 		const tasks = this._tasksByProject.get(projectName) || [];
@@ -120,7 +134,7 @@ export function installBoardTableTaskFeatures(BoardTable) {
 				if (!fields.includes('custom_team_members')) fields.push('custom_team_members');
 			}
 			const map = await ProjectService.getTasksForProjects([projectName], fields, 200);
-			const tasks = map?.[projectName] || [];
+			const tasks = this._sortTasksBySubject(map?.[projectName] || []);
 			this._tasksByProject.set(projectName, tasks);
 		} finally {
 			this._tasksLoading.delete(projectName);

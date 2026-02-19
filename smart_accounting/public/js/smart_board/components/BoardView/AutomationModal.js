@@ -81,7 +81,6 @@ export class AutomationModal {
   }
 
   _ruleHTML(item, idx) {
-    const triggers = this.meta?.triggers || {};
     const enabled = item.enabled ? 'checked' : '';
     const name = item.name || '';
     const triggerRows = Array.isArray(item.triggers) && item.triggers.length
@@ -126,7 +125,9 @@ export class AutomationModal {
     const allTriggers = this.meta?.triggers || {};
     const triggerType = trigger?.trigger_type || '';
     const triggerConfig = trigger?.config || {};
-    const triggerOpts = Object.entries(allTriggers).map(([k, v]) =>
+    const triggerOpts = Object.entries(allTriggers)
+      .filter(([, v]) => !v?.hidden)
+      .map(([k, v]) =>
       `<option value="${escapeHtml(k)}" ${k === triggerType ? 'selected' : ''}>${escapeHtml(v.label || k)}</option>`
     ).join('');
     const configHTML = this._configFieldsHTML(allTriggers[triggerType], triggerConfig, `trigger_${ruleIdx}_${triggerIdx}`);

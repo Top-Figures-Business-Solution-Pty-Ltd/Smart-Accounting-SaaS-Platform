@@ -68,7 +68,10 @@ export function installBoardTableMonthlyStatusFeatures(BoardTable) {
 			if (includeTasks) {
 				const tasks = bundle?.tasks || {};
 				for (const [p, list] of Object.entries(tasks)) {
-					this._tasksByProject.set(p, Array.isArray(list) ? list : []);
+					const sorted = typeof this._sortTasksBySubject === 'function'
+						? this._sortTasksBySubject(list)
+						: (Array.isArray(list) ? list : []);
+					this._tasksByProject.set(p, sorted);
 				}
 				const matrix = bundle?.matrix || {};
 				for (const [t, m] of Object.entries(matrix)) {

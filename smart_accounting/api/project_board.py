@@ -666,13 +666,13 @@ def get_monthly_status_bundle(
 				"Task",
 				filters=[["project", "in", allowed_projects]],
 				fields=final_task_fields,
-				order_by="modified desc",
+				order_by="subject asc, name asc",
 				limit_page_length=100000,
 			)
 		except frappe.PermissionError:
 			rows = []
 
-		# Keep per-project limited list (stable order: modified desc)
+		# Keep per-project limited list (stable order: subject asc, name asc)
 		per_count: dict[str, int] = {}
 		for t in (rows or []):
 			p = str(t.get("project") or "").strip()
