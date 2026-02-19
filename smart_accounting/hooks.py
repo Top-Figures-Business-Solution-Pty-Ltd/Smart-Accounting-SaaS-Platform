@@ -122,10 +122,10 @@ fixtures = [
     }
 ]
 
-# Override standard ERPNext methods (if needed)
-# override_whitelisted_methods = {
-#     "frappe.desk.doctype.event.event.get_events": "smart_accounting.overrides.get_events"
-# }
+# Override whitelisted methods
+override_whitelisted_methods = {
+    "frappe.client.insert": "smart_accounting.api.client_insert_override.insert"
+}
 
 # Access Control (Product shell hard-gate)
 # External users will be redirected away from Desk (/app*) to /smart.

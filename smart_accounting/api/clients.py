@@ -106,6 +106,34 @@ def _get_select_options(doctype: str, fieldname: str) -> list[str]:
 		return []
 
 
+def _find_client_name_conflicts(name: str | None = None, exclude_name: str | None = None) -> list[dict]:
+	q = str(name or "").strip()
+	if not q:
+		return []
+	excl = str(exclude_name or "").strip()
+
+	rows = frappe.get_all(
+		"Customer",
+		fields=["name", "customer_name"],
+		filters={"customer_name": q},
+		limit_page_length=20,
+	)
+	rows2 = frappe.get_all(
+		"Customer",
+		fields=["name", "customer_name"],
+		filters={"name": q},
+		limit_page_length=20,
+	)
+	merged = {r.get("name"): r for r in (rows or []) if r.get("name")}
+	for r in rows2 or []:
+		if r.get("name"):
+			merged[r.get("name")] = r
+	items = list(merged.values())
+	if excl:
+		items = [r for r in items if str(r.get("name") or "").strip() != excl]
+	return items
+
+
 def _build_client_summary(customer: dict, primary_entity: dict | None = None) -> dict:
 	"""Return a minimal item shape compatible with ClientsTable rows."""
 	return {
@@ -322,6 +350,9 @@ def create_client(payload: dict | None = None) -> dict:
 	customer_name = str(data.get("customer_name") or "").strip()
 	if not customer_name:
 		frappe.throw("customer_name is required")
+	conflicts = _find_client_name_conflicts(customer_name)
+	if conflicts:
+		frappe.throw("Client name already exists. Please use a unique name.")
 
 	customer_type = str(data.get("customer_type") or "").strip() or "Individual"
 	customer_group = str(data.get("customer_group") or "").strip() or (_pick_default("Customer Group", "All Customer Groups") or "")
@@ -410,6 +441,9 @@ def update_client(payload: dict | None = None) -> dict:
 		customer_name = str(customer_name or "").strip()
 		if not customer_name:
 			frappe.throw("customer_name is required")
+		conflicts = _find_client_name_conflicts(customer_name, exclude_name=name)
+		if conflicts:
+			frappe.throw("Client name already exists. Please use a unique name.")
 		doc.customer_name = customer_name
 
 	entity_type = data.get("entity_type", None)
@@ -484,35 +518,15 @@ def update_client(payload: dict | None = None) -> dict:
 
 
 @frappe.whitelist()
-def check_client_name_exists(name: str | None = None) -> dict:
+def check_client_name_exists(name: str | None = None, exclude_name: str | None = None) -> dict:
 	"""
 	Check if a Customer already exists with the same customer_name (or docname).
 	Used by /smart New Client to prompt before creating duplicates.
 	"""
 	_ensure_logged_in()
-	q = str(name or "").strip()
-	if not q:
+	if not str(name or "").strip():
 		return {"exists": False, "items": []}
-
-	rows = frappe.get_all(
-		"Customer",
-		fields=["name", "customer_name"],
-		filters={"customer_name": q},
-		limit_page_length=5,
-	)
-	# Also check docname equality (ERPNext may name by customer_name)
-	rows2 = frappe.get_all(
-		"Customer",
-		fields=["name", "customer_name"],
-		filters={"name": q},
-		limit_page_length=5,
-	)
-	merged = {r.get("name"): r for r in (rows or []) if r.get("name")}
-	for r in rows2 or []:
-		if r.get("name"):
-			merged[r.get("name")] = r
-
-	items = list(merged.values())
+	items = _find_client_name_conflicts(name, exclude_name)
 	return {"exists": bool(items), "items": items}
 
 

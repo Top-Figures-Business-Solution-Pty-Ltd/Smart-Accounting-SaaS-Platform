@@ -28,6 +28,10 @@ class CustomProject(Project):
         - When inserting via API (/smart), status may be missing and defaults to "Open",
           causing validation errors.
         """
+        # Normalize customer as early as possible.
+        # Frappe runs link validation during insert before validate(), so this must happen here.
+        self._normalize_customer_link()
+
         try:
             f = self.meta.get_field("status") if getattr(self, "meta", None) else None
             raw = str(getattr(f, "options", "") or "")
@@ -114,6 +118,9 @@ class CustomProject(Project):
     
     def validate(self):
         """Project validation hooks for Smart Board flows."""
+        # Normalize customer link for /smart create flows:
+        # allow passing Customer.customer_name, but persist Customer.name.
+        self._normalize_customer_link()
         # Capture "before" snapshot once per request so we can build full audit rows
         # later in on_update (works even when Version/track_changes is disabled).
         if not self.is_new():
@@ -154,6 +161,39 @@ class CustomProject(Project):
         cur = str(getattr(self, "custom_entity_type", "") or "").strip()
         if cur != t:
             self.custom_entity_type = t
+
+    def _normalize_customer_link(self):
+        """
+        Ensure Project.customer is always a valid Customer.name.
+
+        If caller submits Customer.customer_name instead of Customer.name,
+        resolve it here before Link validation runs.
+        """
+        raw = str(getattr(self, "customer", "") or "").strip()
+        if not raw:
+            return
+        try:
+            if frappe.db.exists("Customer", raw):
+                return
+        except Exception:
+            # Keep original behavior if meta/db is not ready.
+            return
+        try:
+            rows = frappe.get_all(
+                "Customer",
+                fields=["name"],
+                filters={"customer_name": raw},
+                limit_page_length=2,
+            )
+        except Exception:
+            rows = []
+        if len(rows or []) == 1:
+            resolved = str(rows[0].get("name") or "").strip()
+            if resolved:
+                self.customer = resolved
+                return
+        if len(rows or []) > 1:
+            frappe.throw(f"Multiple Customers found for name: {raw}. Please choose a unique Client.")
     
     # =========================================================================
     # Board Automation Engine

@@ -6,6 +6,7 @@ import { Modal } from '../Common/Modal.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { DoctypeMetaService } from '../../services/doctypeMetaService.js';
 import { formatClientName } from '../../utils/clientNameFormat.js';
+import { ClientsService } from '../../services/clientsService.js';
 
 export class EditClientModal {
   constructor({ title = 'Edit Client', initial = {}, onSubmit, onClose } = {}) {
@@ -163,6 +164,13 @@ export class EditClientModal {
     const btn = this._modal?._overlay?.querySelector?.('#sbEditClientSave');
     if (btn) btn.disabled = true;
     try {
+      const existsResp = await ClientsService.checkClientNameExists(customer_name, {
+        excludeName: this.initial.name,
+      });
+      if (existsResp?.exists) {
+        this._setError('Client name already exists. Please use a unique name.');
+        return;
+      }
       await this.onSubmit({ name: this.initial.name, customer_name, entity_type, year_end });
       this.close();
     } catch (e) {

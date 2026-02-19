@@ -22,14 +22,17 @@ export class ClientsService {
     }, () => ({ search: String(search || ''), limitStart: Number(limitStart) || 0, limit: Number(limit) || 50 }));
   }
 
-  static async checkClientNameExists(name = '') {
+  static async checkClientNameExists(name = '', { excludeName = '' } = {}) {
     return await Perf.timeAsync('clients.check_name', async () => {
       const r = await frappe.call({
         method: 'smart_accounting.api.clients.check_client_name_exists',
-        args: { name: String(name || '') }
+        args: {
+          name: String(name || ''),
+          exclude_name: String(excludeName || ''),
+        }
       });
       return r?.message || { exists: false, items: [] };
-    }, () => ({ name: String(name || '') }));
+    }, () => ({ name: String(name || ''), exclude_name: String(excludeName || '') }));
   }
 }
 

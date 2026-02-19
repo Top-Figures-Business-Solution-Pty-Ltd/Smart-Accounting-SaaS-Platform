@@ -7,7 +7,6 @@ import { escapeHtml } from '../../utils/dom.js';
 import { DoctypeMetaService } from '../../services/doctypeMetaService.js';
 import { formatClientName } from '../../utils/clientNameFormat.js';
 import { ClientsService } from '../../services/clientsService.js';
-import { confirmDialog } from '../../services/uiAdapter.js';
 
 export class NewClientModal {
   constructor({ title = 'New Client', initial = {}, onSubmit, onClose } = {}) {
@@ -191,15 +190,11 @@ export class NewClientModal {
 
   async _submitClient({ customer_name, customer_type, primary_entity, btn }) {
     try {
-      // If name already exists, require user confirmation before creating another.
+      // Name must be unique; do not allow duplicate create.
       const existsResp = await ClientsService.checkClientNameExists(customer_name);
       if (existsResp?.exists) {
-        const names = (existsResp?.items || []).map((x) => x?.customer_name || x?.name).filter(Boolean);
-        const list = names.length ? `Existing: ${names.slice(0, 3).join(', ')}${names.length > 3 ? '…' : ''}` : '';
-        const ok = await confirmDialog(
-          `Client name already exists. Create anyway?\n${list}`
-        );
-        if (!ok) return;
+        this._setError('Client name already exists. Please use a unique name.');
+        return;
       }
       await this.onSubmit({ customer_name, customer_type, primary_entity });
       this.close();
