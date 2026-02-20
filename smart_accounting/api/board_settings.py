@@ -26,16 +26,15 @@ def _ensure_logged_in() -> None:
 def _ensure_can_manage_board_settings() -> None:
 	# Board settings affect everyone; keep it admin/system-manager for now.
 	user = frappe.session.user
+	if user == "Administrator":
+		return
+	# Frappe has no stable top-level frappe.has_role API across versions.
+	# Use get_roles(user) which is the supported role lookup path.
 	try:
-		if user == "Administrator":
-			return
+		roles = frappe.get_roles(user) or []
 	except Exception:
-		pass
-	if not frappe.has_permission("Role", "read"):
-		# Cheap guard: role read is usually granted to admins only.
-		pass
-	# Role checks
-	if not frappe.has_role("System Manager"):
+		roles = []
+	if "System Manager" not in {str(r or "").strip() for r in roles}:
 		frappe.throw("Not permitted", frappe.PermissionError)
 
 
