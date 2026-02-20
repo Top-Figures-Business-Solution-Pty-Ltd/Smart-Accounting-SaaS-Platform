@@ -494,7 +494,7 @@
   "name": "Project-custom_project_frequency",
   "no_copy": 0,
   "non_negative": 0,
-  "options": "Yearly\nHalf-Yearly\nQuarterly\nMonthly\nWeekly\nOne-off",
+  "options": "Yearly\nHalf-Yearly\nQuarterly\nMonthly\nFortnightly\nWeekly\nOne-off",
   "permlevel": 0,
   "placeholder": null,
   "precision": "",
