@@ -513,6 +513,8 @@ def _roll_date_by_frequency(current_date, frequency: str):
 
     if freq in ("weekly",):
         return add_days(d, 7)
+    if freq in ("fortnightly", "fortnight", "biweekly", "bi-weekly", "bi weekly"):
+        return add_days(d, 14)
     if freq in ("monthly",):
         nd = add_months(d, 1)
         return get_last_day(nd) if is_eom else nd
