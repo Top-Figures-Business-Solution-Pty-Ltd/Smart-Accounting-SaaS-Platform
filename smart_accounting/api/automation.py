@@ -68,6 +68,9 @@ TRIGGER_TYPES = {
     },
     "status_is": {
         "label": "Status is",
+        # Guardrail: state-based trigger is risky as a sole trigger because
+        # it may repeatedly match on subsequent saves/scheduler runs.
+        "cannot_be_only": True,
         "config_fields": [
             {
                 "key": "value",
@@ -351,6 +354,13 @@ def save_automation(
         clean_triggers.append({"trigger_type": tt, "config": cfg})
     if not clean_triggers:
         frappe.throw("At least one valid trigger is required")
+    if len(clean_triggers) == 1:
+        only_type = str(clean_triggers[0].get("trigger_type") or "").strip()
+        only_meta = TRIGGER_TYPES.get(only_type) or {}
+        if bool(only_meta.get("cannot_be_only")):
+            frappe.throw(
+                f'Trigger "{only_type}" cannot be used alone. Please add at least one more trigger.'
+            )
     # Persist both for backward compatibility; runtime reads trigger_config.triggers first.
     tc = {"triggers": clean_triggers}
     trigger_type = clean_triggers[0]["trigger_type"]

@@ -5,6 +5,26 @@
 
 import { SmartBoardApp } from './app.js';
 
+function installSmartBoardQuietCallGuard() {
+    const f = window.frappe;
+    if (!f || typeof f.call !== 'function') return;
+    if (f.call.__sbQuietWrapped) return;
+
+    const original = f.call.bind(f);
+    const wrapped = function wrappedFrappeCall(opts, ...rest) {
+        if (opts && typeof opts === 'object' && !Array.isArray(opts)) {
+            if (!Object.prototype.hasOwnProperty.call(opts, 'quiet')) {
+                opts = { ...opts, quiet: true };
+            }
+            return original(opts, ...rest);
+        }
+        return original(opts, ...rest);
+    };
+    wrapped.__sbQuietWrapped = true;
+    wrapped.__sbOriginal = original;
+    f.call = wrapped;
+}
+
 // 挂载到全局对象（Desk 有 frappe.provide，Website 可能没有）
 if (window.frappe?.provide) {
     frappe.provide('smart_accounting');
@@ -16,6 +36,9 @@ if (window.frappe?.provide) {
  * 初始化Smart Board应用
  */
 smart_accounting.show_smart_board = function() {
+    // Use product-level error presentation by default (no ERPNext raw popups).
+    installSmartBoardQuietCallGuard();
+
     // 优先 mount 到 Desk Page 提供的容器（避免全屏覆盖/避免污染 body）
     const mountTarget = smart_accounting.mount_target || smart_accounting.__mount_target;
     const container = mountTarget || document.createElement('div');

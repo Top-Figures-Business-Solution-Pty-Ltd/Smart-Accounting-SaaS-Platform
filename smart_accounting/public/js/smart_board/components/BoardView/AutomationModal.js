@@ -118,6 +118,8 @@ export class AutomationModal {
     const enabled = item.enabled ? 'checked' : '';
     const name = item.name || '';
     const automationName = String(item.automation_name || '').trim();
+    const saveBlockedReason = this._getRuleSaveBlockReason(item);
+    const saveDisabled = saveBlockedReason ? 'disabled' : '';
     const triggerRows = Array.isArray(item.triggers) && item.triggers.length
       ? item.triggers
       : [{ trigger_type: '', config: {} }];
@@ -153,9 +155,10 @@ export class AutomationModal {
           <button class="btn btn-default btn-sm sb-auto__add-action" data-idx="${idx}" type="button">+ And</button>
         </div>
         <div class="sb-automation__rule-footer">
-          <button class="btn btn-primary btn-sm sb-auto__save" data-idx="${idx}" type="button">Save</button>
+          <button class="btn btn-primary btn-sm sb-auto__save" data-idx="${idx}" type="button" ${saveDisabled} title="${escapeHtml(saveBlockedReason || 'Save automation')}">Save</button>
           ${item.execution_count ? `<span class="text-muted" style="font-size:11px;">Executed ${item.execution_count} times</span>` : ''}
         </div>
+        ${saveBlockedReason ? `<div style="margin-top:8px; font-size:12px; color:#b45309;">${escapeHtml(saveBlockedReason)}</div>` : ''}
       </div>
     `;
   }
@@ -325,6 +328,13 @@ export class AutomationModal {
     const idx = parseInt(e.target?.dataset?.idx, 10);
     const item = this.items[idx];
     if (!item) return;
+    const blockedReason = this._getRuleSaveBlockReason(item);
+    if (blockedReason) {
+      try {
+        frappe?.show_alert?.({ message: blockedReason, indicator: 'orange' }, 5);
+      } catch (err) {}
+      return;
+    }
 
     const ruleEl = this._root?.querySelector(`.sb-automation__rule[data-idx="${idx}"]`);
     if (!ruleEl) return;
@@ -343,6 +353,13 @@ export class AutomationModal {
       triggers.push({ trigger_type: triggerType, config });
     });
     if (!triggers.length) return;
+    const blockedByRawTriggers = this._getRuleSaveBlockReasonFromTypes(triggers.map((t) => t?.trigger_type));
+    if (blockedByRawTriggers) {
+      try {
+        frappe?.show_alert?.({ message: blockedByRawTriggers, indicator: 'orange' }, 5);
+      } catch (err) {}
+      return;
+    }
 
     // Read all action rows
     const actions = [];
@@ -485,6 +502,30 @@ export class AutomationModal {
     const explicit = String(item?.automation_name || '').trim();
     if (explicit) return explicit;
     return `Automation ${Number(idx) + 1}`;
+  }
+
+  _getRuleSaveBlockReason(item) {
+    const triggers = (Array.isArray(item?.triggers) ? item.triggers : [])
+      .filter((t) => t && typeof t === 'object')
+      .map((t) => String(t.trigger_type || '').trim())
+      .filter(Boolean);
+    return this._getRuleSaveBlockReasonFromTypes(triggers);
+  }
+
+  _getRuleSaveBlockReasonFromTypes(triggerTypes) {
+    const list = (Array.isArray(triggerTypes) ? triggerTypes : [])
+      .map((x) => String(x || '').trim())
+      .filter(Boolean);
+    if (list.length !== 1) return '';
+    const only = list[0];
+    const meta = this.meta?.triggers?.[only] || {};
+    // Fallback hard guard for stale meta/build cache.
+    const cannotBeOnly = Boolean(meta?.cannot_be_only) || only === 'status_is';
+    if (cannotBeOnly) {
+      const label = String(meta.label || (only === 'status_is' ? 'Status is' : only)).trim() || only;
+      return `"${label}" cannot be used alone. Add another trigger.`;
+    }
+    return '';
   }
 
   _normalizeTriggers(item) {

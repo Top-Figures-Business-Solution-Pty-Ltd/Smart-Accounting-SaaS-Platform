@@ -11,7 +11,7 @@ export class AutomationService {
    * Get metadata: available trigger types, action types, and their config schemas.
    */
   static async getMeta() {
-    const r = await frappe.call({ method: `${API_BASE}.get_automation_meta` });
+    const r = await frappe.call({ method: `${API_BASE}.get_automation_meta`, quiet: true });
     return r?.message || { triggers: {}, actions: {} };
   }
 
@@ -19,7 +19,7 @@ export class AutomationService {
    * List all automation rules.
    */
   static async getAutomations() {
-    const r = await frappe.call({ method: `${API_BASE}.get_automations` });
+    const r = await frappe.call({ method: `${API_BASE}.get_automations`, quiet: true });
     return r?.message?.items || [];
   }
 
@@ -30,6 +30,7 @@ export class AutomationService {
   static async saveAutomation({ name, enabled, automation_name, trigger_type, trigger_config, actions } = {}) {
     const r = await frappe.call({
       method: `${API_BASE}.save_automation`,
+      quiet: true,
       args: {
         name: name || '',
         enabled: enabled ? 1 : 0,
@@ -48,6 +49,7 @@ export class AutomationService {
   static async toggleAutomation(name, enabled) {
     const r = await frappe.call({
       method: `${API_BASE}.toggle_automation`,
+      quiet: true,
       args: { name, enabled: enabled ? 1 : 0 },
     });
     return r?.message || {};
@@ -59,6 +61,7 @@ export class AutomationService {
   static async deleteAutomation(name) {
     const r = await frappe.call({
       method: `${API_BASE}.delete_automation`,
+      quiet: true,
       args: { name },
     });
     return r?.message || {};
