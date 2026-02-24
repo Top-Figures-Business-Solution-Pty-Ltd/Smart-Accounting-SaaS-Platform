@@ -27,6 +27,29 @@ def _parse_json(val):
     return {}
 
 
+def _coerce_legacy_trigger_type(candidate: str) -> str:
+    """
+    Board Automation.trigger_type is a legacy Select field kept for backward compatibility.
+    Runtime logic already reads trigger_config.triggers first, so if DocField options are stale,
+    we safely coerce this legacy field to any allowed option to avoid save-time Select validation errors.
+    """
+    cand = str(candidate or "").strip()
+    try:
+        meta = frappe.get_meta("Board Automation")
+        f = meta.get_field("trigger_type") if meta else None
+        raw = str(getattr(f, "options", "") or "")
+        allowed = [x.strip() for x in raw.split("\n") if str(x).strip()]
+    except Exception:
+        allowed = []
+    if not allowed:
+        return cand
+    if cand in allowed:
+        return cand
+    if "status_change" in allowed:
+        return "status_change"
+    return allowed[0]
+
+
 # ============================================================
 # Metadata: available trigger / action options
 # ============================================================
@@ -38,6 +61,17 @@ TRIGGER_TYPES = {
             {
                 "key": "to_value",
                 "label": "Target Status",
+                "type": "select",
+                "source": "project_status_pool",
+            }
+        ],
+    },
+    "status_is": {
+        "label": "Status is",
+        "config_fields": [
+            {
+                "key": "value",
+                "label": "Status",
                 "type": "select",
                 "source": "project_status_pool",
             }
@@ -115,6 +149,30 @@ ACTION_TYPES = {
         "label": "Archive project",
         "config_fields": [],
     },
+    "push_date": {
+        "label": "Push a date",
+        "config_fields": [
+            {
+                "key": "date_field",
+                "label": "Date Field",
+                "type": "select",
+                "source": "project_date_fields",
+            },
+            {
+                "key": "period",
+                "label": "By",
+                "type": "select",
+                "options": [
+                    {"value": "1_week", "label": "1 week"},
+                    {"value": "1_fortnight", "label": "1 fortnight"},
+                    {"value": "1_month", "label": "1 month"},
+                    {"value": "1_quarter", "label": "1 quarter"},
+                    {"value": "1_year", "label": "1 year"},
+                ],
+                "default": "1_month",
+            },
+        ],
+    },
 }
 
 
@@ -140,13 +198,19 @@ def _get_project_date_field_options() -> list[dict]:
     # Prefer dynamic Project Date fields; force-include Reset Date if present.
     out: list[dict] = []
     seen = set()
+    excluded = {
+        "expected_start_date",
+        "expected_end_date",
+        "actual_start_date",
+        "actual_end_date",
+    }
     try:
         meta = frappe.get_meta("Project")
         for f in (meta.fields or []):
             if str(getattr(f, "fieldtype", "") or "").strip() != "Date":
                 continue
             fn = str(getattr(f, "fieldname", "") or "").strip()
-            if not fn or fn in seen:
+            if not fn or fn in seen or fn in excluded:
                 continue
             lb = str(getattr(f, "label", "") or fn).strip() or fn
             out.append({"value": fn, "label": lb})
@@ -205,7 +269,7 @@ def get_automations() -> dict:
         items = frappe.get_all(
             "Board Automation",
             fields=[
-                "name", "enabled", "trigger_type", "trigger_config",
+                "name", "enabled", "automation_name", "trigger_type", "trigger_config",
                 "actions", "execution_count", "last_triggered",
             ],
             order_by="creation asc",
@@ -230,6 +294,7 @@ def get_automations() -> dict:
 def save_automation(
     name: str | None = None,
     enabled: int = 1,
+    automation_name: str | None = None,
     trigger_type: str = "",
     trigger_config: Any = None,
     actions: Any = None,
@@ -289,6 +354,7 @@ def save_automation(
     # Persist both for backward compatibility; runtime reads trigger_config.triggers first.
     tc = {"triggers": clean_triggers}
     trigger_type = clean_triggers[0]["trigger_type"]
+    persisted_trigger_type = _coerce_legacy_trigger_type(trigger_type)
 
     # Parse actions array
     acts = actions
@@ -319,18 +385,27 @@ def save_automation(
     if not clean_actions:
         frappe.throw("At least one valid action is required")
 
+    automation_name = str(automation_name or "").strip()
+    if not automation_name:
+        # Keep backward compatibility: caller may not pass a title yet.
+        automation_name = f"Automation {trigger_type}"
+
     name = str(name or "").strip()
     if name and frappe.db.exists("Board Automation", name):
         doc = frappe.get_doc("Board Automation", name)
         doc.enabled = int(enabled or 0)
-        doc.trigger_type = trigger_type
+        if hasattr(doc, "automation_name"):
+            doc.automation_name = automation_name
+        doc.trigger_type = persisted_trigger_type
         doc.trigger_config = json.dumps(tc)
         doc.actions = json.dumps(clean_actions)
         doc.save(ignore_permissions=True)
     else:
         doc = frappe.new_doc("Board Automation")
         doc.enabled = int(enabled or 0)
-        doc.trigger_type = trigger_type
+        if hasattr(doc, "automation_name"):
+            doc.automation_name = automation_name
+        doc.trigger_type = persisted_trigger_type
         doc.trigger_config = json.dumps(tc)
         doc.actions = json.dumps(clean_actions)
         doc.insert(ignore_permissions=True)
@@ -339,6 +414,7 @@ def save_automation(
         "ok": True,
         "name": doc.name,
         "enabled": doc.enabled,
+        "automation_name": getattr(doc, "automation_name", "") or "",
         "trigger_type": doc.trigger_type,
     }
 

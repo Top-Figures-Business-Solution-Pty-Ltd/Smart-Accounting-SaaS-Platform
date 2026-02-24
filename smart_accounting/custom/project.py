@@ -230,7 +230,7 @@ class CustomProject(Project):
             automations = frappe.get_all(
                 "Board Automation",
                 filters={"enabled": 1},
-                fields=["name", "trigger_type", "trigger_config", "actions",
+                fields=["name", "automation_name", "trigger_type", "trigger_config", "actions",
                          "execution_count"],
             )
         except Exception:
@@ -283,6 +283,12 @@ class CustomProject(Project):
             if not getattr(self, '_sb_status_changed', False):
                 return False
             return getattr(self, '_sb_original_status', '') == to_value
+
+        if trigger_type == "status_is":
+            want = str(config.get("value") or "").strip()
+            if not want:
+                return False
+            return str(getattr(self, "status", "") or "").strip() == want
 
         if trigger_type == "project_type_is":
             want = str(config.get("project_type") or "").strip()
@@ -344,6 +350,12 @@ class CustomProject(Project):
                 prev = str(getattr(self, "is_active", "") or "").strip()
                 self._action_archive_project(config, auto)
                 changed_any = (str(getattr(self, "is_active", "") or "").strip() != prev) or changed_any
+            elif action_type == "push_date":
+                prev_field = str((config or {}).get("date_field") or "").strip()
+                prev_val = getattr(self, prev_field, None) if prev_field else None
+                self._action_push_date(config, auto)
+                next_val = getattr(self, prev_field, None) if prev_field else None
+                changed_any = (next_val != prev_val) or changed_any
             else:
                 frappe.logger("smart_accounting").warning(
                     "Board Automation %s: unknown action_type '%s'", auto.get("name"), action_type
@@ -446,7 +458,7 @@ class CustomProject(Project):
             project_title=(self.project_name or self.name),
             recipients=pending,
             role=role,
-            automation_name=str(auto.get("name") or "").strip(),
+            automation_name=str(auto.get("automation_name") or auto.get("name") or "").strip(),
         )
         sent.update(pending)
 
@@ -458,7 +470,39 @@ class CustomProject(Project):
         self.is_active = "No"
         # Keep source context for activity log formatting in this save cycle.
         self._sb_archive_source = "automation"
-        self._sb_archive_rule = str((auto or {}).get("name") or "").strip()
+        self._sb_archive_rule = str((auto or {}).get("automation_name") or (auto or {}).get("name") or "").strip()
+
+    def _action_push_date(self, config, auto):
+        """Action: push selected Project date field by selected period."""
+        cfg = config or {}
+        fieldname = str(cfg.get("date_field") or "").strip()
+        period = str(cfg.get("period") or "1_month").strip().lower()
+        if not fieldname:
+            return
+        current_val = getattr(self, fieldname, None)
+        if not current_val:
+            return
+
+        d = getdate(current_val)
+        is_eom = d == get_last_day(d)
+
+        next_d = None
+        if period == "1_week":
+            next_d = add_days(d, 7)
+        elif period == "1_fortnight":
+            next_d = add_days(d, 14)
+        elif period == "1_month":
+            nd = add_months(d, 1)
+            next_d = get_last_day(nd) if is_eom else nd
+        elif period == "1_quarter":
+            nd = add_months(d, 3)
+            next_d = get_last_day(nd) if is_eom else nd
+        elif period == "1_year":
+            nd = add_months(d, 12)
+            next_d = get_last_day(nd) if is_eom else nd
+
+        if next_d and next_d != d:
+            self.set(fieldname, next_d)
 
     # =========================================================================
     # Activity audit (field-level)

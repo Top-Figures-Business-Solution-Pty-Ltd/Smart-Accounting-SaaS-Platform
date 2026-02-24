@@ -27,12 +27,13 @@ export class AutomationService {
    * Create or update an automation rule.
    * actions: array of { action_type, config }
    */
-  static async saveAutomation({ name, enabled, trigger_type, trigger_config, actions } = {}) {
+  static async saveAutomation({ name, enabled, automation_name, trigger_type, trigger_config, actions } = {}) {
     const r = await frappe.call({
       method: `${API_BASE}.save_automation`,
       args: {
         name: name || '',
         enabled: enabled ? 1 : 0,
+        automation_name: String(automation_name || '').trim(),
         trigger_type,
         trigger_config: typeof trigger_config === 'string' ? trigger_config : JSON.stringify(trigger_config || {}),
         actions: typeof actions === 'string' ? actions : JSON.stringify(actions || []),

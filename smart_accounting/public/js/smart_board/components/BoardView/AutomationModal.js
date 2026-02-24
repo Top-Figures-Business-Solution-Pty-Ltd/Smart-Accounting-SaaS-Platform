@@ -1,8 +1,8 @@
 /**
  * AutomationModal (Monday-like)
- * - Lists existing automation rules with enable/disable toggles
+ * - Left: saved automation list
+ * - Right: edit selected automation
  * - Each rule: When [trigger] → Then [action1] And [action2] ...
- * - Actions are independent units, combined via "And" button
  * - Website-safe (Modal + native HTML)
  */
 import { escapeHtml } from '../../utils/dom.js';
@@ -13,6 +13,7 @@ export class AutomationModal {
     this.meta = meta || {};
     this.items = Array.isArray(items) ? items.map((it) => ({
       ...it,
+      automation_name: String(it?.automation_name || '').trim(),
       triggers: this._normalizeTriggers(it),
       actions: Array.isArray(it.actions) ? [...it.actions] : [],
     })) : [];
@@ -24,6 +25,7 @@ export class AutomationModal {
     this._modal = null;
     this._root = null;
     this._saving = false;
+    this._activeIdx = this.items.length ? 0 : -1;
   }
 
   open() {
@@ -36,9 +38,6 @@ export class AutomationModal {
         Configure automations: When a trigger fires → execute actions automatically.
       </div>
       <div class="sb-automation__list" id="sbAutoList"></div>
-      <div style="margin-top:12px;">
-        <button class="btn btn-default" type="button" id="sbAutoAdd">+ Add Automation</button>
-      </div>
     `;
 
     this._modal = new Modal({
@@ -50,7 +49,6 @@ export class AutomationModal {
     this._root = content;
 
     this._renderList();
-    content.querySelector('#sbAutoAdd')?.addEventListener('click', () => this._addNew());
   }
 
   close() {
@@ -67,22 +65,58 @@ export class AutomationModal {
     const wrap = this._root?.querySelector('#sbAutoList');
     if (!wrap) return;
 
-    if (!this.items.length) {
-      wrap.innerHTML = `
+    if (!this.items.length) this._activeIdx = -1;
+    if (this._activeIdx >= this.items.length) this._activeIdx = this.items.length - 1;
+
+    wrap.innerHTML = `
+      <div class="sb-auto__layout">
+        <div class="sb-auto__saved">
+          <div class="sb-auto__saved-title">Saved Automations</div>
+          <div class="sb-auto__saved-list" id="sbAutoSavedList">
+            ${this.items.map((item, idx) => this._savedItemHTML(item, idx)).join('')}
+          </div>
+          <button class="btn btn-default btn-sm" type="button" id="sbAutoAdd">+ Add Automation</button>
+        </div>
+        <div class="sb-auto__editor" id="sbAutoEditor">
+          ${this._editorHTML()}
+        </div>
+      </div>
+    `;
+    wrap.querySelector('#sbAutoAdd')?.addEventListener('click', () => this._addNew());
+    wrap.querySelectorAll('.sb-auto__saved-item').forEach((el) => {
+      el.addEventListener('click', (e) => this._handleSelectSavedItem(e));
+    });
+    const editor = wrap.querySelector('#sbAutoEditor');
+    if (editor) this._bindRuleEvents(editor);
+  }
+
+  _savedItemHTML(item, idx) {
+    const active = idx === this._activeIdx;
+    const name = this._displayName(item, idx);
+    const state = item.enabled ? 'ON' : 'OFF';
+    return `
+      <button type="button" class="sb-auto__saved-item ${active ? 'is-active' : ''}" data-idx="${idx}">
+        <span class="sb-auto__saved-name">${escapeHtml(name)}</span>
+        <span class="sb-auto__saved-state">${state}</span>
+      </button>
+    `;
+  }
+
+  _editorHTML() {
+    if (this._activeIdx < 0 || !this.items[this._activeIdx]) {
+      return `
         <div class="sb-automation__empty text-muted">
           No automations configured yet. Click "+ Add Automation" to create one.
         </div>
       `;
-      return;
     }
-
-    wrap.innerHTML = this.items.map((item, idx) => this._ruleHTML(item, idx)).join('');
-    this._bindRuleEvents(wrap);
+    return this._ruleHTML(this.items[this._activeIdx], this._activeIdx);
   }
 
   _ruleHTML(item, idx) {
     const enabled = item.enabled ? 'checked' : '';
     const name = item.name || '';
+    const automationName = String(item.automation_name || '').trim();
     const triggerRows = Array.isArray(item.triggers) && item.triggers.length
       ? item.triggers
       : [{ trigger_type: '', config: {} }];
@@ -101,9 +135,13 @@ export class AutomationModal {
             <input type="checkbox" class="sb-auto__enabled" data-idx="${idx}" ${enabled} />
             <span class="sb-automation__toggle-label">${enabled ? 'ON' : 'OFF'}</span>
           </label>
-          <button class="btn btn-default sb-auto__delete" data-idx="${idx}" type="button" title="Delete">×</button>
+          <button class="btn btn-danger btn-sm sb-auto__delete" data-idx="${idx}" type="button" title="Delete">Delete</button>
         </div>
         <div class="sb-automation__rule-body">
+          <div class="sb-automation__row">
+            <span class="sb-automation__label">Name</span>
+            <input class="form-control sb-auto__name" data-idx="${idx}" type="text" maxlength="140" placeholder="Automation name" value="${escapeHtml(automationName)}" />
+          </div>
           ${triggersHTML}
           <div class="sb-automation__rule-actions-bar">
             <button class="btn btn-default btn-sm sb-auto__add-trigger" data-idx="${idx}" type="button">+ And Trigger</button>
@@ -241,6 +279,13 @@ export class AutomationModal {
     });
   }
 
+  _handleSelectSavedItem(e) {
+    const idx = parseInt(e.currentTarget?.dataset?.idx, 10);
+    if (!Number.isFinite(idx) || idx < 0 || idx >= this.items.length) return;
+    this._activeIdx = idx;
+    this._renderList();
+  }
+
   async _handleToggle(e) {
     const idx = parseInt(e.target?.dataset?.idx, 10);
     const item = this.items[idx];
@@ -263,11 +308,14 @@ export class AutomationModal {
     const idx = parseInt(e.target?.dataset?.idx, 10);
     const item = this.items[idx];
     if (!item) return;
+    const ok = window.confirm(`Delete automation "${this._displayName(item, idx)}"?`);
+    if (!ok) return;
 
     if (item.name) {
       try { await this.onDelete(item.name); } catch (err) { return; }
     }
     this.items.splice(idx, 1);
+    if (this._activeIdx >= this.items.length) this._activeIdx = this.items.length - 1;
     this._renderList();
   }
 
@@ -315,6 +363,7 @@ export class AutomationModal {
     if (!actions.length) return;
 
     const enabled = ruleEl.querySelector('.sb-auto__enabled')?.checked ? 1 : 0;
+    const automationName = String(ruleEl.querySelector('.sb-auto__name')?.value || '').trim() || this._displayName(item, idx);
 
     this._saving = true;
     const btn = e.target;
@@ -326,12 +375,14 @@ export class AutomationModal {
       const result = await this.onSave({
         name: item.name || '',
         enabled,
+        automation_name: automationName,
         trigger_type: triggers[0]?.trigger_type || '',
         trigger_config: { triggers },
         actions,
       });
 
       item.name = result?.name || item.name;
+      item.automation_name = String(result?.automation_name || automationName || '').trim();
       item.enabled = enabled;
       item.trigger_type = triggers[0]?.trigger_type || '';
       item.trigger_config = { triggers };
@@ -418,13 +469,21 @@ export class AutomationModal {
     this.items.push({
       name: '',
       enabled: 1,
+      automation_name: '',
       trigger_type: '',
       trigger_config: { triggers: [{ trigger_type: '', config: {} }] },
       triggers: [{ trigger_type: '', config: {} }],
       actions: [{ action_type: '', config: {} }],
       execution_count: 0,
     });
+    this._activeIdx = this.items.length - 1;
     this._renderList();
+  }
+
+  _displayName(item, idx) {
+    const explicit = String(item?.automation_name || '').trim();
+    if (explicit) return explicit;
+    return `Automation ${Number(idx) + 1}`;
   }
 
   _normalizeTriggers(item) {

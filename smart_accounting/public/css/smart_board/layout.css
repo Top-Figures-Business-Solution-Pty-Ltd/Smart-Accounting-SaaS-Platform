@@ -313,6 +313,66 @@
     flex-direction: column;
     gap: 14px;
 }
+.sb-auto__layout {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
+}
+.sb-auto__saved {
+    border: 1px solid var(--smart-board-border, #e0e4e8);
+    border-radius: 10px;
+    background: #fff;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 520px;
+}
+.sb-auto__saved-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--smart-board-text-muted);
+    text-transform: uppercase;
+    letter-spacing: .02em;
+}
+.sb-auto__saved-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow: auto;
+}
+.sb-auto__saved-item {
+    border: 1px solid var(--smart-board-border, #e0e4e8);
+    background: #fff;
+    border-radius: 8px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    cursor: pointer;
+    text-align: left;
+}
+.sb-auto__saved-item.is-active {
+    border-color: var(--smart-board-primary, #0073ea);
+    box-shadow: 0 0 0 1px rgba(0, 115, 234, 0.15) inset;
+}
+.sb-auto__saved-name {
+    font-size: 13px;
+    color: var(--smart-board-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.sb-auto__saved-state {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--smart-board-text-muted);
+}
+.sb-auto__editor {
+    min-width: 0;
+}
 .sb-automation__rule {
     border: 1px solid var(--smart-board-border, #e0e4e8);
     border-radius: 10px;
@@ -343,16 +403,7 @@
     color: var(--smart-board-primary, #0073ea);
 }
 .sb-auto__delete {
-    border: none;
-    background: none;
-    font-size: 18px;
-    color: #999;
-    cursor: pointer;
-    padding: 2px 8px;
-    line-height: 1;
-}
-.sb-auto__delete:hover {
-    color: #e44;
+    min-width: 72px;
 }
 .sb-automation__rule-body {
     display: flex;
@@ -380,6 +431,9 @@
     height: auto;
     min-height: 36px;
     border-radius: 8px;
+}
+.sb-automation__row .sb-auto__name {
+    max-width: 420px;
 }
 .sb-automation__rule-footer {
     display: flex;
