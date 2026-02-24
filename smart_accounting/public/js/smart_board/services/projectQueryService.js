@@ -554,6 +554,8 @@ export class ProjectQueryService {
     // 只显示活跃的项目（Smart Board 默认只展示 Active）
     if (filters.is_active === true) {
       result.push(['is_active', '=', 'Yes']);
+    } else if (filters.is_active === false) {
+      result.push(['is_active', '=', 'No']);
     }
 
     // name IN (from advanced groups resolution)

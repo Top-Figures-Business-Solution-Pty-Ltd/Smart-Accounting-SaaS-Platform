@@ -10,7 +10,7 @@ import { Modal } from './components/Common/Modal.js';
 import { PROJECT_TYPE_ICONS, DEFAULT_PROJECT_TYPE_ICON, DEFAULT_COLUMNS } from './utils/constants.js';
 import { Store } from './store/store.js';
 import { ProjectTypeService } from './services/projectTypeService.js';
-import { isBoardView as isBoardViewFn, isProductView } from './utils/viewTypes.js';
+import * as ViewTypes from './utils/viewTypes.js';
 import { handleHeaderAction } from './controllers/headerActionHandler.js';
 import { openProject, createProject } from './services/navigationService.js';
 import { msgprint, confirmDialog, notify } from './services/uiAdapter.js';
@@ -170,7 +170,7 @@ export class SmartBoardApp {
             return;
         }
         // Settings / Activity are product views (no board data needed)
-        if (viewType === 'settings' || viewType === 'activity') {
+        if (viewType === 'settings' || viewType === 'activity' || viewType === 'report') {
             return;
         }
         // Client Projects: a cross-project-type view, still backed by Projects module
@@ -186,7 +186,9 @@ export class SmartBoardApp {
         const projectTypeValues = new Set(this.projectTypes.map(t => t.value));
 
         // v2: board view 默认仍按 project_type 过滤（Saved View.filters 只是“默认配置来源”，不会阻塞删除 Project Type）
-        const base = projectTypeValues.has(viewType) ? { project_type: viewType } : {};
+        const base = this._isArchivedView(viewType)
+            ? { project_type: null, is_active: false }
+            : (projectTypeValues.has(viewType) ? { project_type: viewType, is_active: true } : {});
 
         const stateFilters = this.store?.getState?.()?.filters || {};
         // base 覆盖 stateFilters 里的 project_type（避免旧视图残留）
@@ -279,7 +281,20 @@ export class SmartBoardApp {
     }
 
     isBoardView(viewType) {
-        return isBoardViewFn(viewType, this.projectTypes);
+        const fn = typeof ViewTypes?.isBoardView === 'function'
+            ? ViewTypes.isBoardView
+            : ((view, projectTypes = []) => {
+                const values = new Set((projectTypes || []).map(t => t?.value).filter(Boolean));
+                return values.has(view);
+            });
+        return fn(viewType, this.projectTypes);
+    }
+
+    _isArchivedView(viewType) {
+        const fn = typeof ViewTypes?.isArchivedView === 'function'
+            ? ViewTypes.isArchivedView
+            : ((view) => String(view || '').trim() === 'archived-projects');
+        return !!fn(viewType);
     }
 
     async loadProjectTypes() {
@@ -293,7 +308,8 @@ export class SmartBoardApp {
         // 如果系统里有 Project Type：仅当 currentView 不是产品页且不是合法 board 时，才切到第一个
         if (
             this.projectTypes.length &&
-            !isProductView(this.currentView) &&
+            !(typeof ViewTypes?.isProductView === 'function' ? ViewTypes.isProductView(this.currentView) : false) &&
+            !this._isArchivedView(this.currentView) &&
             !this.projectTypes.find(t => t.value === this.currentView)
         ) {
             this.currentView = this.projectTypes[0].value;
@@ -332,7 +348,7 @@ export class SmartBoardApp {
         this.mainContent.updateView(viewType);
         
         // 加载新视图的数据：Boards（Project Type）/ Dashboard / Clients / Client Projects
-        if (this.isBoardView(viewType) || viewType === 'dashboard' || viewType === 'clients' || viewType === 'client-projects') {
+        if (this.isBoardView(viewType) || viewType === 'dashboard' || viewType === 'clients' || viewType === 'client-projects' || viewType === 'report') {
             this.loadViewData(viewType);
         }
 

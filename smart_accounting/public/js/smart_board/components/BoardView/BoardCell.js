@@ -63,6 +63,7 @@ export class BoardCell {
             const taskCount = Number(this.project?.__sb_task_count || 0);
             const expanded = !!this.project?.__sb_expanded;
             const pn = this.escapeHtml(this.project?.name || '');
+            const isArchivedView = !!this.project?.__sb_readonly;
             const isEmpty = taskCount <= 0;
             const expandTitle = expanded ? 'Collapse tasks' : (isEmpty ? 'Show tasks (no tasks yet)' : 'Expand tasks');
             const updCount = Number(this.project?.__sb_update_count || 0);
@@ -82,12 +83,16 @@ export class BoardCell {
                     ${updCount > 0 ? `<span class="sb-update-badge ${isHot ? 'sb-update-badge--hot' : 'sb-update-badge--quiet'}">${updCount > 99 ? '99+' : updCount}</span>` : ''}
                 </button>
             `;
+            const restoreBtn = isArchivedView
+                ? `<button type="button" class="sb-restore-btn btn btn-default btn-xs" data-project-name="${pn}" title="Restore project">Restore</button>`
+                : '';
             cellInnerHTML = `
                 <div class="cell-content sb-primary-cell">
                     <div class="sb-primary-left">
                         ${expander}
                         ${formattedValue}
                         ${updatesBtn}
+                        ${restoreBtn}
                     </div>
                 </div>
             `;
@@ -298,6 +303,7 @@ export class BoardCell {
         }
 
         // Legacy fallback (keep current behavior unless spec overrides)
+        if (this.project?.__sb_readonly) return false;
         const nonEditableFields = ['customer', 'project_name', 'company'];
         return !nonEditableFields.includes(field);
     }

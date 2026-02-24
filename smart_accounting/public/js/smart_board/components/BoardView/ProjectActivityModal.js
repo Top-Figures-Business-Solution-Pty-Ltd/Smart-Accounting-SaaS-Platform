@@ -121,6 +121,21 @@ export class ProjectActivityModal {
     const label = _norm(it?.field_label || field || 'Field');
     const fromRaw = _norm(it?.from_value);
     const toRaw = _norm(it?.to_value);
+    const archiveSource = _norm(it?.archive_source).toLowerCase();
+    const archiveRule = _norm(it?.archive_rule);
+
+    if (field === 'is_active') {
+      if (fromRaw === 'Yes' && toRaw === 'No') {
+        if (archiveSource === 'automation') {
+          const byRule = archiveRule ? ` via automation <span class="sb-project-activity__field">${escapeHtml(archiveRule)}</span>` : ' via automation';
+          return `archived this project${byRule}`;
+        }
+        return 'archived this project';
+      }
+      if (fromRaw === 'No' && toRaw === 'Yes') {
+        return 'restored this project';
+      }
+    }
 
     if (field === 'custom_team_members') {
       return this._teamMembersChangeHTML(label, fromRaw, toRaw);

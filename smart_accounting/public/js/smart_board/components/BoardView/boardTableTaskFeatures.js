@@ -41,6 +41,7 @@ export function installBoardTableTaskFeatures(BoardTable) {
 	};
 
 	BoardTable.prototype._isTaskFieldEditable = function (column) {
+		if (this.isArchivedBoard?.()) return false;
 		const field = column?.field;
 		if (!field) return false;
 		if (String(field).startsWith('__sb_')) return false;
@@ -262,7 +263,7 @@ export function installBoardTableTaskFeatures(BoardTable) {
 
 							// Single-task delete button: only in the first data column (Monday-like minimal chrome).
 							let actions = afford;
-							if (c === taskCols[0]) {
+							if (c === taskCols[0] && !this.isArchivedBoard?.()) {
 								actions = `<span class="sb-task-actions">${afford}
                   <button type="button" class="sb-task-delete-btn" data-project="${escapeHtml(name)}" data-task="${escapeHtml(tn)}" title="Delete task" aria-label="Delete task">🗑</button>
                 </span>`;
@@ -286,18 +287,20 @@ export function installBoardTableTaskFeatures(BoardTable) {
 				rows.push(`<tr>${tds}${filler > 0 ? '<td></td>' : ''}</tr>`);
 			}
 
-			// Always show an add row (Monday-like)
-			const addTds = taskCols
-				.map((c, idx) => {
-					if (idx === 0) {
-						return `<td>
+			// Always show an add row in active boards (Monday-like)
+			if (!this.isArchivedBoard?.()) {
+				const addTds = taskCols
+					.map((c, idx) => {
+						if (idx === 0) {
+							return `<td>
                       <button type="button" class="sb-add-task-btn" data-project-name="${escapeHtml(name)}">＋ Add New Task</button>
                     </td>`;
-					}
-					return `<td></td>`;
-				})
-				.join('');
-			rows.push(`<tr class="sb-task-add-row"><td class="sb-task-select-col"></td>${addTds}${filler > 0 ? '<td></td>' : ''}</tr>`);
+						}
+						return `<td></td>`;
+					})
+					.join('');
+				rows.push(`<tr class="sb-task-add-row"><td class="sb-task-select-col"></td>${addTds}${filler > 0 ? '<td></td>' : ''}</tr>`);
+			}
 
 			return `
               <div class="sb-task-grid">

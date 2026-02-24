@@ -74,6 +74,8 @@ export class Header {
             'activity': 'Activity Log',
             'settings': 'Settings',
             'client-projects': 'Client Projects',
+            'archived-projects': 'Archived Projects',
+            'report': 'Report',
         };
         
         return viewTitles[this.currentView] || this.currentView;

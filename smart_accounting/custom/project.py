@@ -338,6 +338,12 @@ class CustomProject(Project):
                 prev = str(getattr(self, "status", "") or "").strip()
                 self._action_reset_status(config, auto)
                 changed_any = (str(getattr(self, "status", "") or "").strip() != prev) or changed_any
+            elif action_type == "notify_someone":
+                self._action_notify_someone(config, auto)
+            elif action_type == "archive_project":
+                prev = str(getattr(self, "is_active", "") or "").strip()
+                self._action_archive_project(config, auto)
+                changed_any = (str(getattr(self, "is_active", "") or "").strip() != prev) or changed_any
             else:
                 frappe.logger("smart_accounting").warning(
                     "Board Automation %s: unknown action_type '%s'", auto.get("name"), action_type
@@ -398,6 +404,62 @@ class CustomProject(Project):
         elif pool:
             self.status = pool[0]
 
+    def _action_notify_someone(self, config, auto):
+        """Action: notify all users under the selected project role."""
+        role = str((config or {}).get("role") or "").strip()
+        if not role:
+            return
+
+        members = getattr(self, "custom_team_members", None) or []
+        recipients: list[str] = []
+        for row in members:
+            if not isinstance(row, dict):
+                try:
+                    row = row.as_dict()
+                except Exception:
+                    row = {}
+            member_role = str((row or {}).get("role") or "").strip()
+            user = str((row or {}).get("user") or "").strip()
+            if not user or user == "Guest":
+                continue
+            if member_role != role:
+                continue
+            recipients.append(user)
+
+        if not recipients:
+            return
+
+        # De-dupe, preserve order.
+        recipients = list(dict.fromkeys(recipients))
+
+        # De-dupe across this document save cycle so repeated actions don't spam the same user.
+        sent = getattr(self, "_sb_notified_users", None)
+        if not isinstance(sent, set):
+            sent = set()
+            setattr(self, "_sb_notified_users", sent)
+        pending = [u for u in recipients if u not in sent]
+        if not pending:
+            return
+
+        _send_automation_in_app_notifications(
+            project_name=self.name,
+            project_title=(self.project_name or self.name),
+            recipients=pending,
+            role=role,
+            automation_name=str(auto.get("name") or "").strip(),
+        )
+        sent.update(pending)
+
+    def _action_archive_project(self, config, auto):
+        """Action: archive current project by setting is_active = No."""
+        cur = str(getattr(self, "is_active", "") or "").strip()
+        if cur == "No":
+            return
+        self.is_active = "No"
+        # Keep source context for activity log formatting in this save cycle.
+        self._sb_archive_source = "automation"
+        self._sb_archive_rule = str((auto or {}).get("name") or "").strip()
+
     # =========================================================================
     # Activity audit (field-level)
     # =========================================================================
@@ -443,14 +505,23 @@ class CustomProject(Project):
                 new_v = _short_text(_value_to_text(new_raw))
             if old_v == new_v:
                 continue
-            out.append(
-                {
-                    "field": fieldname,
-                    "field_label": label,
-                    "from_value": old_v,
-                    "to_value": new_v,
-                }
-            )
+            row = {
+                "field": fieldname,
+                "field_label": label,
+                "from_value": old_v,
+                "to_value": new_v,
+            }
+            if fieldname == "is_active":
+                old_s = str(old_v or "").strip().lower()
+                new_s = str(new_v or "").strip().lower()
+                if old_s == "yes" and new_s == "no":
+                    source = str(getattr(self, "_sb_archive_source", "") or "manual").strip() or "manual"
+                    row["archive_source"] = source
+                    if source == "automation":
+                        row["archive_rule"] = str(getattr(self, "_sb_archive_rule", "") or "").strip()
+                elif old_s == "no" and new_s == "yes":
+                    row["archive_source"] = "restore"
+            out.append(row)
         self._sb_activity_changes = out
 
     def _write_activity_comments(self):
@@ -498,6 +569,56 @@ def _parse_json_array(val):
         except Exception:
             return []
     return []
+
+
+def _send_automation_in_app_notifications(
+    project_name: str,
+    project_title: str,
+    recipients: list[str],
+    role: str,
+    automation_name: str = "",
+) -> None:
+    """
+    Reuse the same in-app Notification Log channel used by @mentions.
+    Never raise from here: automation actions should not fail because of notification side effects.
+    """
+    users = [str(u or "").strip() for u in (recipients or []) if str(u or "").strip()]
+    users = [u for u in users if u != "Guest"]
+    if not users:
+        return
+    users = list(dict.fromkeys(users))
+
+    actor = str(getattr(frappe.session, "user", "") or "").strip() or "Administrator"
+    if actor != "Administrator":
+        users = [u for u in users if u != actor]
+    if not users:
+        return
+
+    title = str(project_title or project_name or "").strip() or project_name
+    auto_suffix = f" ({automation_name})" if automation_name else ""
+    subject = f"Automation{auto_suffix} notified you in {title}"
+    preview = f"Role: {role}"
+
+    prev_mute = bool(getattr(frappe.flags, "mute_emails", False))
+    frappe.flags.mute_emails = True
+    try:
+        for target in users:
+            enabled = frappe.db.get_value("User", target, "enabled")
+            if not enabled:
+                continue
+            n = frappe.new_doc("Notification Log")
+            n.type = "Mention"
+            n.for_user = target
+            n.from_user = actor
+            n.document_type = "Project"
+            n.document_name = project_name
+            n.subject = subject
+            n.email_content = preview
+            n.insert(ignore_permissions=True)
+    except Exception:
+        pass
+    finally:
+        frappe.flags.mute_emails = prev_mute
 
 
 def _roll_date_by_frequency(current_date, frequency: str):

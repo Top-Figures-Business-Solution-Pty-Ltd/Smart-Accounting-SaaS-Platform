@@ -95,6 +95,26 @@ ACTION_TYPES = {
             },
         ],
     },
+    "notify_someone": {
+        "label": "Notify someone",
+        "config_fields": [
+            {
+                "key": "role",
+                "label": "User Type",
+                "type": "select",
+                "options": [
+                    {"value": "Assigned Person", "label": "Assigned Person"},
+                    {"value": "Preparer", "label": "Preparer"},
+                    {"value": "Reviewer", "label": "Reviewer"},
+                    {"value": "Partner", "label": "Partner"},
+                ],
+            },
+        ],
+    },
+    "archive_project": {
+        "label": "Archive project",
+        "config_fields": [],
+    },
 }
 
 

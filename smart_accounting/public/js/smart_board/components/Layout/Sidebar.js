@@ -29,6 +29,10 @@ export class Sidebar {
                             <span class="nav-icon">🏠</span>
                             <span class="nav-label">Home</span>
                         </a>
+                        <a href="#" class="nav-item" data-view="report">
+                            <span class="nav-icon">📊</span>
+                            <span class="nav-label">Report</span>
+                        </a>
                     </div>
                     
                     <!-- Divider -->
@@ -84,7 +88,7 @@ export class Sidebar {
             `;
         }
 
-        return this.projectTypes.map(type => `
+        const dynamicRows = this.projectTypes.map(type => `
             <div class="sb-board-item ${this._openBoardMenuFor === type.value ? 'is-open' : ''}" data-board-item="${type.value}">
                 <a href="#" class="nav-item" data-view="${type.value}">
                     <span class="nav-icon">${type.icon}</span>
@@ -98,6 +102,17 @@ export class Sidebar {
                 </div>
             </div>
         `).join('');
+
+        const archivedRow = `
+            <div class="sb-board-item sb-board-item--archived" data-board-item="archived-projects">
+                <a href="#" class="nav-item nav-item--archived" data-view="archived-projects">
+                    <span class="nav-icon">🗄️</span>
+                    <span class="nav-label">Archived Projects</span>
+                </a>
+            </div>
+        `;
+
+        return `${dynamicRows}${archivedRow}`;
     }
     
     bindEvents() {

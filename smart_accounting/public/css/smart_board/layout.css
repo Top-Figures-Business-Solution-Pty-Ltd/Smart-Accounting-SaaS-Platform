@@ -157,6 +157,15 @@
     background: rgba(15, 23, 42, 0.06);
 }
 
+.nav-item--archived {
+    opacity: 0.9;
+    border: 1px dashed rgba(15, 23, 42, 0.2);
+}
+
+.nav-item--archived.active {
+    opacity: 1;
+}
+
 .nav-icon {
     font-size: 18px;
     margin-right: 12px;
@@ -428,5 +437,37 @@
     overflow: auto;
     /* Reserve space for the fixed bottom horizontal scrollbar */
     padding-bottom: 18px;
+}
+
+.sb-report {
+    padding: 18px 20px;
+}
+
+.sb-report__tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.sb-report__tab {
+    border: 1px solid var(--smart-board-border);
+    background: #fff;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.sb-report__tab.is-active {
+    border-color: var(--smart-board-primary);
+    color: var(--smart-board-primary);
+    font-weight: 600;
+}
+
+.sb-report__panel {
+    border: 1px solid var(--smart-board-border);
+    border-radius: 12px;
+    background: #fff;
+    padding: 16px;
 }
 

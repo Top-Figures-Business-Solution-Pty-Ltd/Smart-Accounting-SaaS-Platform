@@ -25,6 +25,7 @@ import { confirmDialog, notify } from '../../services/uiAdapter.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { sanitizeProjectColumnsConfig } from '../../utils/deprecatedColumns.js';
 import { ProjectActivityModal } from './ProjectActivityModal.js';
+import * as ViewTypes from '../../utils/viewTypes.js';
 
 export class BoardTable {
     constructor(container, options = {}) {
@@ -145,6 +146,13 @@ export class BoardTable {
             if (widths[col.field]) col.width = widths[col.field];
         });
         return base;
+    }
+
+    isArchivedBoard() {
+        const fn = typeof ViewTypes?.isArchivedView === 'function'
+            ? ViewTypes.isArchivedView
+            : ((view) => String(view || '').trim() === 'archived-projects');
+        return !!fn(this.viewType);
     }
 
     getAvailableColumnDefs(includeHidden = true) {
@@ -370,6 +378,19 @@ export class BoardTable {
         const tableWidth = (this._renderColumns || []).reduce((sum, c) => sum + colWidth(c), 0);
         this._tableWidthPx = tableWidth;
 
+        const archived = this.isArchivedBoard();
+        if (this.container) this.container.dataset.sbReadonly = archived ? '1' : '0';
+        const bulkActionButtons = archived
+            ? `
+                  <button type="button" class="btn btn-default btn-sm" data-action="bulk-restore">Restore</button>
+                  <button type="button" class="btn btn-light btn-sm" data-action="bulk-clear">Clear</button>
+              `
+            : `
+                  <button type="button" class="btn btn-default btn-sm" data-action="bulk-add-task">Add Task</button>
+                  <button type="button" class="btn btn-default btn-sm" data-action="bulk-archive">Archive</button>
+                  <button type="button" class="btn btn-danger btn-sm" data-action="bulk-delete">Delete</button>
+                  <button type="button" class="btn btn-light btn-sm" data-action="bulk-clear">Clear</button>
+              `;
         this.container.innerHTML = `
             <div class="board-table-wrapper">
                 <!-- Table Header -->
@@ -405,10 +426,7 @@ export class BoardTable {
                   <span class="sb-bulkbar__count"><span id="sbBulkCount">0</span> selected</span>
                 </div>
                 <div class="sb-bulkbar__actions">
-                  <button type="button" class="btn btn-default btn-sm" data-action="bulk-add-task">Add Task</button>
-                  <button type="button" class="btn btn-default btn-sm" data-action="bulk-archive">Archive</button>
-                  <button type="button" class="btn btn-danger btn-sm" data-action="bulk-delete">Delete</button>
-                  <button type="button" class="btn btn-light btn-sm" data-action="bulk-clear">Clear</button>
+                  ${bulkActionButtons}
                 </div>
               </div>
             </div>
@@ -480,6 +498,7 @@ export class BoardTable {
                 // (task bulk bar moved to fixed bottom bar; handled elsewhere)
                 const taskDelBtn = e.target?.closest?.('.sb-task-delete-btn');
                 if (taskDelBtn) {
+                    if (this.isArchivedBoard()) return;
                     e.preventDefault();
                     e.stopPropagation();
                     const projectName = taskDelBtn.getAttribute('data-project') || '';
@@ -489,6 +508,7 @@ export class BoardTable {
                 }
                 const addTaskBtn = e.target?.closest?.('.sb-add-task-btn');
                 if (addTaskBtn) {
+                    if (this.isArchivedBoard()) return;
                     e.preventDefault();
                     e.stopPropagation();
                     const projectName = addTaskBtn.dataset.projectName;
@@ -522,6 +542,14 @@ export class BoardTable {
                     }
                     return;
                 }
+                const restoreBtn = e.target?.closest?.('.sb-restore-btn');
+                if (restoreBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const projectName = restoreBtn.dataset.projectName;
+                    if (projectName) this._restoreProjects([projectName]);
+                    return;
+                }
                 const actBtn = e.target?.closest?.('.sb-activity-open-btn');
                 if (actBtn) {
                     e.preventDefault();
@@ -550,6 +578,10 @@ export class BoardTable {
             tbody.addEventListener('change', (e) => {
                 const target = e.target;
                 if (!(target instanceof HTMLInputElement)) return;
+                if (this.isArchivedBoard() && (target.classList.contains('sb-task-select-all') || target.classList.contains('sb-task-select'))) {
+                    target.checked = false;
+                    return;
+                }
 
                 // Select all tasks within one expanded project
                 if (target.classList.contains('sb-task-select-all')) {
@@ -846,6 +878,7 @@ export class BoardTable {
     }
     
     initCellEditing() {
+        if (this.isArchivedBoard()) return;
         // 实现单元格行内编辑（click -> edit）
         const tbody = this.container.querySelector('#tableBody');
         if (!tbody) return;
@@ -864,6 +897,7 @@ export class BoardTable {
     }
 
     initTaskEditing() {
+        if (this.isArchivedBoard()) return;
         const tbody = this.container.querySelector('#tableBody');
         if (!tbody) return;
         if (!this._taskEditing) {
@@ -1010,6 +1044,7 @@ export class BoardTable {
     }
 
     bindTaskBulkBar() {
+        if (this.isArchivedBoard()) return;
         const bar = this.container.querySelector('#sbTaskBulkBar');
         if (!bar) return;
 
@@ -1065,6 +1100,15 @@ export class BoardTable {
 
         if (action === 'bulk-clear') {
             this._clearSelection();
+            return;
+        }
+
+        if (this.isArchivedBoard()) {
+            if (action === 'bulk-restore') {
+                const ok = await confirmDialog(`Restore ${names.length} projects? (Set is_active = Yes)`);
+                if (!ok) return;
+                await this._restoreProjects(names);
+            }
             return;
         }
 
@@ -1139,6 +1183,27 @@ export class BoardTable {
             console.error(e);
             const { getErrorMessage } = await import('../../utils/errorMessage.js');
             notify(getErrorMessage(e) || 'Bulk delete failed', 'red');
+        } finally {
+            this._bulkWorking = false;
+            this.updateBulkBar();
+        }
+    }
+
+    async _restoreProjects(names = []) {
+        const list = Array.isArray(names) ? names.map((x) => String(x || '').trim()).filter(Boolean) : [];
+        if (!list.length) return;
+        this._bulkWorking = true;
+        this.updateBulkBar();
+        try {
+            for (const name of list) {
+                await ProjectService.updateProject(name, { is_active: 'Yes' });
+                this.store?.commit?.('projects/removeProject', name);
+            }
+            this._clearSelection();
+            notify(`Restored ${list.length} projects`, 'green');
+        } catch (e) {
+            console.error(e);
+            notify('Restore failed', 'red');
         } finally {
             this._bulkWorking = false;
             this.updateBulkBar();
@@ -1395,6 +1460,7 @@ export class BoardTable {
 
     _prepareProjectDerivedCaches(project) {
         if (!project) return;
+        project.__sb_readonly = this.isArchivedBoard();
         const team = project.custom_team_members;
 
         // Use reference equality as a cheap invalidation

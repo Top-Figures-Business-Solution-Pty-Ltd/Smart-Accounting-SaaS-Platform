@@ -40,6 +40,7 @@ export class EditingManager {
    */
   bindToTbody(tbodyEl) {
     if (!tbodyEl) return;
+    if (String(this.rootEl?.dataset?.sbReadonly || '') === '1') return;
 
     // Click to edit (per requirement)
     tbodyEl.addEventListener('click', (e) => {

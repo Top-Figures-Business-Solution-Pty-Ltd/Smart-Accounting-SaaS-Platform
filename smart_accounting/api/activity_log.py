@@ -334,6 +334,8 @@ def get_project_activity(project: str, limit_start: int = 0, limit_page_length: 
 				"field_label": _clean_str(payload.get("field_label")) or labels.get(field) or field,
 				"from_value": _short(payload.get("from_value")),
 				"to_value": _short(payload.get("to_value")),
+				"archive_source": _clean_str(payload.get("archive_source")),
+				"archive_rule": _clean_str(payload.get("archive_rule")),
 				"user": user_name,
 				"user_label": _get_user_fullname(user_name, user_cache) or user_name or "Unknown",
 				"timestamp": r.get("creation"),

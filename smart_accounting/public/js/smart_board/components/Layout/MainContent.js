@@ -9,6 +9,7 @@ import { ClientsApp } from '../ClientsView/ClientsApp.js';
 import { ClientProjectsApp } from '../ClientsView/ClientProjectsApp.js';
 import { ActivityLogApp } from '../ActivityLogView/ActivityLogApp.js';
 import { SettingsApp } from '../SettingsView/SettingsApp.js';
+import { ReportApp } from '../ReportView/ReportApp.js';
 
 export class MainContent {
     constructor(container, options = {}) {
@@ -23,6 +24,7 @@ export class MainContent {
         this._clientProjectsApp = null;
         this._activityLogApp = null;
         this._settingsApp = null;
+        this._reportApp = null;
         
         this.render();
 
@@ -114,7 +116,7 @@ export class MainContent {
         this.currentView = view;
 
         // Non-board views should not show the projects table
-        if (view === 'clients' || view === 'client-projects' || view === 'activity' || view === 'settings' || isPlaceholderView(view)) {
+        if (view === 'clients' || view === 'client-projects' || view === 'activity' || view === 'settings' || view === 'report' || isPlaceholderView(view)) {
             this.showPlaceholder(view);
             return;
         }
@@ -203,6 +205,8 @@ export class MainContent {
             placeholder.innerHTML = `<div id="sbClientsMount"></div>`;
             const mount = placeholder.querySelector('#sbClientsMount');
             // Recreate app on each entry to keep lifecycle clean
+            try { this._reportApp?.destroy?.(); } catch (e) {}
+            this._reportApp = null;
             try { this._clientsApp?.destroy?.(); } catch (e) {}
             try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
             this._clientProjectsApp = null;
@@ -216,6 +220,8 @@ export class MainContent {
         } else if (view === 'client-projects') {
             placeholder.innerHTML = `<div id="sbClientProjectsMount"></div>`;
             const mount = placeholder.querySelector('#sbClientProjectsMount');
+            try { this._reportApp?.destroy?.(); } catch (e) {}
+            this._reportApp = null;
             try { this._clientsApp?.destroy?.(); } catch (e) {}
             this._clientsApp = null;
             try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
@@ -229,6 +235,8 @@ export class MainContent {
         } else if (view === 'activity') {
             placeholder.innerHTML = `<div id="sbActivityLogMount"></div>`;
             const mount = placeholder.querySelector('#sbActivityLogMount');
+            try { this._reportApp?.destroy?.(); } catch (e) {}
+            this._reportApp = null;
             try { this._clientsApp?.destroy?.(); } catch (e) {}
             this._clientsApp = null;
             try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
@@ -239,6 +247,8 @@ export class MainContent {
         } else if (view === 'settings') {
             placeholder.innerHTML = `<div id="sbSettingsMount"></div>`;
             const mount = placeholder.querySelector('#sbSettingsMount');
+            try { this._reportApp?.destroy?.(); } catch (e) {}
+            this._reportApp = null;
             try { this._clientsApp?.destroy?.(); } catch (e) {}
             this._clientsApp = null;
             try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
@@ -249,6 +259,20 @@ export class MainContent {
             const initialTab = this.options?.app?._settingsTab || null;
             this._settingsApp = new SettingsApp(mount, { initialTab });
             this._settingsApp.init();
+        } else if (view === 'report') {
+            placeholder.innerHTML = `<div id="sbReportMount"></div>`;
+            const mount = placeholder.querySelector('#sbReportMount');
+            try { this._clientsApp?.destroy?.(); } catch (e) {}
+            this._clientsApp = null;
+            try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
+            this._clientProjectsApp = null;
+            try { this._activityLogApp?.destroy?.(); } catch (e) {}
+            this._activityLogApp = null;
+            try { this._settingsApp?.destroy?.(); } catch (e) {}
+            this._settingsApp = null;
+            try { this._reportApp?.destroy?.(); } catch (e) {}
+            this._reportApp = new ReportApp(mount, { app: this.options?.app });
+            this._reportApp.init();
         } else {
             // Dashboard / Settings placeholders remain static-html based for now
             try { this._clientsApp?.destroy?.(); } catch (e) {}
@@ -259,6 +283,8 @@ export class MainContent {
             this._activityLogApp = null;
             try { this._settingsApp?.destroy?.(); } catch (e) {}
             this._settingsApp = null;
+            try { this._reportApp?.destroy?.(); } catch (e) {}
+            this._reportApp = null;
             placeholder.innerHTML = renderPlaceholderHTML(view, this.store);
         }
     }
@@ -289,6 +315,8 @@ export class MainContent {
         this._activityLogApp = null;
         try { this._settingsApp?.destroy?.(); } catch (e) {}
         this._settingsApp = null;
+        try { this._reportApp?.destroy?.(); } catch (e) {}
+        this._reportApp = null;
         try { this._unsub?.(); } catch (e) {}
         this._unsub = null;
         this.container.innerHTML = '';

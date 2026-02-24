@@ -6,6 +6,7 @@
 
 export function renderHeaderActions(view, { isBoardView }) {
     const isBoard = !!isBoardView;
+    const isArchived = String(view || '').trim() === 'archived-projects';
 
     if (isBoard) {
         return `
@@ -20,7 +21,7 @@ export function renderHeaderActions(view, { isBoardView }) {
             <button class="btn btn-default btn-filter" id="btnFilter">Filter<span class="filter-badge" id="filterBadge"></span></button>
             <button class="btn btn-default btn-automation" id="btnAutomation">Automation</button>
             <button class="btn btn-default btn-columns" id="btnManageColumns">Columns</button>
-            <button class="btn btn-primary btn-new-project" id="btnNewProject">New Project</button>
+            ${isArchived ? '' : '<button class="btn btn-primary btn-new-project" id="btnNewProject">New Project</button>'}
         `;
     }
 
