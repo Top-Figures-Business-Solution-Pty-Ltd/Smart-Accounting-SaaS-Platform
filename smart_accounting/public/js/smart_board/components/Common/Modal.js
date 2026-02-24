@@ -23,11 +23,12 @@ export class Modal {
     } catch (e) {}
   }
 
-  constructor({ title = 'Modal', contentEl, footerEl, onClose } = {}) {
+  constructor({ title = 'Modal', contentEl, footerEl, onClose, modalClass = '' } = {}) {
     this.title = title;
     this.contentEl = contentEl || document.createElement('div');
     this.footerEl = footerEl || null;
     this.onClose = onClose || (() => {});
+    this.modalClass = String(modalClass || '').trim();
 
     this._overlay = null;
     this._modal = null;
@@ -44,8 +45,9 @@ export class Modal {
     // Treat modal as an "editor portal" so inline EditingManager won't auto-commit
     // when user interacts with a modal triggered from a table cell.
     overlay.setAttribute('data-sb-editor-portal', '1');
+    const modalCls = `sb-modal${this.modalClass ? ` ${escapeHtml(this.modalClass)}` : ''}`;
     overlay.innerHTML = `
-      <div class="sb-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(this.title)}">
+      <div class="${modalCls}" role="dialog" aria-modal="true" aria-label="${escapeHtml(this.title)}">
         <div class="sb-modal__header">
           <div class="sb-modal__title">${escapeHtml(this.title)}</div>
           <button class="sb-modal__close" type="button" aria-label="Close">×</button>

@@ -43,6 +43,7 @@ export class AutomationModal {
     this._modal = new Modal({
       title: 'Automations',
       contentEl: content,
+      modalClass: 'sb-modal--automation',
       onClose: () => this.onClose(),
     });
     this._modal.open();

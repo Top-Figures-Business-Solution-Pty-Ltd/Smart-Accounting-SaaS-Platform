@@ -238,10 +238,15 @@ class CustomProject(Project):
             return
 
         changed_any = False
+        ev = str((context or {}).get("event") or "validate").strip()
         for auto in automations:
             try:
+                if ev in {"daily", "hourly"} and self._scheduler_rule_already_fired_today(auto):
+                    continue
                 if self._trigger_matches(auto, context=context):
                     changed_any = bool(self._execute_actions(auto)) or changed_any
+                    if ev in {"daily", "hourly"}:
+                        self._mark_scheduler_rule_fired_today(auto)
             except Exception as e:
                 frappe.log_error(
                     f"Board Automation {auto.get('name')} failed for Project {self.name}: {str(e)}",
@@ -308,6 +313,9 @@ class CustomProject(Project):
             today_d = getdate(frappe.utils.today())
             if ev == "daily":
                 # Daily runner should fire once on the exact date.
+                return d == today_d
+            if ev == "hourly":
+                # Hourly catch-up uses the same exact-date rule; repetition is controlled by cache guard.
                 return d == today_d
             # validate/manual save path
             try:
@@ -503,6 +511,26 @@ class CustomProject(Project):
 
         if next_d and next_d != d:
             self.set(fieldname, next_d)
+
+    def _scheduler_rule_guard_key(self, auto) -> str:
+        rule_name = str((auto or {}).get("name") or "").strip()
+        day_key = str(frappe.utils.today() or "").strip()
+        return f"sb:auto:date-trigger:{day_key}:{self.name}:{rule_name}"
+
+    def _scheduler_rule_already_fired_today(self, auto) -> bool:
+        try:
+            key = self._scheduler_rule_guard_key(auto)
+            return bool(frappe.cache().get_value(key))
+        except Exception:
+            return False
+
+    def _mark_scheduler_rule_fired_today(self, auto):
+        try:
+            key = self._scheduler_rule_guard_key(auto)
+            # Keep slightly over one day to cover delayed workers around midnight.
+            frappe.cache().set_value(key, 1, expires_in_sec=60 * 60 * 30)
+        except Exception:
+            pass
 
     # =========================================================================
     # Activity audit (field-level)

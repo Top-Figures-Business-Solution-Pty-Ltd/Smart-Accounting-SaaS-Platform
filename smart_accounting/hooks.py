@@ -53,6 +53,9 @@ override_doctype_class = {
 scheduler_events = {
     "daily": [
         "smart_accounting.api.automation.run_due_date_automations_daily"
+    ],
+    "hourly": [
+        "smart_accounting.api.automation.run_due_date_automations_hourly"
     ]
 }
 

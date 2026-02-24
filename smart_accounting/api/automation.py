@@ -499,6 +499,69 @@ def run_due_date_automations_daily() -> dict:
 
 
 @frappe.whitelist()
+def run_due_date_automations_hourly() -> dict:
+    """
+    Hourly catch-up runner for date_reaches automations.
+    Uses the same candidate and trigger semantics as daily runner.
+    """
+    autos = frappe.get_all(
+        "Board Automation",
+        filters={"enabled": 1},
+        fields=["name", "trigger_type", "trigger_config"],
+        limit_page_length=1000,
+    )
+    date_autos = [a for a in (autos or []) if _has_date_reaches_trigger(a.get("trigger_config"), a.get("trigger_type"))]
+    if not date_autos:
+        return {"ok": True, "checked": 0, "updated": 0}
+
+    date_fields = set()
+    for a in date_autos:
+        tc = _parse_json(a.get("trigger_config"))
+        trs = tc.get("triggers") if isinstance(tc, dict) else None
+        if not isinstance(trs, list):
+            trs = [{"trigger_type": a.get("trigger_type"), "config": tc}]
+        for t in trs:
+            if not isinstance(t, dict):
+                continue
+            if str(t.get("trigger_type") or "").strip() != "date_reaches":
+                continue
+            cfg = t.get("config") or {}
+            if isinstance(cfg, str):
+                try:
+                    cfg = json.loads(cfg)
+                except Exception:
+                    cfg = {}
+            fn = str((cfg or {}).get("date_field") or "").strip()
+            if fn:
+                date_fields.add(fn)
+    if not date_fields:
+        return {"ok": True, "checked": 0, "updated": 0}
+
+    or_filters = [[f, "=", today()] for f in sorted(date_fields)]
+    rows = frappe.get_all(
+        "Project",
+        fields=["name"],
+        filters={"is_active": "Yes"},
+        or_filters=or_filters,
+        limit_page_length=20000,
+    )
+    names = [str(r.get("name") or "").strip() for r in (rows or []) if str(r.get("name") or "").strip()]
+    updated = 0
+    for name in names:
+        try:
+            doc = frappe.get_doc("Project", name)
+            changed = bool(doc._run_board_automations({"event": "hourly"}))
+            if changed:
+                doc.flags.skip_board_automation = True
+                doc.save(ignore_permissions=True)
+                updated += 1
+        except Exception:
+            continue
+
+    return {"ok": True, "checked": len(names), "updated": updated}
+
+
+@frappe.whitelist()
 def toggle_automation(name: str, enabled: int = 1) -> dict:
     _ensure_logged_in()
     name = str(name or "").strip()

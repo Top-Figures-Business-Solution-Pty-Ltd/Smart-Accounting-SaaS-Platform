@@ -631,6 +631,10 @@
     overflow: hidden;
 }
 
+.sb-modal--automation {
+    width: min(1100px, 92vw);
+}
+
 .sb-modal__header {
     display: flex;
     align-items: center;
