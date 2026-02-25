@@ -16,7 +16,15 @@ export function isDeprecatedProjectField(field) {
 
 export function sanitizeProjectColumnsConfig(columnsConfig) {
   const cols = Array.isArray(columnsConfig) ? columnsConfig : [];
-  return cols.filter((c) => !isDeprecatedProjectField(c?.field));
+  return cols
+    .filter((c) => !isDeprecatedProjectField(c?.field))
+    .map((c) => {
+      const field = String(c?.field || '').trim();
+      if (field === 'team:Reviewer') {
+        return { ...c, field: 'team:Manager', label: c?.label || 'Manager' };
+      }
+      return c;
+    });
 }
 
 

@@ -142,7 +142,7 @@ ACTION_TYPES = {
                 "options": [
                     {"value": "Assigned Person", "label": "Assigned Person"},
                     {"value": "Preparer", "label": "Preparer"},
-                    {"value": "Reviewer", "label": "Reviewer"},
+                    {"value": "Manager", "label": "Manager"},
                     {"value": "Partner", "label": "Partner"},
                 ],
             },

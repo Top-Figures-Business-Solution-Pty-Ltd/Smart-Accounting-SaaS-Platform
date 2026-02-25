@@ -6,3 +6,4 @@
 # Patches added in this section will be executed after doctypes are migrated
 smart_accounting.patches.migrate_project_status_done_to_lodged
 smart_accounting.patches.backfill_board_automation_names
+smart_accounting.patches.migrate_reviewer_to_manager

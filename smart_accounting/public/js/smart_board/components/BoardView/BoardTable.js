@@ -122,7 +122,7 @@ export class BoardTable {
             { field: 'priority', label: 'Priority', width: 120 },
             { field: 'team:Assigned Person', label: 'Assigned Person', width: 180 },
             { field: 'team:Preparer', label: 'Preparer', width: 160 },
-            { field: 'team:Reviewer', label: 'Reviewer', width: 160 },
+            { field: 'team:Manager', label: 'Manager', width: 160 },
             { field: 'team:Partner', label: 'Partner', width: 160 },
             { field: 'modified', label: 'Updated', width: 160 },
         ];
@@ -131,12 +131,19 @@ export class BoardTable {
     _migrateTaskColumns(taskCfg) {
         const list = Array.isArray(taskCfg) ? taskCfg : [];
         if (!list.length) return this._defaultTaskColumnsConfig();
-        const fields = list.map((c) => String(c?.field || '').trim()).filter(Boolean);
+        const normalized = list.map((c) => {
+            const field = String(c?.field || '').trim();
+            if (field === 'team:Reviewer') {
+                return { ...c, field: 'team:Manager', label: c?.label || 'Manager' };
+            }
+            return c;
+        });
+        const fields = normalized.map((c) => String(c?.field || '').trim()).filter(Boolean);
         const hasRoleCols = fields.some((f) => f.startsWith('team:'));
         const hasLegacyOwner = fields.includes('owner') || fields.includes('custom_task_members') || fields.includes('custom_team_members');
         // Legacy schema: only owner/custom_* members => upgrade to role columns
         if (!hasRoleCols && hasLegacyOwner) return this._defaultTaskColumnsConfig();
-        return list.map((c) => ({ field: c.field, label: c.label || c.field, width: c.width || 140 }));
+        return normalized.map((c) => ({ field: c.field, label: c.label || c.field, width: c.width || 140 }));
     }
     
     getColumnsForView() {
@@ -1574,7 +1581,7 @@ export class BoardTable {
             // Task team roles (stored in Project Team Member child table on Task)
             { field: 'team:Assigned Person', label: 'Assigned Person', width: 180 },
             { field: 'team:Preparer', label: 'Preparer', width: 160 },
-            { field: 'team:Reviewer', label: 'Reviewer', width: 160 },
+            { field: 'team:Manager', label: 'Manager', width: 160 },
             { field: 'team:Partner', label: 'Partner', width: 160 },
             { field: 'modified', label: 'Updated', width: 160 },
             // Component: expands to 12 months (board fiscal order)

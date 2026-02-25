@@ -6,7 +6,7 @@
  */
 import { ROLE_OPTIONS } from '../utils/constants.js';
 
-const STORAGE_KEY = 'sb_team_roles_v1';
+const STORAGE_KEY = 'sb_team_roles_v2';
 const TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
 export class TeamRoleService {

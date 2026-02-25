@@ -113,7 +113,7 @@ export const FREQUENCY_OPTIONS = [
 // Role 选项
 export const ROLE_OPTIONS = [
     'Preparer',
-    'Reviewer',
+    'Manager',
     'Partner'
 ];
 
