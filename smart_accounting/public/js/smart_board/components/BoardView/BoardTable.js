@@ -1300,7 +1300,7 @@ export class BoardTable {
         });
         this._projectActivityModal.open();
     }
-    
+
     subscribeToStore() {
         if (!this.store) return;
         

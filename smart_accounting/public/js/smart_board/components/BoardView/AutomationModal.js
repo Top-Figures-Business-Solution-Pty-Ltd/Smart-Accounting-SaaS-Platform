@@ -26,6 +26,7 @@ export class AutomationModal {
     this._root = null;
     this._saving = false;
     this._activeIdx = this.items.length ? 0 : -1;
+    this._savedSearch = '';
   }
 
   open() {
@@ -69,12 +70,20 @@ export class AutomationModal {
     if (!this.items.length) this._activeIdx = -1;
     if (this._activeIdx >= this.items.length) this._activeIdx = this.items.length - 1;
 
+    const savedRows = this._getFilteredSavedItems();
     wrap.innerHTML = `
       <div class="sb-auto__layout">
         <div class="sb-auto__saved">
           <div class="sb-auto__saved-title">Saved Automations</div>
+          <input
+            class="form-control sb-auto__saved-search"
+            id="sbAutoSavedSearch"
+            type="text"
+            placeholder="Search automation..."
+            value="${escapeHtml(this._savedSearch)}"
+          />
           <div class="sb-auto__saved-list" id="sbAutoSavedList">
-            ${this.items.map((item, idx) => this._savedItemHTML(item, idx)).join('')}
+            ${savedRows.length ? savedRows.map(({ item, idx }) => this._savedItemHTML(item, idx)).join('') : '<div class="text-muted" style="font-size:12px; padding:6px;">No matching automations.</div>'}
           </div>
           <button class="btn btn-default btn-sm" type="button" id="sbAutoAdd">+ Add Automation</button>
         </div>
@@ -84,6 +93,10 @@ export class AutomationModal {
       </div>
     `;
     wrap.querySelector('#sbAutoAdd')?.addEventListener('click', () => this._addNew());
+    wrap.querySelector('#sbAutoSavedSearch')?.addEventListener('input', (e) => {
+      this._savedSearch = String(e?.target?.value || '');
+      this._renderList();
+    });
     wrap.querySelectorAll('.sb-auto__saved-item').forEach((el) => {
       el.addEventListener('click', (e) => this._handleSelectSavedItem(e));
     });
@@ -156,6 +169,7 @@ export class AutomationModal {
         </div>
         <div class="sb-automation__rule-footer">
           <button class="btn btn-primary btn-sm sb-auto__save" data-idx="${idx}" type="button" ${saveDisabled} title="${escapeHtml(saveBlockedReason || 'Save automation')}">Save</button>
+          <button class="btn btn-default btn-sm sb-auto__save-as" data-idx="${idx}" type="button" ${saveDisabled} title="${escapeHtml(saveBlockedReason || 'Save as new automation')}">Save as</button>
           ${item.execution_count ? `<span class="text-muted" style="font-size:11px;">Executed ${item.execution_count} times</span>` : ''}
         </div>
         ${saveBlockedReason ? `<div style="margin-top:8px; font-size:12px; color:#b45309;">${escapeHtml(saveBlockedReason)}</div>` : ''}
@@ -263,6 +277,16 @@ export class AutomationModal {
     wrap.querySelectorAll('.sb-auto__save').forEach((el) => {
       el.addEventListener('click', (e) => this._handleSave(e));
     });
+    wrap.querySelectorAll('.sb-auto__save-as').forEach((el) => {
+      el.addEventListener('click', (e) => this._handleSaveAs(e));
+    });
+    wrap.querySelectorAll('.sb-auto__name').forEach((el) => {
+      el.addEventListener('input', (e) => this._handleNameInput(e));
+    });
+    wrap.querySelectorAll('.sb-auto__config').forEach((el) => {
+      el.addEventListener('change', () => this._syncActiveRuleFromDOM());
+      el.addEventListener('input', () => this._syncActiveRuleFromDOM());
+    });
     wrap.querySelectorAll('.sb-auto__trigger-type').forEach((el) => {
       el.addEventListener('change', (e) => this._handleTriggerTypeChange(e));
     });
@@ -284,10 +308,18 @@ export class AutomationModal {
   }
 
   _handleSelectSavedItem(e) {
+    this._syncActiveRuleFromDOM();
     const idx = parseInt(e.currentTarget?.dataset?.idx, 10);
     if (!Number.isFinite(idx) || idx < 0 || idx >= this.items.length) return;
     this._activeIdx = idx;
     this._renderList();
+  }
+
+  _handleNameInput(e) {
+    const idx = parseInt(e.target?.dataset?.idx, 10);
+    const item = this.items[idx];
+    if (!item) return;
+    item.automation_name = String(e.target?.value || '').trim();
   }
 
   async _handleToggle(e) {
@@ -336,22 +368,11 @@ export class AutomationModal {
       return;
     }
 
-    const ruleEl = this._root?.querySelector(`.sb-automation__rule[data-idx="${idx}"]`);
-    if (!ruleEl) return;
-
-    const triggers = [];
-    const triggerRows = ruleEl.querySelectorAll('.sb-automation__trigger-row');
-    triggerRows.forEach((row) => {
-      const tidx = parseInt(row.dataset.tidx, 10);
-      const triggerType = row.querySelector('.sb-auto__trigger-type')?.value || '';
-      if (!triggerType) return;
-      const config = {};
-      row.querySelectorAll(`.sb-auto__config[data-prefix="trigger_${idx}_${tidx}"]`).forEach((el) => {
-        const key = el.dataset.key;
-        if (key) config[key] = el.value || '';
-      });
-      triggers.push({ trigger_type: triggerType, config });
-    });
+    this._syncActiveRuleFromDOM(idx);
+    const itemNow = this.items[idx];
+    const triggers = (Array.isArray(itemNow?.triggers) ? itemNow.triggers : [])
+      .filter((t) => String(t?.trigger_type || '').trim())
+      .map((t) => ({ trigger_type: String(t.trigger_type || '').trim(), config: { ...(t.config || {}) } }));
     if (!triggers.length) return;
     const blockedByRawTriggers = this._getRuleSaveBlockReasonFromTypes(triggers.map((t) => t?.trigger_type));
     if (blockedByRawTriggers) {
@@ -362,26 +383,14 @@ export class AutomationModal {
     }
 
     // Read all action rows
-    const actions = [];
-    const actionRows = ruleEl.querySelectorAll('.sb-automation__action-row');
-    actionRows.forEach((row) => {
-      const aidx = parseInt(row.dataset.aidx, 10);
-      const actionType = row.querySelector('.sb-auto__action-type')?.value || '';
-      if (!actionType) return;
-
-      const config = {};
-      row.querySelectorAll(`.sb-auto__config[data-prefix="action_${idx}_${aidx}"]`).forEach((el) => {
-        const key = el.dataset.key;
-        if (key) config[key] = el.value || '';
-      });
-
-      actions.push({ action_type: actionType, config });
-    });
+    const actions = (Array.isArray(itemNow?.actions) ? itemNow.actions : [])
+      .filter((a) => String(a?.action_type || '').trim())
+      .map((a) => ({ action_type: String(a.action_type || '').trim(), config: { ...(a.config || {}) } }));
 
     if (!actions.length) return;
 
-    const enabled = ruleEl.querySelector('.sb-auto__enabled')?.checked ? 1 : 0;
-    const automationName = String(ruleEl.querySelector('.sb-auto__name')?.value || '').trim() || this._displayName(item, idx);
+    const enabled = itemNow?.enabled ? 1 : 0;
+    const automationName = String(itemNow?.automation_name || '').trim() || this._displayName(itemNow, idx);
 
     this._saving = true;
     const btn = e.target;
@@ -391,7 +400,7 @@ export class AutomationModal {
 
     try {
       const result = await this.onSave({
-        name: item.name || '',
+        name: itemNow?.name || '',
         enabled,
         automation_name: automationName,
         trigger_type: triggers[0]?.trigger_type || '',
@@ -421,6 +430,7 @@ export class AutomationModal {
   _handleTriggerTypeChange(e) {
     const idx = parseInt(e.target?.dataset?.idx, 10);
     const tidx = parseInt(e.target?.dataset?.tidx, 10);
+    this._syncActiveRuleFromDOM(idx);
     const item = this.items[idx];
     if (!item) return;
     if (!Array.isArray(item.triggers)) item.triggers = [];
@@ -433,6 +443,7 @@ export class AutomationModal {
 
   _handleAddTrigger(e) {
     const idx = parseInt(e.target?.dataset?.idx, 10);
+    this._syncActiveRuleFromDOM(idx);
     const item = this.items[idx];
     if (!item) return;
     if (!Array.isArray(item.triggers)) item.triggers = [];
@@ -443,6 +454,7 @@ export class AutomationModal {
   _handleRemoveTrigger(e) {
     const idx = parseInt(e.target?.dataset?.idx, 10);
     const tidx = parseInt(e.target?.dataset?.tidx, 10);
+    this._syncActiveRuleFromDOM(idx);
     const item = this.items[idx];
     if (!item || !Array.isArray(item.triggers)) return;
     item.triggers.splice(tidx, 1);
@@ -455,6 +467,7 @@ export class AutomationModal {
   _handleActionTypeChange(e) {
     const idx = parseInt(e.target?.dataset?.idx, 10);
     const aidx = parseInt(e.target?.dataset?.aidx, 10);
+    this._syncActiveRuleFromDOM(idx);
     const item = this.items[idx];
     if (!item) return;
 
@@ -466,6 +479,7 @@ export class AutomationModal {
 
   _handleAddAction(e) {
     const idx = parseInt(e.target?.dataset?.idx, 10);
+    this._syncActiveRuleFromDOM(idx);
     const item = this.items[idx];
     if (!item) return;
     if (!Array.isArray(item.actions)) item.actions = [];
@@ -476,6 +490,7 @@ export class AutomationModal {
   _handleRemoveAction(e) {
     const idx = parseInt(e.target?.dataset?.idx, 10);
     const aidx = parseInt(e.target?.dataset?.aidx, 10);
+    this._syncActiveRuleFromDOM(idx);
     const item = this.items[idx];
     if (!item || !Array.isArray(item.actions)) return;
     item.actions.splice(aidx, 1);
@@ -484,6 +499,7 @@ export class AutomationModal {
   }
 
   _addNew() {
+    this._syncActiveRuleFromDOM();
     this.items.push({
       name: '',
       enabled: 1,
@@ -494,14 +510,123 @@ export class AutomationModal {
       actions: [{ action_type: '', config: {} }],
       execution_count: 0,
     });
+    this._savedSearch = '';
     this._activeIdx = this.items.length - 1;
     this._renderList();
+  }
+
+  async _handleSaveAs(e) {
+    const idx = parseInt(e.target?.dataset?.idx, 10);
+    const item = this.items[idx];
+    if (!item || this._saving) return;
+
+    const blockedReason = this._getRuleSaveBlockReason(item);
+    if (blockedReason) {
+      try { frappe?.show_alert?.({ message: blockedReason, indicator: 'orange' }, 5); } catch (err) {}
+      return;
+    }
+
+    this._syncActiveRuleFromDOM(idx);
+    const base = this.items[idx];
+    const defaultName = String(base?.automation_name || '').trim() || this._displayName(base, idx);
+    const nextName = String(window.prompt('Save as new automation name', defaultName) || '').trim();
+    if (!nextName) return;
+
+    const triggers = (Array.isArray(base?.triggers) ? base.triggers : [])
+      .filter((t) => String(t?.trigger_type || '').trim())
+      .map((t) => ({ trigger_type: String(t.trigger_type || '').trim(), config: { ...(t.config || {}) } }));
+    const actions = (Array.isArray(base?.actions) ? base.actions : [])
+      .filter((a) => String(a?.action_type || '').trim())
+      .map((a) => ({ action_type: String(a.action_type || '').trim(), config: { ...(a.config || {}) } }));
+    if (!triggers.length || !actions.length) return;
+
+    const btn = e.target;
+    const prevText = btn.textContent;
+    this._saving = true;
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      const result = await this.onSave({
+        name: '',
+        enabled: base?.enabled ? 1 : 0,
+        automation_name: nextName,
+        trigger_type: triggers[0]?.trigger_type || '',
+        trigger_config: { triggers },
+        actions,
+      });
+      const created = {
+        name: result?.name || '',
+        enabled: base?.enabled ? 1 : 0,
+        automation_name: String(result?.automation_name || nextName || '').trim(),
+        trigger_type: triggers[0]?.trigger_type || '',
+        trigger_config: { triggers },
+        triggers,
+        actions,
+        execution_count: 0,
+      };
+      this.items.push(created);
+      this._savedSearch = '';
+      this._activeIdx = this.items.length - 1;
+      this._renderList();
+    } finally {
+      this._saving = false;
+      btn.disabled = false;
+      btn.textContent = prevText;
+    }
+  }
+
+  _syncActiveRuleFromDOM(idx = this._activeIdx) {
+    const i = Number(idx);
+    if (!Number.isFinite(i) || i < 0 || i >= this.items.length) return;
+    const item = this.items[i];
+    const ruleEl = this._root?.querySelector(`.sb-automation__rule[data-idx="${i}"]`);
+    if (!item || !ruleEl) return;
+
+    item.enabled = ruleEl.querySelector('.sb-auto__enabled')?.checked ? 1 : 0;
+    item.automation_name = String(ruleEl.querySelector('.sb-auto__name')?.value || item.automation_name || '').trim();
+
+    const triggerRows = Array.from(ruleEl.querySelectorAll('.sb-automation__trigger-row'));
+    const triggers = triggerRows.map((row) => {
+      const tidx = parseInt(row?.dataset?.tidx, 10);
+      const triggerType = String(row.querySelector('.sb-auto__trigger-type')?.value || '').trim();
+      const config = {};
+      row.querySelectorAll(`.sb-auto__config[data-prefix="trigger_${i}_${tidx}"]`).forEach((el) => {
+        const key = String(el?.dataset?.key || '').trim();
+        if (!key) return;
+        config[key] = el.value ?? '';
+      });
+      return { trigger_type: triggerType, config };
+    });
+    item.triggers = triggers.length ? triggers : [{ trigger_type: '', config: {} }];
+    item.trigger_type = item.triggers[0]?.trigger_type || '';
+    item.trigger_config = { triggers: item.triggers };
+
+    const actionRows = Array.from(ruleEl.querySelectorAll('.sb-automation__action-row'));
+    const actions = actionRows.map((row) => {
+      const aidx = parseInt(row?.dataset?.aidx, 10);
+      const actionType = String(row.querySelector('.sb-auto__action-type')?.value || '').trim();
+      const config = {};
+      row.querySelectorAll(`.sb-auto__config[data-prefix="action_${i}_${aidx}"]`).forEach((el) => {
+        const key = String(el?.dataset?.key || '').trim();
+        if (!key) return;
+        config[key] = el.value ?? '';
+      });
+      return { action_type: actionType, config };
+    });
+    item.actions = actions.length ? actions : [{ action_type: '', config: {} }];
   }
 
   _displayName(item, idx) {
     const explicit = String(item?.automation_name || '').trim();
     if (explicit) return explicit;
     return `Automation ${Number(idx) + 1}`;
+  }
+
+  _getFilteredSavedItems() {
+    const q = String(this._savedSearch || '').trim().toLowerCase();
+    const rows = this.items.map((item, idx) => ({ item, idx }));
+    if (!q) return rows;
+    return rows.filter(({ item, idx }) => this._displayName(item, idx).toLowerCase().includes(q));
   }
 
   _getRuleSaveBlockReason(item) {
