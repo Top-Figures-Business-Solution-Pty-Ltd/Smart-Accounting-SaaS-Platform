@@ -529,6 +529,11 @@ export class ProjectQueryService {
       result.push(['customer', '=', filters.customer]);
     }
 
+    // Temporary scoped filter: focus on a single project from notifications.
+    if (filters.focused_project_name && String(filters.focused_project_name).trim()) {
+      result.push(['name', '=', String(filters.focused_project_name).trim()]);
+    }
+
     // fiscal_year筛选
     if (filters.fiscal_year && String(filters.fiscal_year).trim()) {
       result.push(['custom_fiscal_year', '=', filters.fiscal_year]);

@@ -43,6 +43,7 @@ export function countActiveFilters(filterState) {
   if (Array.isArray(filterState.status) && filterState.status.length > 0) count++;
   if (filterState.company && String(filterState.company).trim()) count++;
   if (filterState.customer && String(filterState.customer).trim()) count++;
+  if (filterState.focused_project_name && String(filterState.focused_project_name).trim()) count++;
   if (filterState.fiscal_year && String(filterState.fiscal_year).trim()) count++;
   // date_from / date_to count as one filter group
   const hasDateFrom = filterState.date_from && String(filterState.date_from).trim();

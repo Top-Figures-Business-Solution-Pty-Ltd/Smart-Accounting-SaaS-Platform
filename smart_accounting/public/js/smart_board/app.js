@@ -37,6 +37,8 @@ export class SmartBoardApp {
         this._onWindowResize = null;
         this._clientProjects = null;
         this._scopedCustomer = '';
+        this._scopedProjectName = '';
+        this._scopedProjectView = '';
         
         this.init();
     }
@@ -341,6 +343,16 @@ export class SmartBoardApp {
             this._scopedCustomer = '';
             this._clientProjects = null;
         }
+        // Leaving notification-scoped project focus: clear temporary single-project filter
+        // when user switches to another view/board to avoid confusion.
+        if (this._scopedProjectName && String(viewType || '') !== String(this._scopedProjectView || '')) {
+            try {
+                const st = this.store?.getState?.()?.filters || {};
+                this.store?.dispatch?.('filters/setFilters', { ...st, focused_project_name: null });
+            } catch (e) {}
+            this._scopedProjectName = '';
+            this._scopedProjectView = '';
+        }
         this.currentView = viewType;
         
         // 更新各组件状态
@@ -389,14 +401,47 @@ export class SmartBoardApp {
                 return;
             }
         }
+        if (!project) return;
+
+        // Product rule: archived project should not deep-navigate from notification.
+        if (String(project?.is_active || '').trim() === 'No') {
+            notify('This project has been archived. Please restore it first.', 'orange');
+            return;
+        }
 
         const pt = String(project?.project_type || '').trim();
+        const targetView = pt || this.currentView;
+
+        // Apply temporary single-project focus so users still know the source project
+        // after closing the Updates modal.
+        try {
+            const st = this.store?.getState?.()?.filters || {};
+            this.store?.dispatch?.('filters/setFilters', {
+                ...st,
+                status: [],
+                company: null,
+                customer: null,
+                fiscal_year: null,
+                date_from: null,
+                date_to: null,
+                search: '',
+                advanced_rules: [],
+                advanced_groups: [],
+                focused_project_name: name,
+            });
+            this._scopedProjectName = name;
+            this._scopedProjectView = targetView;
+        } catch (e) {}
+
         if (pt && this.currentView !== pt) {
             // Switch view + load its data so BoardTable has the row model ready.
             this.currentView = pt;
             this.header?.updateView?.(pt);
             this.mainContent?.updateView?.(pt);
             try { await this.loadViewData(pt); } catch (e) {}
+            try { this._syncUrl?.(); } catch (e) {}
+        } else {
+            try { await this.loadViewData(this.currentView); } catch (e) {}
         }
 
         // Re-resolve from store after load
@@ -423,7 +468,9 @@ export class SmartBoardApp {
     }
     
     applyFilters(filters) {
-        this.store.dispatch('filters/setFilters', filters);
+        this.store.dispatch('filters/setFilters', { ...filters, focused_project_name: null });
+        this._scopedProjectName = '';
+        this._scopedProjectView = '';
         this.loadViewData(this.currentView);
         try { this._syncUrl?.(); } catch (e) {}
     }

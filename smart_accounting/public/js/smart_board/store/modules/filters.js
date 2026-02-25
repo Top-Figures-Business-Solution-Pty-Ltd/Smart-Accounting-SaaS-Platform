@@ -19,6 +19,8 @@ export const FiltersModule = {
             // Smart Board default: show active projects only.
             // Archive sets Project.is_active = "No", so archived projects should disappear and stay hidden after refresh.
             is_active: true,
+            // Temporary scope used by notification deep-linking (single project focus)
+            focused_project_name: null,
             // Monday-like advanced filter builder rules
             advanced_rules: [],
             // Monday-like groups: [{ join, rules: [{field, condition, value}] }]
@@ -68,6 +70,7 @@ export const FiltersModule = {
             state.date_to = null;
             state.search = '';
             state.is_active = true;
+            state.focused_project_name = null;
             state.advanced_rules = [];
             state.advanced_groups = [];
         }
