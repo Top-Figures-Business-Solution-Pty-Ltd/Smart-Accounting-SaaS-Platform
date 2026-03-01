@@ -117,20 +117,24 @@ def add_project_update(project: str, content: str, mentions: Any = None) -> dict
 	mentions_list = list(dict.fromkeys(mentions_list))  # de-dupe, preserve order
 
 	if mentions_list:
-		# We only want in-app notifications right now.
-		# Prevent any email side-effects (and the "setup default outgoing Email Account" prompt).
+		# Keep in-app mentions independent from email delivery:
+		# - Notification Log insertion is muted (no implicit side-effects)
+		# - Mention emails are sent explicitly below
 		prev_mute = bool(getattr(frappe.flags, "mute_emails", False))
+		from frappe.utils import strip_html
+
+		preview = strip_html(content or "")
+		preview = (preview or "").strip()
+		if len(preview) > 240:
+			preview = preview[:240] + "…"
+
+		project_title = frappe.db.get_value("Project", project, "project_name") or project
+		subject_base = f"{full_name} mentioned you in {project_title}"
+
+		# 1) In-app notifications (always)
 		frappe.flags.mute_emails = True
+		valid_targets: list[str] = []
 		try:
-			from frappe.utils import strip_html
-
-			preview = strip_html(content or "")
-			preview = (preview or "").strip()
-			if len(preview) > 240:
-				preview = preview[:240] + "…"
-
-			project_title = frappe.db.get_value("Project", project, "project_name") or project
-			subject_base = f"{full_name} mentioned you in {project_title}"
 			for target in mentions_list:
 				if target == user:
 					continue
@@ -138,6 +142,7 @@ def add_project_update(project: str, content: str, mentions: Any = None) -> dict
 				enabled = frappe.db.get_value("User", target, "enabled")
 				if not enabled:
 					continue
+				valid_targets.append(target)
 
 				n = frappe.new_doc("Notification Log")
 				n.type = "Mention"
@@ -155,6 +160,29 @@ def add_project_update(project: str, content: str, mentions: Any = None) -> dict
 		finally:
 			# Restore flag no matter what.
 			frappe.flags.mute_emails = prev_mute
+
+		# 2) Mention email notifications (only for @mentions)
+		# Fail-open: posting updates should still succeed even if mail is misconfigured.
+		for target in valid_targets:
+			try:
+				email = frappe.db.get_value("User", target, "email") or target
+				email = str(email or "").strip()
+				if not email:
+					continue
+
+				message_html = (
+					f"<p><b>{frappe.utils.escape_html(full_name)}</b> mentioned you in "
+					f"<b>{frappe.utils.escape_html(project_title)}</b>.</p>"
+					f"<p>{frappe.utils.escape_html(preview or '(no preview)')}</p>"
+				)
+				frappe.sendmail(
+					recipients=[email],
+					subject=subject_base,
+					message=message_html,
+					delayed=False,
+				)
+			except Exception:
+				continue
 
 	return {
 		"item": {
