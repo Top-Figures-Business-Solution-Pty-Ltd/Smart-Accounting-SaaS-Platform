@@ -487,6 +487,27 @@ class CustomProject(Project):
         period = str(cfg.get("period") or "1_month").strip().lower()
         if not fieldname:
             return
+        # Special-case Target Month (Select field): push forward by N months (1..12).
+        if fieldname == "custom_target_month":
+            try:
+                step = int(period)
+            except Exception:
+                step = 0
+            months = [
+                "January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December",
+            ]
+            if step < 1:
+                return
+            cur = str(getattr(self, fieldname, "") or "").strip()
+            # If current target month is empty/invalid, use current calendar month as base.
+            if cur in months:
+                base_idx = months.index(cur)
+            else:
+                base_idx = int(frappe.utils.now_datetime().month) - 1
+            next_idx = (base_idx + step) % 12
+            self.set(fieldname, months[next_idx])
+            return
         current_val = getattr(self, fieldname, None)
         if not current_val:
             return

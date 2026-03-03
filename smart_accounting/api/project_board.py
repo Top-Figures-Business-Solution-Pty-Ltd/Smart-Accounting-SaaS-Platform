@@ -721,7 +721,7 @@ def get_monthly_status_bundle(
 				task_total_by_project[p] = len(tasks_by_project.get(p) or [])
 
 	matrix: dict[str, dict[int, str]] = {}
-	done_counts: dict[str, dict[int, int]] = {}  # project -> mi -> done
+	status_counts: dict[str, dict[int, dict[str, int]]] = {}  # project -> mi -> {done, working_on_it, stuck}
 	if int(include_matrix or 0) or int(include_summary or 0):
 		task_names = [str(t.get("name") or "").strip() for t in all_tasks if str(t.get("name") or "").strip()]
 		task_names = list(dict.fromkeys(task_names))
@@ -757,13 +757,19 @@ def get_monthly_status_bundle(
 				if p and by_fy.get(p) and fy and fy != by_fy.get(p):
 					continue
 				matrix.setdefault(tn, {})[mi] = st
-				if st == "Done" and p:
-					done_counts.setdefault(p, {})[mi] = int(done_counts.get(p, {}).get(mi, 0)) + 1
+				if p:
+					bucket = status_counts.setdefault(p, {}).setdefault(mi, {"done": 0, "working_on_it": 0, "stuck": 0})
+					if st == "Done":
+						bucket["done"] = int(bucket.get("done") or 0) + 1
+					elif st == "Working On It":
+						bucket["working_on_it"] = int(bucket.get("working_on_it") or 0) + 1
+					elif st == "Stuck":
+						bucket["stuck"] = int(bucket.get("stuck") or 0) + 1
 
-		# If caller only needs summary, fetch aggregated Done counts without pulling full matrix.
-		if int(include_summary or 0) and (not int(include_matrix or 0)) and fys:
+		# For summary, fetch aggregated status counts on ALL tasks (not limited by include_matrix rows).
+		if int(include_summary or 0) and fys:
 			try:
-				done_rows = frappe.get_all(
+				agg_rows = frappe.get_all(
 					"Monthly Status",
 					filters=[
 						["reference_doctype", "=", "Task"],
@@ -771,31 +777,40 @@ def get_monthly_status_bundle(
 						["fiscal_year", "in", fys],
 						["month_index", ">=", 1],
 						["month_index", "<=", 12],
-						["status", "=", "Done"],
+						["status", "in", ["Done", "Working On It", "Stuck"]],
 					],
-					fields=["project", "fiscal_year", "month_index", "count(name) as done"],
-					group_by="project, fiscal_year, month_index",
+					fields=["project", "fiscal_year", "month_index", "status", "count(name) as cnt"],
+					group_by="project, fiscal_year, month_index, status",
 					ignore_permissions=True,
 					limit_page_length=200000,
 				)
 			except Exception:
-				done_rows = []
-			for r in (done_rows or []):
+				agg_rows = []
+			# Use aggregated rows as source of truth for summary status segments.
+			status_counts = {}
+			for r in (agg_rows or []):
 				p = str(r.get("project") or "").strip()
 				fy = str(r.get("fiscal_year") or "").strip()
 				try:
 					mi = int(r.get("month_index") or 0)
 				except Exception:
 					mi = 0
+				st = str(r.get("status") or "").strip()
 				try:
-					done = int(r.get("done") or 0)
+					cnt = int(r.get("cnt") or 0)
 				except Exception:
-					done = 0
-				if not p or mi < 1 or mi > 12 or done <= 0:
+					cnt = 0
+				if not p or mi < 1 or mi > 12 or cnt <= 0:
 					continue
 				if by_fy.get(p) and fy and fy != by_fy.get(p):
 					continue
-				done_counts.setdefault(p, {})[mi] = int(done_counts.get(p, {}).get(mi, 0)) + done
+				bucket = status_counts.setdefault(p, {}).setdefault(mi, {"done": 0, "working_on_it": 0, "stuck": 0})
+				if st == "Done":
+					bucket["done"] = int(bucket.get("done") or 0) + cnt
+				elif st == "Working On It":
+					bucket["working_on_it"] = int(bucket.get("working_on_it") or 0) + cnt
+				elif st == "Stuck":
+					bucket["stuck"] = int(bucket.get("stuck") or 0) + cnt
 
 	# Summary per project
 	summary: dict[str, dict[int, dict]] = {}
@@ -804,9 +819,18 @@ def get_monthly_status_bundle(
 			total = int(task_total_by_project.get(p, 0) or 0)
 			months = {}
 			for mi in range(1, 13):
-				done = int((done_counts.get(p) or {}).get(mi, 0) or 0)
+				s = (status_counts.get(p) or {}).get(mi) or {}
+				done = int(s.get("done") or 0)
+				working_on_it = int(s.get("working_on_it") or 0)
+				stuck = int(s.get("stuck") or 0)
 				percent = float(done) / float(total) * 100.0 if total else 0.0
-				months[mi] = {"done": done, "total": total, "percent": percent}
+				months[mi] = {
+					"done": done,
+					"working_on_it": working_on_it,
+					"stuck": stuck,
+					"total": total,
+					"percent": percent,
+				}
 			summary[p] = months
 
 	out = {

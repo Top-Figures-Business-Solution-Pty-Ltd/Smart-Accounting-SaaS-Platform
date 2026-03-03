@@ -159,7 +159,7 @@ ACTION_TYPES = {
                 "key": "date_field",
                 "label": "Date Field",
                 "type": "select",
-                "source": "project_date_fields",
+                "source": "project_push_date_fields",
             },
             {
                 "key": "period",
@@ -225,6 +225,14 @@ def _get_project_date_field_options() -> list[dict]:
     return out
 
 
+def _get_project_push_date_field_options() -> list[dict]:
+    out = list(_get_project_date_field_options() or [])
+    values = {str(x.get("value") or "").strip() for x in out if isinstance(x, dict)}
+    if "custom_target_month" not in values:
+        out.append({"value": "custom_target_month", "label": "Target Month"})
+    return out
+
+
 @frappe.whitelist()
 def get_automation_meta() -> dict:
     """
@@ -245,6 +253,9 @@ def get_automation_meta() -> dict:
                 del field["source"]
             elif field.get("source") == "project_date_fields":
                 field["options"] = _get_project_date_field_options()
+                del field["source"]
+            elif field.get("source") == "project_push_date_fields":
+                field["options"] = _get_project_push_date_field_options()
                 del field["source"]
             out.append(field)
         return out

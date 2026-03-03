@@ -289,6 +289,8 @@
 .sb-ms-sum__bar {
     position: relative;
     height: 8px;
+    display: flex;
+    align-items: stretch;
     flex: 1 1 100%;
     width: 100%;
     min-width: 72px;
@@ -297,12 +299,26 @@
     overflow: hidden;
 }
 
-.sb-ms-sum__bar > span {
+.sb-ms-sum__seg {
     display: block;
     height: 100%;
-    background: #10b981;
-    border-radius: 999px;
     transition: width 0.15s ease;
+}
+
+.sb-ms-sum__seg--done {
+    background: #10b981;
+}
+
+.sb-ms-sum__seg--working {
+    background: #f59e0b;
+}
+
+.sb-ms-sum__seg--stuck {
+    background: #ef4444;
+}
+
+.sb-ms-sum__seg--empty {
+    background: #e9ecef;
 }
 
 .sb-ms-sum__bar::after {
@@ -883,6 +899,8 @@
 
 .sb-inline-editor--textarea {
     min-height: 96px;
+    max-height: 240px;
+    overflow: auto;
     resize: vertical;
 }
 
@@ -985,6 +1003,17 @@
 /* Notes hover hint (lightweight; can be redesigned per your style spec later) */
 .board-table > tbody > tr > td.sb-col-notes.editable:hover {
     box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+}
+
+.sb-fy-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 10px;
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    color: #3730a3;
+    font-weight: 600;
+    font-size: 12px;
 }
 
 /* ============================================

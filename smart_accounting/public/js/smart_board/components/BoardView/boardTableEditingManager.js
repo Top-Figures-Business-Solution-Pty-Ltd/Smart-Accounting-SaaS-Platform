@@ -35,6 +35,21 @@ export class EditingManager {
   }
 
   /**
+   * Keep textarea-based note editing stable while user scrolls.
+   * If we commit on every container scroll, bottom-row notes close immediately.
+   */
+  shouldCommitOnScroll() {
+    if (!this._active) return true;
+    try {
+      const input = this._editorInstance?.getInputEl?.() || this._active?.cellEl?.querySelector?.('.sb-inline-editor');
+      if (!input) return true;
+      const tag = String(input.tagName || '').toUpperCase();
+      if (tag === 'TEXTAREA') return false;
+    } catch (e) {}
+    return true;
+  }
+
+  /**
    * Bind event delegation on tbody for click-to-edit.
    * Caller should call this after each table render (since tbody is re-created).
    */

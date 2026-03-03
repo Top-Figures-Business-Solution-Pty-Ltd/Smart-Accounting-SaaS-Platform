@@ -20,11 +20,20 @@ export class BoardCell {
             const months = this.project?.__sb_monthly_completion || {};
             const m = months?.[mi] || months?.[String(mi)];
             const done = Number(m?.done || 0);
+            const workingOnIt = Number(m?.working_on_it || 0);
+            const stuck = Number(m?.stuck || 0);
             const total = Number(m?.total || 0);
             const percent = Number.isFinite(Number(m?.percent)) ? Number(m.percent) : (total ? (done / total * 100) : 0);
             const pct = Math.max(0, Math.min(100, Number(percent) || 0));
+            const donePct = total ? Math.max(0, Math.min(100, (done / total) * 100)) : 0;
+            const workingPct = total ? Math.max(0, Math.min(100, (workingOnIt / total) * 100)) : 0;
+            const stuckPct = total ? Math.max(0, Math.min(100, (stuck / total) * 100)) : 0;
+            const accountedPct = Math.max(0, Math.min(100, donePct + workingPct + stuckPct));
+            const emptyPct = Math.max(0, Math.min(100, 100 - accountedPct));
             const text = total ? `${done}/${total}` : '—';
-            const tip = total ? `Done ${done}/${total}, ${pct.toFixed(1)}%` : 'No tasks';
+            const tip = total
+                ? `Done ${done}/${total}, Working On It ${workingOnIt}, Stuck ${stuck}, Done ${pct.toFixed(1)}%`
+                : 'No tasks';
             const left = (this.column.frozen && this.column._stickyLeft != null) ? ` left: ${this.column._stickyLeft}px;` : '';
             const extraClass = columnRegistry.getCellClass({ project: this.project, column: this.column });
             const staticClass = this.column.__cellClass || '';
@@ -37,7 +46,10 @@ export class BoardCell {
                 >
                     <div class="cell-content sb-ms-sum__cell" data-done="${done}" data-total="${total}" data-percent="${pct.toFixed(1)}">
                       <span class="sb-ms-sum__bar" data-progress="${this.escapeHtml(text)}">
-                        <span style="width:${pct.toFixed(1)}%"></span>
+                        <span class="sb-ms-sum__seg sb-ms-sum__seg--done" style="width:${donePct.toFixed(1)}%"></span>
+                        <span class="sb-ms-sum__seg sb-ms-sum__seg--working" style="width:${workingPct.toFixed(1)}%"></span>
+                        <span class="sb-ms-sum__seg sb-ms-sum__seg--stuck" style="width:${stuckPct.toFixed(1)}%"></span>
+                        <span class="sb-ms-sum__seg sb-ms-sum__seg--empty" style="width:${emptyPct.toFixed(1)}%"></span>
                       </span>
                     </div>
                 </td>
@@ -155,6 +167,9 @@ export class BoardCell {
             
             case 'custom_entity_type':
                 return this.formatEntity(value);
+
+            case 'custom_fiscal_year':
+                return this.formatFiscalYear(value);
             
             case 'estimated_costing':
                 return this.formatCurrency(value);
@@ -257,6 +272,36 @@ export class BoardCell {
             return this.escapeHtml(parts.slice(-2).join(' '));
         }
         return this.escapeHtml(entity);
+    }
+
+    formatFiscalYear(fiscalYear) {
+        if (!fiscalYear) return '<span class="text-muted">—</span>';
+        const palettes = [
+            { bg: '#eef2ff', bd: '#c7d2fe', fg: '#3730a3' },
+            { bg: '#ecfeff', bd: '#a5f3fc', fg: '#155e75' },
+            { bg: '#ecfdf5', bd: '#a7f3d0', fg: '#065f46' },
+            { bg: '#fffbeb', bd: '#fde68a', fg: '#92400e' },
+            { bg: '#fff1f2', bd: '#fecdd3', fg: '#9f1239' },
+            { bg: '#f5f3ff', bd: '#ddd6fe', fg: '#5b21b6' },
+            { bg: '#eff6ff', bd: '#bfdbfe', fg: '#1e40af' },
+            { bg: '#f0fdf4', bd: '#bbf7d0', fg: '#166534' },
+        ];
+        const text = String(fiscalYear || '');
+        // Prefer year-based deterministic mapping so adjacent fiscal years render in distinct colors.
+        // Example: 2024-2025 / 2025-2026 should not collapse to the same color.
+        const m = text.match(/(\d{4})/);
+        let idx = -1;
+        if (m && m[1]) {
+            const y = Number(m[1]);
+            if (Number.isFinite(y)) idx = Math.abs(y) % palettes.length;
+        }
+        if (idx < 0) {
+            let hash = 0;
+            for (let i = 0; i < text.length; i += 1) hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+            idx = Math.abs(hash) % palettes.length;
+        }
+        const c = palettes[idx];
+        return `<span class="sb-fy-badge" style="background:${c.bg};border-color:${c.bd};color:${c.fg};">${this.escapeHtml(fiscalYear)}</span>`;
     }
     
     formatCurrency(amount) {

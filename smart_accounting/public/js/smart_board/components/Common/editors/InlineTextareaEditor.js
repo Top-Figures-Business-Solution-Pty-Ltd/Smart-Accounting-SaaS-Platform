@@ -20,6 +20,13 @@ export class InlineTextareaEditor {
     if (this._textarea) {
       this._textarea.value = String(this.initialValue ?? '');
       this._textarea.placeholder = String(this.placeholder ?? '');
+      // Keep wheel/touch scroll inside textarea; prevent table container scroll
+      // from force-committing the editor at the bottom rows.
+      const swallowScroll = (e) => {
+        e.stopPropagation();
+      };
+      this._textarea.addEventListener('wheel', swallowScroll, { passive: true });
+      this._textarea.addEventListener('touchmove', swallowScroll, { passive: true });
     }
   }
 

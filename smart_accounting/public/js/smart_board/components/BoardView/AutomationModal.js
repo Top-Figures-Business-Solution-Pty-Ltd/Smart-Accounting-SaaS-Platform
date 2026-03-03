@@ -213,7 +213,8 @@ export class AutomationModal {
       `<option value="${escapeHtml(k)}" ${k === actionType ? 'selected' : ''}>${escapeHtml(v.label || k)}</option>`
     ).join('');
 
-    const configHTML = this._configFieldsHTML(allActions[actionType], actionConfig, `action_${ruleIdx}_${actionIdx}`);
+    const resolvedMeta = this._resolveActionMetaForRender(actionType, actionConfig, allActions[actionType]);
+    const configHTML = this._configFieldsHTML(resolvedMeta, actionConfig, `action_${ruleIdx}_${actionIdx}`);
 
     const andLabel = showAnd ? '<span class="sb-automation__and-label">And</span>' : '<span class="sb-automation__label">Then</span>';
     const removeBtn = showAnd
@@ -231,6 +232,34 @@ export class AutomationModal {
         ${removeBtn}
       </div>
     `;
+  }
+
+  _resolveActionMetaForRender(actionType, actionConfig, rawMeta) {
+    const base = rawMeta ? { ...rawMeta } : null;
+    if (!base || !Array.isArray(base.config_fields)) return base;
+    if (String(actionType || '').trim() !== 'push_date') return base;
+
+    const pickedField = String(actionConfig?.date_field || '').trim();
+    const fields = base.config_fields.map((cf) => ({ ...cf }));
+    if (pickedField !== 'custom_target_month') {
+      base.config_fields = fields;
+      return base;
+    }
+
+    base.config_fields = fields.map((cf) => {
+      if (String(cf?.key || '') !== 'period') return cf;
+      const monthOpts = Array.from({ length: 12 }).map((_, i) => {
+        const n = i + 1;
+        return { value: String(n), label: `${n} month${n > 1 ? 's' : ''}` };
+      });
+      return {
+        ...cf,
+        label: 'Push by',
+        options: monthOpts,
+        default: '1',
+      };
+    });
+    return base;
   }
 
   _configFieldsHTML(typeMeta, config, prefix) {
@@ -284,7 +313,16 @@ export class AutomationModal {
       el.addEventListener('input', (e) => this._handleNameInput(e));
     });
     wrap.querySelectorAll('.sb-auto__config').forEach((el) => {
-      el.addEventListener('change', () => this._syncActiveRuleFromDOM());
+      el.addEventListener('change', (ev) => {
+        this._syncActiveRuleFromDOM();
+        const key = String(ev?.target?.dataset?.key || '').trim();
+        const prefix = String(ev?.target?.dataset?.prefix || '').trim();
+        // Re-render action row when push_date date_field changes so period options
+        // can switch between normal intervals and 1..12 target-month choices.
+        if (key === 'date_field' && prefix.startsWith('action_')) {
+          this._renderList();
+        }
+      });
       el.addEventListener('input', () => this._syncActiveRuleFromDOM());
     });
     wrap.querySelectorAll('.sb-auto__trigger-type').forEach((el) => {

@@ -285,7 +285,8 @@ export const ProjectsModule = {
                     // Pick commonly-affected fields from the response
                     const syncFields = [
                         'status', 'custom_lodgement_due_date', 'expected_end_date',
-                        'custom_project_frequency', 'modified',
+                        'custom_project_frequency', 'custom_target_month', 'custom_reset_date',
+                        'is_active', 'modified',
                     ];
                     for (const f of syncFields) {
                         if (f in updatedDoc && updatedDoc[f] !== undefined) {

@@ -824,7 +824,9 @@ export class BoardTable {
         this._onScroll = () => {
             // Requirement: click elsewhere saves; scrolling is a "leave cell" action too.
             if (this._editing?.isEditing?.()) {
-                this._editing.commitAndClose?.('scroll');
+                if (this._editing?.shouldCommitOnScroll?.() !== false) {
+                    this._editing.commitAndClose?.('scroll');
+                }
             }
 
             // Infinite scroll (pagination): when near bottom, fetch next page.
