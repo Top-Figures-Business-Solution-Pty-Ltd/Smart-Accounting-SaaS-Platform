@@ -286,6 +286,8 @@ export const ProjectsModule = {
                     const syncFields = [
                         'status', 'custom_lodgement_due_date', 'expected_end_date',
                         'custom_project_frequency', 'custom_target_month', 'custom_reset_date',
+                        'custom_year_end', 'custom_ato_status', 'custom_lodgeit_status',
+                        'custom_company_agent_status', 'custom_xeroquickbooks_status',
                         'is_active', 'modified',
                     ];
                     for (const f of syncFields) {

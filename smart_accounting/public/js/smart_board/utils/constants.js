@@ -73,6 +73,8 @@ export const STATUS_COLORS = {
     // New global status pool (2026-02)
     'Not started': '#6b7280', // slate/gray
     'Not started yet': '#6b7280', // task pool
+    'Not applicable': '#0ea5e9', // cyan-blue for clear distinction
+    'Not Applicable': '#0ea5e9',
     'Working on it': '#f59e0b', // amber
     'Stuck': '#ef4444', // task pool (red)
     'Waiting for client': '#a855f7', // purple
@@ -149,7 +151,12 @@ export const PROJECT_COLUMN_CATALOG = [
     { field: 'custom_project_frequency', label: 'Frequency', width: 120 },
     { field: 'custom_target_month', label: 'Target Month', width: 130 },
     { field: 'custom_fiscal_year', label: 'Fiscal Year', width: 120 },
+    { field: 'custom_year_end', label: 'Year End', width: 120 },
     { field: 'custom_reset_date', label: 'Reset Date', width: 130 },
+    { field: 'custom_ato_status', label: 'ATO Status', width: 140 },
+    { field: 'custom_lodgeit_status', label: 'LodgeIT Status', width: 150 },
+    { field: 'custom_company_agent_status', label: 'Company Agent Status', width: 190 },
+    { field: 'custom_xeroquickbooks_status', label: 'Xero/QuickBooks Status', width: 190 },
 
     // Money / notes / archive
     { field: 'estimated_costing', label: 'Budget', width: 120 },
@@ -200,6 +207,18 @@ export const DEFAULT_COLUMNS = {
         { field: 'status', label: 'Status', width: 150 },
         { field: 'custom_project_frequency', label: 'Frequency', width: 100 },
         { field: 'notes', label: 'Notes', width: 250 }
+    ],
+    'Client Information Update': [
+        { field: 'customer', label: 'Client Name', width: 220, frozen: true },
+        { field: 'project_name', label: 'Project Name', width: 240 },
+        { field: 'custom_ato_status', label: 'ATO', width: 140 },
+        { field: 'custom_lodgeit_status', label: 'LodgeIT', width: 150 },
+        { field: 'custom_company_agent_status', label: 'Company Agent', width: 190 },
+        { field: 'custom_xeroquickbooks_status', label: 'Xero/QuickBooks', width: 200 },
+        { field: 'custom_year_end', label: 'Year End', width: 120 },
+        { field: 'custom_fiscal_year', label: 'Fiscal Year', width: 130 },
+        { field: 'status', label: 'Status', width: 150 },
+        { field: 'modified', label: 'Last Updated', width: 160 }
     ],
     'DEFAULT': [
         { field: 'customer', label: 'Client Name', width: 200, frozen: true },

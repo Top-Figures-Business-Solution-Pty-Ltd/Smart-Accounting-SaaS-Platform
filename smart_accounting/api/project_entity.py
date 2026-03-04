@@ -34,6 +34,54 @@ def _normalize_int(v: Any, default: int) -> int:
 		return int(default)
 
 
+def _get_select_options(doctype: str, fieldname: str) -> list[str]:
+	try:
+		meta = frappe.get_meta(doctype)
+		field = meta.get_field(fieldname) if meta else None
+		raw = str(getattr(field, "options", "") or "")
+		return [x.strip() for x in raw.split("\n") if str(x).strip()]
+	except Exception:
+		return []
+
+
+def _resolve_project_entity_row(project_name: str, customer: str, customer_entity: str | None = None) -> dict | None:
+	"""
+	Resolve the Customer Entity row bound to a Project.
+	Priority:
+	1) Explicit Project.custom_customer_entity
+	2) Customer primary entity (is_primary=1)
+	"""
+	explicit = str(customer_entity or "").strip()
+	if explicit:
+		row = frappe.db.get_value(
+			"Customer Entity",
+			explicit,
+			["name", "parent", "entity_type", "year_end"],
+			as_dict=True,
+		)
+		if not row:
+			frappe.throw("Customer Entity not found")
+		parent = str(row.get("parent") or "").strip()
+		if parent and parent != str(customer or "").strip():
+			frappe.throw("Customer Entity does not belong to the Project's client")
+		return row
+
+	rows = frappe.get_all(
+		"Customer Entity",
+		filters={
+			"parenttype": "Customer",
+			"parentfield": "custom_entities",
+			"parent": customer,
+			"is_primary": 1,
+		},
+		fields=["name", "parent", "entity_type", "year_end"],
+		order_by="modified desc",
+		limit_page_length=1,
+		ignore_permissions=True,
+	)
+	return rows[0] if rows else None
+
+
 def attach_effective_entity_type(project_rows: list[dict]) -> list[dict]:
 	"""
 	Attach `custom_entity_type` to Project rows when missing.
@@ -211,6 +259,131 @@ def set_project_customer_entity(project: str | None = None, customer_entity: str
 		frappe.throw(str(e))
 
 	return {"project": pn, "custom_customer_entity": en, "custom_entity_type": entity_type}
+
+
+@frappe.whitelist()
+def set_project_year_end(project: str | None = None, year_end: str | None = None) -> dict:
+	"""
+	Set Project.custom_year_end and sync Customer Entity.year_end.
+	Used by Smart Board Year End column editing on Project board.
+	"""
+	_ensure_logged_in()
+	pn = str(project or "").strip()
+	ye = str(year_end or "").strip()
+	if not pn:
+		frappe.throw("project is required")
+	if not ye:
+		frappe.throw("year_end is required")
+
+	if not frappe.has_permission("Project", "write", pn):
+		frappe.throw("Not permitted", frappe.PermissionError)
+
+	customer = str(frappe.db.get_value("Project", pn, "customer") or "").strip()
+	if not customer:
+		frappe.throw("Project has no customer")
+
+	allowed = _get_select_options("Customer Entity", "year_end")
+	if allowed and ye not in allowed:
+		frappe.throw("Invalid year_end option")
+
+	cur_link = str(frappe.db.get_value("Project", pn, "custom_customer_entity") or "").strip()
+	row = _resolve_project_entity_row(pn, customer, cur_link or None)
+	if not row or not str(row.get("name") or "").strip():
+		frappe.throw("Client primary entity not found")
+
+	entity_name = str(row.get("name") or "").strip()
+	entity_type = str(row.get("entity_type") or "").strip()
+
+	# 1) Persist on Customer Entity (source of truth)
+	frappe.db.set_value("Customer Entity", entity_name, "year_end", ye, update_modified=True)
+
+	# 2) Persist on Project for direct board usage (if field exists)
+	project_update = {"custom_customer_entity": entity_name}
+	if entity_type:
+		project_update["custom_entity_type"] = entity_type
+	if frappe.db.has_column("Project", "custom_year_end"):
+		project_update["custom_year_end"] = ye
+	frappe.db.set_value("Project", pn, project_update, update_modified=True)
+
+	return {
+		"project": pn,
+		"custom_year_end": ye,
+		"custom_customer_entity": entity_name,
+		"custom_entity_type": entity_type,
+	}
+
+
+@frappe.whitelist()
+def backfill_project_year_end(limit: int = 50000, dry_run: int = 1, active_only: int = 0) -> dict:
+	"""
+	Backfill empty Project.custom_year_end from Customer Entity.year_end.
+	Use linked custom_customer_entity when available, otherwise customer's primary entity.
+	"""
+	_ensure_logged_in()
+	roles = set(frappe.get_roles(frappe.session.user) or [])
+	if frappe.session.user != "Administrator" and "System Manager" not in roles:
+		frappe.throw("Not permitted", frappe.PermissionError)
+
+	limit = max(1, min(200000, _normalize_int(limit, 50000)))
+	dry = 1 if int(dry_run or 0) else 0
+	active = 1 if int(active_only or 0) else 0
+	cond_active = " and ifnull(is_active,'')='Yes' " if active else ""
+	rows = frappe.db.sql(
+		f"""
+		select name, customer, custom_customer_entity, custom_entity_type, custom_year_end
+		from `tabProject`
+		where ifnull(customer,'')!=''
+		  and ifnull(custom_year_end,'')=''
+		  {cond_active}
+		order by modified desc
+		limit %s
+		""",
+		(limit,),
+		as_dict=True,
+	)
+	scanned = len(rows or [])
+	if not scanned:
+		return {"ok": True, "dry_run": dry, "scanned": 0, "will_update": 0, "updated": []}
+
+	will_update = 0
+	updated = []
+	for r in rows or []:
+		pn = str(r.get("name") or "").strip()
+		customer = str(r.get("customer") or "").strip()
+		link = str(r.get("custom_customer_entity") or "").strip()
+		if not pn or not customer:
+			continue
+		try:
+			entity_row = _resolve_project_entity_row(pn, customer, link or None)
+		except Exception:
+			entity_row = None
+		year_end = str((entity_row or {}).get("year_end") or "").strip()
+		entity_name = str((entity_row or {}).get("name") or "").strip()
+		entity_type = str((entity_row or {}).get("entity_type") or "").strip()
+		if not year_end:
+			continue
+		will_update += 1
+		if dry:
+			continue
+		payload = {"custom_year_end": year_end}
+		if entity_name and not link:
+			payload["custom_customer_entity"] = entity_name
+		if entity_type and not str(r.get("custom_entity_type") or "").strip():
+			payload["custom_entity_type"] = entity_type
+		try:
+			frappe.db.set_value("Project", pn, payload, update_modified=False)
+			if len(updated) < 100:
+				updated.append(pn)
+		except Exception:
+			continue
+
+	return {
+		"ok": True,
+		"dry_run": dry,
+		"scanned": scanned,
+		"will_update": will_update,
+		"updated": updated,
+	}
 
 
 @frappe.whitelist()

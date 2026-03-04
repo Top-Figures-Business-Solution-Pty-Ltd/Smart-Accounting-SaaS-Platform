@@ -194,6 +194,59 @@ async function getFiscalYearOptions() {
   return _fiscalYearOptionsLoading;
 }
 
+const _projectSelectOptionsCache = new Map();
+const _projectSelectOptionsLoading = new Map();
+async function getProjectSelectOptions(fieldname) {
+  const fn = String(fieldname || '').trim();
+  if (!fn) return [];
+  if (_projectSelectOptionsCache.has(fn)) return _projectSelectOptionsCache.get(fn) || [];
+  if (_projectSelectOptionsLoading.has(fn)) return _projectSelectOptionsLoading.get(fn);
+  const p = (async () => {
+    try {
+      const opts = await DoctypeMetaService.getSelectOptions('Project', fn, { force: true });
+      const list = Array.isArray(opts) ? opts.filter(Boolean) : [];
+      _projectSelectOptionsCache.set(fn, list);
+      return list;
+    } catch (e) {
+      _projectSelectOptionsCache.set(fn, []);
+      return [];
+    } finally {
+      _projectSelectOptionsLoading.delete(fn);
+    }
+  })();
+  _projectSelectOptionsLoading.set(fn, p);
+  return p;
+}
+
+function projectFieldMenuEditor({ cellEl, project, manager, field }) {
+  const contentEl = cellEl.querySelector('.cell-content') || cellEl;
+  const current = String(project?.[field] || '').trim();
+  const ed = new InlineMenuSelectEditor(contentEl, {
+    options: current ? [{ value: current, label: current, color: STATUS_COLORS[current] || '' }] : [],
+    initialValue: current
+  });
+
+  contentEl.addEventListener('sb:menu-select', (e) => {
+    e.stopPropagation?.();
+    manager?.commitAndClose?.('menu-select');
+  }, { once: true });
+  contentEl.addEventListener('sb:menu-close', () => {
+    manager?.commitAndClose?.('menu-close');
+  }, { once: true });
+
+  getProjectSelectOptions(field).then((opts) => {
+    if (!contentEl?.isConnected) return;
+    if (Array.isArray(opts) && opts.length) {
+      ed.options = opts.map((v) => ({ value: v, label: v, color: STATUS_COLORS[v] || '' }));
+      ed.render();
+      mountEditorHelpers(manager, contentEl, ed);
+    }
+  });
+
+  mountEditorHelpers(manager, contentEl, ed);
+  return ed;
+}
+
 function companyMenuEditor({ cellEl, project, manager, field }) {
   const contentEl = cellEl.querySelector('.cell-content') || cellEl;
 
@@ -456,6 +509,52 @@ export function makeProjectColumnSpecs() {
         `;
       },
       renderEditor: ({ cellEl, project, manager, field }) => statusMenuEditor({ cellEl, project, manager, field })
+    },
+
+    // Client Information Update statuses (Project custom Select fields)
+    {
+      field: 'custom_ato_status',
+      isEditable: true,
+      renderCell: ({ project }) => {
+        const v = project?.custom_ato_status;
+        if (!v) return '<span class="text-muted">—</span><span class="sb-afford sb-afford--select">▾</span>';
+        const color = STATUS_COLORS[v] || '#6c757d';
+        return `<span class="status-badge" style="background-color:${escapeHtml(color)};">${escapeHtml(v)}</span><span class="sb-afford sb-afford--select">▾</span>`;
+      },
+      renderEditor: ({ cellEl, project, manager, field }) => projectFieldMenuEditor({ cellEl, project, manager, field })
+    },
+    {
+      field: 'custom_lodgeit_status',
+      isEditable: true,
+      renderCell: ({ project }) => {
+        const v = project?.custom_lodgeit_status;
+        if (!v) return '<span class="text-muted">—</span><span class="sb-afford sb-afford--select">▾</span>';
+        const color = STATUS_COLORS[v] || '#6c757d';
+        return `<span class="status-badge" style="background-color:${escapeHtml(color)};">${escapeHtml(v)}</span><span class="sb-afford sb-afford--select">▾</span>`;
+      },
+      renderEditor: ({ cellEl, project, manager, field }) => projectFieldMenuEditor({ cellEl, project, manager, field })
+    },
+    {
+      field: 'custom_company_agent_status',
+      isEditable: true,
+      renderCell: ({ project }) => {
+        const v = project?.custom_company_agent_status;
+        if (!v) return '<span class="text-muted">—</span><span class="sb-afford sb-afford--select">▾</span>';
+        const color = STATUS_COLORS[v] || '#6c757d';
+        return `<span class="status-badge" style="background-color:${escapeHtml(color)};">${escapeHtml(v)}</span><span class="sb-afford sb-afford--select">▾</span>`;
+      },
+      renderEditor: ({ cellEl, project, manager, field }) => projectFieldMenuEditor({ cellEl, project, manager, field })
+    },
+    {
+      field: 'custom_xeroquickbooks_status',
+      isEditable: true,
+      renderCell: ({ project }) => {
+        const v = project?.custom_xeroquickbooks_status;
+        if (!v) return '<span class="text-muted">—</span><span class="sb-afford sb-afford--select">▾</span>';
+        const color = STATUS_COLORS[v] || '#6c757d';
+        return `<span class="status-badge" style="background-color:${escapeHtml(color)};">${escapeHtml(v)}</span><span class="sb-afford sb-afford--select">▾</span>`;
+      },
+      renderEditor: ({ cellEl, project, manager, field }) => projectFieldMenuEditor({ cellEl, project, manager, field })
     },
 
     // (4) End Date - date
@@ -776,7 +875,7 @@ export function makeProjectColumnSpecs() {
       },
     },
 
-    // (16) Fiscal Year - read-only
+    // (16) Fiscal Year
     {
       field: 'custom_fiscal_year',
       isEditable: true,
@@ -810,6 +909,33 @@ export function makeProjectColumnSpecs() {
         mountEditorHelpers(manager, contentEl, ed);
         return ed;
       }
+    },
+    {
+      field: 'custom_year_end',
+      isEditable: true,
+      renderCell: ({ project }) => {
+        const v = String(project?.custom_year_end || '').trim();
+        if (!v) return '<span class="text-muted">—</span><span class="sb-afford sb-afford--select">▾</span>';
+        return `<span class="status-badge" style="background-color:#475569;">${escapeHtml(v)}</span><span class="sb-afford sb-afford--select">▾</span>`;
+      },
+      renderEditor: ({ cellEl, project, manager, field }) => projectFieldMenuEditor({ cellEl, project, manager, field }),
+      async commit({ project, projectName, value, store }) {
+        const to = String(value || '').trim();
+        const from = String(project?.custom_year_end || '').trim();
+        if (!to || to === from) return;
+        try {
+          const r = await ProjectEntityService.setProjectYearEnd(projectName, to);
+          store?.commit?.('projects/updateProject', {
+            name: projectName,
+            custom_year_end: String(r?.custom_year_end || to).trim(),
+            custom_customer_entity: String(r?.custom_customer_entity || project?.custom_customer_entity || '').trim(),
+            custom_entity_type: String(r?.custom_entity_type || project?.custom_entity_type || '').trim(),
+          });
+          notify('Year End updated', 'green');
+        } catch (e) {
+          notify(getErrorMessage(e) || 'Update Year End failed', 'red');
+        }
+      },
     },
 
     // (20) System/meta fields that should never be edited from the board

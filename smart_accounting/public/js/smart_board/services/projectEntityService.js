@@ -26,6 +26,18 @@ export class ProjectEntityService {
     return r?.message || {};
   }
 
+  static async setProjectYearEnd(projectName, yearEnd) {
+    const pn = String(projectName || '').trim();
+    const ye = String(yearEnd || '').trim();
+    if (!pn) throw new Error('Missing project');
+    if (!ye) throw new Error('Missing year_end');
+    const r = await frappe.call({
+      method: 'smart_accounting.api.project_entity.set_project_year_end',
+      args: { project: pn, year_end: ye },
+    });
+    return r?.message || {};
+  }
+
   static async backfillMissingProjectEntities({ limit = 2000, dryRun = true, activeOnly = false } = {}) {
     const r = await frappe.call({
       method: 'smart_accounting.api.project_entity.backfill_project_customer_entities',

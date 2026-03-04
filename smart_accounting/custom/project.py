@@ -31,6 +31,9 @@ class CustomProject(Project):
         # Normalize customer as early as possible.
         # Frappe runs link validation during insert before validate(), so this must happen here.
         self._normalize_customer_link()
+        # Auto-sync Project Year End on creation when empty:
+        # source of truth is Customer Entity.year_end.
+        self._sync_year_end_from_customer_entity_on_create()
 
         try:
             f = self.meta.get_field("status") if getattr(self, "meta", None) else None
@@ -49,6 +52,66 @@ class CustomProject(Project):
         # Prefer our canonical default if present
         preferred = "Not started"
         self.status = preferred if preferred in opts else opts[0]
+
+    def _sync_year_end_from_customer_entity_on_create(self):
+        """
+        If Project.custom_year_end is empty on insert, pull from:
+        1) linked Customer Entity (custom_customer_entity), else
+        2) customer's primary Customer Entity.
+        """
+        try:
+            cur = str(getattr(self, "custom_year_end", "") or "").strip()
+        except Exception:
+            cur = ""
+        # Important:
+        # Some sites set a default (e.g. January) on Project.custom_year_end.
+        # Treat default-filled value as "empty" for create-time auto-sync.
+        # Only preserve when user provided a non-default explicit value.
+        default_val = ""
+        try:
+            f = self.meta.get_field("custom_year_end") if getattr(self, "meta", None) else None
+            default_val = str(getattr(f, "default", "") or "").strip()
+        except Exception:
+            default_val = ""
+        if cur and (not default_val or cur != default_val):
+            return
+
+        customer = str(getattr(self, "customer", "") or "").strip()
+        if not customer:
+            return
+
+        entity_name = str(getattr(self, "custom_customer_entity", "") or "").strip()
+        year_end = ""
+        if entity_name:
+            try:
+                year_end = str(frappe.db.get_value("Customer Entity", entity_name, "year_end") or "").strip()
+            except Exception:
+                year_end = ""
+
+        if not year_end:
+            try:
+                rows = frappe.get_all(
+                    "Customer Entity",
+                    filters={
+                        "parenttype": "Customer",
+                        "parentfield": "custom_entities",
+                        "parent": customer,
+                        "is_primary": 1,
+                    },
+                    fields=["name", "year_end"],
+                    order_by="modified desc",
+                    limit_page_length=1,
+                )
+            except Exception:
+                rows = []
+            if rows:
+                entity_name = str(rows[0].get("name") or "").strip()
+                year_end = str(rows[0].get("year_end") or "").strip()
+                if entity_name and not str(getattr(self, "custom_customer_entity", "") or "").strip():
+                    self.custom_customer_entity = entity_name
+
+        if year_end:
+            self.custom_year_end = year_end
 
     def update_percent_complete(self):
         """

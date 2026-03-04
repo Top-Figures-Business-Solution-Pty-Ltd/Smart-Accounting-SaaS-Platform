@@ -23,6 +23,9 @@ export function sanitizeProjectColumnsConfig(columnsConfig) {
       if (field === 'team:Reviewer') {
         return { ...c, field: 'team:Manager', label: c?.label || 'Manager' };
       }
+      if (field === 'custom_xero_qb_status') {
+        return { ...c, field: 'custom_xeroquickbooks_status', label: c?.label || 'Xero/QuickBooks Status' };
+      }
       return c;
     });
 }

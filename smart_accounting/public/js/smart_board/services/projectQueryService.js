@@ -63,11 +63,16 @@ export class ProjectQueryService {
       'custom_entity_type',
       'custom_team_members',
       'custom_fiscal_year',
+      'custom_year_end',
       'custom_target_month',
       'custom_lodgement_due_date',
       'custom_reset_date',
       'custom_project_frequency',
       'custom_softwares',
+      'custom_ato_status',
+      'custom_lodgeit_status',
+      'custom_company_agent_status',
+      'custom_xeroquickbooks_status',
     ];
 
     const minimalFields = [

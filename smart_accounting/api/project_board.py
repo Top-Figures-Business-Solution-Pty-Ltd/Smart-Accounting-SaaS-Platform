@@ -230,6 +230,74 @@ def _attach_effective_entity_type(project_rows: list[dict]) -> list[dict]:
 		return project_rows
 
 
+def _attach_effective_year_end(project_rows: list[dict]) -> list[dict]:
+	"""
+	Attach Project.custom_year_end for UI display when missing.
+	Uses:
+	- Project.custom_customer_entity override -> Customer Entity.year_end
+	- fallback -> Customer primary entity year_end
+	"""
+	rows = list(project_rows or [])
+	if not rows:
+		return rows
+	customers = [str(r.get("customer") or "").strip() for r in rows if str(r.get("customer") or "").strip()]
+	links = [str(r.get("custom_customer_entity") or "").strip() for r in rows if str(r.get("custom_customer_entity") or "").strip()]
+	customers = list(dict.fromkeys(customers))
+	links = list(dict.fromkeys(links))
+
+	by_link: dict[str, str] = {}
+	by_customer_primary: dict[str, str] = {}
+
+	if links:
+		try:
+			erows = frappe.get_all(
+				"Customer Entity",
+				filters=[["name", "in", links]],
+				fields=["name", "year_end"],
+				ignore_permissions=True,
+				limit_page_length=100000,
+			)
+			for e in erows or []:
+				n = str(e.get("name") or "").strip()
+				y = str(e.get("year_end") or "").strip()
+				if n and y:
+					by_link[n] = y
+		except Exception:
+			pass
+
+	if customers:
+		try:
+			prows = frappe.get_all(
+				"Customer Entity",
+				filters=[["parent", "in", customers], ["is_primary", "=", 1]],
+				fields=["parent", "year_end"],
+				ignore_permissions=True,
+				limit_page_length=100000,
+			)
+			for e in prows or []:
+				c = str(e.get("parent") or "").strip()
+				y = str(e.get("year_end") or "").strip()
+				if c and y and c not in by_customer_primary:
+					by_customer_primary[c] = y
+		except Exception:
+			pass
+
+	for r in rows:
+		try:
+			if str(r.get("custom_year_end") or "").strip():
+				continue
+			link = str(r.get("custom_customer_entity") or "").strip()
+			if link and link in by_link:
+				r["custom_year_end"] = by_link.get(link) or ""
+				continue
+			c = str(r.get("customer") or "").strip()
+			if c and c in by_customer_primary:
+				r["custom_year_end"] = by_customer_primary.get(c) or ""
+		except Exception:
+			continue
+	return rows
+
+
 def _project_names_with_read_permission(names: list[str]) -> list[str]:
 	# Respect Project permissions first; this bounds all downstream queries.
 	allowed = frappe.get_all("Project", filters=[["name", "in", names]], pluck="name")
@@ -417,6 +485,9 @@ def get_projects_list(
 		# Entity display depends on Customer Entity override/fallback.
 		if req_fields and "custom_entity_type" in req_fields and "custom_customer_entity" not in req_fields:
 			req_fields.append("custom_customer_entity")
+		# Year End display depends on Customer Entity override/fallback.
+		if req_fields and "custom_year_end" in req_fields and "custom_customer_entity" not in req_fields:
+			req_fields.append("custom_customer_entity")
 	except Exception:
 		pass
 
@@ -457,6 +528,16 @@ def get_projects_list(
 	if need_entity:
 		try:
 			_attach_effective_entity_type(rows)
+		except Exception:
+			pass
+	# Year End enrichment when caller requested year_end and DB value is empty.
+	try:
+		need_year_end = bool(req_fields) and ("custom_year_end" in req_fields)
+	except Exception:
+		need_year_end = False
+	if need_year_end:
+		try:
+			_attach_effective_year_end(rows)
 		except Exception:
 			pass
 
