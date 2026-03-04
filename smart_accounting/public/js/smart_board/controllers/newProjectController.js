@@ -20,15 +20,27 @@ export async function openNewProjectFlow({ app, viewType } = {}) {
   const currentView = String(viewType || app?.currentView || '').trim();
   const store = app?.store || null;
   const stateFilters = store?.getState?.()?.filters || {};
+  const fixedCustomer = (currentView === 'client-projects')
+    ? String(stateFilters?.customer || '').trim()
+    : '';
+
+  if (currentView === 'client-projects' && !fixedCustomer) {
+    notify('No client selected. Please open a client first.', 'orange');
+    return null;
+  }
 
   const modal = new NewProjectModal({
     title: 'New Project',
     initial: {
-      project_type: currentView || null,
+      project_type: (currentView === 'client-projects') ? null : (currentView || null),
       // If user has an active fiscal_year filter, reuse it for creation.
       fiscal_year: stateFilters?.fiscal_year || null,
+      customer: fixedCustomer || null,
     },
+    fixedCustomer: fixedCustomer || null,
+    lockCustomer: currentView === 'client-projects',
     onCreateClient: async ({ initialName, onCreated } = {}) => {
+      if (currentView === 'client-projects') return;
       await openNewClientFlow({
         app,
         initial: { customer_name: initialName || '' },
@@ -53,14 +65,19 @@ export async function openNewProjectFlow({ app, viewType } = {}) {
 
       const doc = await ProjectCreateService.createProject({ ...payload, status });
       notify('Project created', 'green');
-      // Refresh current board list so newly created row appears and columns/hydration are consistent.
-      const last = store?.getState?.()?.projects?.lastFilters || null;
-      const base = { ...(last || {}), project_type: payload.project_type };
-      try {
-        await store?.dispatch?.('projects/fetchProjects', base);
-      } catch (e) {
-        // fallback: optimistic insert if fetch fails
-        if (doc?.name) store?.commit?.('projects/addProject', doc);
+      if (currentView === 'client-projects') {
+        // Keep client scope and refresh cross-project-type list.
+        await app?.loadViewData?.('client-projects');
+      } else {
+        // Refresh current board list so newly created row appears and columns/hydration are consistent.
+        const last = store?.getState?.()?.projects?.lastFilters || null;
+        const base = { ...(last || {}), project_type: payload.project_type };
+        try {
+          await store?.dispatch?.('projects/fetchProjects', base);
+        } catch (e) {
+          // fallback: optimistic insert if fetch fails
+          if (doc?.name) store?.commit?.('projects/addProject', doc);
+        }
       }
       return doc;
     },

@@ -52,6 +52,7 @@ export function renderHeaderActions(view, { isBoardView }) {
                     id="headerClientProjectsSearchInput"
                 />
             </div>
+            <button class="btn btn-primary" id="btnClientProjectsNewProject">New Project</button>
         `;
     }
 
@@ -98,6 +99,7 @@ export function bindHeaderActions(rootEl, view, { isBoardView, onAction, onShowF
     rootEl.querySelector('#btnDashboardRefresh')?.addEventListener('click', () => onAction?.('dashboard_refresh'));
 
     rootEl.querySelector('#btnClientProjectsBack')?.addEventListener('click', () => onAction?.('client_projects_back'));
+    rootEl.querySelector('#btnClientProjectsNewProject')?.addEventListener('click', () => onAction?.('client_projects_new_project'));
     const clientProjectsSearch = rootEl.querySelector('#headerClientProjectsSearchInput');
     if (clientProjectsSearch) {
         let t;

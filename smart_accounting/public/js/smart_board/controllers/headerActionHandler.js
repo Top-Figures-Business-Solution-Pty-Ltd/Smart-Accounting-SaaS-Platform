@@ -36,6 +36,8 @@ export async function handleHeaderAction(app, action, data) {
       return app?.loadViewData?.('dashboard');
     case 'client_projects_back':
       return app?.goBackToClients?.();
+    case 'client_projects_new_project':
+      return app?.createNewProject?.();
     case 'client_projects_search':
       return app?.performSearch?.(data);
     default:

@@ -10,9 +10,11 @@ import { getErrorMessage } from '../../utils/errorMessage.js';
 import { escapeHtml } from '../../utils/dom.js';
 
 export class NewProjectModal {
-  constructor({ title = 'New Project', initial = {}, onSubmit, onCreateClient, onClose } = {}) {
+  constructor({ title = 'New Project', initial = {}, fixedCustomer = null, lockCustomer = false, onSubmit, onCreateClient, onClose } = {}) {
     this.title = title;
     this.initial = initial || {};
+    this.fixedCustomer = String(fixedCustomer || '').trim();
+    this.lockCustomer = !!lockCustomer;
     this.onSubmit = onSubmit || (async () => {});
     this.onCreateClient = onCreateClient || null;
     this.onClose = onClose || (() => {});
@@ -27,13 +29,15 @@ export class NewProjectModal {
     this.close();
 
     const content = document.createElement('div');
-    content.innerHTML = `
-      <div class="sb-newproj">
+    const customerRowHTML = this.lockCustomer
+      ? `
         <div class="sb-newproj__row">
-          <label class="sb-newproj__label">Project Name</label>
-          <input class="form-control" id="sbNewProjName" type="text" placeholder="e.g. Client A - FY25 ITR" />
+          <label class="sb-newproj__label">Client</label>
+          <div id="sbNewProjCustomer"></div>
+          <div class="text-muted" style="font-size:12px; margin-top:6px;">Client is fixed from current client context.</div>
         </div>
-
+      `
+      : `
         <div class="sb-newproj__row">
           <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
             <label class="sb-newproj__label" style="margin:0;">Client</label>
@@ -43,6 +47,15 @@ export class NewProjectModal {
           </div>
           <div id="sbNewProjCustomer"></div>
         </div>
+      `;
+    content.innerHTML = `
+      <div class="sb-newproj">
+        <div class="sb-newproj__row">
+          <label class="sb-newproj__label">Project Name</label>
+          <input class="form-control" id="sbNewProjName" type="text" placeholder="e.g. Client A - FY25 ITR" />
+        </div>
+
+        ${customerRowHTML}
 
         <div class="sb-newproj__row">
           <label class="sb-newproj__label">Company</label>
@@ -96,7 +109,8 @@ export class NewProjectModal {
     if (nameEl) nameEl.value = this.initial.project_name || '';
 
     // Link inputs
-    this._mountLink('sbNewProjCustomer', 'Customer', this.initial.customer || null);
+    const customerInitial = this.fixedCustomer || this.initial.customer || null;
+    this._mountLink('sbNewProjCustomer', 'Customer', customerInitial);
     this._mountLink('sbNewProjCompany', 'Company', this.initial.company || null);
     this._mountLink('sbNewProjFiscalYear', 'Fiscal Year', this.initial.custom_fiscal_year || this.initial.fiscal_year || null);
     this._mountLink('sbNewProjType', 'Project Type', this.initial.project_type || null);
@@ -112,6 +126,16 @@ export class NewProjectModal {
     if (!this.onCreateClient) {
       const btn = content.querySelector('#sbNewProjNewClient');
       if (btn) btn.style.display = 'none';
+    }
+    if (this.lockCustomer) {
+      const customerMount = content.querySelector('#sbNewProjCustomer');
+      const customerInput = customerMount?.querySelector?.('input');
+      if (customerInput) {
+        customerInput.readOnly = true;
+        customerInput.disabled = true;
+        customerInput.style.background = '#f8f9fa';
+        customerInput.style.cursor = 'not-allowed';
+      }
     }
 
     // Enter to submit when in Project Name field
@@ -262,7 +286,7 @@ export class NewProjectModal {
   async _handleSubmit() {
     this._setError('');
     const name = String(this._root?.querySelector?.('#sbNewProjName')?.value || '').trim();
-    const customer = this._readValueFromLinkInput('Customer');
+    const customer = this.fixedCustomer || this._readValueFromLinkInput('Customer');
     const company = this._readValueFromLinkInput('Company');
     const custom_fiscal_year = this._readValueFromLinkInput('Fiscal Year');
     const project_type = this._readValueFromLinkInput('Project Type');

@@ -8,6 +8,14 @@ import { DoctypeMetaService } from '../../services/doctypeMetaService.js';
 import { formatClientName } from '../../utils/clientNameFormat.js';
 import { ClientsService } from '../../services/clientsService.js';
 
+function mapEntityTypeFromCustomerType(customerType) {
+  const t = String(customerType || '').trim().toLowerCase();
+  if (t === 'company') return 'Company';
+  if (t === 'trust') return 'Trust';
+  if (t === 'partner' || t === 'partnership') return 'Partnership';
+  return 'Individual';
+}
+
 export class NewClientModal {
   constructor({ title = 'New Client', initial = {}, onSubmit, onClose } = {}) {
     this.title = title;
@@ -126,9 +134,12 @@ export class NewClientModal {
     // Customer.customer_type options
     const types = await DoctypeMetaService.getSelectOptions('Customer', 'customer_type');
     const safeTypes = (types || []).filter(Boolean);
+    if (!safeTypes.some((t) => String(t || '').trim().toLowerCase() === 'trust')) {
+      safeTypes.push('Trust');
+    }
     typeSel.innerHTML = safeTypes.length
       ? safeTypes.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')
-      : `<option value="Individual">Individual</option><option value="Company">Company</option>`;
+      : `<option value="Individual">Individual</option><option value="Company">Company</option><option value="Partnership">Partnership</option><option value="Trust">Trust</option>`;
 
     // Customer Entity.year_end options (configured in ERPNext)
     const yearEnds = await DoctypeMetaService.getSelectOptions('Customer Entity', 'year_end', { force: true });
@@ -178,7 +189,7 @@ export class NewClientModal {
     // We keep the backend interface ready for future multi-entity expansion.
     const primary_entity = {
       entity_name: customer_name,
-      entity_type: (customer_type === 'Company' ? 'Company' : 'Individual'),
+      entity_type: mapEntityTypeFromCustomerType(customer_type),
       year_end: year_end,
       abn: abn || null,
     };
@@ -243,7 +254,7 @@ export class NewClientModal {
           customer_type,
           primary_entity: {
             entity_name: choice,
-            entity_type: (customer_type === 'Company' ? 'Company' : 'Individual'),
+            entity_type: mapEntityTypeFromCustomerType(customer_type),
             year_end: year_end,
             abn: abn || null,
           },
@@ -260,7 +271,7 @@ export class NewClientModal {
           customer_type,
           primary_entity: {
             entity_name: choice,
-            entity_type: (customer_type === 'Company' ? 'Company' : 'Individual'),
+            entity_type: mapEntityTypeFromCustomerType(customer_type),
             year_end: year_end,
             abn: abn || null,
           },

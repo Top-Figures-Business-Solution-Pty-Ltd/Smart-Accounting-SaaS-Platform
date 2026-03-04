@@ -106,6 +106,27 @@ def _get_select_options(doctype: str, fieldname: str) -> list[str]:
 		return []
 
 
+def _normalize_customer_type_for_customer(customer_type: str) -> str:
+	"""
+	Normalize input customer_type against Customer.customer_type options.
+	Fallback strategy:
+	- If input exists in options: keep it.
+	- If input is Trust but Customer doesn't support Trust: fallback to Company.
+	- Else fallback to first available option, then 'Individual'.
+	"""
+	ct = str(customer_type or "").strip()
+	opts = [str(x or "").strip() for x in (_get_select_options("Customer", "customer_type") or []) if str(x or "").strip()]
+	if not opts:
+		return ct or "Individual"
+	if ct in opts:
+		return ct
+	if ct.lower() == "trust":
+		for cand in ("Company", "Individual"):
+			if cand in opts:
+				return cand
+	return opts[0]
+
+
 def _find_client_name_conflicts(name: str | None = None, exclude_name: str | None = None) -> list[dict]:
 	q = str(name or "").strip()
 	if not q:
@@ -354,7 +375,8 @@ def create_client(payload: dict | None = None) -> dict:
 	if conflicts:
 		frappe.throw("Client name already exists. Please use a unique name.")
 
-	customer_type = str(data.get("customer_type") or "").strip() or "Individual"
+	raw_customer_type = str(data.get("customer_type") or "").strip() or "Individual"
+	customer_type = _normalize_customer_type_for_customer(raw_customer_type)
 	customer_group = str(data.get("customer_group") or "").strip() or (_pick_default("Customer Group", "All Customer Groups") or "")
 	territory = str(data.get("territory") or "").strip() or (_pick_default("Territory", "All Territories") or "")
 
