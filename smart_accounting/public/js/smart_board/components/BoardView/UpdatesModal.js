@@ -18,10 +18,16 @@ export class UpdatesModal {
     this._items = [];
     this._loading = false;
     this._posting = false;
-    this._limit = 30;
+    this._saving = false;
+    this._deleting = false;
+    this._limit = 20;
+    this._cursor = 0;
+    this._totalCount = 0;
     this._listEl = null;
+    this._loadMoreBtn = null;
     this._mentionPicker = null;
     this._mentions = []; // [{name, full_name}]
+    this._editingName = '';
   }
 
   open() {
@@ -32,12 +38,15 @@ export class UpdatesModal {
     content.innerHTML = `
       <div class="sb-updates">
         <div class="sb-updates__hint text-muted">Updates</div>
-        <div class="sb-updates__list" id="sbUpdatesList" style="margin: 10px 0; padding: 10px; border: 1px solid var(--smart-board-border); border-radius: 10px; min-height: 120px;">
+        <div class="sb-updates__list" id="sbUpdatesList">
           <div class="text-muted">Loading…</div>
+        </div>
+        <div class="sb-updates__more-wrap">
+          <button class="btn btn-default sb-updates__more" type="button" data-action="load-more" style="display:none;">Load more</button>
         </div>
         <div class="sb-updates__composer">
           <textarea class="form-control sb-updates__textarea" rows="4" placeholder="Write a new update..."></textarea>
-          <div style="display:flex; justify-content:flex-end; gap:10px; margin-top: 10px;">
+          <div class="sb-updates__composer-actions">
             <button class="btn btn-default" type="button" data-action="cancel">Cancel</button>
             <button class="btn btn-primary" type="button" data-action="post">Post</button>
           </div>
@@ -59,7 +68,9 @@ export class UpdatesModal {
 
     const ta = content.querySelector('.sb-updates__textarea');
     const listEl = content.querySelector('#sbUpdatesList');
+    const loadMoreBtn = content.querySelector('button[data-action="load-more"]');
     this._listEl = listEl;
+    this._loadMoreBtn = loadMoreBtn;
     setTimeout(() => { try { ta?.focus?.(); } catch (e) {} }, 0);
 
     // @mention picker (MVP)
@@ -86,6 +97,17 @@ export class UpdatesModal {
         this.close();
       } else if (action === 'post') {
         this._postUpdate(ta);
+      } else if (action === 'load-more') {
+        this._loadMore();
+      } else if (action === 'edit') {
+        this._startEdit(btn.dataset.name);
+      } else if (action === 'cancel-edit') {
+        this._editingName = '';
+        this._renderList();
+      } else if (action === 'save-edit') {
+        this._saveEdit(btn.dataset.name);
+      } else if (action === 'delete') {
+        this._deleteItem(btn.dataset.name);
       }
     });
   }
@@ -94,16 +116,47 @@ export class UpdatesModal {
     if (this._loading) return;
     const projectName = this.project?.name;
     if (!projectName) return;
+    this._cursor = 0;
+    this._totalCount = 0;
     this._loading = true;
     try {
-      const items = await UpdatesService.listProjectUpdates(projectName, { limitStart: 0, limit: this._limit });
-      this._items = Array.isArray(items) ? items : [];
+      const msg = await UpdatesService.listProjectUpdates(projectName, { limitStart: 0, limit: this._limit });
+      const items = Array.isArray(msg?.items) ? msg.items : [];
+      this._items = items;
+      this._cursor = items.length;
+      this._totalCount = Number(msg?.meta?.total_count || items.length || 0);
       this._renderList();
+      this._updateLoadMoreState();
     } catch (e) {
       console.error(e);
       this._renderError(e?.message || String(e));
     } finally {
       this._loading = false;
+    }
+  }
+
+  async _loadMore() {
+    if (this._loading) return;
+    const projectName = this.project?.name;
+    if (!projectName) return;
+    if (!this._hasMore()) return;
+    this._loading = true;
+    this._updateLoadMoreState();
+    try {
+      const msg = await UpdatesService.listProjectUpdates(projectName, { limitStart: this._cursor, limit: this._limit });
+      const next = Array.isArray(msg?.items) ? msg.items : [];
+      this._items = (this._items || []).concat(next);
+      this._cursor += next.length;
+      const total = Number(msg?.meta?.total_count || 0);
+      if (total > 0) this._totalCount = total;
+      this._renderList();
+      this._updateLoadMoreState();
+    } catch (e) {
+      console.error(e);
+      notify(e?.message || 'Failed to load more', 'red');
+    } finally {
+      this._loading = false;
+      this._updateLoadMoreState();
     }
   }
 
@@ -134,21 +187,54 @@ export class UpdatesModal {
       }
       return s;
     };
-    const rows = items.map((it) => {
+    const rows = [];
+    let lastDay = '';
+    items.forEach((it) => {
+      const dayKey = this._dayKey(it?.creation);
+      if (dayKey && dayKey !== lastDay) {
+        rows.push(`<div class="sb-updates__day">${escapeHtml(this._dayLabel(it?.creation))}</div>`);
+        lastDay = dayKey;
+      }
       const by = escapeHtml(it?.comment_by || it?.owner || it?.comment_email || 'Unknown');
-      const when = escapeHtml(String(it?.creation || '').replace('T', ' ').slice(0, 19));
+      const when = escapeHtml(this._timeLabel(it?.creation));
       const content = escapeHtml(toPlainText(it?.content || ''));
-      return `
-        <div class="sb-updates__item" style="padding:10px 0; border-bottom: 1px solid rgba(0,0,0,0.06);">
-          <div style="display:flex; justify-content:space-between; gap:10px;">
-            <div style="font-weight:600;">${by}</div>
-            <div class="text-muted" style="font-size:12px;">${when}</div>
+      const name = String(it?.name || '');
+      const isEditing = !!name && name === this._editingName;
+      const canManage = !!it?.can_manage;
+      const editedTag = it?.is_edited ? `<span class="sb-updates__edited text-muted">(edited)</span>` : '';
+      if (isEditing) {
+        rows.push(`
+          <div class="sb-updates__item">
+            <div class="sb-updates__meta">
+              <div class="sb-updates__author">${by}</div>
+              <div class="sb-updates__when">${when}</div>
+            </div>
+            <textarea class="form-control sb-updates__edit-textarea" data-edit-name="${escapeHtml(name)}" rows="4">${content}</textarea>
+            <div class="sb-updates__actions">
+              <button class="btn btn-default btn-xs" type="button" data-action="cancel-edit" data-name="${escapeHtml(name)}">Cancel</button>
+              <button class="btn btn-primary btn-xs" type="button" data-action="save-edit" data-name="${escapeHtml(name)}">Save</button>
+            </div>
           </div>
-          <div style="margin-top:6px; white-space:pre-wrap;">${content}</div>
+        `);
+        return;
+      }
+      rows.push(`
+        <div class="sb-updates__item">
+          <div class="sb-updates__meta">
+            <div class="sb-updates__author">${by} ${editedTag}</div>
+            <div class="sb-updates__when">${when}</div>
+          </div>
+          <div class="sb-updates__content">${content}</div>
+          ${canManage ? `
+            <div class="sb-updates__actions">
+              <button class="btn btn-default btn-xs" type="button" data-action="edit" data-name="${escapeHtml(name)}">Edit</button>
+              <button class="btn btn-default btn-xs" type="button" data-action="delete" data-name="${escapeHtml(name)}">Delete</button>
+            </div>
+          ` : ''}
         </div>
-      `;
-    }).join('');
-    this._listEl.innerHTML = `<div class="sb-updates__items">${rows}</div>`;
+      `);
+    });
+    this._listEl.innerHTML = `<div class="sb-updates__items">${rows.join('')}</div>`;
   }
 
   async _postUpdate(textareaEl) {
@@ -173,7 +259,10 @@ export class UpdatesModal {
       if (item) {
         // Prepend (we render newest-first)
         this._items = [item].concat(this._items || []);
+        this._cursor += 1;
+        this._totalCount += 1;
         this._renderList();
+        this._updateLoadMoreState();
         notify('Posted.', 'green');
         try { this.onPosted?.(item); } catch (e) {}
       }
@@ -214,6 +303,117 @@ export class UpdatesModal {
     return { html, mentions: outMentions };
   }
 
+  _startEdit(name) {
+    const n = String(name || '').trim();
+    if (!n) return;
+    this._editingName = n;
+    this._renderList();
+  }
+
+  async _saveEdit(name) {
+    if (this._saving) return;
+    const n = String(name || '').trim();
+    if (!n) return;
+    let ta = null;
+    const textareas = Array.from(this._listEl?.querySelectorAll?.('textarea[data-edit-name]') || []);
+    for (const el of textareas) {
+      if (String(el?.dataset?.editName || '').trim() === n) {
+        ta = el;
+        break;
+      }
+    }
+    const text = String(ta?.value || '').trim();
+    if (!text) {
+      notify('Update cannot be empty.', 'orange');
+      return;
+    }
+    this._saving = true;
+    try {
+      const item = await UpdatesService.updateProjectUpdate(n, text);
+      if (item) {
+        this._items = (this._items || []).map((x) => (x?.name === n ? item : x));
+        this._editingName = '';
+        this._renderList();
+        notify('Updated.', 'green');
+      }
+    } catch (e) {
+      console.error(e);
+      notify(e?.message || 'Update failed', 'red');
+    } finally {
+      this._saving = false;
+    }
+  }
+
+  async _deleteItem(name) {
+    if (this._deleting) return;
+    const n = String(name || '').trim();
+    if (!n) return;
+    const ok = window.confirm('Delete this update?');
+    if (!ok) return;
+    this._deleting = true;
+    try {
+      const deleted = await UpdatesService.deleteProjectUpdate(n);
+      if (deleted) {
+        this._items = (this._items || []).filter((x) => x?.name !== n);
+        this._cursor = Math.max(0, this._cursor - 1);
+        this._totalCount = Math.max(0, this._totalCount - 1);
+        this._editingName = this._editingName === n ? '' : this._editingName;
+        this._renderList();
+        this._updateLoadMoreState();
+        notify('Deleted.', 'green');
+      }
+    } catch (e) {
+      console.error(e);
+      notify(e?.message || 'Delete failed', 'red');
+    } finally {
+      this._deleting = false;
+    }
+  }
+
+  _hasMore() {
+    const total = Number(this._totalCount || 0);
+    const current = Number((this._items || []).length || 0);
+    return total > current;
+  }
+
+  _updateLoadMoreState() {
+    const btn = this._loadMoreBtn;
+    if (!btn) return;
+    const show = this._hasMore();
+    btn.style.display = show ? '' : 'none';
+    btn.disabled = !!this._loading;
+  }
+
+  _dateFromTs(ts) {
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return null;
+    return d;
+  }
+
+  _dayKey(ts) {
+    const d = this._dateFromTs(ts);
+    if (!d) return '';
+    return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  }
+
+  _dayLabel(ts) {
+    const d = this._dateFromTs(ts);
+    if (!d) return 'Unknown date';
+    const today = new Date();
+    const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const d0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const diff = Math.round((t0 - d0) / (24 * 3600 * 1000));
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Yesterday';
+    return d.toLocaleDateString();
+  }
+
+  _timeLabel(ts) {
+    const d = this._dateFromTs(ts);
+    if (!d) return String(ts || '').replace('T', ' ').slice(0, 19);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
   close() {
     this._modal?.close?.();
     this._modal = null;
@@ -221,6 +421,12 @@ export class UpdatesModal {
     this._listEl = null;
     this._loading = false;
     this._posting = false;
+    this._saving = false;
+    this._deleting = false;
+    this._cursor = 0;
+    this._totalCount = 0;
+    this._loadMoreBtn = null;
+    this._editingName = '';
     this._mentionPicker?.destroy?.();
     this._mentionPicker = null;
     this._mentions = [];

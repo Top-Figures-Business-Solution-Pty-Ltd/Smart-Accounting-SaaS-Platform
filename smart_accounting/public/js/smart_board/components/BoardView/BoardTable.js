@@ -1305,6 +1305,12 @@ export class BoardTable {
         this._projectActivityModal?.close?.();
         this._projectActivityModal = new ProjectActivityModal({
             project,
+            onChanged: async () => {
+                try {
+                    const filters = this.store?.state?.projects?.lastFilters || {};
+                    await this.store?.dispatch?.('projects/fetchProjects', filters);
+                } catch (e) {}
+            },
             onClose: () => { this._projectActivityModal = null; }
         });
         this._projectActivityModal.open();

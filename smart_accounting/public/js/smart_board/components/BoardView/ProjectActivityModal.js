@@ -44,12 +44,14 @@ function _shortText(v, max = 120) {
 }
 
 export class ProjectActivityModal {
-  constructor({ project, onClose } = {}) {
+  constructor({ project, onClose, onChanged } = {}) {
     this.project = project || null;
     this.onClose = typeof onClose === 'function' ? onClose : (() => {});
+    this.onChanged = typeof onChanged === 'function' ? onChanged : (() => {});
     this._modal = null;
     this._listEl = null;
     this._loading = false;
+    this._undoing = false;
   }
 
   open() {
@@ -69,6 +71,13 @@ export class ProjectActivityModal {
     });
     this._modal.open();
     this._listEl = content.querySelector('#sbProjectActivityList');
+    content.addEventListener('click', (e) => {
+      const btn = e.target?.closest?.('button[data-action="undo"]');
+      if (!btn) return;
+      const activityName = btn.dataset.activityName;
+      const expectedTo = btn.dataset.expectedTo || '';
+      this._undo(activityName, expectedTo);
+    });
     this._load();
   }
 
@@ -103,6 +112,7 @@ export class ProjectActivityModal {
     const when = escapeHtml(formatDate(it?.timestamp) || String(it?.timestamp || ''));
     const isCreate = String(it?.action || '') === 'create';
     const desc = isCreate ? 'created this project' : this._describeChangeHTML(it);
+    const canUndo = !isCreate && !!it?.undoable && !!String(it?.activity_name || '').trim();
     return `
       <div class="sb-project-activity__item">
         <div class="sb-project-activity__meta">
@@ -112,8 +122,33 @@ export class ProjectActivityModal {
         <div class="sb-project-activity__body">
           ${desc}
         </div>
+        ${canUndo ? `
+          <div class="sb-project-activity__actions">
+            <button class="btn btn-default btn-xs" type="button" data-action="undo" data-activity-name="${escapeHtml(String(it?.activity_name || ''))}" data-expected-to="${escapeHtml(String(it?.to_value || ''))}">Undo</button>
+          </div>
+        ` : ''}
       </div>
     `;
+  }
+
+  async _undo(activityName, expectedToValue) {
+    if (this._undoing) return;
+    const name = String(activityName || '').trim();
+    if (!name) return;
+    const ok = window.confirm('Undo this update?');
+    if (!ok) return;
+    this._undoing = true;
+    try {
+      await ProjectActivityService.undoProjectActivity(this.project?.name, name, expectedToValue);
+      frappe.show_alert({ message: 'Undo completed.', indicator: 'green' });
+      try { this.onChanged?.(); } catch (e) {}
+      await this._load();
+    } catch (e) {
+      const msg = String(e?.message || 'Undo failed');
+      frappe.show_alert({ message: msg, indicator: 'red' });
+    } finally {
+      this._undoing = false;
+    }
   }
 
   _describeChangeHTML(it) {

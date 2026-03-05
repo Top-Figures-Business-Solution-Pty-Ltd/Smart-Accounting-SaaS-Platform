@@ -10,5 +10,21 @@ export class ProjectActivityService {
     });
     return r?.message || { items: [], meta: {} };
   }
+
+  static async undoProjectActivity(projectName, activityName, expectedToValue) {
+    const project = String(projectName || '').trim();
+    const activity = String(activityName || '').trim();
+    if (!project) throw new Error('Missing project');
+    if (!activity) throw new Error('Missing activity name');
+    const r = await frappe.call({
+      method: 'smart_accounting.api.activity_log.undo_project_activity',
+      args: {
+        project,
+        activity_name: activity,
+        expected_to_value: expectedToValue == null ? '' : String(expectedToValue || ''),
+      },
+    });
+    return r?.message || { ok: false };
+  }
 }
 

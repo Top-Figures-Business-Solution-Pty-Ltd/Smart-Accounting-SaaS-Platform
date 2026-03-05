@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
+from frappe.utils import getdate
 
 
 def _ensure_logged_in() -> None:
@@ -99,6 +100,40 @@ def _short(v: Any) -> str:
 	if len(s) <= 120:
 		return s
 	return f"{s[:117]}..."
+
+
+def _norm_cmp(v: Any) -> str:
+	if v is None:
+		return ""
+	return str(v).strip()
+
+
+def _coerce_value_for_field(doc, fieldname: str, value: Any):
+	meta_field = None
+	try:
+		meta_field = doc.meta.get_field(fieldname)
+	except Exception:
+		meta_field = None
+	fieldtype = str(getattr(meta_field, "fieldtype", "") or "").strip()
+	raw = _norm_cmp(value)
+	if not raw:
+		return None
+	if fieldtype in {"Int", "Check"}:
+		try:
+			return int(raw)
+		except Exception:
+			return 0
+	if fieldtype in {"Float", "Currency", "Percent"}:
+		try:
+			return float(raw)
+		except Exception:
+			return 0.0
+	if fieldtype == "Date":
+		try:
+			return getdate(raw)
+		except Exception:
+			return raw
+	return raw
 
 
 def _parse_sb_activity_comment(content: Any) -> dict | None:
@@ -315,7 +350,7 @@ def get_project_activity(project: str, limit_start: int = 0, limit_page_length: 
 			"reference_name": name,
 			"comment_type": "Info",
 		},
-		fields=["owner", "creation", "content"],
+		fields=["name", "owner", "creation", "content"],
 		order_by="creation desc",
 		limit_page_length=5000,
 	)
@@ -330,12 +365,14 @@ def get_project_activity(project: str, limit_start: int = 0, limit_page_length: 
 		items.append(
 			{
 				"action": "update",
+				"activity_name": r.get("name"),
 				"field": field,
 				"field_label": _clean_str(payload.get("field_label")) or labels.get(field) or field,
 				"from_value": _short(payload.get("from_value")),
 				"to_value": _short(payload.get("to_value")),
 				"archive_source": _clean_str(payload.get("archive_source")),
 				"archive_rule": _clean_str(payload.get("archive_rule")),
+				"undoable": field in _PROJECT_ACTIVITY_UNDO_FIELDS,
 				"user": user_name,
 				"user_label": _get_user_fullname(user_name, user_cache) or user_name or "Unknown",
 				"timestamp": r.get("creation"),
@@ -371,10 +408,12 @@ def get_project_activity(project: str, limit_start: int = 0, limit_page_length: 
 				items.append(
 					{
 						"action": "update",
+						"activity_name": "",
 						"field": field,
 						"field_label": labels.get(field) or field,
 						"from_value": _short(c[1]),
 						"to_value": _short(c[2]),
+						"undoable": False,
 						"user": user_name,
 						"user_label": user_label,
 						"timestamp": ts,
@@ -392,6 +431,56 @@ def get_project_activity(project: str, limit_start: int = 0, limit_page_length: 
 			"total_count": len(items),
 		},
 	}
+
+
+@frappe.whitelist()
+def undo_project_activity(project: str, activity_name: str, expected_to_value: str | None = None) -> dict:
+	"""
+	Undo a single project update row recorded by SB_ACTIVITY comment.
+	Only supports safe scalar fields listed in _PROJECT_ACTIVITY_UNDO_FIELDS.
+	"""
+	_ensure_logged_in()
+	name = _clean_str(project)
+	activity = _clean_str(activity_name)
+	if not name:
+		frappe.throw("project is required")
+	if not activity:
+		frappe.throw("activity_name is required")
+	if not frappe.has_permission("Project", "write", name):
+		frappe.throw("Not permitted", frappe.PermissionError)
+
+	row = frappe.db.get_value(
+		"Comment",
+		activity,
+		["name", "reference_doctype", "reference_name", "comment_type", "content"],
+		as_dict=True,
+	)
+	if not row:
+		frappe.throw("Activity row not found")
+	if _clean_str(row.get("reference_doctype")) != "Project" or _clean_str(row.get("reference_name")) != name:
+		frappe.throw("Activity row does not belong to this project")
+	if _clean_str(row.get("comment_type")) != "Info":
+		frappe.throw("Unsupported activity row")
+
+	payload = _parse_sb_activity_comment(row.get("content"))
+	if not payload:
+		frappe.throw("Unsupported activity row")
+	field = _clean_str(payload.get("field"))
+	if field not in _PROJECT_ACTIVITY_UNDO_FIELDS:
+		frappe.throw("This update type cannot be undone")
+
+	from_value = payload.get("from_value")
+	to_value = payload.get("to_value")
+	doc = frappe.get_doc("Project", name)
+	current_value = doc.get(field)
+	expected_now = expected_to_value if expected_to_value is not None else to_value
+	if _norm_cmp(current_value) != _norm_cmp(expected_now):
+		frappe.throw("Cannot undo because this field changed again")
+
+	doc.flags.skip_board_automation = True
+	doc.set(field, _coerce_value_for_field(doc, field, from_value))
+	doc.save(ignore_permissions=True)
+	return {"ok": True, "field": field, "value": doc.get(field)}
 
 
 _PROJECT_ACTIVITY_FIELDS = {
@@ -416,6 +505,27 @@ _PROJECT_ACTIVITY_FIELDS = {
 	"custom_team_members",
 	"custom_softwares",
 	"custom_engagement_letter",
+}
+
+
+_PROJECT_ACTIVITY_UNDO_FIELDS = {
+	"status",
+	"project_name",
+	"company",
+	"project_type",
+	"custom_project_frequency",
+	"custom_fiscal_year",
+	"custom_entity_type",
+	"custom_customer_entity",
+	"custom_lodgement_due_date",
+	"custom_target_month",
+	"custom_reset_date",
+	"custom_engagement_letter",
+	"is_active",
+	"priority",
+	"estimated_costing",
+	"expected_start_date",
+	"expected_end_date",
 }
 
 

@@ -30,6 +30,23 @@ def _normalize_int(v: Any, default: int = 0) -> int:
 		return int(default)
 
 
+def _can_manage_update(row: dict, user: str) -> bool:
+	if not isinstance(row, dict):
+		return False
+	u = str(user or "").strip()
+	if not u:
+		return False
+	if u == "Administrator":
+		return True
+	try:
+		if "System Manager" in (frappe.get_roles(u) or []):
+			return True
+	except Exception:
+		pass
+	owner = str(row.get("owner") or "").strip()
+	return bool(owner and owner == u)
+
+
 @frappe.whitelist()
 def get_project_updates(project: str, limit_start: int = 0, limit_page_length: int = 20) -> dict:
 	"""
@@ -54,14 +71,36 @@ def get_project_updates(project: str, limit_start: int = 0, limit_page_length: i
 			"reference_name": project,
 			"comment_type": "Comment",
 		},
-		fields=["name", "content", "creation", "owner", "comment_by", "comment_email"],
+		fields=["name", "content", "creation", "modified", "owner", "comment_by", "comment_email"],
 		order_by="creation desc",
 		limit_start=limit_start,
 		limit_page_length=limit_page_length,
 		ignore_permissions=True,  # bounded by Project read permission above
 	)
-
-	return {"items": rows or []}
+	user = str(frappe.session.user or "").strip()
+	items = []
+	for r in (rows or []):
+		row = dict(r or {})
+		row["can_manage"] = _can_manage_update(row, user)
+		# "edited" indicator for UI
+		row["is_edited"] = str(row.get("modified") or "") != str(row.get("creation") or "")
+		items.append(row)
+	total_rows = frappe.get_all(
+		"Comment",
+		filters={
+			"reference_doctype": "Project",
+			"reference_name": project,
+			"comment_type": "Comment",
+		},
+		fields=["count(name) as cnt"],
+		limit_page_length=1,
+		ignore_permissions=True,
+	)
+	try:
+		total_count = int((total_rows or [{}])[0].get("cnt") or 0)
+	except Exception:
+		total_count = len(items)
+	return {"items": items, "meta": {"total_count": total_count}}
 
 
 @frappe.whitelist()
@@ -121,9 +160,7 @@ def add_project_update(project: str, content: str, mentions: Any = None) -> dict
 		# - Notification Log insertion is muted (no implicit side-effects)
 		# - Mention emails are sent explicitly below
 		prev_mute = bool(getattr(frappe.flags, "mute_emails", False))
-		from frappe.utils import strip_html
-
-		preview = strip_html(content or "")
+		preview = frappe.utils.strip_html(content or "")
 		preview = (preview or "").strip()
 		if len(preview) > 240:
 			preview = preview[:240] + "…"
@@ -189,11 +226,102 @@ def add_project_update(project: str, content: str, mentions: Any = None) -> dict
 			"name": c.name,
 			"content": c.content,
 			"creation": c.creation,
+			"modified": c.modified,
 			"owner": c.owner,
 			"comment_by": c.comment_by,
 			"comment_email": c.comment_email,
+			"can_manage": _can_manage_update({"owner": c.owner}, user),
+			"is_edited": False,
 		}
 	}
+
+
+@frappe.whitelist()
+def update_project_update(update_name: str, content: str) -> dict:
+	"""
+	Edit an existing project update (Comment).
+	Allowed:
+	- original author
+	- System Manager / Administrator
+	"""
+	_ensure_logged_in()
+	name = str(update_name or "").strip()
+	text = str(content or "").strip()
+	if not name:
+		frappe.throw("Missing update_name")
+	if not text:
+		frappe.throw("Missing content")
+	if len(text) > 10_000:
+		frappe.throw("Update too long")
+
+	row = frappe.db.get_value(
+		"Comment",
+		name,
+		["name", "reference_doctype", "reference_name", "comment_type", "owner", "comment_by", "comment_email", "creation", "modified"],
+		as_dict=True,
+	)
+	if not row:
+		frappe.throw("Update not found")
+	if str(row.get("comment_type") or "").strip() != "Comment":
+		frappe.throw("Only project updates can be edited")
+	if str(row.get("reference_doctype") or "").strip() != "Project":
+		frappe.throw("Only project updates can be edited")
+
+	project = str(row.get("reference_name") or "").strip()
+	_ensure_can_read_project(project)
+	user = str(frappe.session.user or "").strip()
+	if not _can_manage_update(row, user):
+		frappe.throw("Not permitted", frappe.PermissionError)
+
+	doc = frappe.get_doc("Comment", name)
+	doc.content = text
+	doc.save(ignore_permissions=True)
+	return {
+		"item": {
+			"name": doc.name,
+			"content": doc.content,
+			"creation": doc.creation,
+			"modified": doc.modified,
+			"owner": doc.owner,
+			"comment_by": doc.comment_by,
+			"comment_email": doc.comment_email,
+			"can_manage": _can_manage_update({"owner": doc.owner}, user),
+			"is_edited": str(doc.modified or "") != str(doc.creation or ""),
+		}
+	}
+
+
+@frappe.whitelist()
+def delete_project_update(update_name: str) -> dict:
+	"""
+	Delete a project update (Comment).
+	Allowed:
+	- original author
+	- System Manager / Administrator
+	"""
+	_ensure_logged_in()
+	name = str(update_name or "").strip()
+	if not name:
+		frappe.throw("Missing update_name")
+	row = frappe.db.get_value(
+		"Comment",
+		name,
+		["name", "reference_doctype", "reference_name", "comment_type", "owner"],
+		as_dict=True,
+	)
+	if not row:
+		frappe.throw("Update not found")
+	if str(row.get("comment_type") or "").strip() != "Comment":
+		frappe.throw("Only project updates can be deleted")
+	if str(row.get("reference_doctype") or "").strip() != "Project":
+		frappe.throw("Only project updates can be deleted")
+	project = str(row.get("reference_name") or "").strip()
+	_ensure_can_read_project(project)
+	user = str(frappe.session.user or "").strip()
+	if not _can_manage_update(row, user):
+		frappe.throw("Not permitted", frappe.PermissionError)
+	frappe.delete_doc("Comment", name, ignore_permissions=True)
+	return {"ok": True, "name": name}
 
 
 @frappe.whitelist()
