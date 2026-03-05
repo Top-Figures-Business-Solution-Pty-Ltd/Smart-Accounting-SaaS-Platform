@@ -136,6 +136,22 @@ def _coerce_value_for_field(doc, fieldname: str, value: Any):
 	return raw
 
 
+def _can_manage_project_comment(row: dict, user: str) -> bool:
+	if not isinstance(row, dict):
+		return False
+	u = _clean_str(user)
+	if not u:
+		return False
+	if u == "Administrator":
+		return True
+	try:
+		if "System Manager" in (frappe.get_roles(u) or []):
+			return True
+	except Exception:
+		pass
+	return _clean_str(row.get("owner")) == u
+
+
 def _parse_sb_activity_comment(content: Any) -> dict | None:
 	raw = _clean_str(content)
 	prefix = "SB_ACTIVITY::"
@@ -375,6 +391,44 @@ def get_project_activity(project: str, limit_start: int = 0, limit_page_length: 
 				"undoable": field in _PROJECT_ACTIVITY_UNDO_FIELDS,
 				"user": user_name,
 				"user_label": _get_user_fullname(user_name, user_cache) or user_name or "Unknown",
+				"timestamp": r.get("creation"),
+			}
+		)
+
+	# Project updates (comment_type=Comment): include in Last Updated feed.
+	try:
+		update_rows = frappe.get_all(
+			"Comment",
+			filters={
+				"reference_doctype": "Project",
+				"reference_name": name,
+				"comment_type": "Comment",
+			},
+			fields=["name", "owner", "creation", "modified", "comment_by", "comment_email", "content"],
+			order_by="creation desc",
+			limit_page_length=5000,
+			ignore_permissions=True,
+		)
+	except Exception:
+		update_rows = []
+	current_user = _clean_str(frappe.session.user)
+	for r in (update_rows or []):
+		content_plain = ""
+		try:
+			content_plain = _clean_str(frappe.utils.strip_html(r.get("content") or ""))
+		except Exception:
+			content_plain = _clean_str(r.get("content"))
+		user_name = _clean_str(r.get("owner"))
+		items.append(
+			{
+				"action": "comment",
+				"kind": "update_comment",
+				"update_name": r.get("name"),
+				"content": content_plain,
+				"is_edited": _clean_str(r.get("modified")) != _clean_str(r.get("creation")),
+				"can_manage": _can_manage_project_comment(r, current_user),
+				"user": user_name,
+				"user_label": _clean_str(r.get("comment_by")) or _get_user_fullname(user_name, user_cache) or user_name or "Unknown",
 				"timestamp": r.get("creation"),
 			}
 		)

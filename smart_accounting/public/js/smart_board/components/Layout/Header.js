@@ -116,11 +116,6 @@ export class Header {
         modal.open();
     }
     
-    getStatusOptions() {
-        // Deprecated: status options are now sourced from backend meta + board status config.
-        return '';
-    }
-    
     updateView(view) {
         this.currentView = view;
 

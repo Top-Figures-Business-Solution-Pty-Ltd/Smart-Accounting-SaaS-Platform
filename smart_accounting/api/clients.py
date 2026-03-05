@@ -26,59 +26,6 @@ def _normalize_int(v: Any, default: int) -> int:
 		return int(default)
 
 
-def _clean_spaces(s: str) -> str:
-	return " ".join(str(s or "").strip().split())
-
-
-def _cap_word(w: str) -> str:
-	t = str(w or "").strip().lower()
-	if not t:
-		return ""
-	return t[:1].upper() + t[1:]
-
-
-def _cap_hyphen(w: str) -> str:
-	parts = [p for p in str(w or "").split("-") if p.strip()]
-	return "-".join([_cap_word(p) for p in parts if _cap_word(p)])
-
-
-def _title_case_words(name: str) -> str:
-	clean = _clean_spaces(name)
-	if not clean:
-		return ""
-	return " ".join([_cap_hyphen(w) for w in clean.split(" ") if w.strip()])
-
-
-def _format_individual(name: str) -> str:
-	clean = _clean_spaces(name)
-	if not clean:
-		return ""
-	last = ""
-	first = ""
-	if "," in clean:
-		parts = clean.split(",", 1)
-		last = _clean_spaces(parts[0])
-		first = _clean_spaces(parts[1])
-	else:
-		parts = [p for p in clean.split(" ") if p.strip()]
-		if len(parts) == 1:
-			last = parts[0]
-		else:
-			last = parts[-1]
-			first = parts[0]
-	last_up = str(last or "").upper()
-	first_cap = _cap_word(first)
-	return f"{last_up}, {first_cap}" if first_cap else last_up
-
-
-def _normalize_client_name(name: str, customer_type: str) -> str:
-	ct = str(customer_type or "").strip()
-	if ct == "Individual":
-		return _format_individual(name)
-	# Non-Individual
-	return _title_case_words(name)
-
-
 def _pick_default(doctype: str, preferred_name: str) -> str | None:
 	"""Best-effort pick a default value for Link fields like Customer Group / Territory."""
 	try:

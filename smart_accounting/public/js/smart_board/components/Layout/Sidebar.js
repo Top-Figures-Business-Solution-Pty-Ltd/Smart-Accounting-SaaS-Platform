@@ -192,15 +192,6 @@ export class Sidebar {
         }
     }
     
-    getUserName() {
-        return frappe.session.user_fullname || frappe.session.user;
-    }
-    
-    getUserInitial() {
-        const name = this.getUserName();
-        return name.charAt(0).toUpperCase();
-    }
-    
     updateView(view) {
         this.currentView = view;
         this.highlightCurrentView();

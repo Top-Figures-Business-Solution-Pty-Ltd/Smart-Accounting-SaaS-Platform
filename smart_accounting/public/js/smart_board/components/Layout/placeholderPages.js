@@ -87,17 +87,6 @@ export function renderPlaceholderHTML(view, store) {
         `;
     }
 
-    if (view === 'clients') {
-        return `
-            <div class="sb-page">
-                <div class="sb-page__subtitle">Client directory (coming soon)</div>
-                <div class="sb-page__hint">
-                    We will build a custom Clients UI here (based on Client/Contact) while keeping your SaaS look & feel.
-                </div>
-            </div>
-        `;
-    }
-
     return `<div class="sb-page"><div class="sb-page__title">${view}</div></div>`;
 }
 

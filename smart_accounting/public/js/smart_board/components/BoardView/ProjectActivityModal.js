@@ -1,6 +1,8 @@
 import { Modal } from '../Common/Modal.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { ProjectActivityService } from '../../services/projectActivityService.js';
+import { UpdatesService } from '../../services/updatesService.js';
+import { notify } from '../../services/uiAdapter.js';
 import { formatDate } from '../../utils/helpers.js';
 
 function _norm(v) {
@@ -52,6 +54,9 @@ export class ProjectActivityModal {
     this._listEl = null;
     this._loading = false;
     this._undoing = false;
+    this._savingComment = false;
+    this._deletingComment = false;
+    this._editingCommentName = '';
   }
 
   open() {
@@ -72,11 +77,32 @@ export class ProjectActivityModal {
     this._modal.open();
     this._listEl = content.querySelector('#sbProjectActivityList');
     content.addEventListener('click', (e) => {
-      const btn = e.target?.closest?.('button[data-action="undo"]');
+      const btn = e.target?.closest?.('button[data-action]');
       if (!btn) return;
-      const activityName = btn.dataset.activityName;
-      const expectedTo = btn.dataset.expectedTo || '';
-      this._undo(activityName, expectedTo);
+      const action = String(btn.dataset.action || '').trim();
+      if (action === 'undo') {
+        const activityName = btn.dataset.activityName;
+        const expectedTo = btn.dataset.expectedTo || '';
+        this._undo(activityName, expectedTo);
+        return;
+      }
+      if (action === 'edit-comment') {
+        this._editingCommentName = String(btn.dataset.commentName || '').trim();
+        this._load();
+        return;
+      }
+      if (action === 'cancel-edit-comment') {
+        this._editingCommentName = '';
+        this._load();
+        return;
+      }
+      if (action === 'save-comment') {
+        this._saveComment(btn.dataset.commentName);
+        return;
+      }
+      if (action === 'delete-comment') {
+        this._deleteComment(btn.dataset.commentName);
+      }
     });
     this._load();
   }
@@ -111,6 +137,9 @@ export class ProjectActivityModal {
     const who = escapeHtml(String(it?.user_label || 'Unknown'));
     const when = escapeHtml(formatDate(it?.timestamp) || String(it?.timestamp || ''));
     const isCreate = String(it?.action || '') === 'create';
+    if (String(it?.kind || '') === 'update_comment') {
+      return this._commentRowHTML(it, who, when);
+    }
     const desc = isCreate ? 'created this project' : this._describeChangeHTML(it);
     const canUndo = !isCreate && !!it?.undoable && !!String(it?.activity_name || '').trim();
     return `
@@ -125,6 +154,46 @@ export class ProjectActivityModal {
         ${canUndo ? `
           <div class="sb-project-activity__actions">
             <button class="btn btn-default btn-xs" type="button" data-action="undo" data-activity-name="${escapeHtml(String(it?.activity_name || ''))}" data-expected-to="${escapeHtml(String(it?.to_value || ''))}">Undo</button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  _commentRowHTML(it, who, when) {
+    const name = _norm(it?.update_name);
+    const canManage = !!it?.can_manage;
+    const isEdited = !!it?.is_edited;
+    const isEditing = !!name && this._editingCommentName === name;
+    const content = escapeHtml(_norm(it?.content));
+    if (isEditing) {
+      return `
+        <div class="sb-project-activity__item">
+          <div class="sb-project-activity__meta">
+            <span class="sb-project-activity__who">${who}</span>
+            <span class="sb-project-activity__when">${when}</span>
+          </div>
+          <textarea class="form-control sb-updates__edit-textarea" data-comment-edit="${escapeHtml(name)}" rows="4">${content}</textarea>
+          <div class="sb-project-activity__actions">
+            <button class="btn btn-default btn-xs" type="button" data-action="cancel-edit-comment" data-comment-name="${escapeHtml(name)}">Cancel</button>
+            <button class="btn btn-primary btn-xs" type="button" data-action="save-comment" data-comment-name="${escapeHtml(name)}">Save</button>
+          </div>
+        </div>
+      `;
+    }
+    return `
+      <div class="sb-project-activity__item">
+        <div class="sb-project-activity__meta">
+          <span class="sb-project-activity__who">${who}</span>
+          <span class="sb-project-activity__when">${when}</span>
+        </div>
+        <div class="sb-project-activity__body">
+          posted update${isEdited ? ' (edited)' : ''}: <span class="sb-project-activity__to">${content || '(empty)'}</span>
+        </div>
+        ${canManage ? `
+          <div class="sb-project-activity__actions">
+            <button class="btn btn-default btn-xs" type="button" data-action="edit-comment" data-comment-name="${escapeHtml(name)}">Edit</button>
+            <button class="btn btn-default btn-xs" type="button" data-action="delete-comment" data-comment-name="${escapeHtml(name)}">Delete</button>
           </div>
         ` : ''}
       </div>
@@ -148,6 +217,58 @@ export class ProjectActivityModal {
       frappe.show_alert({ message: msg, indicator: 'red' });
     } finally {
       this._undoing = false;
+    }
+  }
+
+  async _saveComment(commentName) {
+    if (this._savingComment) return;
+    const name = _norm(commentName);
+    if (!name) return;
+    const taList = Array.from(this._listEl?.querySelectorAll?.('textarea[data-comment-edit]') || []);
+    let ta = null;
+    for (const x of taList) {
+      if (_norm(x?.dataset?.commentEdit) === name) {
+        ta = x;
+        break;
+      }
+    }
+    const text = _norm(ta?.value);
+    if (!text) {
+      notify('Update cannot be empty.', 'orange');
+      return;
+    }
+    this._savingComment = true;
+    try {
+      await UpdatesService.updateProjectUpdate(name, text);
+      this._editingCommentName = '';
+      notify('Updated.', 'green');
+      try { this.onChanged?.(); } catch (e) {}
+      await this._load();
+    } catch (e) {
+      notify(String(e?.message || 'Update failed'), 'red');
+    } finally {
+      this._savingComment = false;
+    }
+  }
+
+  async _deleteComment(commentName) {
+    if (this._deletingComment) return;
+    const name = _norm(commentName);
+    if (!name) return;
+    if (!window.confirm('Delete this update?')) return;
+    this._deletingComment = true;
+    try {
+      const ok = await UpdatesService.deleteProjectUpdate(name);
+      if (ok) {
+        this._editingCommentName = this._editingCommentName === name ? '' : this._editingCommentName;
+        notify('Deleted.', 'green');
+        try { this.onChanged?.(); } catch (e) {}
+        await this._load();
+      }
+    } catch (e) {
+      notify(String(e?.message || 'Delete failed'), 'red');
+    } finally {
+      this._deletingComment = false;
     }
   }
 

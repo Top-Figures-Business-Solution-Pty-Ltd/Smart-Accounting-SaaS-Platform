@@ -19,11 +19,6 @@ app_version = "2.1.0"
 # Set your home page route here (after implementing frontend)
 # home_page = "/smart-board"
 
-# Client Scripts (JavaScript)
-doctype_js = {
-    "Project": "public/js/project.js"
-}
-
 # App Include - 尽量不要全局注入页面级资源（保持架构健康）
 # Smart Board 的 JS/CSS 会在 Desk Page `project_management` 内按需加载。
 
