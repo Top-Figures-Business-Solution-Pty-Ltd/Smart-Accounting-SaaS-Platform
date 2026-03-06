@@ -166,6 +166,7 @@ ACTION_TYPES = {
                 "label": "By",
                 "type": "select",
                 "options": [
+                    {"value": "frequency", "label": "frequency"},
                     {"value": "1_week", "label": "1 week"},
                     {"value": "1_fortnight", "label": "1 fortnight"},
                     {"value": "1_month", "label": "1 month"},

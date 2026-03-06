@@ -552,10 +552,14 @@ class CustomProject(Project):
             return
         # Special-case Target Month (Select field): push forward by N months (1..12).
         if fieldname == "custom_target_month":
-            try:
-                step = int(period)
-            except Exception:
-                step = 0
+            if period == "frequency":
+                freq = str(getattr(self, "custom_project_frequency", "") or "").strip()
+                step = _target_month_step_by_frequency(freq)
+            else:
+                try:
+                    step = int(period)
+                except Exception:
+                    step = 0
             months = [
                 "January", "February", "March", "April", "May", "June",
                 "July", "August", "September", "October", "November", "December",
@@ -576,22 +580,25 @@ class CustomProject(Project):
             return
 
         d = getdate(current_val)
-        is_eom = d == get_last_day(d)
-
         next_d = None
-        if period == "1_week":
+        if period == "frequency":
+            freq = str(getattr(self, "custom_project_frequency", "") or "").strip()
+            if not freq or freq in ("One-off", "One off", ""):
+                return
+            next_d = _roll_date_by_frequency(d, freq)
+        elif period == "1_week":
             next_d = add_days(d, 7)
         elif period == "1_fortnight":
             next_d = add_days(d, 14)
         elif period == "1_month":
             nd = add_months(d, 1)
-            next_d = get_last_day(nd) if is_eom else nd
+            next_d = get_last_day(nd) if d == get_last_day(d) else nd
         elif period == "1_quarter":
             nd = add_months(d, 3)
-            next_d = get_last_day(nd) if is_eom else nd
+            next_d = get_last_day(nd) if d == get_last_day(d) else nd
         elif period == "1_year":
             nd = add_months(d, 12)
-            next_d = get_last_day(nd) if is_eom else nd
+            next_d = get_last_day(nd) if d == get_last_day(d) else nd
 
         if next_d and next_d != d:
             self.set(fieldname, next_d)
@@ -806,6 +813,19 @@ def _roll_date_by_frequency(current_date, frequency: str):
         return get_last_day(nd) if is_eom else nd
 
     return None
+
+
+def _target_month_step_by_frequency(frequency: str) -> int:
+    freq = str(frequency or "").strip().lower()
+    if freq in ("monthly",):
+        return 1
+    if freq in ("quarterly",):
+        return 3
+    if freq in ("half-yearly", "half yearly", "halfyearly"):
+        return 6
+    if freq in ("yearly",):
+        return 12
+    return 0
 
 
 _AUDIT_SKIP_FIELDS = {

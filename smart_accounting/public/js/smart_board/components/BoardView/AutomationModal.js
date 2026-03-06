@@ -255,7 +255,7 @@ export class AutomationModal {
       return {
         ...cf,
         label: 'Push by',
-        options: monthOpts,
+        options: [{ value: 'frequency', label: 'frequency' }].concat(monthOpts),
         default: '1',
       };
     });
