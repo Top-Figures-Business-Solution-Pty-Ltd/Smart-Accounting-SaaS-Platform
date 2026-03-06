@@ -3,7 +3,7 @@ Smart Accounting - Access Control
 
 Goal:
 - External users should use the product shell (/smart) and be prevented from entering Desk (/app).
-- Internal admins (e.g. System Manager) can still access Desk normally.
+- Internal admins (Administrator + System Manager) can still access Desk normally.
 """
 
 from __future__ import annotations
@@ -35,7 +35,8 @@ def _get_desk_allow_roles() -> set[str]:
 	"""
 	Desk access allowlist (roles).
 
-	Default: empty (only Administrator can access Desk).
+	Default: empty.
+	Note: System Manager is allowed by code by default and does not need to be listed here.
 
 	Optional site_config.json:
 	  "smart_desk_allow_roles": ["System Manager", "Support Team"]
@@ -83,16 +84,16 @@ def _get_desk_allow_users() -> set[str]:
 def _get_desk_access_mode() -> str:
 	"""
 	Desk access mode:
-	- "admin_only" (default): ONLY Administrator can access /app*
-	- "config": allow additional roles/users via site_config.json
+	- "admin_only": ONLY Administrator can access /app*
+	- "config" (default): Administrator + System Manager + configured roles/users can access /app*
 	"""
 	try:
 		cfg = frappe.get_site_config() or {}
 	except Exception:
 		cfg = {}
-	mode = str(cfg.get("smart_desk_access_mode") or "admin_only").strip().lower()
+	mode = str(cfg.get("smart_desk_access_mode") or "config").strip().lower()
 	if mode not in {"admin_only", "config"}:
-		mode = "admin_only"
+		mode = "config"
 	return mode
 
 SMART_PUBLIC_PATHS = {
@@ -125,7 +126,16 @@ def _is_allowed_to_use_desk() -> bool:
 	if user == "Administrator":
 		return True
 
-	# Default: keep everyone out of Desk except Administrator.
+	try:
+		user_roles = set(frappe.get_roles(user))
+	except Exception:
+		user_roles = set()
+
+	# System Manager should be able to access Desk by default.
+	if "System Manager" in user_roles:
+		return True
+
+	# admin_only: keep everyone else out of Desk.
 	if _get_desk_access_mode() != "config":
 		return False
 
@@ -135,11 +145,6 @@ def _is_allowed_to_use_desk() -> bool:
 			return True
 	except Exception:
 		pass
-
-	try:
-		user_roles = set(frappe.get_roles(user))
-	except Exception:
-		user_roles = set()
 
 	allow_roles = _get_desk_allow_roles()
 	if allow_roles and user_roles.intersection(allow_roles):
@@ -152,7 +157,7 @@ def before_request():
 	"""
 	Hard-gate /app for non-admin users.
 
-	- If the request is for /app*, and user is not in allow roles, redirect to /smart.
+	- If the request is for /app*, and user is not allowed to use Desk, redirect to /smart.
 	- This creates a "product-only" experience while still using System Users.
 	"""
 	try:
