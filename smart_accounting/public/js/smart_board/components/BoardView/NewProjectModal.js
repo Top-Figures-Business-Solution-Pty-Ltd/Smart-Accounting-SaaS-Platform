@@ -6,6 +6,7 @@
 import { Modal } from '../Common/Modal.js';
 import { LinkInput } from '../Common/LinkInput.js';
 import { DoctypeMetaService } from '../../services/doctypeMetaService.js';
+import { confirmDialog } from '../../services/uiAdapter.js';
 import { getErrorMessage } from '../../utils/errorMessage.js';
 import { escapeHtml } from '../../utils/dom.js';
 
@@ -23,6 +24,7 @@ export class NewProjectModal {
     this._root = null;
     this._linkInputs = [];
     this._linkInputsByDoctype = new Map(); // key: doctype -> LinkInput
+    this._initialSnapshot = null;
   }
 
   async open() {
@@ -96,6 +98,8 @@ export class NewProjectModal {
       title: this.title,
       contentEl: content,
       footerEl: footer,
+      closeOnOverlayClick: false,
+      beforeClose: async () => this._confirmDiscardIfDirty(),
       onClose: () => {
         this._destroyInputs();
         this.onClose();
@@ -118,9 +122,10 @@ export class NewProjectModal {
     // Load current Project metadata/options.
     try { await DoctypeMetaService.getMeta('Project', { force: true }); } catch (e) {}
     await this._loadSelectOptions();
+    this._initialSnapshot = this._snapshotForm();
 
     // Bind
-    footer.querySelector('#sbNewProjCancel')?.addEventListener('click', () => this.close());
+    footer.querySelector('#sbNewProjCancel')?.addEventListener('click', () => this._modal?.requestClose?.('cancel'));
     footer.querySelector('#sbNewProjCreate')?.addEventListener('click', () => this._handleSubmit());
     content.querySelector('#sbNewProjNewClient')?.addEventListener('click', () => this._handleCreateClient());
     if (!this.onCreateClient) {
@@ -151,6 +156,7 @@ export class NewProjectModal {
     this._modal?.close?.();
     this._modal = null;
     this._root = null;
+    this._initialSnapshot = null;
   }
 
   _destroyInputs() {
@@ -234,6 +240,29 @@ export class NewProjectModal {
     const mount = sel ? this._root?.querySelector?.(sel) : null;
     const input = mount?.querySelector?.('input');
     return String(input?.value || '').trim();
+  }
+
+  _snapshotForm() {
+    const freqSel = this._root?.querySelector?.('#sbNewProjFrequency');
+    return {
+      project_name: String(this._root?.querySelector?.('#sbNewProjName')?.value || '').trim(),
+      customer: String(this.fixedCustomer || this._readValueFromLinkInput('Customer') || '').trim(),
+      company: this._readValueFromLinkInput('Company'),
+      custom_fiscal_year: this._readValueFromLinkInput('Fiscal Year'),
+      project_type: this._readValueFromLinkInput('Project Type'),
+      custom_project_frequency: String(freqSel?.value || '').trim(),
+    };
+  }
+
+  _isDirty() {
+    const initial = this._initialSnapshot || {};
+    const current = this._snapshotForm();
+    return Object.keys(current).some((key) => String(current[key] || '').trim() !== String(initial[key] || '').trim());
+  }
+
+  async _confirmDiscardIfDirty() {
+    if (!this._isDirty()) return true;
+    return await confirmDialog('You have unsaved project details. Discard them?');
   }
 
   async _loadSelectOptions() {

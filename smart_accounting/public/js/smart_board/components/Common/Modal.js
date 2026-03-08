@@ -23,12 +23,24 @@ export class Modal {
     } catch (e) {}
   }
 
-  constructor({ title = 'Modal', contentEl, footerEl, onClose, modalClass = '' } = {}) {
+  constructor({
+    title = 'Modal',
+    contentEl,
+    footerEl,
+    onClose,
+    modalClass = '',
+    closeOnOverlayClick = true,
+    closeOnEscape = true,
+    beforeClose = null,
+  } = {}) {
     this.title = title;
     this.contentEl = contentEl || document.createElement('div');
     this.footerEl = footerEl || null;
     this.onClose = onClose || (() => {});
     this.modalClass = String(modalClass || '').trim();
+    this.closeOnOverlayClick = closeOnOverlayClick !== false;
+    this.closeOnEscape = closeOnEscape !== false;
+    this.beforeClose = typeof beforeClose === 'function' ? beforeClose : null;
 
     this._overlay = null;
     this._modal = null;
@@ -75,14 +87,14 @@ export class Modal {
     }
 
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) this.close();
+      if (e.target === overlay && this.closeOnOverlayClick) this.requestClose('overlay');
     });
-    overlay.querySelector('.sb-modal__close')?.addEventListener('click', () => this.close());
+    overlay.querySelector('.sb-modal__close')?.addEventListener('click', () => this.requestClose('close-button'));
 
     this._onKeyDown = (e) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && this.closeOnEscape) {
         e.preventDefault();
-        this.close();
+        this.requestClose('escape');
         return;
       }
       if (e.key === 'Tab') {
@@ -135,6 +147,19 @@ export class Modal {
       e.preventDefault();
       last.focus();
     }
+  }
+
+  async requestClose(reason = 'programmatic') {
+    if (!this._overlay) return;
+    if (this.beforeClose) {
+      try {
+        const allowed = await this.beforeClose(reason);
+        if (allowed === false) return;
+      } catch (e) {
+        return;
+      }
+    }
+    this.close();
   }
 
   close() {

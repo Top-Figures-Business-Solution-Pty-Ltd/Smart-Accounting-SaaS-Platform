@@ -7,6 +7,7 @@ import { escapeHtml } from '../../utils/dom.js';
 import { DoctypeMetaService } from '../../services/doctypeMetaService.js';
 import { formatClientName } from '../../utils/clientNameFormat.js';
 import { ClientsService } from '../../services/clientsService.js';
+import { confirmDialog } from '../../services/uiAdapter.js';
 
 function mapEntityTypeFromCustomerType(customerType) {
   const t = String(customerType || '').trim().toLowerCase();
@@ -25,6 +26,7 @@ export class NewClientModal {
     this._modal = null;
     this._root = null;
     this._nameChoice = null;
+    this._initialSnapshot = null;
   }
 
   async open() {
@@ -80,6 +82,8 @@ export class NewClientModal {
       title: this.title,
       contentEl: content,
       footerEl: footer,
+      closeOnOverlayClick: false,
+      beforeClose: async () => this._confirmDiscardIfDirty(),
       onClose: () => this.onClose(),
     });
     this._modal.open();
@@ -91,9 +95,10 @@ export class NewClientModal {
 
     // Load select options from backend meta (single source of truth)
     await this._loadSelectOptions();
+    this._initialSnapshot = this._snapshotForm();
 
     // Bind
-    footer.querySelector('#sbNewClientCancel')?.addEventListener('click', () => this.close());
+    footer.querySelector('#sbNewClientCancel')?.addEventListener('click', () => this._modal?.requestClose?.('cancel'));
     footer.querySelector('#sbNewClientCreate')?.addEventListener('click', () => this._handleSubmit());
     const typeSel = content.querySelector('#sbNewClientType');
     nameEl?.addEventListener?.('keydown', (e) => {
@@ -116,6 +121,7 @@ export class NewClientModal {
     this._modal?.close?.();
     this._modal = null;
     this._root = null;
+    this._initialSnapshot = null;
   }
 
   _setError(msg) {
@@ -148,6 +154,26 @@ export class NewClientModal {
       <option value="" disabled selected>Select year end</option>
       ${safeYears.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('')}
     `;
+  }
+
+  _snapshotForm() {
+    return {
+      customer_name: String(this._root?.querySelector?.('#sbNewClientName')?.value || '').trim(),
+      customer_type: String(this._root?.querySelector?.('#sbNewClientType')?.value || '').trim(),
+      year_end: String(this._root?.querySelector?.('#sbNewClientYearEnd')?.value || '').trim(),
+      abn: String(this._root?.querySelector?.('#sbNewClientAbn')?.value || '').trim(),
+    };
+  }
+
+  _isDirty() {
+    const initial = this._initialSnapshot || {};
+    const current = this._snapshotForm();
+    return Object.keys(current).some((key) => String(current[key] || '').trim() !== String(initial[key] || '').trim());
+  }
+
+  async _confirmDiscardIfDirty() {
+    if (!this._isDirty()) return true;
+    return await confirmDialog('You have unsaved client details. Discard them?');
   }
 
   async _handleSubmit() {
