@@ -205,6 +205,7 @@ class CustomProject(Project):
     def on_update(self):
         """Persist project field-level activity rows."""
         self._write_activity_comments()
+        self._write_automation_run_logs()
 
     def _sync_entity_type_from_customer_entity(self):
         """If Project.custom_customer_entity is set, keep Project.custom_entity_type aligned."""
@@ -303,14 +304,19 @@ class CustomProject(Project):
         changed_any = False
         ev = str((context or {}).get("event") or "validate").strip()
         for auto in automations:
+            run_ctx = None
             try:
                 if ev in {"daily", "hourly"} and self._scheduler_rule_already_fired_today(auto):
                     continue
                 if self._trigger_matches(auto, context=context):
-                    changed_any = bool(self._execute_actions(auto)) or changed_any
+                    run_ctx = self._start_automation_run_log(auto, context=context)
+                    exec_result = self._execute_actions(auto, run_ctx=run_ctx)
+                    changed_any = bool((exec_result or {}).get("changed_any")) or changed_any
                     if ev in {"daily", "hourly"}:
                         self._mark_scheduler_rule_fired_today(auto)
+                    self._finish_automation_run_log(run_ctx, exec_result=exec_result)
             except Exception as e:
+                self._finish_automation_run_log(run_ctx, exec_result=None, failed=True, error_details=str(e))
                 frappe.log_error(
                     f"Board Automation {auto.get('name')} failed for Project {self.name}: {str(e)}",
                     "Board Automation Error",
@@ -393,44 +399,49 @@ class CustomProject(Project):
 
         return False
 
-    def _execute_actions(self, auto):
+    def _execute_actions(self, auto, run_ctx=None):
         """Execute all actions in the automation's actions array."""
         actions_raw = auto.get("actions")
         actions = _parse_json_array(actions_raw)
         if not actions:
-                return False
+                return {"changed_any": False}
 
         changed_any = False
-        for action in actions:
-            action_type = str(action.get("action_type") or "").strip()
-            config = action.get("config") or {}
-            if isinstance(config, str):
-                config = _parse_json(config)
+        self._sb_active_automation_run = run_ctx if isinstance(run_ctx, dict) else None
+        try:
+            for action in actions:
+                action_type = str(action.get("action_type") or "").strip()
+                config = action.get("config") or {}
+                if isinstance(config, str):
+                    config = _parse_json(config)
 
-            if action_type == "roll_due_date":
-                prev = getattr(self, "custom_lodgement_due_date", None)
-                self._action_roll_due_date(config, auto)
-                changed_any = (getattr(self, "custom_lodgement_due_date", None) != prev) or changed_any
-            elif action_type == "reset_status":
-                prev = str(getattr(self, "status", "") or "").strip()
-                self._action_reset_status(config, auto)
-                changed_any = (str(getattr(self, "status", "") or "").strip() != prev) or changed_any
-            elif action_type == "notify_someone":
-                self._action_notify_someone(config, auto)
-            elif action_type == "archive_project":
-                prev = str(getattr(self, "is_active", "") or "").strip()
-                self._action_archive_project(config, auto)
-                changed_any = (str(getattr(self, "is_active", "") or "").strip() != prev) or changed_any
-            elif action_type == "push_date":
-                prev_field = str((config or {}).get("date_field") or "").strip()
-                prev_val = getattr(self, prev_field, None) if prev_field else None
-                self._action_push_date(config, auto)
-                next_val = getattr(self, prev_field, None) if prev_field else None
-                changed_any = (next_val != prev_val) or changed_any
-            else:
-                frappe.logger("smart_accounting").warning(
-                    "Board Automation %s: unknown action_type '%s'", auto.get("name"), action_type
-                )
+                if action_type == "roll_due_date":
+                    prev = getattr(self, "custom_lodgement_due_date", None)
+                    self._action_roll_due_date(config, auto)
+                    changed_any = (getattr(self, "custom_lodgement_due_date", None) != prev) or changed_any
+                elif action_type == "reset_status":
+                    prev = str(getattr(self, "status", "") or "").strip()
+                    self._action_reset_status(config, auto)
+                    changed_any = (str(getattr(self, "status", "") or "").strip() != prev) or changed_any
+                elif action_type == "notify_someone":
+                    self._action_notify_someone(config, auto)
+                elif action_type == "archive_project":
+                    prev = str(getattr(self, "is_active", "") or "").strip()
+                    self._action_archive_project(config, auto)
+                    changed_any = (str(getattr(self, "is_active", "") or "").strip() != prev) or changed_any
+                elif action_type == "push_date":
+                    prev_field = str((config or {}).get("date_field") or "").strip()
+                    prev_val = getattr(self, prev_field, None) if prev_field else None
+                    self._action_push_date(config, auto)
+                    next_val = getattr(self, prev_field, None) if prev_field else None
+                    changed_any = (next_val != prev_val) or changed_any
+                else:
+                    frappe.logger("smart_accounting").warning(
+                        "Board Automation %s: unknown action_type '%s'", auto.get("name"), action_type
+                    )
+                    self._record_automation_note(action_type, f"Unknown action type: {action_type}")
+        finally:
+            self._sb_active_automation_run = None
 
         # Update execution stats (once per automation, not per action)
         try:
@@ -445,7 +456,7 @@ class CustomProject(Project):
             )
         except Exception:
             pass
-        return changed_any
+        return {"changed_any": changed_any}
 
     def _action_roll_due_date(self, config, auto):
         """Action: Roll Lodgement Due forward by the project's frequency."""
@@ -464,6 +475,7 @@ class CustomProject(Project):
 
         if new_date and new_date != current_date:
             self.set(target_field, new_date)
+            self._record_automation_field_change(auto, "roll_due_date", target_field, current_date, new_date)
             frappe.logger("smart_accounting").info(
                 "Board Automation %s: rolled %s from %s to %s for Project %s",
                 auto.get("name"), target_field, current_date, new_date, self.name,
@@ -471,6 +483,7 @@ class CustomProject(Project):
     
     def _action_reset_status(self, config, auto):
         """Action: Reset project status to a configured value."""
+        prev = str(getattr(self, "status", "") or "").strip()
         reset_to = str(config.get("reset_to") or "Not started").strip()
         if not reset_to:
             return
@@ -486,6 +499,9 @@ class CustomProject(Project):
             self.status = reset_to
         elif pool:
             self.status = pool[0]
+        next_v = str(getattr(self, "status", "") or "").strip()
+        if next_v != prev:
+            self._record_automation_field_change(auto, "reset_status", "status", prev, next_v)
 
     def _action_notify_someone(self, config, auto):
         """Action: notify all users under the selected project role."""
@@ -532,6 +548,7 @@ class CustomProject(Project):
             automation_name=str(auto.get("automation_name") or auto.get("name") or "").strip(),
         )
         sent.update(pending)
+        self._record_automation_note("notify_someone", f"Notified {len(pending)} recipient(s) in role {role}")
 
     def _action_archive_project(self, config, auto):
         """Action: archive current project by setting is_active = No."""
@@ -539,6 +556,7 @@ class CustomProject(Project):
         if cur == "No":
             return
         self.is_active = "No"
+        self._record_automation_field_change(auto, "archive_project", "is_active", cur, "No")
         # Keep source context for activity log formatting in this save cycle.
         self._sb_archive_source = "automation"
         self._sb_archive_rule = str((auto or {}).get("automation_name") or (auto or {}).get("name") or "").strip()
@@ -573,7 +591,9 @@ class CustomProject(Project):
             else:
                 base_idx = int(frappe.utils.now_datetime().month) - 1
             next_idx = (base_idx + step) % 12
-            self.set(fieldname, months[next_idx])
+            next_month = months[next_idx]
+            self.set(fieldname, next_month)
+            self._record_automation_field_change(auto, "push_date", fieldname, cur, next_month)
             return
         current_val = getattr(self, fieldname, None)
         if not current_val:
@@ -602,6 +622,7 @@ class CustomProject(Project):
 
         if next_d and next_d != d:
             self.set(fieldname, next_d)
+            self._record_automation_field_change(auto, "push_date", fieldname, d, next_d)
 
     def _scheduler_rule_guard_key(self, auto) -> str:
         rule_name = str((auto or {}).get("name") or "").strip()
@@ -684,6 +705,12 @@ class CustomProject(Project):
                         row["archive_rule"] = str(getattr(self, "_sb_archive_rule", "") or "").strip()
                 elif old_s == "no" and new_s == "yes":
                     row["archive_source"] = "restore"
+            field_meta = (getattr(self, "_sb_automation_field_meta", None) or {}).get(fieldname)
+            if isinstance(field_meta, dict):
+                row["change_source"] = "automation"
+                row["automation_name"] = str(field_meta.get("automation_name") or "").strip()
+                row["automation_run_id"] = str(field_meta.get("automation_run_id") or "").strip()
+                row["automation_action_type"] = str(field_meta.get("automation_action_type") or "").strip()
             out.append(row)
         self._sb_activity_changes = out
 
@@ -703,6 +730,134 @@ class CustomProject(Project):
                 c.insert(ignore_permissions=True)
             except Exception:
                 continue
+
+    def _start_automation_run_log(self, auto, context=None):
+        return {
+            "run_id": frappe.generate_hash(length=12),
+            "automation": str((auto or {}).get("name") or "").strip(),
+            "automation_name": str((auto or {}).get("automation_name") or (auto or {}).get("name") or "").strip(),
+            "project": self.name,
+            "project_title": str(getattr(self, "project_name", "") or self.name).strip(),
+            "project_type": str(getattr(self, "project_type", "") or "").strip(),
+            "triggered_at": frappe.utils.now_datetime(),
+            "execution_source": _normalize_automation_execution_source((context or {}).get("event")),
+            "matched_triggers": _describe_automation_triggers(auto),
+            "actions_attempted": _describe_automation_actions(auto),
+            "changes": [],
+            "notes": [],
+        }
+
+    def _record_automation_field_change(self, auto, action_type, fieldname, from_value, to_value):
+        if not fieldname:
+            return
+        label = fieldname
+        try:
+            mf = self.meta.get_field(fieldname) if getattr(self, "meta", None) else None
+            label = str(getattr(mf, "label", "") or fieldname)
+        except Exception:
+            label = fieldname
+        from_text = _short_text(_value_to_text(from_value))
+        to_text = _short_text(_value_to_text(to_value))
+        ctx = getattr(self, "_sb_active_automation_run", None)
+        if isinstance(ctx, dict):
+            ctx.setdefault("changes", []).append({
+                "fieldname": fieldname,
+                "field_label": label,
+                "action_type": str(action_type or "").strip(),
+                "from_value": from_text,
+                "to_value": to_text,
+            })
+        field_meta = getattr(self, "_sb_automation_field_meta", None)
+        if not isinstance(field_meta, dict):
+            field_meta = {}
+            self._sb_automation_field_meta = field_meta
+        field_meta[fieldname] = {
+            "automation_name": str((auto or {}).get("automation_name") or (auto or {}).get("name") or "").strip(),
+            "automation_run_id": str((ctx or {}).get("run_id") or "").strip(),
+            "automation_action_type": str(action_type or "").strip(),
+        }
+
+    def _record_automation_note(self, action_type, message):
+        ctx = getattr(self, "_sb_active_automation_run", None)
+        if not isinstance(ctx, dict):
+            return
+        msg = str(message or "").strip()
+        if not msg:
+            return
+        ctx.setdefault("notes", []).append({
+            "action_type": str(action_type or "").strip(),
+            "message": msg,
+        })
+
+    def _finish_automation_run_log(self, run_ctx, exec_result=None, failed=False, error_details=""):
+        if not isinstance(run_ctx, dict):
+            return
+        changes = list(run_ctx.get("changes") or [])
+        notes = list(run_ctx.get("notes") or [])
+        changed_field_count = len({str(ch.get("fieldname") or "").strip() for ch in changes if str(ch.get("fieldname") or "").strip()})
+        has_effect = bool(changes or notes or ((exec_result or {}).get("changed_any")))
+        if failed:
+            result = "Failed"
+            message = str(error_details or "Automation failed").strip()
+        elif has_effect:
+            result = "Success"
+            labels = [str(ch.get("field_label") or ch.get("fieldname") or "").strip() for ch in changes if str(ch.get("field_label") or ch.get("fieldname") or "").strip()]
+            labels = list(dict.fromkeys(labels))
+            if labels:
+                preview = ", ".join(labels[:3])
+                if len(labels) > 3:
+                    preview += ", ..."
+                message = f"Updated {preview}"
+            elif notes:
+                message = "; ".join([str(n.get("message") or "").strip() for n in notes if str(n.get("message") or "").strip()][:2])
+            else:
+                message = "Automation executed successfully"
+        else:
+            result = "No Change"
+            message = "Automation matched but did not change anything"
+        run_ctx["result"] = result
+        run_ctx["message"] = message
+        run_ctx["error_details"] = str(error_details or "").strip()
+        run_ctx["changed_field_count"] = changed_field_count
+        logs = getattr(self, "_sb_automation_run_logs", None)
+        if not isinstance(logs, list):
+            logs = []
+            self._sb_automation_run_logs = logs
+        logs.append(run_ctx)
+
+    def _write_automation_run_logs(self):
+        logs = getattr(self, "_sb_automation_run_logs", None)
+        if not isinstance(logs, list) or not logs:
+            return
+        try:
+            if not frappe.db.exists("DocType", "Automation Run Log"):
+                return
+        except Exception:
+            return
+        for log in logs[:80]:
+            try:
+                doc = frappe.get_doc({
+                    "doctype": "Automation Run Log",
+                    "run_id": log.get("run_id"),
+                    "automation": log.get("automation"),
+                    "automation_name": log.get("automation_name"),
+                    "project": log.get("project"),
+                    "project_title": log.get("project_title"),
+                    "project_type": log.get("project_type"),
+                    "triggered_at": log.get("triggered_at"),
+                    "execution_source": log.get("execution_source"),
+                    "result": log.get("result"),
+                    "matched_triggers": log.get("matched_triggers"),
+                    "actions_attempted": log.get("actions_attempted"),
+                    "message": log.get("message"),
+                    "error_details": log.get("error_details"),
+                    "changed_field_count": int(log.get("changed_field_count") or 0),
+                    "changes": list(log.get("changes") or []),
+                })
+                doc.insert(ignore_permissions=True)
+            except Exception:
+                continue
+        self._sb_automation_run_logs = []
 
 
 # =========================================================================
@@ -826,6 +981,39 @@ def _target_month_step_by_frequency(frequency: str) -> int:
     if freq in ("yearly",):
         return 12
     return 0
+
+
+def _normalize_automation_execution_source(event: str | None) -> str:
+    ev = str(event or "").strip().lower()
+    if ev == "hourly":
+        return "Hourly Scheduler"
+    if ev == "daily":
+        return "Daily Scheduler"
+    if ev == "manual":
+        return "Manual"
+    if ev == "validate":
+        return "Validate"
+    return "Other"
+
+
+def _describe_automation_triggers(auto) -> str:
+    config = _parse_json((auto or {}).get("trigger_config"))
+    triggers = config.get("triggers") if isinstance(config, dict) else None
+    if not isinstance(triggers, list) or not triggers:
+        triggers = [{"trigger_type": str((auto or {}).get("trigger_type") or "").strip()}]
+    labels = []
+    for tr in triggers:
+        if not isinstance(tr, dict):
+            continue
+        labels.append(str(tr.get("trigger_type") or "").strip())
+    labels = [x for x in labels if x]
+    return ", ".join(labels[:10])
+
+
+def _describe_automation_actions(auto) -> str:
+    actions = _parse_json_array((auto or {}).get("actions"))
+    labels = [str((a or {}).get("action_type") or "").strip() for a in (actions or []) if str((a or {}).get("action_type") or "").strip()]
+    return ", ".join(labels[:10])
 
 
 _AUDIT_SKIP_FIELDS = {

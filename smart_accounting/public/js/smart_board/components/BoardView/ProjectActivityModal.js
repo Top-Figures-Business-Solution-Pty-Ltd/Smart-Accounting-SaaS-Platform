@@ -277,19 +277,24 @@ export class ProjectActivityModal {
     const label = _norm(it?.field_label || field || 'Field');
     const fromRaw = _norm(it?.from_value);
     const toRaw = _norm(it?.to_value);
+    const changeSource = _norm(it?.change_source).toLowerCase();
+    const automationName = _norm(it?.automation_name);
     const archiveSource = _norm(it?.archive_source).toLowerCase();
     const archiveRule = _norm(it?.archive_rule);
+    const prefix = changeSource === 'automation'
+      ? `<span class="sb-project-activity__source sb-project-activity__source--automation">Automation${automationName ? ` · ${escapeHtml(automationName)}` : ''}</span> `
+      : '';
 
     if (field === 'is_active') {
       if (fromRaw === 'Yes' && toRaw === 'No') {
         if (archiveSource === 'automation') {
           const byRule = archiveRule ? ` via automation <span class="sb-project-activity__field">${escapeHtml(archiveRule)}</span>` : ' via automation';
-          return `archived this project${byRule}`;
+          return `${prefix}archived this project${byRule}`;
         }
-        return 'archived this project';
+        return `${prefix}archived this project`;
       }
       if (fromRaw === 'No' && toRaw === 'Yes') {
-        return 'restored this project';
+        return `${prefix}restored this project`;
       }
     }
 
@@ -302,15 +307,15 @@ export class ProjectActivityModal {
 
     const fieldHtml = `<span class="sb-project-activity__field">${escapeHtml(label)}</span>`;
     if (!fromRaw && toRaw) {
-      return `set ${fieldHtml} to <span class="sb-project-activity__to">${escapeHtml(_shortText(toRaw))}</span>`;
+      return `${prefix}set ${fieldHtml} to <span class="sb-project-activity__to">${escapeHtml(_shortText(toRaw))}</span>`;
     }
     if (fromRaw && !toRaw) {
-      return `cleared ${fieldHtml} (was <span class="sb-project-activity__from">${escapeHtml(_shortText(fromRaw))}</span>)`;
+      return `${prefix}cleared ${fieldHtml} (was <span class="sb-project-activity__from">${escapeHtml(_shortText(fromRaw))}</span>)`;
     }
     if (fromRaw !== toRaw) {
-      return `changed ${fieldHtml} from <span class="sb-project-activity__from">${escapeHtml(_shortText(fromRaw))}</span> to <span class="sb-project-activity__to">${escapeHtml(_shortText(toRaw))}</span>`;
+      return `${prefix}changed ${fieldHtml} from <span class="sb-project-activity__from">${escapeHtml(_shortText(fromRaw))}</span> to <span class="sb-project-activity__to">${escapeHtml(_shortText(toRaw))}</span>`;
     }
-    return `updated ${fieldHtml}`;
+    return `${prefix}updated ${fieldHtml}`;
   }
 
   _teamMembersChangeHTML(label, fromRaw, toRaw) {

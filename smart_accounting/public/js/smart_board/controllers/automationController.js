@@ -43,6 +43,11 @@ export async function openAutomationFlow() {
         throw e;
       }
     },
+    onOpenProject: async (project) => {
+      try {
+        await window.smart_accounting?.smart_board_instance?.openBoardForProject?.(project);
+      } catch (e) {}
+    },
   });
   modal.open();
 }

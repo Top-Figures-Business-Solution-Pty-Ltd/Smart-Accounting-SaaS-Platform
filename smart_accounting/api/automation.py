@@ -438,6 +438,7 @@ def save_automation(
         "enabled": doc.enabled,
         "automation_name": getattr(doc, "automation_name", "") or "",
         "trigger_type": doc.trigger_type,
+        "execution_count": int(getattr(doc, "execution_count", 0) or 0),
     }
 
 

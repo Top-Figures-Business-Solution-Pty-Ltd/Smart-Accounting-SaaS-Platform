@@ -7,9 +7,10 @@
  */
 import { escapeHtml } from '../../utils/dom.js';
 import { Modal } from '../Common/Modal.js';
+import { AutomationLogService } from '../../services/automationLogService.js';
 
 export class AutomationModal {
-  constructor({ meta = {}, items = [], onSave, onToggle, onDelete, onClose } = {}) {
+  constructor({ meta = {}, items = [], onSave, onToggle, onDelete, onOpenProject, onClose } = {}) {
     this.meta = meta || {};
     this.items = Array.isArray(items) ? items.map((it) => ({
       ...it,
@@ -20,6 +21,7 @@ export class AutomationModal {
     this.onSave = onSave || (async () => {});
     this.onToggle = onToggle || (async () => {});
     this.onDelete = onDelete || (async () => {});
+    this.onOpenProject = onOpenProject || (() => {});
     this.onClose = onClose || (() => {});
 
     this._modal = null;
@@ -27,6 +29,8 @@ export class AutomationModal {
     this._saving = false;
     this._activeIdx = this.items.length ? 0 : -1;
     this._savedSearch = '';
+    this._logsByAutomation = new Map();
+    this._loadingRunsFor = '';
   }
 
   open() {
@@ -100,8 +104,12 @@ export class AutomationModal {
     wrap.querySelectorAll('.sb-auto__saved-item').forEach((el) => {
       el.addEventListener('click', (e) => this._handleSelectSavedItem(e));
     });
+    wrap.querySelectorAll('.sb-auto__run-open').forEach((el) => {
+      el.addEventListener('click', (e) => this._handleOpenProject(e));
+    });
     const editor = wrap.querySelector('#sbAutoEditor');
     if (editor) this._bindRuleEvents(editor);
+    this._ensureActiveRunsLoaded();
   }
 
   _savedItemHTML(item, idx) {
@@ -172,7 +180,72 @@ export class AutomationModal {
           <button class="btn btn-default btn-sm sb-auto__save-as" data-idx="${idx}" type="button" ${saveDisabled} title="${escapeHtml(saveBlockedReason || 'Save as new automation')}">Save as</button>
           ${item.execution_count ? `<span class="text-muted" style="font-size:11px;">Executed ${item.execution_count} times</span>` : ''}
         </div>
+        ${this._recentRunsHTML(item)}
         ${saveBlockedReason ? `<div style="margin-top:8px; font-size:12px; color:#b45309;">${escapeHtml(saveBlockedReason)}</div>` : ''}
+      </div>
+    `;
+  }
+
+  _recentRunsHTML(item) {
+    const key = String(item?.name || '').trim();
+    if (!key) {
+      return `
+        <div class="sb-auto__runs">
+          <div class="sb-auto__runs-title">Recent Runs</div>
+          <div class="text-muted" style="font-size:12px;">Save this automation first to view execution logs.</div>
+        </div>
+      `;
+    }
+
+    const rows = this._logsByAutomation.get(key) || null;
+    if (this._loadingRunsFor === key && !rows) {
+      return `
+        <div class="sb-auto__runs">
+          <div class="sb-auto__runs-title">Recent Runs</div>
+          <div class="text-muted" style="font-size:12px;">Loading runs...</div>
+        </div>
+      `;
+    }
+
+    if (!rows || !rows.length) {
+      return `
+        <div class="sb-auto__runs">
+          <div class="sb-auto__runs-title">Recent Runs</div>
+          <div class="text-muted" style="font-size:12px;">No runs yet.</div>
+        </div>
+      `;
+    }
+
+    const items = rows.map((row) => {
+      const result = String(row?.result || '').trim();
+      const source = String(row?.execution_source || '').trim();
+      const project = String(row?.project_title || row?.project || '').trim();
+      const projectName = String(row?.project || '').trim();
+      const projectType = String(row?.project_type || '').trim();
+      const message = String(row?.message || '').trim();
+      const changed = Number(row?.changed_field_count || 0);
+      const when = String(row?.triggered_at || '').replace('T', ' ').slice(0, 19);
+      return `
+        <div class="sb-auto__run-item">
+          <div class="sb-auto__run-head">
+            <span class="sb-auto__run-result sb-auto__run-result--${escapeHtml(result.toLowerCase().replace(/\s+/g, '-'))}">${escapeHtml(result || 'Unknown')}</span>
+            <span class="sb-auto__run-when">${escapeHtml(when)}</span>
+          </div>
+          <div class="sb-auto__run-project">
+            <span>${escapeHtml(project || 'Unknown project')}</span>
+            ${projectType ? `<span class="sb-auto__run-type">${escapeHtml(projectType)}</span>` : ''}
+          </div>
+          <div class="sb-auto__run-meta">${escapeHtml(source || 'validate')}${changed ? ` · ${escapeHtml(String(changed))} field${changed > 1 ? 's' : ''}` : ''}</div>
+          ${message ? `<div class="sb-auto__run-message">${escapeHtml(message)}</div>` : ''}
+          ${projectName ? `<div class="sb-auto__run-actions"><button type="button" class="btn btn-default btn-xs sb-auto__run-open" data-project="${escapeHtml(projectName)}" data-project-type="${escapeHtml(projectType)}" data-project-title="${escapeHtml(project)}">Open project</button></div>` : ''}
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="sb-auto__runs">
+        <div class="sb-auto__runs-title">Recent Runs</div>
+        <div class="sb-auto__runs-list">${items}</div>
       </div>
     `;
   }
@@ -353,6 +426,35 @@ export class AutomationModal {
     this._renderList();
   }
 
+  _handleOpenProject(e) {
+    const btn = e.currentTarget;
+    const project = {
+      name: String(btn?.dataset?.project || '').trim(),
+      project_type: String(btn?.dataset?.projectType || '').trim(),
+      project_name: String(btn?.dataset?.projectTitle || '').trim(),
+    };
+    if (!project.name) return;
+    try { this._modal?.close?.(); } catch (err) {}
+    try { this.onOpenProject?.(project); } catch (err) {}
+  }
+
+  async _ensureActiveRunsLoaded() {
+    const item = this.items[this._activeIdx];
+    const key = String(item?.name || '').trim();
+    if (!key || this._logsByAutomation.has(key) || this._loadingRunsFor === key) return;
+    this._loadingRunsFor = key;
+    this._renderList();
+    try {
+      const msg = await AutomationLogService.listRuns({ automation: key, limit: 8 });
+      this._logsByAutomation.set(key, Array.isArray(msg?.items) ? msg.items : []);
+    } catch (e) {
+      this._logsByAutomation.set(key, []);
+    } finally {
+      this._loadingRunsFor = '';
+      this._renderList();
+    }
+  }
+
   _handleNameInput(e) {
     const idx = parseInt(e.target?.dataset?.idx, 10);
     const item = this.items[idx];
@@ -453,8 +555,10 @@ export class AutomationModal {
       item.trigger_config = { triggers };
       item.triggers = triggers;
       item.actions = actions;
+      item.execution_count = Number(result?.execution_count || item.execution_count || 0);
 
       // Re-render to update data-name
+      if (item.name) this._logsByAutomation.delete(item.name);
       this._renderList();
     } catch (err) {
       // handled by controller
@@ -600,7 +704,7 @@ export class AutomationModal {
         trigger_config: { triggers },
         triggers,
         actions,
-        execution_count: 0,
+        execution_count: Number(result?.execution_count || 0),
       };
       this.items.push(created);
       this._savedSearch = '';

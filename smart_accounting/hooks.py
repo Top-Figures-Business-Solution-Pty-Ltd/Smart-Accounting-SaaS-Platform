@@ -114,7 +114,9 @@ fixtures = [
                 "Monthly Status",
 				"Project Team Member",
 				"Project Software",
-				"Board Automation"
+				"Board Automation",
+				"Automation Run Log",
+				"Automation Run Log Change"
             ]]
         ]
     }
