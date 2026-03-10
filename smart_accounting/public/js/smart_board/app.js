@@ -357,6 +357,26 @@ export class SmartBoardApp {
         return !!fn(viewType);
     }
 
+    _clearTransientBoardEntryFilters() {
+        try {
+            const st = this.store?.getState?.()?.filters || {};
+            this.store?.dispatch?.('filters/setFilters', {
+                ...st,
+                status: [],
+                company: null,
+                customer: null,
+                fiscal_year: null,
+                date_from: null,
+                date_to: null,
+                search: '',
+                is_active: true,
+                focused_project_name: null,
+                advanced_rules: [],
+                advanced_groups: [],
+            });
+        } catch (e) {}
+    }
+
     async loadProjectTypes() {
         const names = await ProjectTypeService.fetchProjectTypes();
         this.projectTypes = names.map((name) => ({
@@ -414,6 +434,19 @@ export class SmartBoardApp {
             this._scopedProjectName = '';
             this._scopedProjectView = '';
         }
+
+        const leavingProductView = typeof ViewTypes?.isProductView === 'function'
+            ? ViewTypes.isProductView(this.currentView)
+            : false;
+        const enteringBoardView = this.isBoardView(viewType);
+        if (leavingProductView && enteringBoardView) {
+            // Unify navigation behavior:
+            // when leaving Dashboard / Client Projects / Status Projects / other product views
+            // for a normal board, clear transient filters so users don't carry hidden scope
+            // into the next board with a confusing badge-only state.
+            this._clearTransientBoardEntryFilters();
+        }
+
         this.currentView = viewType;
         
         // 更新各组件状态
