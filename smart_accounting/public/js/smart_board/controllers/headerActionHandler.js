@@ -40,6 +40,10 @@ export async function handleHeaderAction(app, action, data) {
       return app?.createNewProject?.();
     case 'client_projects_search':
       return app?.performSearch?.(data);
+    case 'status_projects_back':
+      return app?.goBackToDashboard?.();
+    case 'status_projects_search':
+      return app?.performSearch?.(data);
     default:
       console.warn('Unknown action:', action, data);
   }

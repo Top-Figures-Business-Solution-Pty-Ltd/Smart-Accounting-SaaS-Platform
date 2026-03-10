@@ -56,6 +56,10 @@ export class Sidebar {
                             <span class="nav-icon">👥</span>
                             <span class="nav-label">Clients</span>
                         </a>
+                        <a href="#" class="nav-item" data-view="archived-clients">
+                            <span class="nav-icon">🗃️</span>
+                            <span class="nav-label">Archived Clients</span>
+                        </a>
                         <a href="#" class="nav-item" data-view="automation-logs">
                             <span class="nav-icon">🤖</span>
                             <span class="nav-label">Automation Logs</span>

@@ -22,6 +22,7 @@ export class MainContent {
         this.onProjectClick = options.onProjectClick || (() => {});
         this._unsub = null;
         this._clientsApp = null;
+        this._archivedClientsApp = null;
         this._clientProjectsApp = null;
         this._activityLogApp = null;
         this._automationLogsApp = null;
@@ -112,13 +113,20 @@ export class MainContent {
             if (!project) return;
             try { this.options?.app?.openBoardForProject?.(project); } catch (e2) {}
         });
+        this.container.addEventListener('click', (e) => {
+            const btn = e.target?.closest?.('.sb-dash-status-card');
+            if (!btn) return;
+            e.preventDefault();
+            const status = btn.getAttribute('data-status') || '';
+            try { this.options?.app?.openStatusProjects?.(status); } catch (e2) {}
+        });
     }
     
     updateView(view) {
         this.currentView = view;
 
         // Non-board views should not show the projects table
-        if (view === 'clients' || view === 'client-projects' || view === 'activity' || view === 'automation-logs' || view === 'settings' || view === 'report' || isPlaceholderView(view)) {
+        if (view === 'clients' || view === 'client-projects' || view === 'status-projects' || view === 'archived-clients' || view === 'activity' || view === 'automation-logs' || view === 'settings' || view === 'report' || isPlaceholderView(view)) {
             this.showPlaceholder(view);
             return;
         }
@@ -210,15 +218,33 @@ export class MainContent {
             try { this._reportApp?.destroy?.(); } catch (e) {}
             this._reportApp = null;
             try { this._clientsApp?.destroy?.(); } catch (e) {}
+            try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
             try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
             this._clientProjectsApp = null;
             this._clientsApp = new ClientsApp(mount, {
                 store: this.store,
+                canArchive: true,
                 onOpenProjects: (client) => {
                     try { this.options?.app?.openCustomerProjects?.(client); } catch (e) {}
                 }
             });
             this._clientsApp.init();
+        } else if (view === 'archived-clients') {
+            placeholder.innerHTML = `<div id="sbArchivedClientsMount"></div>`;
+            const mount = placeholder.querySelector('#sbArchivedClientsMount');
+            try { this._reportApp?.destroy?.(); } catch (e) {}
+            this._reportApp = null;
+            try { this._clientsApp?.destroy?.(); } catch (e) {}
+            this._clientsApp = null;
+            try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
+            try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
+            this._clientProjectsApp = null;
+            this._archivedClientsApp = new ClientsApp(mount, {
+                store: this.store,
+                archivedMode: true,
+                canRestore: true,
+            });
+            this._archivedClientsApp.init();
         } else if (view === 'client-projects') {
             placeholder.innerHTML = `<div id="sbClientProjectsMount"></div>`;
             const mount = placeholder.querySelector('#sbClientProjectsMount');
@@ -226,11 +252,30 @@ export class MainContent {
             this._reportApp = null;
             try { this._clientsApp?.destroy?.(); } catch (e) {}
             this._clientsApp = null;
+            try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
+            this._archivedClientsApp = null;
             try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
             this._clientProjectsApp = new ClientProjectsApp(mount, {
                 store: this.store,
                 onOpenBoard: (project) => {
                     try { this.options?.app?.openBoardForProject?.(project); } catch (e) {}
+                }
+            });
+            this._clientProjectsApp.init();
+        } else if (view === 'status-projects') {
+            placeholder.innerHTML = `<div id="sbStatusProjectsMount"></div>`;
+            const mount = placeholder.querySelector('#sbStatusProjectsMount');
+            try { this._reportApp?.destroy?.(); } catch (e) {}
+            this._reportApp = null;
+            try { this._clientsApp?.destroy?.(); } catch (e) {}
+            this._clientsApp = null;
+            try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
+            this._archivedClientsApp = null;
+            try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
+            this._clientProjectsApp = new ClientProjectsApp(mount, {
+                store: this.store,
+                onOpenBoard: (project) => {
+                    try { this.options?.app?.focusProject?.(project); } catch (e) {}
                 }
             });
             this._clientProjectsApp.init();
@@ -241,6 +286,8 @@ export class MainContent {
             this._reportApp = null;
             try { this._clientsApp?.destroy?.(); } catch (e) {}
             this._clientsApp = null;
+            try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
+            this._archivedClientsApp = null;
             try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
             this._clientProjectsApp = null;
             try { this._activityLogApp?.destroy?.(); } catch (e) {}
@@ -253,6 +300,8 @@ export class MainContent {
             this._reportApp = null;
             try { this._clientsApp?.destroy?.(); } catch (e) {}
             this._clientsApp = null;
+            try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
+            this._archivedClientsApp = null;
             try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
             this._clientProjectsApp = null;
             try { this._activityLogApp?.destroy?.(); } catch (e) {}
@@ -273,6 +322,8 @@ export class MainContent {
             this._reportApp = null;
             try { this._clientsApp?.destroy?.(); } catch (e) {}
             this._clientsApp = null;
+            try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
+            this._archivedClientsApp = null;
             try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
             this._clientProjectsApp = null;
             try { this._activityLogApp?.destroy?.(); } catch (e) {}
@@ -288,6 +339,8 @@ export class MainContent {
             const mount = placeholder.querySelector('#sbReportMount');
             try { this._clientsApp?.destroy?.(); } catch (e) {}
             this._clientsApp = null;
+            try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
+            this._archivedClientsApp = null;
             try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
             this._clientProjectsApp = null;
             try { this._activityLogApp?.destroy?.(); } catch (e) {}
@@ -337,6 +390,8 @@ export class MainContent {
         }
         try { this._clientsApp?.destroy?.(); } catch (e) {}
         this._clientsApp = null;
+        try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
+        this._archivedClientsApp = null;
         try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
         this._clientProjectsApp = null;
         try { this._activityLogApp?.destroy?.(); } catch (e) {}

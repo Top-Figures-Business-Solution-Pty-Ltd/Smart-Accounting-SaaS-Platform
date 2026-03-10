@@ -99,6 +99,8 @@ export const ClientsModule = {
           search: filters?.search || '',
           limitStart: 0,
           limit,
+          includeDisabled: !!filters?.includeDisabled,
+          disabledOnly: !!filters?.disabledOnly,
         });
         const items = r?.items || [];
         const total = r?.meta?.total_count;
@@ -130,6 +132,8 @@ export const ClientsModule = {
           search: effective?.search || '',
           limitStart: offset,
           limit,
+          includeDisabled: !!effective?.includeDisabled,
+          disabledOnly: !!effective?.disabledOnly,
         });
         const items = r?.items || [];
         const total = r?.meta?.total_count;

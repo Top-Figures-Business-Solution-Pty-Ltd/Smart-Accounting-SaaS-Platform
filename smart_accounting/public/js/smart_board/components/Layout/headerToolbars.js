@@ -56,6 +56,20 @@ export function renderHeaderActions(view, { isBoardView }) {
         `;
     }
 
+    if (view === 'status-projects') {
+        return `
+            <button class="btn btn-default" id="btnStatusProjectsBack">Back</button>
+            <div class="header-search">
+                <input 
+                    type="text" 
+                    class="form-control search-input" 
+                    placeholder="Search projects..."
+                    id="headerStatusProjectsSearchInput"
+                />
+            </div>
+        `;
+    }
+
     if (view === 'dashboard') {
         return `<button class="btn btn-default" id="btnDashboardRefresh">Refresh</button>`;
     }
@@ -106,6 +120,16 @@ export function bindHeaderActions(rootEl, view, { isBoardView, onAction, onShowF
         clientProjectsSearch.addEventListener('input', (e) => {
             clearTimeout(t);
             t = setTimeout(() => onAction?.('client_projects_search', e.target.value), 300);
+        });
+    }
+
+    rootEl.querySelector('#btnStatusProjectsBack')?.addEventListener('click', () => onAction?.('status_projects_back'));
+    const statusProjectsSearch = rootEl.querySelector('#headerStatusProjectsSearchInput');
+    if (statusProjectsSearch) {
+        let t;
+        statusProjectsSearch.addEventListener('input', (e) => {
+            clearTimeout(t);
+            t = setTimeout(() => onAction?.('status_projects_search', e.target.value), 300);
         });
     }
 }

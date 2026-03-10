@@ -5,7 +5,7 @@
 import { Perf } from '../utils/perf.js';
 
 export class ClientsService {
-  static async fetchClients({ search = '', limitStart = 0, limit = 50 } = {}) {
+  static async fetchClients({ search = '', limitStart = 0, limit = 50, includeDisabled = false, disabledOnly = false } = {}) {
     return await Perf.timeAsync('clients.get_clients', async () => {
       const r = await frappe.call({
         method: 'smart_accounting.api.clients.get_clients',
@@ -13,13 +13,15 @@ export class ClientsService {
           search: String(search || ''),
           limit_start: Math.max(0, Number(limitStart) || 0),
           limit_page_length: Math.max(1, Number(limit) || 50),
+          include_disabled: includeDisabled ? 1 : 0,
+          disabled_only: disabledOnly ? 1 : 0,
         }
       });
       return {
         items: r?.message?.items || [],
         meta: r?.message?.meta || {},
       };
-    }, () => ({ search: String(search || ''), limitStart: Number(limitStart) || 0, limit: Number(limit) || 50 }));
+    }, () => ({ search: String(search || ''), limitStart: Number(limitStart) || 0, limit: Number(limit) || 50, includeDisabled: !!includeDisabled, disabledOnly: !!disabledOnly }));
   }
 
   static async checkClientNameExists(name = '', { excludeName = '' } = {}) {
@@ -33,6 +35,22 @@ export class ClientsService {
       });
       return r?.message || { exists: false, items: [] };
     }, () => ({ name: String(name || ''), exclude_name: String(excludeName || '') }));
+  }
+
+  static async archiveClient(name = '') {
+    const r = await frappe.call({
+      method: 'smart_accounting.api.clients.archive_client',
+      args: { name: String(name || '').trim() }
+    });
+    return r?.message || {};
+  }
+
+  static async restoreClient(name = '') {
+    const r = await frappe.call({
+      method: 'smart_accounting.api.clients.restore_client',
+      args: { name: String(name || '').trim() }
+    });
+    return r?.message || {};
   }
 }
 

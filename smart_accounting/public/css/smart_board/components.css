@@ -218,6 +218,13 @@
     border-color: rgba(220, 38, 38, 0.45);
 }
 
+.sb-client-archive-btn,
+.sb-client-restore-btn {
+    padding: 6px 10px;
+    border-radius: 10px;
+    font-size: 12px;
+}
+
 /* ============================================
    Toast (Website notifications)
    ============================================ */
@@ -399,6 +406,17 @@
     border-radius: 12px;
     padding: 12px 14px;
     box-shadow: var(--smart-board-shadow-sm);
+}
+
+button.sb-card {
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+}
+
+button.sb-card:hover {
+    border-color: var(--smart-board-primary);
+    box-shadow: 0 0 0 1px rgba(0, 115, 234, 0.15) inset;
 }
 
 .sb-card__label {

@@ -198,6 +198,10 @@ class CustomProject(Project):
             if not getattr(getattr(self, "flags", None), "skip_board_automation", False):
                 self._run_board_automations({"event": "validate"})
 
+        # Keep archive source fields consistent with the current archive action.
+        if not self.is_new():
+            self._sync_archive_source_fields()
+
         # Compute diffs after all business rules (including automations) settle.
         if not self.is_new():
             self._prepare_activity_changes()
@@ -647,6 +651,46 @@ class CustomProject(Project):
     # =========================================================================
     # Activity audit (field-level)
     # =========================================================================
+
+    def _sync_archive_source_fields(self):
+        try:
+            changed = self.has_value_changed("is_active")
+        except Exception:
+            changed = False
+        if not changed:
+            return
+        try:
+            meta = self.meta if getattr(self, "meta", None) else None
+            has_source = bool(meta and meta.has_field("custom_archive_source"))
+            has_ref = bool(meta and meta.has_field("custom_archive_source_ref"))
+        except Exception:
+            has_source = False
+            has_ref = False
+        if not has_source and not has_ref:
+            return
+
+        new_state = str(getattr(self, "is_active", "") or "").strip()
+        if new_state == "No":
+            source_key = str(getattr(self, "_sb_archive_source", "") or "manual").strip().lower()
+            source_label = "Manual"
+            source_ref = ""
+            if source_key == "automation":
+                source_label = "Automation"
+                source_ref = str(getattr(self, "_sb_archive_rule", "") or "").strip()
+            elif source_key == "client_archive":
+                source_label = "Client Archive"
+                source_ref = str(getattr(self, "_sb_archive_client_ref", "") or "").strip()
+            if has_source:
+                self.set("custom_archive_source", source_label)
+            if has_ref:
+                self.set("custom_archive_source_ref", source_ref or "")
+            return
+
+        if new_state == "Yes":
+            if has_source:
+                self.set("custom_archive_source", "")
+            if has_ref:
+                self.set("custom_archive_source_ref", "")
 
     def _capture_activity_before_state(self):
         if getattr(self, "_sb_activity_before", None) is not None:

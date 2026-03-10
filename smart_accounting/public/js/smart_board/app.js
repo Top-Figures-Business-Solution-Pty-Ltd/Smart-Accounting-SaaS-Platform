@@ -32,10 +32,12 @@ export class SmartBoardApp {
         this.currentView = urlState?.view || 'dashboard';
         // Only treat URL customer param as meaningful for client-projects view
         this._initialUrlCustomer = (this.currentView === 'client-projects') ? String(urlState?.customer || '').trim() : '';
+        this._initialUrlStatus = (this.currentView === 'status-projects') ? String(urlState?.status || '').trim() : '';
         this.projectTypes = [];   // 运行时从系统获取
         this._unsubscribers = [];
         this._onWindowResize = null;
         this._clientProjects = null;
+        this._statusProjects = '';
         this._scopedCustomer = '';
         this._scopedProjectName = '';
         this._scopedProjectView = '';
@@ -146,6 +148,21 @@ export class SmartBoardApp {
                 });
                 this._clientProjects = { customer: this._initialUrlCustomer, customer_name: this._initialUrlCustomer };
             }
+            if (this.currentView === 'status-projects' && this._initialUrlStatus) {
+                this.store.dispatch('filters/setFilters', {
+                    status: [this._initialUrlStatus],
+                    company: null,
+                    customer: null,
+                    fiscal_year: null,
+                    date_from: null,
+                    date_to: null,
+                    search: '',
+                    advanced_rules: [],
+                    advanced_groups: [],
+                    is_active: true,
+                });
+                this._statusProjects = this._initialUrlStatus;
+            }
             await this.loadViewData(this.currentView);
             
             this.showLoading(false);
@@ -172,8 +189,27 @@ export class SmartBoardApp {
             await this.store.dispatch('clients/fetchClients', { search: '', limit: 200 });
             return;
         }
+        if (viewType === 'archived-clients') {
+            await this.store.dispatch('clients/fetchClients', { search: '', limit: 50, disabledOnly: true });
+            return;
+        }
         // Settings / Activity are product views (no board data needed)
         if (viewType === 'settings' || viewType === 'activity' || viewType === 'report' || viewType === 'automation-logs') {
+            return;
+        }
+        if (viewType === 'status-projects') {
+            const dash = this.store?.getState?.()?.dashboard || {};
+            let scoped = Array.isArray(dash?.myProjects) ? dash.myProjects : [];
+            if (!scoped.length) {
+                try { await this.store.dispatch('dashboard/fetchMyProjects'); } catch (e) {}
+                const nextDash = this.store?.getState?.()?.dashboard || {};
+                scoped = Array.isArray(nextDash?.myProjects) ? nextDash.myProjects : [];
+            }
+            const stateFilters = this.store?.getState?.()?.filters || {};
+            const merged = { ...stateFilters };
+            merged.fields = ['name', 'project_name', 'customer', 'project_type', 'status', 'modified', 'is_active'];
+            merged.name_in = scoped.map((p) => String(p?.name || '').trim()).filter(Boolean);
+            await this.store.dispatch('projects/fetchProjects', merged);
             return;
         }
         // Client Projects: a cross-project-type view, still backed by Projects module
@@ -344,6 +380,9 @@ export class SmartBoardApp {
             this._scopedCustomer = '';
             this._clientProjects = null;
         }
+        if (this._statusProjects && String(viewType || '') !== 'status-projects') {
+            this._statusProjects = '';
+        }
         // Leaving notification-scoped project focus: clear temporary single-project filter
         // when user switches to another view/board to avoid confusion.
         if (this._scopedProjectName && String(viewType || '') !== String(this._scopedProjectView || '')) {
@@ -361,7 +400,7 @@ export class SmartBoardApp {
         this.mainContent.updateView(viewType);
         
         // 加载新视图的数据：Boards（Project Type）/ Dashboard / Clients / Client Projects
-        if (this.isBoardView(viewType) || viewType === 'dashboard' || viewType === 'clients' || viewType === 'client-projects' || viewType === 'report' || viewType === 'automation-logs') {
+        if (this.isBoardView(viewType) || viewType === 'dashboard' || viewType === 'clients' || viewType === 'client-projects' || viewType === 'status-projects' || viewType === 'archived-clients' || viewType === 'report' || viewType === 'automation-logs') {
             this.loadViewData(viewType);
         }
 
@@ -456,6 +495,15 @@ export class SmartBoardApp {
         this.sidebar?.updateView?.(this.currentView);
         try { this._syncUrl?.(); } catch (e) {}
         // Clients view fetch
+        return this.loadViewData(this.currentView);
+    }
+
+    goBackToDashboard() {
+        this.currentView = 'dashboard';
+        this.header?.updateView?.(this.currentView);
+        this.mainContent?.updateView?.(this.currentView);
+        this.sidebar?.updateView?.(this.currentView);
+        try { this._syncUrl?.(); } catch (e) {}
         return this.loadViewData(this.currentView);
     }
     
@@ -581,6 +629,28 @@ export class SmartBoardApp {
         return this.loadViewData(this.currentView);
     }
 
+    openStatusProjects(statusValue) {
+        const status = String(statusValue || '').trim();
+        if (!status) return;
+        this._statusProjects = status;
+        this.currentView = 'status-projects';
+        this.header?.updateView?.(this.currentView);
+        this.mainContent?.updateView?.(this.currentView);
+        this.sidebar?.updateView?.(this.currentView);
+        this.applyFilters({
+            status: [status],
+            company: null,
+            customer: null,
+            fiscal_year: null,
+            date_from: null,
+            date_to: null,
+            search: '',
+            advanced_rules: [],
+            advanced_groups: [],
+            is_active: true,
+        });
+    }
+
     /**
      * Navigate from Clients -> Projects (board) filtered by customer.
      * Strategy (MVP):
@@ -617,8 +687,15 @@ export class SmartBoardApp {
     _syncUrl() {
         const state = this.store?.getState?.() || {};
         const customer = String(state?.filters?.customer || this._clientProjects?.customer || '').trim();
+        const status = (this.currentView === 'status-projects')
+            ? String((Array.isArray(state?.filters?.status) ? state.filters.status[0] : state?.filters?.status) || this._statusProjects || '').trim()
+            : '';
         // Only keep `customer` in URL for client-projects view to avoid confusing sticky filters on other pages.
-        setUrlState({ view: this.currentView, customer: (this.currentView === 'client-projects') ? (customer || '') : '' });
+        setUrlState({
+            view: this.currentView,
+            customer: (this.currentView === 'client-projects') ? (customer || '') : '',
+            status,
+        });
     }
     
     showLoading(show) {

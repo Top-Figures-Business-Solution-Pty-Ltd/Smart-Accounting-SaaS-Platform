@@ -120,7 +120,13 @@ def _build_client_summary(customer: dict, primary_entity: dict | None = None) ->
 
 
 @frappe.whitelist()
-def get_clients(search: str | None = None, limit_start: int = 0, limit_page_length: int = 50) -> dict:
+def get_clients(
+	search: str | None = None,
+	limit_start: int = 0,
+	limit_page_length: int = 50,
+	include_disabled: int = 0,
+	disabled_only: int = 0,
+) -> dict:
 	"""
 	List Customers with an entity summary (from Customer Entity child table).
 
@@ -148,6 +154,10 @@ def get_clients(search: str | None = None, limit_start: int = 0, limit_page_leng
 		"modified",
 	]
 	filters: dict[str, Any] = {}
+	if int(disabled_only or 0):
+		filters["disabled"] = 1
+	elif not int(include_disabled or 0):
+		filters["disabled"] = 0
 	or_filters = []
 	if q:
 		like = f"%{q}%"
@@ -182,10 +192,27 @@ def get_clients(search: str | None = None, limit_start: int = 0, limit_page_leng
 	names = [c.get("name") for c in (customers or []) if c.get("name")]
 	by_customer: dict[str, list[dict]] = {n: [] for n in names}
 	project_counts: dict[str, int] = {n: 0 for n in names}
+	total_project_counts: dict[str, int] = {n: 0 for n in names}
 	active_project_counts: dict[str, int] = {n: 0 for n in names}
+	client_archived_project_counts: dict[str, int] = {n: 0 for n in names}
 	last_project_type: dict[str, str] = {n: "" for n in names}
 
 	if names:
+		# Total counts across all projects (active + archived)
+		try:
+			rows_all = frappe.get_all(
+				"Project",
+				filters={"customer": ["in", names]},
+				fields=["customer", "count(name) as project_count"],
+				group_by="customer",
+				limit_page_length=100000,
+			)
+			for r in rows_all or []:
+				cn = r.get("customer")
+				if cn in total_project_counts:
+					total_project_counts[cn] = int(r.get("project_count") or 0)
+		except Exception:
+			pass
 		# Active-only counts (best-effort; field exists in your Project customizations)
 		try:
 			rows2 = frappe.get_all(
@@ -201,8 +228,25 @@ def get_clients(search: str | None = None, limit_start: int = 0, limit_page_leng
 					active_project_counts[cn] = int(r.get("project_count") or 0)
 		except Exception:
 			pass
-		# Product rule: Clients table "Projects" should not count archived projects.
-		project_counts = dict(active_project_counts)
+		# Archived-by-client counts only (used by Archived Clients view)
+		try:
+			if frappe.db.has_column("Project", "custom_archive_source") and frappe.db.has_column("Project", "custom_archive_source_ref"):
+				for cn in names:
+					client_archived_project_counts[cn] = int(frappe.db.count(
+						"Project",
+						filters={
+							"customer": cn,
+							"is_active": "No",
+							"custom_archive_source": "Client Archive",
+							"custom_archive_source_ref": cn,
+						},
+					) or 0)
+		except Exception:
+			pass
+		# Product rule:
+		# - Normal Clients table: show active-only project count
+		# - Archived Clients table: show only projects archived together with the client
+		project_counts = dict(client_archived_project_counts if int(disabled_only or 0) else active_project_counts)
 
 		# Last project type (most recently modified project) per customer
 		try:
@@ -256,7 +300,9 @@ def get_clients(search: str | None = None, limit_start: int = 0, limit_page_leng
 				**c,
 				"entities_count": len(es),
 				"project_count": int(project_counts.get(name) or 0),
+				"total_project_count": int(total_project_counts.get(name) or 0),
 				"active_project_count": int(active_project_counts.get(name) or 0),
+				"client_archived_project_count": int(client_archived_project_counts.get(name) or 0),
 				"last_project_type": str(last_project_type.get(name) or ""),
 				"primary_entity": (
 					{
@@ -280,6 +326,107 @@ def get_clients(search: str | None = None, limit_start: int = 0, limit_page_leng
 			"limit_start": limit_start,
 			"limit_page_length": limit_page_length,
 		},
+	}
+
+
+@frappe.whitelist()
+def archive_client(name: str | None = None) -> dict:
+	"""
+	Archive a client by setting Customer.disabled = 1 and archiving all related active projects.
+	"""
+	_ensure_logged_in()
+	docname = str(name or "").strip()
+	if not docname:
+		frappe.throw("name is required")
+	if not frappe.db.exists("Customer", docname):
+		frappe.throw("Client not found")
+
+	customer_name = frappe.db.get_value("Customer", docname, "customer_name") or docname
+	frappe.db.set_value("Customer", docname, "disabled", 1, update_modified=True)
+
+	project_rows = frappe.get_all(
+		"Project",
+		filters={"customer": docname, "is_active": "Yes"},
+		fields=["name"],
+		limit_page_length=100000,
+	)
+	archived_projects = 0
+	for row in (project_rows or []):
+		project_name = str(row.get("name") or "").strip()
+		if not project_name:
+			continue
+		try:
+			doc = frappe.get_doc("Project", project_name)
+			doc.is_active = "No"
+			doc._sb_archive_source = "client_archive"
+			doc._sb_archive_client_ref = docname
+			doc._sb_archive_rule = customer_name
+			if doc.meta.has_field("custom_archive_source"):
+				doc.custom_archive_source = "Client Archive"
+			if doc.meta.has_field("custom_archive_source_ref"):
+				doc.custom_archive_source_ref = docname
+			doc.flags.skip_board_automation = True
+			doc.save(ignore_permissions=True)
+			archived_projects += 1
+		except Exception:
+			continue
+
+	return {
+		"ok": True,
+		"name": docname,
+		"disabled": 1,
+		"archived_projects": archived_projects,
+	}
+
+
+@frappe.whitelist()
+def restore_client(name: str | None = None) -> dict:
+	"""
+	Restore a client by setting Customer.disabled = 0 and restoring all related archived projects.
+	"""
+	_ensure_logged_in()
+	docname = str(name or "").strip()
+	if not docname:
+		frappe.throw("name is required")
+	if not frappe.db.exists("Customer", docname):
+		frappe.throw("Client not found")
+
+	frappe.db.set_value("Customer", docname, "disabled", 0, update_modified=True)
+
+	project_filters: dict[str, Any] = {"customer": docname, "is_active": "No"}
+	if frappe.db.has_column("Project", "custom_archive_source"):
+		project_filters["custom_archive_source"] = "Client Archive"
+	if frappe.db.has_column("Project", "custom_archive_source_ref"):
+		project_filters["custom_archive_source_ref"] = docname
+	project_rows = frappe.get_all(
+		"Project",
+		filters=project_filters,
+		fields=["name"],
+		limit_page_length=100000,
+	)
+	restored_projects = 0
+	for row in (project_rows or []):
+		project_name = str(row.get("name") or "").strip()
+		if not project_name:
+			continue
+		try:
+			doc = frappe.get_doc("Project", project_name)
+			doc.is_active = "Yes"
+			if doc.meta.has_field("custom_archive_source"):
+				doc.custom_archive_source = ""
+			if doc.meta.has_field("custom_archive_source_ref"):
+				doc.custom_archive_source_ref = ""
+			doc.flags.skip_board_automation = True
+			doc.save(ignore_permissions=True)
+			restored_projects += 1
+		except Exception:
+			continue
+
+	return {
+		"ok": True,
+		"name": docname,
+		"disabled": 0,
+		"restored_projects": restored_projects,
 	}
 
 

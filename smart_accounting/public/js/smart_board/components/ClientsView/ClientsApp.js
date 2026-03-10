@@ -9,16 +9,20 @@ import { openClientsColumnsManager } from '../../controllers/clientsColumnsContr
 import { openEditClientFlow } from '../../controllers/editClientController.js';
 import { ClientDeleteService } from '../../services/clientDeleteService.js';
 import { confirmDialog } from '../../services/uiAdapter.js';
+import { ClientsService } from '../../services/clientsService.js';
 
 export class ClientsApp {
-  constructor(container, { store, onOpenProjects } = {}) {
+  constructor(container, { store, onOpenProjects, archivedMode = false, canArchive = false, canRestore = false } = {}) {
     this.container = container;
     this.store = store;
     this.onOpenProjects = typeof onOpenProjects === 'function' ? onOpenProjects : (() => {});
+    this.archivedMode = !!archivedMode;
+    this.canArchive = !!canArchive;
+    this.canRestore = !!canRestore;
     this._unsub = null;
     this._table = null;
     this._lastSearch = '';
-    this._columns = loadClientColumns() || getDefaultClientColumns();
+    this._columns = this.archivedMode ? ['customer_name', 'entity_type', 'year_end', 'project_count'] : (loadClientColumns() || getDefaultClientColumns());
     this._pageSize = 50;
   }
 
@@ -38,6 +42,12 @@ export class ClientsApp {
       onDelete: (client) => {
         this.deleteClient(client);
       },
+      onArchive: (client) => {
+        this.archiveClient(client);
+      },
+      onRestore: (client) => {
+        this.restoreClient(client);
+      },
     });
 
     if (this.store?.subscribe) {
@@ -45,7 +55,7 @@ export class ClientsApp {
     }
 
     // Initial load
-    await this.store?.dispatch?.('clients/fetchClients', { search: '', limit: this._pageSize });
+    await this.store?.dispatch?.('clients/fetchClients', { search: '', limit: this._pageSize, disabledOnly: this.archivedMode });
     this.render();
   }
 
@@ -60,12 +70,16 @@ export class ClientsApp {
       error: clients.error || null,
       columns: this._columns,
       totalCount: clients.totalCount,
+      archivedMode: this.archivedMode,
+      canArchive: this.canArchive,
+      canRestore: this.canRestore,
+      projectCountClickable: !this.archivedMode,
     });
   }
 
   async search(q) {
     this._lastSearch = String(q || '');
-    await this.store?.dispatch?.('clients/fetchClients', { search: this._lastSearch, limit: this._pageSize });
+    await this.store?.dispatch?.('clients/fetchClients', { search: this._lastSearch, limit: this._pageSize, disabledOnly: this.archivedMode });
   }
 
   openColumnsManager() {
@@ -79,9 +93,9 @@ export class ClientsApp {
 
   async loadMore() {
     const state = this.store?.getState?.() || {};
-    const last = state?.clients?.lastFilters || { search: this._lastSearch || '', limit: this._pageSize };
+    const last = state?.clients?.lastFilters || { search: this._lastSearch || '', limit: this._pageSize, disabledOnly: this.archivedMode };
     // Ensure paging size is consistent even if older state didn't persist `limit`.
-    const effective = { ...(last || {}), limit: Number(last?.limit || this._pageSize) };
+    const effective = { ...(last || {}), limit: Number(last?.limit || this._pageSize), disabledOnly: this.archivedMode };
     await this.store?.dispatch?.('clients/fetchMoreClients', effective);
   }
 
@@ -100,6 +114,34 @@ export class ClientsApp {
       notify('Client deleted', 'green');
     } catch (e) {
       notify(e?.message || 'Delete client failed', 'red');
+    }
+  }
+
+  async archiveClient(client) {
+    const name = client?.name || '';
+    const label = client?.customer_name || name;
+    const ok = await confirmDialog(`Archive client "${label}" and archive all related active projects?`);
+    if (!ok) return;
+    try {
+      const r = await ClientsService.archiveClient(name);
+      this.store?.commit?.('clients/removeClient', { name });
+      notify(`Client archived${Number(r?.archived_projects || 0) ? ` (${Number(r.archived_projects)} projects)` : ''}`, 'green');
+    } catch (e) {
+      notify(e?.message || 'Archive client failed', 'red');
+    }
+  }
+
+  async restoreClient(client) {
+    const name = client?.name || '';
+    const label = client?.customer_name || name;
+    const ok = await confirmDialog(`Restore client "${label}" and restore its archived projects?`);
+    if (!ok) return;
+    try {
+      const r = await ClientsService.restoreClient(name);
+      this.store?.commit?.('clients/removeClient', { name });
+      notify(`Client restored${Number(r?.restored_projects || 0) ? ` (${Number(r.restored_projects)} projects)` : ''}`, 'green');
+    } catch (e) {
+      notify(e?.message || 'Restore client failed', 'red');
     }
   }
 

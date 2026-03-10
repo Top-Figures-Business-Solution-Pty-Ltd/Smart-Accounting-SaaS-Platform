@@ -34,7 +34,12 @@ export function renderPlaceholderHTML(view, store) {
         const topStatuses = Object.entries(byStatus)
             .sort((a, b) => b[1] - a[1])
             .slice(0, 4)
-            .map(([k, v]) => `<div class="sb-card"><div class="sb-card__label">${k}</div><div class="sb-card__value">${v}</div></div>`)
+            .map(([k, v]) => `
+              <button type="button" class="sb-card sb-dash-status-card" data-status="${_escapeHtml(k)}">
+                <div class="sb-card__label">${_escapeHtml(k)}</div>
+                <div class="sb-card__value">${v}</div>
+              </button>
+            `)
             .join('');
 
         const list = (() => {
