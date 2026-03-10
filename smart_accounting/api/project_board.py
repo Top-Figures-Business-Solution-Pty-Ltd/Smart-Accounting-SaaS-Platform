@@ -1890,7 +1890,7 @@ def get_my_projects_with_roles() -> dict:
 	try:
 		prows = frappe.get_all(
 			"Project",
-			filters=[["name", "in", allowed]],
+			filters=[["name", "in", allowed], ["is_active", "=", "Yes"]],
 			fields=["name", "project_name", "project_type", "status"],
 			limit_page_length=10000,
 		)
@@ -1901,6 +1901,10 @@ def get_my_projects_with_roles() -> dict:
 	out = []
 	for name in allowed:
 		p = by_name.get(name) or {}
+		if not p:
+			# Dashboard should only show active projects. Archived projects are intentionally
+			# excluded here so Home cards and counts stay aligned with active-only views.
+			continue
 		roles = parent_to_roles.get(name, [])
 		out.append(
 			{
