@@ -45,7 +45,12 @@ export async function openAutomationFlow() {
     },
     onOpenProject: async (project) => {
       try {
-        await window.smart_accounting?.smart_board_instance?.openBoardForProject?.(project);
+        await window.smart_accounting?.smart_board_instance?.focusProject?.(project);
+      } catch (e) {}
+    },
+    onOpenLogs: async (filters) => {
+      try {
+        await window.smart_accounting?.smart_board_instance?.openAutomationLogs?.(filters || {});
       } catch (e) {}
     },
   });

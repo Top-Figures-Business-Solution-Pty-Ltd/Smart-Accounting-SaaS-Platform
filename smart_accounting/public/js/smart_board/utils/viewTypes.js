@@ -7,7 +7,8 @@
 // NOTE: Some product views are rendered as real apps (e.g. Clients), not placeholders.
 export const ARCHIVED_PROJECTS_VIEW = 'archived-projects';
 export const REPORT_VIEW = 'report';
-export const PRODUCT_VIEWS = ['dashboard', 'clients', 'client-projects', 'activity', 'settings', REPORT_VIEW];
+export const AUTOMATION_LOGS_VIEW = 'automation-logs';
+export const PRODUCT_VIEWS = ['dashboard', 'clients', 'client-projects', 'activity', 'settings', REPORT_VIEW, AUTOMATION_LOGS_VIEW];
 
 export function isProductView(view) {
     return PRODUCT_VIEWS.includes(view);

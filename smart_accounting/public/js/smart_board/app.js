@@ -39,6 +39,7 @@ export class SmartBoardApp {
         this._scopedCustomer = '';
         this._scopedProjectName = '';
         this._scopedProjectView = '';
+        this._automationLogsFilters = {};
         
         this.init();
     }
@@ -172,7 +173,7 @@ export class SmartBoardApp {
             return;
         }
         // Settings / Activity are product views (no board data needed)
-        if (viewType === 'settings' || viewType === 'activity' || viewType === 'report') {
+        if (viewType === 'settings' || viewType === 'activity' || viewType === 'report' || viewType === 'automation-logs') {
             return;
         }
         // Client Projects: a cross-project-type view, still backed by Projects module
@@ -360,7 +361,7 @@ export class SmartBoardApp {
         this.mainContent.updateView(viewType);
         
         // 加载新视图的数据：Boards（Project Type）/ Dashboard / Clients / Client Projects
-        if (this.isBoardView(viewType) || viewType === 'dashboard' || viewType === 'clients' || viewType === 'client-projects' || viewType === 'report') {
+        if (this.isBoardView(viewType) || viewType === 'dashboard' || viewType === 'clients' || viewType === 'client-projects' || viewType === 'report' || viewType === 'automation-logs') {
             this.loadViewData(viewType);
         }
 
@@ -409,40 +410,7 @@ export class SmartBoardApp {
             return;
         }
 
-        const pt = String(project?.project_type || '').trim();
-        const targetView = pt || this.currentView;
-
-        // Apply temporary single-project focus so users still know the source project
-        // after closing the Updates modal.
-        try {
-            const st = this.store?.getState?.()?.filters || {};
-            this.store?.dispatch?.('filters/setFilters', {
-                ...st,
-                status: [],
-                company: null,
-                customer: null,
-                fiscal_year: null,
-                date_from: null,
-                date_to: null,
-                search: '',
-                advanced_rules: [],
-                advanced_groups: [],
-                focused_project_name: name,
-            });
-            this._scopedProjectName = name;
-            this._scopedProjectView = targetView;
-        } catch (e) {}
-
-        if (pt && this.currentView !== pt) {
-            // Switch view + load its data so BoardTable has the row model ready.
-            this.currentView = pt;
-            this.header?.updateView?.(pt);
-            this.mainContent?.updateView?.(pt);
-            try { await this.loadViewData(pt); } catch (e) {}
-            try { this._syncUrl?.(); } catch (e) {}
-        } else {
-            try { await this.loadViewData(this.currentView); } catch (e) {}
-        }
+        await this.focusProject(project);
 
         // Re-resolve from store after load
         const nextState = this.store?.getState?.() || {};
@@ -569,6 +537,48 @@ export class SmartBoardApp {
             search: '',
         });
         if (customer) this._scopedCustomer = customer;
+    }
+
+    async focusProject(project) {
+        const name = String(project?.name || '').trim();
+        const pt = String(project?.project_type || '').trim();
+        if (!name || !pt) return;
+
+        try {
+            const st = this.store?.getState?.()?.filters || {};
+            this.store?.dispatch?.('filters/setFilters', {
+                ...st,
+                status: [],
+                company: null,
+                customer: null,
+                fiscal_year: null,
+                date_from: null,
+                date_to: null,
+                search: '',
+                advanced_rules: [],
+                advanced_groups: [],
+                focused_project_name: name,
+            });
+            this._scopedProjectName = name;
+            this._scopedProjectView = pt;
+        } catch (e) {}
+
+        this.currentView = pt;
+        this.header?.updateView?.(pt);
+        this.mainContent?.updateView?.(pt);
+        this.sidebar?.updateView?.(pt);
+        try { await this.loadViewData(pt); } catch (e) {}
+        try { this._syncUrl?.(); } catch (e) {}
+    }
+
+    openAutomationLogs(filters = {}) {
+        this._automationLogsFilters = { ...(filters || {}) };
+        this.currentView = 'automation-logs';
+        this.header?.updateView?.(this.currentView);
+        this.mainContent?.updateView?.(this.currentView);
+        this.sidebar?.updateView?.(this.currentView);
+        try { this._syncUrl?.(); } catch (e) {}
+        return this.loadViewData(this.currentView);
     }
 
     /**

@@ -10,7 +10,7 @@ import { Modal } from '../Common/Modal.js';
 import { AutomationLogService } from '../../services/automationLogService.js';
 
 export class AutomationModal {
-  constructor({ meta = {}, items = [], onSave, onToggle, onDelete, onOpenProject, onClose } = {}) {
+  constructor({ meta = {}, items = [], onSave, onToggle, onDelete, onOpenProject, onOpenLogs, onClose } = {}) {
     this.meta = meta || {};
     this.items = Array.isArray(items) ? items.map((it) => ({
       ...it,
@@ -22,6 +22,7 @@ export class AutomationModal {
     this.onToggle = onToggle || (async () => {});
     this.onDelete = onDelete || (async () => {});
     this.onOpenProject = onOpenProject || (() => {});
+    this.onOpenLogs = onOpenLogs || (() => {});
     this.onClose = onClose || (() => {});
 
     this._modal = null;
@@ -107,6 +108,9 @@ export class AutomationModal {
     wrap.querySelectorAll('.sb-auto__run-open').forEach((el) => {
       el.addEventListener('click', (e) => this._handleOpenProject(e));
     });
+    wrap.querySelectorAll('.sb-auto__runs-open-all').forEach((el) => {
+      el.addEventListener('click', (e) => this._handleOpenLogs(e));
+    });
     const editor = wrap.querySelector('#sbAutoEditor');
     if (editor) this._bindRuleEvents(editor);
     this._ensureActiveRunsLoaded();
@@ -191,7 +195,9 @@ export class AutomationModal {
     if (!key) {
       return `
         <div class="sb-auto__runs">
-          <div class="sb-auto__runs-title">Recent Runs</div>
+          <div class="sb-auto__runs-head">
+            <div class="sb-auto__runs-title">Recent Runs</div>
+          </div>
           <div class="text-muted" style="font-size:12px;">Save this automation first to view execution logs.</div>
         </div>
       `;
@@ -201,7 +207,10 @@ export class AutomationModal {
     if (this._loadingRunsFor === key && !rows) {
       return `
         <div class="sb-auto__runs">
-          <div class="sb-auto__runs-title">Recent Runs</div>
+          <div class="sb-auto__runs-head">
+            <div class="sb-auto__runs-title">Recent Runs</div>
+            <button type="button" class="btn btn-default btn-xs sb-auto__runs-open-all" data-automation="${escapeHtml(key)}">View all logs</button>
+          </div>
           <div class="text-muted" style="font-size:12px;">Loading runs...</div>
         </div>
       `;
@@ -210,7 +219,10 @@ export class AutomationModal {
     if (!rows || !rows.length) {
       return `
         <div class="sb-auto__runs">
-          <div class="sb-auto__runs-title">Recent Runs</div>
+          <div class="sb-auto__runs-head">
+            <div class="sb-auto__runs-title">Recent Runs</div>
+            <button type="button" class="btn btn-default btn-xs sb-auto__runs-open-all" data-automation="${escapeHtml(key)}">View all logs</button>
+          </div>
           <div class="text-muted" style="font-size:12px;">No runs yet.</div>
         </div>
       `;
@@ -244,7 +256,10 @@ export class AutomationModal {
 
     return `
       <div class="sb-auto__runs">
-        <div class="sb-auto__runs-title">Recent Runs</div>
+        <div class="sb-auto__runs-head">
+          <div class="sb-auto__runs-title">Recent Runs</div>
+          <button type="button" class="btn btn-default btn-xs sb-auto__runs-open-all" data-automation="${escapeHtml(key)}">View all logs</button>
+        </div>
         <div class="sb-auto__runs-list">${items}</div>
       </div>
     `;
@@ -436,6 +451,12 @@ export class AutomationModal {
     if (!project.name) return;
     try { this._modal?.close?.(); } catch (err) {}
     try { this.onOpenProject?.(project); } catch (err) {}
+  }
+
+  _handleOpenLogs(e) {
+    const automation = String(e.currentTarget?.dataset?.automation || '').trim();
+    try { this._modal?.close?.(); } catch (err) {}
+    try { this.onOpenLogs?.({ automation }); } catch (err) {}
   }
 
   async _ensureActiveRunsLoaded() {

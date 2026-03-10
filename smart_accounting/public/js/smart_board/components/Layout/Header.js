@@ -71,6 +71,7 @@ export class Header {
             'Audit': 'Audit',
             'Financial Statements': 'Financial Statements',
             'clients': 'Clients',
+            'automation-logs': 'Automation Logs',
             'activity': 'Activity Log',
             'settings': 'Settings',
             'client-projects': 'Client Projects',
