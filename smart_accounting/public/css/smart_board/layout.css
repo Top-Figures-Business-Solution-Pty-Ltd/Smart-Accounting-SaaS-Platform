@@ -303,6 +303,24 @@
     vertical-align: middle;
 }
 
+.sb-sort__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.sb-sort__row:last-child {
+    margin-bottom: 0;
+}
+
+.sb-sort__label {
+    min-width: 56px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--smart-board-text);
+}
+
 /* Automation Modal */
 .sb-automation__hint {
     font-size: 13px;

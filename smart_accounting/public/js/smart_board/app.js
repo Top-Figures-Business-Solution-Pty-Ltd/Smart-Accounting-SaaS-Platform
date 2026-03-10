@@ -258,6 +258,7 @@ export class SmartBoardApp {
                 };
 
                 const cols = sanitizeProjectColumnsConfig(parseColumns(view?.columns));
+                const viewFiltersPayload = ViewService.normalizeFilters(view?.filters);
                 // Derive the current first visible project column from Saved View config.
                 // Sorting rule:
                 // - first column = project_name => sort by project_name
@@ -272,6 +273,26 @@ export class SmartBoardApp {
                     break;
                 }
                 merged.first_column = firstProjectColumn;
+                const rawSortBy = String(viewFiltersPayload?.ui?.sort_field || '').trim();
+                const rawSortOrder = String(viewFiltersPayload?.ui?.sort_order || '').trim().toLowerCase();
+                const isAdhoc = /ad[\s-]?hoc/i.test(String(viewType || '').trim());
+                if (rawSortBy) {
+                    merged.sort_field = rawSortBy;
+                    merged.sort_order = rawSortOrder === 'desc' ? 'desc' : 'asc';
+                } else if (isAdhoc) {
+                    merged.sort_field = 'creation';
+                    merged.sort_order = 'desc';
+                } else {
+                    merged.sort_field = null;
+                    merged.sort_order = null;
+                }
+                try {
+                    const currentFilters = this.store?.getState?.()?.filters || {};
+                    if (String(currentFilters?.sort_field || '') !== String(merged.sort_field || '') ||
+                        String(currentFilters?.sort_order || '') !== String(merged.sort_order || '')) {
+                        this.store?.dispatch?.('filters/setSort', { field: merged.sort_field, order: merged.sort_order });
+                    }
+                } catch (e) {}
                 // Base fields are always fetched even if not visible in Columns Manager.
                 // IMPORTANT: `custom_fiscal_year` is required for Task Monthly Status interactions
                 // (cells need a fiscal year to call setMonthlyStatus), so never omit it.
@@ -523,6 +544,42 @@ export class SmartBoardApp {
 
     showClientsColumnManager() {
         return this.mainContent?.openClientsColumnsManager?.();
+    }
+
+    showSortDialog() {
+        return this.mainContent?.openSortDialog?.();
+    }
+
+    async applySort({ field, order } = {}) {
+        const sortField = String(field || '').trim() || null;
+        const sortOrder = sortField ? (String(order || 'asc').trim().toLowerCase() === 'desc' ? 'desc' : 'asc') : null;
+        await this.store?.dispatch?.('filters/setSort', { field: sortField, order: sortOrder });
+        if (this.isBoardView(this.currentView)) {
+            try {
+                const table = this.mainContent?.boardTable;
+                const view = table?._savedView;
+                if (view?.name) {
+                    const payload = ViewService.normalizeFilters(view?.filters);
+                    payload.ui = { ...(payload.ui || {}) };
+                    if (sortField) {
+                        payload.ui.sort_field = sortField;
+                        payload.ui.sort_order = sortOrder || 'asc';
+                    } else {
+                        delete payload.ui.sort_field;
+                        delete payload.ui.sort_order;
+                    }
+                    await ViewService.updateView(view.name, {
+                        filters: payload,
+                    });
+                    if (table?._savedView) {
+                        table._savedView = { ...table._savedView, filters: payload };
+                    }
+                }
+            } catch (e) {}
+        }
+        await this.loadViewData(this.currentView);
+        try { this._syncUrl?.(); } catch (e) {}
+        return true;
     }
 
     async handleBoardMenuAction(action, viewType) {

@@ -18,6 +18,8 @@ export async function handleHeaderAction(app, action, data) {
       return app?.performSearch?.(data);
     case 'manage_columns':
       return app?.showColumnManager?.();
+    case 'sort':
+      return app?.showSortDialog?.();
     case 'automation':
       return openAutomationFlow();
     case 'export_projects_csv':

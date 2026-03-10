@@ -41,6 +41,20 @@ export class ProjectQueryService {
     return 'project_name asc, name asc';
   }
 
+  static _resolveExplicitOrderBy(sortField, sortOrder) {
+    const fieldRaw = String(sortField || '').trim();
+    const order = String(sortOrder || 'asc').trim().toLowerCase() === 'desc' ? 'desc' : 'asc';
+    if (!fieldRaw) return '';
+    if (fieldRaw === 'creation') return `creation ${order}, name ${order}`;
+    const field = fieldRaw.toLowerCase();
+    if (field === 'customer' || field === 'customer_name' || field === 'client' || field === 'client_name') {
+      return `customer ${order}, name ${order}`;
+    }
+    if (field === 'project_name') return `project_name ${order}, name ${order}`;
+    if (!/^[a-zA-Z0-9_]+$/.test(fieldRaw)) return '';
+    return `${fieldRaw} ${order}, name asc`;
+  }
+
   /**
    * 获取Projects列表
    */
@@ -259,6 +273,7 @@ export class ProjectQueryService {
       const effectiveOrFilters = hasAdvOr ? advOrFilters : (searchResolvedToNameIn ? [] : (hasSearchOr ? searchOrFilters : []));
       const resolvedOrderBy =
         String(filters?.order_by || '').trim() ||
+        this._resolveExplicitOrderBy(filters?.sort_field, filters?.sort_order) ||
         this._resolveBoardOrderBy(filters?.first_column);
 
       const args = {

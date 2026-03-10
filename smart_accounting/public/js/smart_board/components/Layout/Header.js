@@ -127,6 +127,7 @@ export class Header {
         this.bindEvents();
         this._updateCountsSubtitle();
         this._updateFilterBadge();
+        this._updateSortBadge();
     }
 
     subscribeToStore() {
@@ -139,9 +140,11 @@ export class Header {
         this._unsub = store.subscribe(() => {
             this._updateCountsSubtitle();
             this._updateFilterBadge();
+            this._updateSortBadge();
         });
         this._updateCountsSubtitle();
         this._updateFilterBadge();
+        this._updateSortBadge();
     }
 
     _updateFilterBadge() {
@@ -154,6 +157,22 @@ export class Header {
 
             if (count > 0) {
                 badge.textContent = String(count);
+                badge.style.display = 'inline-block';
+            } else {
+                badge.textContent = '';
+                badge.style.display = 'none';
+            }
+        } catch (e) {}
+    }
+
+    _updateSortBadge() {
+        try {
+            const badge = this.container?.querySelector?.('#sortBadge');
+            if (!badge) return;
+            const filters = this.options?.store?.getState?.()?.filters || {};
+            const hasSort = !!String(filters?.sort_field || '').trim();
+            if (hasSort) {
+                badge.textContent = '1';
                 badge.style.display = 'inline-block';
             } else {
                 badge.textContent = '';

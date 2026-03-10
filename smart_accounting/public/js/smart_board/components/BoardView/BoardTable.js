@@ -26,6 +26,7 @@ import { escapeHtml } from '../../utils/dom.js';
 import { sanitizeProjectColumnsConfig } from '../../utils/deprecatedColumns.js';
 import { ProjectActivityModal } from './ProjectActivityModal.js';
 import * as ViewTypes from '../../utils/viewTypes.js';
+import { SortModal } from './SortModal.js';
 
 export class BoardTable {
     constructor(container, options = {}) {
@@ -35,6 +36,7 @@ export class BoardTable {
         this.store = options.store;
         this.isBoardView = options.isBoardView || (() => false);
         this.onRowClick = options.onRowClick || (() => {});
+        this.onSortChange = options.onSortChange || (async () => {});
         this._unsubscribe = null;
         
         this.projects = [];
@@ -406,7 +408,7 @@ export class BoardTable {
                         ${renderColGroup(this._renderColumns)}
                         <thead>
                             <tr>
-                                ${renderHeaderCells(this._renderColumns)}
+                                ${renderHeaderCells(this._renderColumns, this._getSortState())}
                             </tr>
                         </thead>
                     </table>
@@ -1274,8 +1276,11 @@ export class BoardTable {
     }
     
     handleSort(field) {
-        console.log('Sort by:', field);
-        // TODO: 实现排序逻辑
+        const f = String(field || '').trim();
+        if (!f || f.startsWith('__sb_') || f.startsWith('team:')) return;
+        const current = this._getSortState();
+        const nextOrder = (String(current.field || '') === f && String(current.order || 'asc') === 'asc') ? 'desc' : 'asc';
+        this.onSortChange?.({ field: f, order: nextOrder });
     }
     
     handleRowClick(project) {
@@ -1314,6 +1319,49 @@ export class BoardTable {
             onClose: () => { this._projectActivityModal = null; }
         });
         this._projectActivityModal.open();
+    }
+
+    openSortDialog() {
+        if (!this.isBoardView(this.viewType)) {
+            notify('Sort is only available in boards.', 'orange');
+            return;
+        }
+        const state = this._getSortState();
+        const options = this._getSortableProjectColumns();
+        const modal = new SortModal({
+            options,
+            initialField: state.field || '',
+            initialOrder: state.order || 'asc',
+            onApply: async ({ field, order }) => {
+                await this.onSortChange?.({ field, order });
+            },
+            onClear: async () => {
+                await this.onSortChange?.({ field: '', order: '' });
+            },
+        });
+        modal.open();
+    }
+
+    _getSortableProjectColumns() {
+        const visible = Array.isArray(this.columns) ? this.columns : [];
+        const items = visible
+            .filter((c) => c && c.sortable !== false)
+            .filter((c) => {
+                const f = String(c?.field || '').trim();
+                return f && !f.startsWith('__sb_') && !f.startsWith('team:');
+            })
+            .map((c) => ({ value: String(c.field || '').trim(), label: String(c.label || c.field || '').trim() }));
+        const creationOpt = { value: 'creation', label: 'Created Time' };
+        const seen = new Set(items.map((x) => x.value));
+        return seen.has('creation') ? items : [creationOpt, ...items];
+    }
+
+    _getSortState() {
+        const filters = this.store?.getState?.()?.filters || {};
+        return {
+            field: String(filters?.sort_field || '').trim(),
+            order: String(filters?.sort_order || 'asc').trim().toLowerCase() === 'desc' ? 'desc' : 'asc',
+        };
     }
 
     subscribeToStore() {

@@ -9,10 +9,10 @@ export function renderColGroup(columns) {
   `;
 }
 
-export function renderHeaderCells(columns) {
+export function renderHeaderCells(columns, sortState = {}) {
   return columns.map(col => `
     <th 
-      class="board-table-cell ${col.frozen ? 'frozen' : ''} ${col.__headerClass || ''} ${col.field === '__sb_select' ? 'sb-select-col' : ''}"
+      class="board-table-cell ${col.frozen ? 'frozen' : ''} ${col.__headerClass || ''} ${col.field === '__sb_select' ? 'sb-select-col' : ''} ${String(sortState?.field || '') === String(col.field || '') ? `is-sorted is-sorted--${escapeHtml(String(sortState?.order || 'asc'))}` : ''}"
       style="${col.frozen && col._stickyLeft != null ? ` left:${col._stickyLeft}px;` : ''}"
       data-field="${col.field}"
     >
@@ -23,7 +23,7 @@ export function renderHeaderCells(columns) {
         : `<div class="cell-content">
             <span class="cell-label">${col.label}</span>
             ${col.field === 'status' ? '<button type="button" class="sb-status-settings-btn" title="Status settings" aria-label="Status settings">⚙️</button>' : ''}
-            ${col.sortable !== false ? '<span class="sort-icon"></span>' : ''}
+            ${col.sortable !== false ? `<span class="sort-icon">${String(sortState?.field || '') === String(col.field || '') ? (String(sortState?.order || 'asc') === 'desc' ? '↓' : '↑') : ''}</span>` : ''}
           </div>
           <div class="resize-handle"></div>`
       }

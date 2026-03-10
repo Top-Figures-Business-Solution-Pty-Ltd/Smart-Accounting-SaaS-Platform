@@ -635,6 +635,10 @@
     height: 16px;
     margin-left: 4px;
     opacity: 0.5;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
 }
 
 .sb-status-settings-btn {
@@ -656,6 +660,20 @@
 
 .board-table > thead > tr > th:hover .sort-icon {
     opacity: 1;
+}
+
+.board-table > thead > tr > th.is-sorted {
+    background: rgba(37, 99, 235, 0.06);
+}
+
+.board-table > thead > tr > th.is-sorted .cell-label {
+    color: var(--smart-board-primary);
+    font-weight: 700;
+}
+
+.board-table > thead > tr > th.is-sorted .sort-icon {
+    opacity: 1;
+    color: var(--smart-board-primary);
 }
 
 /* 列宽调整手柄 */

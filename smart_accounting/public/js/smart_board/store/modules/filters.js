@@ -21,6 +21,9 @@ export const FiltersModule = {
             is_active: true,
             // Temporary scope used by notification deep-linking (single project focus)
             focused_project_name: null,
+            // Explicit sort state (Monday-like Sort)
+            sort_field: null,
+            sort_order: null,
             // Monday-like advanced filter builder rules
             advanced_rules: [],
             // Monday-like groups: [{ join, rules: [{field, condition, value}] }]
@@ -60,6 +63,11 @@ export const FiltersModule = {
         setSearch(state, search) {
             state.search = search;
         },
+
+        setSort(state, { field, order } = {}) {
+            state.sort_field = field ? String(field).trim() : null;
+            state.sort_order = order ? String(order).trim().toLowerCase() : null;
+        },
         
         clearFilters(state) {
             state.status = [];
@@ -71,6 +79,8 @@ export const FiltersModule = {
             state.search = '';
             state.is_active = true;
             state.focused_project_name = null;
+            state.sort_field = null;
+            state.sort_order = null;
             state.advanced_rules = [];
             state.advanced_groups = [];
         }
@@ -87,6 +97,11 @@ export const FiltersModule = {
         
         setSearch(state, search, store) {
             store.commit('filters/setSearch', search);
+            return state;
+        },
+
+        setSort(state, payload, store) {
+            store.commit('filters/setSort', payload || {});
             return state;
         },
         

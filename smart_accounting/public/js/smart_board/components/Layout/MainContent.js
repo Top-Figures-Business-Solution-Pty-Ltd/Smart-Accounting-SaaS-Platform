@@ -88,6 +88,7 @@ export class MainContent {
             viewType: this.currentView,
             store: this.store,
             isBoardView: (viewType) => this.isBoardView(viewType),
+            onSortChange: (payload) => this.options?.app?.applySort?.(payload),
             onRowClick: (project) => this.onProjectClick(project)
         });
     }
@@ -376,6 +377,10 @@ export class MainContent {
 
     openClientsColumnsManager() {
         try { return this._clientsApp?.openColumnsManager?.(); } catch (e) {}
+    }
+
+    openSortDialog() {
+        try { return this.boardTable?.openSortDialog?.(); } catch (e) {}
     }
     
     handleResize() {

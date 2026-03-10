@@ -37,8 +37,15 @@ function _isProjectNameFirst(firstColumn) {
     return _norm(firstColumn) === 'project_name';
 }
 
-function _sortProjectsForBoard(items, firstColumn) {
+function _sortProjectsForBoard(items, filtersOrFirstColumn) {
     const list = Array.isArray(items) ? items : [];
+    const filters = (filtersOrFirstColumn && typeof filtersOrFirstColumn === 'object')
+        ? filtersOrFirstColumn
+        : { first_column: filtersOrFirstColumn };
+    if (String(filters?.sort_field || '').trim()) {
+        return list; // explicit sort is handled by backend query order
+    }
+    const firstColumn = filters?.first_column;
     const byCustomer = _isCustomerFirst(firstColumn);
     const byProject = _isProjectNameFirst(firstColumn) || !byCustomer;
     list.sort((a, b) => {
@@ -93,7 +100,7 @@ export const ProjectsModule = {
     mutations: {
         setProjects(state, projects) {
             state.items = Array.isArray(projects) ? projects.slice() : [];
-            _sortProjectsForBoard(state.items, state?.lastFilters?.first_column);
+            _sortProjectsForBoard(state.items, state?.lastFilters || {});
             state.offset = Array.isArray(projects) ? projects.length : 0;
         },
         
@@ -136,7 +143,7 @@ export const ProjectsModule = {
         setFirstColumnAndResort(state, firstColumn) {
             const f = String(firstColumn || '').trim();
             state.lastFilters = { ...(state.lastFilters || {}), first_column: f };
-            _sortProjectsForBoard(state.items, f);
+            _sortProjectsForBoard(state.items, state.lastFilters);
         },
 
         setRequestSeq(state, seq) {
@@ -159,7 +166,7 @@ export const ProjectsModule = {
                 state.items.push(p);
                 seen.add(name);
             }
-            _sortProjectsForBoard(state.items, state?.lastFilters?.first_column);
+            _sortProjectsForBoard(state.items, state?.lastFilters || {});
             state.offset = (state.items || []).length;
         },
         
