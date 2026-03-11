@@ -12,6 +12,16 @@ import { AutomationLogsApp } from '../AutomationLogsView/AutomationLogsApp.js';
 import { SettingsApp } from '../SettingsView/SettingsApp.js';
 import { ReportApp } from '../ReportView/ReportApp.js';
 
+const PRODUCT_APP_KEYS = [
+    '_clientsApp',
+    '_archivedClientsApp',
+    '_clientProjectsApp',
+    '_activityLogApp',
+    '_automationLogsApp',
+    '_settingsApp',
+    '_reportApp',
+];
+
 export class MainContent {
     constructor(container, options = {}) {
         this.container = container;
@@ -199,6 +209,105 @@ export class MainContent {
         if (boardTableContainer) boardTableContainer.style.display = 'block';
     }
 
+    _destroyAppInstance(key) {
+        if (!key) return;
+        try { this[key]?.destroy?.(); } catch (e) {}
+        this[key] = null;
+    }
+
+    _destroyMountedApps(exceptKeys = []) {
+        const keep = new Set(Array.isArray(exceptKeys) ? exceptKeys : []);
+        PRODUCT_APP_KEYS.forEach((key) => {
+            if (keep.has(key)) return;
+            this._destroyAppInstance(key);
+        });
+    }
+
+    _productViewRegistry() {
+        return {
+            'clients': {
+                mountId: 'sbClientsMount',
+                appKey: '_clientsApp',
+                create: (mount) => new ClientsApp(mount, {
+                    store: this.store,
+                    canArchive: true,
+                    onOpenProjects: (client) => {
+                        try { this.options?.app?.openCustomerProjects?.(client); } catch (e) {}
+                    }
+                }),
+            },
+            'archived-clients': {
+                mountId: 'sbArchivedClientsMount',
+                appKey: '_archivedClientsApp',
+                create: (mount) => new ClientsApp(mount, {
+                    store: this.store,
+                    archivedMode: true,
+                    canRestore: true,
+                }),
+            },
+            'client-projects': {
+                mountId: 'sbClientProjectsMount',
+                appKey: '_clientProjectsApp',
+                create: (mount) => new ClientProjectsApp(mount, {
+                    store: this.store,
+                    onOpenBoard: (project) => {
+                        try { this.options?.app?.openBoardForProject?.(project); } catch (e) {}
+                    }
+                }),
+            },
+            'status-projects': {
+                mountId: 'sbStatusProjectsMount',
+                appKey: '_clientProjectsApp',
+                create: (mount) => new ClientProjectsApp(mount, {
+                    store: this.store,
+                    onOpenBoard: (project) => {
+                        try { this.options?.app?.focusProject?.(project); } catch (e) {}
+                    }
+                }),
+            },
+            'activity': {
+                mountId: 'sbActivityLogMount',
+                appKey: '_activityLogApp',
+                create: (mount) => new ActivityLogApp(mount, { app: this.options?.app }),
+            },
+            'automation-logs': {
+                mountId: 'sbAutomationLogsMount',
+                appKey: '_automationLogsApp',
+                create: (mount) => new AutomationLogsApp(mount, {
+                    app: this.options?.app,
+                    initialFilters: this.options?.app?._automationLogsFilters || {},
+                    projectTypes: this.options?.app?.projectTypes || [],
+                }),
+            },
+            'settings': {
+                mountId: 'sbSettingsMount',
+                appKey: '_settingsApp',
+                create: (mount) => {
+                    const initialTab = this.options?.app?._settingsTab || null;
+                    return new SettingsApp(mount, { initialTab });
+                },
+            },
+            'report': {
+                mountId: 'sbReportMount',
+                appKey: '_reportApp',
+                create: (mount) => new ReportApp(mount, { app: this.options?.app }),
+            },
+        };
+    }
+
+    _mountRegisteredProductView(placeholder, view) {
+        const config = this._productViewRegistry()[view];
+        if (!config) return false;
+
+        this._destroyMountedApps();
+        placeholder.innerHTML = `<div id="${config.mountId}"></div>`;
+        const mount = placeholder.querySelector(`#${config.mountId}`);
+        const app = config.create(mount);
+        this[config.appKey] = app;
+        app?.init?.();
+        return true;
+    }
+
     showPlaceholder(view) {
         const placeholder = this.container.querySelector('#pagePlaceholder');
         const boardTableContainer = this.container.querySelector('#boardTableContainer');
@@ -211,164 +320,11 @@ export class MainContent {
         if (!placeholder) return;
 
         placeholder.style.display = 'block';
-        // Clients is now a real module, not a static placeholder.
-        if (view === 'clients') {
-            placeholder.innerHTML = `<div id="sbClientsMount"></div>`;
-            const mount = placeholder.querySelector('#sbClientsMount');
-            // Recreate app on each entry to keep lifecycle clean
-            try { this._reportApp?.destroy?.(); } catch (e) {}
-            this._reportApp = null;
-            try { this._clientsApp?.destroy?.(); } catch (e) {}
-            try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
-            try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
-            this._clientProjectsApp = null;
-            this._clientsApp = new ClientsApp(mount, {
-                store: this.store,
-                canArchive: true,
-                onOpenProjects: (client) => {
-                    try { this.options?.app?.openCustomerProjects?.(client); } catch (e) {}
-                }
-            });
-            this._clientsApp.init();
-        } else if (view === 'archived-clients') {
-            placeholder.innerHTML = `<div id="sbArchivedClientsMount"></div>`;
-            const mount = placeholder.querySelector('#sbArchivedClientsMount');
-            try { this._reportApp?.destroy?.(); } catch (e) {}
-            this._reportApp = null;
-            try { this._clientsApp?.destroy?.(); } catch (e) {}
-            this._clientsApp = null;
-            try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
-            try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
-            this._clientProjectsApp = null;
-            this._archivedClientsApp = new ClientsApp(mount, {
-                store: this.store,
-                archivedMode: true,
-                canRestore: true,
-            });
-            this._archivedClientsApp.init();
-        } else if (view === 'client-projects') {
-            placeholder.innerHTML = `<div id="sbClientProjectsMount"></div>`;
-            const mount = placeholder.querySelector('#sbClientProjectsMount');
-            try { this._reportApp?.destroy?.(); } catch (e) {}
-            this._reportApp = null;
-            try { this._clientsApp?.destroy?.(); } catch (e) {}
-            this._clientsApp = null;
-            try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
-            this._archivedClientsApp = null;
-            try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
-            this._clientProjectsApp = new ClientProjectsApp(mount, {
-                store: this.store,
-                onOpenBoard: (project) => {
-                    try { this.options?.app?.openBoardForProject?.(project); } catch (e) {}
-                }
-            });
-            this._clientProjectsApp.init();
-        } else if (view === 'status-projects') {
-            placeholder.innerHTML = `<div id="sbStatusProjectsMount"></div>`;
-            const mount = placeholder.querySelector('#sbStatusProjectsMount');
-            try { this._reportApp?.destroy?.(); } catch (e) {}
-            this._reportApp = null;
-            try { this._clientsApp?.destroy?.(); } catch (e) {}
-            this._clientsApp = null;
-            try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
-            this._archivedClientsApp = null;
-            try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
-            this._clientProjectsApp = new ClientProjectsApp(mount, {
-                store: this.store,
-                onOpenBoard: (project) => {
-                    try { this.options?.app?.focusProject?.(project); } catch (e) {}
-                }
-            });
-            this._clientProjectsApp.init();
-        } else if (view === 'activity') {
-            placeholder.innerHTML = `<div id="sbActivityLogMount"></div>`;
-            const mount = placeholder.querySelector('#sbActivityLogMount');
-            try { this._reportApp?.destroy?.(); } catch (e) {}
-            this._reportApp = null;
-            try { this._clientsApp?.destroy?.(); } catch (e) {}
-            this._clientsApp = null;
-            try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
-            this._archivedClientsApp = null;
-            try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
-            this._clientProjectsApp = null;
-            try { this._activityLogApp?.destroy?.(); } catch (e) {}
-            this._activityLogApp = new ActivityLogApp(mount, { app: this.options?.app });
-            this._activityLogApp.init();
-        } else if (view === 'automation-logs') {
-            placeholder.innerHTML = `<div id="sbAutomationLogsMount"></div>`;
-            const mount = placeholder.querySelector('#sbAutomationLogsMount');
-            try { this._reportApp?.destroy?.(); } catch (e) {}
-            this._reportApp = null;
-            try { this._clientsApp?.destroy?.(); } catch (e) {}
-            this._clientsApp = null;
-            try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
-            this._archivedClientsApp = null;
-            try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
-            this._clientProjectsApp = null;
-            try { this._activityLogApp?.destroy?.(); } catch (e) {}
-            this._activityLogApp = null;
-            try { this._settingsApp?.destroy?.(); } catch (e) {}
-            this._settingsApp = null;
-            try { this._automationLogsApp?.destroy?.(); } catch (e) {}
-            this._automationLogsApp = new AutomationLogsApp(mount, {
-                app: this.options?.app,
-                initialFilters: this.options?.app?._automationLogsFilters || {},
-                projectTypes: this.options?.app?.projectTypes || [],
-            });
-            this._automationLogsApp.init();
-        } else if (view === 'settings') {
-            placeholder.innerHTML = `<div id="sbSettingsMount"></div>`;
-            const mount = placeholder.querySelector('#sbSettingsMount');
-            try { this._reportApp?.destroy?.(); } catch (e) {}
-            this._reportApp = null;
-            try { this._clientsApp?.destroy?.(); } catch (e) {}
-            this._clientsApp = null;
-            try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
-            this._archivedClientsApp = null;
-            try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
-            this._clientProjectsApp = null;
-            try { this._activityLogApp?.destroy?.(); } catch (e) {}
-            this._activityLogApp = null;
-            try { this._automationLogsApp?.destroy?.(); } catch (e) {}
-            this._automationLogsApp = null;
-            try { this._settingsApp?.destroy?.(); } catch (e) {}
-            const initialTab = this.options?.app?._settingsTab || null;
-            this._settingsApp = new SettingsApp(mount, { initialTab });
-            this._settingsApp.init();
-        } else if (view === 'report') {
-            placeholder.innerHTML = `<div id="sbReportMount"></div>`;
-            const mount = placeholder.querySelector('#sbReportMount');
-            try { this._clientsApp?.destroy?.(); } catch (e) {}
-            this._clientsApp = null;
-            try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
-            this._archivedClientsApp = null;
-            try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
-            this._clientProjectsApp = null;
-            try { this._activityLogApp?.destroy?.(); } catch (e) {}
-            this._activityLogApp = null;
-            try { this._automationLogsApp?.destroy?.(); } catch (e) {}
-            this._automationLogsApp = null;
-            try { this._settingsApp?.destroy?.(); } catch (e) {}
-            this._settingsApp = null;
-            try { this._reportApp?.destroy?.(); } catch (e) {}
-            this._reportApp = new ReportApp(mount, { app: this.options?.app });
-            this._reportApp.init();
-        } else {
-            // Dashboard / Settings placeholders remain static-html based for now
-            try { this._clientsApp?.destroy?.(); } catch (e) {}
-            this._clientsApp = null;
-            try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
-            this._clientProjectsApp = null;
-            try { this._activityLogApp?.destroy?.(); } catch (e) {}
-            this._activityLogApp = null;
-            try { this._automationLogsApp?.destroy?.(); } catch (e) {}
-            this._automationLogsApp = null;
-            try { this._settingsApp?.destroy?.(); } catch (e) {}
-            this._settingsApp = null;
-            try { this._reportApp?.destroy?.(); } catch (e) {}
-            this._reportApp = null;
-            placeholder.innerHTML = renderPlaceholderHTML(view, this.store);
-        }
+        if (this._mountRegisteredProductView(placeholder, view)) return;
+
+        // Dashboard and any remaining static placeholder pages stay HTML-only.
+        this._destroyMountedApps();
+        placeholder.innerHTML = renderPlaceholderHTML(view, this.store);
     }
 
     setClientsSearch(q) {
@@ -393,20 +349,7 @@ export class MainContent {
         if (this.boardTable) {
             this.boardTable.destroy();
         }
-        try { this._clientsApp?.destroy?.(); } catch (e) {}
-        this._clientsApp = null;
-        try { this._archivedClientsApp?.destroy?.(); } catch (e) {}
-        this._archivedClientsApp = null;
-        try { this._clientProjectsApp?.destroy?.(); } catch (e) {}
-        this._clientProjectsApp = null;
-        try { this._activityLogApp?.destroy?.(); } catch (e) {}
-        this._activityLogApp = null;
-        try { this._automationLogsApp?.destroy?.(); } catch (e) {}
-        this._automationLogsApp = null;
-        try { this._settingsApp?.destroy?.(); } catch (e) {}
-        this._settingsApp = null;
-        try { this._reportApp?.destroy?.(); } catch (e) {}
-        this._reportApp = null;
+        this._destroyMountedApps();
         try { this._unsub?.(); } catch (e) {}
         this._unsub = null;
         this.container.innerHTML = '';

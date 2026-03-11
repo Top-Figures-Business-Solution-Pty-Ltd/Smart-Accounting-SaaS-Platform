@@ -22,6 +22,10 @@ import { Perf } from './utils/perf.js';
 import { ClientsService } from './services/clientsService.js';
 import { sanitizeProjectColumnsConfig } from './utils/deprecatedColumns.js';
 import { exportCurrentClientsCSV, exportCurrentProjectsCSV } from './utils/csvExport.js';
+import {
+    createSimpleFilterReset,
+    createTransientBoardEntryFilterReset,
+} from './utils/filterState.js';
 
 export class SmartBoardApp {
     constructor(container) {
@@ -133,37 +137,9 @@ export class SmartBoardApp {
             await this.loadProjectTypes();
             
             // 加载当前视图的数据
-            // If URL points to client-projects, seed customer filter before the initial fetch.
-            if (this.currentView === 'client-projects' && this._initialUrlCustomer) {
-                this.store.dispatch('filters/setFilters', {
-                    status: [],
-                    company: null,
-                    fiscal_year: null,
-                    date_from: null,
-                    date_to: null,
-                    search: '',
-                    advanced_rules: [],
-                    advanced_groups: [],
-                    customer: this._initialUrlCustomer,
-                });
-                this._clientProjects = { customer: this._initialUrlCustomer, customer_name: this._initialUrlCustomer };
-            }
-            if (this.currentView === 'status-projects' && this._initialUrlStatus) {
-                this.store.dispatch('filters/setFilters', {
-                    status: [this._initialUrlStatus],
-                    company: null,
-                    customer: null,
-                    fiscal_year: null,
-                    date_from: null,
-                    date_to: null,
-                    search: '',
-                    advanced_rules: [],
-                    advanced_groups: [],
-                    is_active: true,
-                });
-                this._statusProjects = this._initialUrlStatus;
-            }
-            await this.loadViewData(this.currentView);
+            // If URL points to a scoped product view, seed filters before the first fetch.
+            this._seedInitialScopedFilters();
+            await this._reloadCurrentView({ syncUrl: false });
             
             this.showLoading(false);
         } catch (error) {
@@ -357,23 +333,117 @@ export class SmartBoardApp {
         return !!fn(viewType);
     }
 
+    _isLoadableView(viewType) {
+        return this.isBoardView(viewType)
+            || viewType === 'dashboard'
+            || viewType === 'clients'
+            || viewType === 'client-projects'
+            || viewType === 'status-projects'
+            || viewType === 'archived-clients'
+            || viewType === 'report'
+            || viewType === 'automation-logs';
+    }
+
+    _setCurrentView(viewType, {
+        updateHeader = true,
+        updateMain = true,
+        updateSidebar = true,
+    } = {}) {
+        this.currentView = viewType;
+        if (updateHeader) this.header?.updateView?.(viewType);
+        if (updateMain) this.mainContent?.updateView?.(viewType);
+        if (updateSidebar) this.sidebar?.updateView?.(viewType);
+    }
+
+    async _navigateToView(viewType, {
+        updateHeader = true,
+        updateMain = true,
+        updateSidebar = true,
+        load = true,
+        syncUrl = true,
+    } = {}) {
+        this._setCurrentView(viewType, { updateHeader, updateMain, updateSidebar });
+        if (load && this._isLoadableView(viewType)) {
+            await this.loadViewData(viewType);
+        }
+        if (syncUrl) {
+            try { this._syncUrl?.(); } catch (e) {}
+        }
+    }
+
+    async _reloadCurrentView({ syncUrl = true } = {}) {
+        await this.loadViewData(this.currentView);
+        if (syncUrl) {
+            try { this._syncUrl?.(); } catch (e) {}
+        }
+    }
+
+    async _setFiltersAndRefresh(filters, {
+        clearFocusedProject = true,
+        syncUrl = true,
+    } = {}) {
+        const nextFilters = clearFocusedProject
+            ? { ...(filters || {}), focused_project_name: null }
+            : { ...(filters || {}) };
+
+        this.store.dispatch('filters/setFilters', nextFilters);
+
+        if (clearFocusedProject) {
+            this._scopedProjectName = '';
+            this._scopedProjectView = '';
+        }
+
+        await this._reloadCurrentView({ syncUrl });
+    }
+
+    async _setSearchAndRefresh(searchTerm, { syncUrl = true } = {}) {
+        this.store.dispatch('filters/setSearch', searchTerm);
+        await this._reloadCurrentView({ syncUrl });
+    }
+
+    _seedInitialScopedFilters() {
+        if (this.currentView === 'client-projects' && this._initialUrlCustomer) {
+            this.store.dispatch('filters/setFilters', createSimpleFilterReset({
+                customer: this._initialUrlCustomer,
+            }));
+            this._clientProjects = { customer: this._initialUrlCustomer, customer_name: this._initialUrlCustomer };
+            return;
+        }
+
+        if (this.currentView === 'status-projects' && this._initialUrlStatus) {
+            this.store.dispatch('filters/setFilters', createTransientBoardEntryFilterReset({}, {
+                status: [this._initialUrlStatus],
+            }));
+            this._statusProjects = this._initialUrlStatus;
+        }
+    }
+
+    _clearScopedCustomerState() {
+        if (!this._scopedCustomer) return;
+        try {
+            const st = this.store?.getState?.()?.filters || {};
+            this.store?.dispatch?.('filters/setFilters', { ...st, customer: null });
+        } catch (e) {}
+        this._scopedCustomer = '';
+        this._clientProjects = null;
+    }
+
+    _clearScopedProjectState(nextViewType) {
+        if (!this._scopedProjectName || String(nextViewType || '') === String(this._scopedProjectView || '')) {
+            return;
+        }
+        try {
+            const st = this.store?.getState?.()?.filters || {};
+            this.store?.dispatch?.('filters/setFilters', { ...st, focused_project_name: null });
+        } catch (e) {}
+        this._scopedProjectName = '';
+        this._scopedProjectView = '';
+    }
+
     _clearTransientBoardEntryFilters() {
         try {
             const st = this.store?.getState?.()?.filters || {};
-            this.store?.dispatch?.('filters/setFilters', {
-                ...st,
-                status: [],
-                company: null,
-                customer: null,
-                fiscal_year: null,
-                date_from: null,
-                date_to: null,
-                search: '',
-                is_active: true,
-                focused_project_name: null,
-                advanced_rules: [],
-                advanced_groups: [],
-            });
+            this.store?.dispatch?.('filters/setFilters', createTransientBoardEntryFilterReset(st));
         } catch (e) {}
     }
 
@@ -413,27 +483,13 @@ export class SmartBoardApp {
         }
         // Leaving a client-scoped view: clear the transient customer filter so it doesn't "stick" everywhere.
         // This matches user expectation: customer filter added from Clients navigation should not persist when switching boards/pages.
-        if (this._scopedCustomer) {
-            try {
-                const st = this.store?.getState?.()?.filters || {};
-                this.store?.dispatch?.('filters/setFilters', { ...st, customer: null });
-            } catch (e) {}
-            this._scopedCustomer = '';
-            this._clientProjects = null;
-        }
+        this._clearScopedCustomerState();
         if (this._statusProjects && String(viewType || '') !== 'status-projects') {
             this._statusProjects = '';
         }
         // Leaving notification-scoped project focus: clear temporary single-project filter
         // when user switches to another view/board to avoid confusion.
-        if (this._scopedProjectName && String(viewType || '') !== String(this._scopedProjectView || '')) {
-            try {
-                const st = this.store?.getState?.()?.filters || {};
-                this.store?.dispatch?.('filters/setFilters', { ...st, focused_project_name: null });
-            } catch (e) {}
-            this._scopedProjectName = '';
-            this._scopedProjectView = '';
-        }
+        this._clearScopedProjectState(viewType);
 
         const leavingProductView = typeof ViewTypes?.isProductView === 'function'
             ? ViewTypes.isProductView(this.currentView)
@@ -447,18 +503,11 @@ export class SmartBoardApp {
             this._clearTransientBoardEntryFilters();
         }
 
-        this.currentView = viewType;
-        
-        // 更新各组件状态
-        this.header.updateView(viewType);
-        this.mainContent.updateView(viewType);
-        
-        // 加载新视图的数据：Boards（Project Type）/ Dashboard / Clients / Client Projects
-        if (this.isBoardView(viewType) || viewType === 'dashboard' || viewType === 'clients' || viewType === 'client-projects' || viewType === 'status-projects' || viewType === 'archived-clients' || viewType === 'report' || viewType === 'automation-logs') {
-            this.loadViewData(viewType);
-        }
-
-        try { this._syncUrl?.(); } catch (e) {}
+        this._navigateToView(viewType, {
+            updateSidebar: false,
+            load: true,
+            syncUrl: true,
+        });
     }
     
     handleHeaderAction(action, data) {
@@ -529,36 +578,22 @@ export class SmartBoardApp {
     }
     
     applyFilters(filters) {
-        this.store.dispatch('filters/setFilters', { ...filters, focused_project_name: null });
-        this._scopedProjectName = '';
-        this._scopedProjectView = '';
-        this.loadViewData(this.currentView);
-        try { this._syncUrl?.(); } catch (e) {}
+        return this._setFiltersAndRefresh(filters, {
+            clearFocusedProject: true,
+            syncUrl: true,
+        });
     }
     
     performSearch(searchTerm) {
-        this.store.dispatch('filters/setSearch', searchTerm);
-        this.loadViewData(this.currentView);
-        try { this._syncUrl?.(); } catch (e) {}
+        return this._setSearchAndRefresh(searchTerm, { syncUrl: true });
     }
 
     goBackToClients() {
-        this.currentView = 'clients';
-        this.header?.updateView?.(this.currentView);
-        this.mainContent?.updateView?.(this.currentView);
-        this.sidebar?.updateView?.(this.currentView);
-        try { this._syncUrl?.(); } catch (e) {}
-        // Clients view fetch
-        return this.loadViewData(this.currentView);
+        return this._navigateToView('clients');
     }
 
     goBackToDashboard() {
-        this.currentView = 'dashboard';
-        this.header?.updateView?.(this.currentView);
-        this.mainContent?.updateView?.(this.currentView);
-        this.sidebar?.updateView?.(this.currentView);
-        try { this._syncUrl?.(); } catch (e) {}
-        return this.loadViewData(this.currentView);
+        return this._navigateToView('dashboard');
     }
     
     showColumnManager() {
@@ -610,8 +645,7 @@ export class SmartBoardApp {
                 }
             } catch (e) {}
         }
-        await this.loadViewData(this.currentView);
-        try { this._syncUrl?.(); } catch (e) {}
+        await this._reloadCurrentView({ syncUrl: true });
         return true;
     }
 
@@ -621,11 +655,7 @@ export class SmartBoardApp {
         if (!act || !vt) return;
         if (act === 'export_csv') {
             if (this.currentView !== vt) {
-                this.currentView = vt;
-                this.sidebar?.updateView?.(vt);
-                this.header?.updateView?.(vt);
-                this.mainContent?.updateView?.(vt);
-                await this.loadViewData(vt);
+                await this._navigateToView(vt);
             }
             await this.exportCurrentProjectsCSV();
         }
@@ -646,12 +676,7 @@ export class SmartBoardApp {
 
     openSettingsTab(tabKey) {
         this._settingsTab = String(tabKey || '').trim() || null;
-        this.currentView = 'settings';
-        this.header?.updateView?.(this.currentView);
-        this.mainContent?.updateView?.(this.currentView);
-        this.sidebar?.updateView?.(this.currentView);
-        try { this._syncUrl?.(); } catch (e) {}
-        return this.loadViewData(this.currentView);
+        return this._navigateToView('settings');
     }
 
     // normalizeClientNames removed (no longer needed)
@@ -661,10 +686,7 @@ export class SmartBoardApp {
         if (!pt) return;
 
         // Switch to the board view
-        this.currentView = pt;
-        this.header?.updateView?.(pt);
-        this.mainContent?.updateView?.(pt);
-        this.sidebar?.updateView?.(pt);
+        this._setCurrentView(pt);
 
         // Keep the customer filter so the board is scoped to the same client (transient).
         const customer = String(project?.customer || '').trim();
@@ -684,61 +706,31 @@ export class SmartBoardApp {
 
         try {
             const st = this.store?.getState?.()?.filters || {};
-            this.store?.dispatch?.('filters/setFilters', {
-                ...st,
-                status: [],
-                company: null,
-                customer: null,
-                fiscal_year: null,
-                date_from: null,
-                date_to: null,
-                search: '',
-                advanced_rules: [],
-                advanced_groups: [],
+            this.store?.dispatch?.('filters/setFilters', createTransientBoardEntryFilterReset(st, {
                 focused_project_name: name,
-            });
+            }));
             this._scopedProjectName = name;
             this._scopedProjectView = pt;
         } catch (e) {}
 
-        this.currentView = pt;
-        this.header?.updateView?.(pt);
-        this.mainContent?.updateView?.(pt);
-        this.sidebar?.updateView?.(pt);
-        try { await this.loadViewData(pt); } catch (e) {}
-        try { this._syncUrl?.(); } catch (e) {}
+        try {
+            await this._navigateToView(pt);
+        } catch (e) {}
     }
 
     openAutomationLogs(filters = {}) {
         this._automationLogsFilters = { ...(filters || {}) };
-        this.currentView = 'automation-logs';
-        this.header?.updateView?.(this.currentView);
-        this.mainContent?.updateView?.(this.currentView);
-        this.sidebar?.updateView?.(this.currentView);
-        try { this._syncUrl?.(); } catch (e) {}
-        return this.loadViewData(this.currentView);
+        return this._navigateToView('automation-logs');
     }
 
     openStatusProjects(statusValue) {
         const status = String(statusValue || '').trim();
         if (!status) return;
         this._statusProjects = status;
-        this.currentView = 'status-projects';
-        this.header?.updateView?.(this.currentView);
-        this.mainContent?.updateView?.(this.currentView);
-        this.sidebar?.updateView?.(this.currentView);
-        this.applyFilters({
+        this._setCurrentView('status-projects');
+        this.applyFilters(createTransientBoardEntryFilterReset({}, {
             status: [status],
-            company: null,
-            customer: null,
-            fiscal_year: null,
-            date_from: null,
-            date_to: null,
-            search: '',
-            advanced_rules: [],
-            advanced_groups: [],
-            is_active: true,
-        });
+        }));
     }
 
     /**
@@ -751,27 +743,14 @@ export class SmartBoardApp {
         const customer = String(client?.name || '').trim();
         if (!customer) return;
         // Navigate to a dedicated cross-project-type view
-        this.currentView = 'client-projects';
+        this._setCurrentView('client-projects');
         this._clientProjects = { customer, customer_name: client?.customer_name || customer };
-        this.header?.updateView?.(this.currentView);
-        this.mainContent?.updateView?.(this.currentView);
-        this.sidebar?.updateView?.(this.currentView); // Sidebar will map highlight to Clients
 
         // Apply customer filter; do NOT set project_type so all project types are included
-        this.applyFilters({
-            status: [],
-            company: null,
-            fiscal_year: null,
-            date_from: null,
-            date_to: null,
-            search: '',
-            advanced_rules: [],
-            advanced_groups: [],
+        this.applyFilters(createSimpleFilterReset({
             customer,
-        });
+        }));
         this._scopedCustomer = customer;
-
-        try { this._syncUrl?.(); } catch (e) {}
     }
 
     _syncUrl() {

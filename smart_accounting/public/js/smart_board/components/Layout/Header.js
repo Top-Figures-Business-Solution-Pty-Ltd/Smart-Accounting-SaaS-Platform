@@ -9,6 +9,7 @@ import { AdvancedFilterModal } from '../BoardView/AdvancedFilterModal.js';
 import { buildAdvancedFilterColumns } from '../../utils/filterColumns.js';
 import { BoardStatusService } from '../../services/boardStatusService.js';
 import { countActiveFilters } from '../../utils/filterCount.js';
+import { createSimpleFilterReset } from '../../utils/filterState.js';
 
 export class Header {
     constructor(container, options = {}) {
@@ -107,13 +108,7 @@ export class Header {
             initial,
             onApply: (values) => this.onAction('filter', {
                 // Clear legacy simple filters to avoid confusing double-filtering.
-                status: [],
-                company: null,
-                customer: null,
-                fiscal_year: null,
-                date_from: null,
-                date_to: null,
-                ...values
+                ...createSimpleFilterReset(values)
             }),
         });
         modal.open();

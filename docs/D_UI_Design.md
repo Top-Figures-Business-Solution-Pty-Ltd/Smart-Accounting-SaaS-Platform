@@ -2,8 +2,8 @@
 # 用户界面设计文档
 
 **项目**: Smart Accounting  
-**版本**: v1.2  
-**日期**: 2026-01-19  
+**版本**: v1.3  
+**日期**: 2026-03-10  
 **状态**: ✅ Smart Board 已落地（UI 持续迭代）
 
 ---
@@ -35,7 +35,8 @@
 
 - **导航/入口**
   - `/smart`：产品壳入口（对外/日常入口）
-  - 左侧 Sidebar：按 `Project Type` 展示 Boards
+  - 左侧 Sidebar：包含 `Home`、`Report`、Boards、`Archived Projects`、`Clients`、`Archived Clients`、`Automation Logs`、`Settings`
+  - 普通 board 使用统一 SVG icon；`/smart` 页面显式注入 icon symbols，避免 website 页缺少 Desk icon 资源
 - **表格（BoardTable）**
   - ✅ 虚拟滚动（大量项目）+ ✅ 无限滚动分页（infinite scroll）
   - ✅ 行内编辑：text/select/date/link/multi-link/attachment
@@ -64,7 +65,7 @@
 | 角色 | 主要操作 |
 |------|---------|
 | **Preparer** | 查看分配的工作、更新状态、记录备注 |
-| **Reviewer** | 审核工作、添加审核意见 |
+| **Manager** | 审核工作、添加审核意见 |
 | **Partner** | 总览所有工作、分配任务、查看报表 |
 | **Admin** | 管理客户、配置系统 |
 
@@ -111,6 +112,8 @@
 ---
 
 ## 3. 页面结构（待讨论）
+
+> **2026-03 对齐说明**：本节的 A/B/C 方案用于保留设计演进历史。当前产品已落地为 **方案 B（左侧导航 + 独立视图）**，且 Dashboard 已不是“待定”，而是正式产品页。
 
 ### 3.1 方案 A：单页面 + Tab 切换
 
@@ -189,6 +192,7 @@
 | 导航项 | 类型 | 说明 |
 |--------|------|------|
 | **Dashboard** | 功能页 | 总览仪表盘（统计、待办、提醒）|
+| **Report** | 功能页 | 报表与聚合视图 |
 | ─────── | 分隔线 | |
 | **ITR** | project_type | 个人/公司所得税申报 |
 | **BAS** | project_type | 商业活动报表 |
@@ -198,8 +202,11 @@
 | **SMSF** | project_type | 自管养老金 |
 | **Audit** | project_type | 审计业务 |
 | **...** | project_type | 其他业务类型 |
+| **Archived Projects** | 功能页 | 查看/恢复归档项目 |
 | ─────── | 分隔线 | |
 | **Clients** | 功能页 | 客户管理 |
+| **Archived Clients** | 功能页 | 归档客户列表 |
+| **Automation Logs** | 功能页 | 自动化执行日志 |
 | **Settings** | 功能页 | 系统设置 |
 
 ### 4.2 设计说明
@@ -245,7 +252,7 @@
 │                                                                  │
 │  🔍 筛选                                                         │
 │     ├── 状态筛选（多选）                                         │
-│     ├── 人员筛选（Preparer/Reviewer/Partner）                   │
+│     ├── 人员筛选（Preparer/Manager/Partner）                    │
 │     ├── 日期范围筛选                                             │
 │     └── 保存筛选条件                                             │
 │                                                                  │
@@ -289,6 +296,22 @@
   - 内容：个人/工作区设置（逐步实现）
 
 > 该规则已在代码中落地（Header 根据 viewType 渲染不同 toolbars）。
+
+### 5.2.1 2026-03 新增产品页
+
+- **Dashboard**
+  - 展示 My Projects、状态卡片、项目快速入口
+  - 点击状态卡进入 `status-projects`
+- **Client Projects**
+  - 从 Clients 进入的 cross-project-type 项目列表
+  - 带临时 customer scope，离开后自动清空
+- **Status Projects**
+  - 从 Dashboard 状态卡进入的项目列表
+  - 带临时 status scope，离开回普通 board 时自动清空
+- **Archived Clients / Archived Projects**
+  - 专门的归档视图，支持恢复
+- **Automation Logs**
+  - 查看自动化执行结果、字段变化、打开关联项目
 
 ### 5.2 任务详情侧边栏
 
@@ -334,7 +357,7 @@
 |------|------|---------|
 | **页面结构？** | A: Tab切换 / B: 左侧导航 / C: 混合 | ✅ **方案 B** |
 | **导航层级？** | 分组（Tax > ITR/BAS）/ 平铺 | ✅ **一级平铺** |
-| **是否需要 Dashboard？** | 是 / 否 | ❓ 待定 |
+| **是否需要 Dashboard？** | 是 / 否 | ✅ **已落地** |
 
 ### 6.2 中优先级
 

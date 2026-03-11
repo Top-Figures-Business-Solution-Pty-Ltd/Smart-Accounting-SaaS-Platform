@@ -43,6 +43,111 @@ def _normalize_list(value: Any) -> list:
 	return []
 
 
+def _parse_json_if_string(value: Any) -> Any:
+	if not isinstance(value, str):
+		return value
+	try:
+		return frappe.parse_json(value)
+	except Exception:
+		return value
+
+
+def _sanitize_project_list_fields(fields: Any) -> list[str]:
+	req_fields = [str(x).strip() for x in _normalize_list(fields) if str(x).strip()]
+	if not req_fields:
+		return req_fields
+
+	# Safety: drop unknown/non-column fields to avoid SQL 1054 when a site
+	# hasn't synced a newly introduced Custom Field yet (e.g. custom_reset_date).
+	try:
+		meta = frappe.get_meta("Project")
+		type_by_field = {
+			str(getattr(df, "fieldname", "") or "").strip(): str(getattr(df, "fieldtype", "") or "").strip()
+			for df in (meta.fields or [])
+			if str(getattr(df, "fieldname", "") or "").strip()
+		}
+		known = set(type_by_field.keys())
+		known |= {"name", "owner", "creation", "modified", "modified_by", "docstatus", "idx", "_user_tags", "_comments", "_assign", "_liked_by"}
+		req_fields = [
+			f for f in req_fields
+			if (
+				(str(f or "").strip() in known)
+				and (type_by_field.get(str(f or "").strip(), "") not in {"Table", "Table MultiSelect"})
+			)
+		]
+	except Exception:
+		# Best-effort only; keep original behavior on meta failure.
+		pass
+
+	# Ensure enrich paths have the necessary inputs (adds minimal payload, safe for callers)
+	try:
+		if "customer" not in req_fields:
+			req_fields.append("customer")
+		if ("custom_entity_type" in req_fields or "custom_year_end" in req_fields) and "custom_customer_entity" not in req_fields:
+			req_fields.append("custom_customer_entity")
+	except Exception:
+		pass
+	return req_fields
+
+
+def _enrich_project_rows(rows: list[dict], requested_fields: list[str] | None = None) -> list[dict]:
+	out = list(rows or [])
+	req_fields = [str(x).strip() for x in (requested_fields or []) if str(x).strip()]
+
+	try:
+		_attach_customer_name(out)
+	except Exception:
+		pass
+
+	need_entity = "custom_entity_type" in req_fields or "custom_customer_entity" in req_fields
+	if need_entity:
+		try:
+			_attach_effective_entity_type(out)
+		except Exception:
+			pass
+
+	need_year_end = "custom_year_end" in req_fields
+	if need_year_end:
+		try:
+			_attach_effective_year_end(out)
+		except Exception:
+			pass
+
+	return out
+
+
+def _get_readable_project_rows(
+	names: Any,
+	*,
+	fields: list[str] | None = None,
+	active_only: bool = False,
+	limit_page_length: int = 100000,
+) -> tuple[list[str], list[dict]]:
+	project_names = [str(x).strip() for x in _normalize_list(names) if str(x).strip()]
+	if not project_names:
+		return [], []
+
+	allowed = _project_names_with_read_permission(project_names)
+	allowed = [str(x).strip() for x in (allowed or []) if str(x).strip()]
+	if not allowed:
+		return [], []
+
+	project_filters = [["name", "in", allowed]]
+	if active_only:
+		project_filters.append(["is_active", "=", "Yes"])
+
+	try:
+		rows = frappe.get_all(
+			"Project",
+			filters=project_filters,
+			fields=fields or ["name"],
+			limit_page_length=limit_page_length,
+		)
+	except frappe.PermissionError:
+		return allowed, []
+	return allowed, rows or []
+
+
 def _get_task_team_fieldname() -> str | None:
 	"""
 		Find the Task table field that points to Project Team Member.
@@ -438,58 +543,13 @@ def get_projects_list(
 	_ensure_logged_in()
 
 	# Normalize inputs (frappe.call may send JSON strings)
-	try:
-		fields = frappe.parse_json(fields) if isinstance(fields, str) else fields
-	except Exception:
-		pass
-	try:
-		filters = frappe.parse_json(filters) if isinstance(filters, str) else filters
-	except Exception:
-		pass
-	try:
-		or_filters = frappe.parse_json(or_filters) if isinstance(or_filters, str) else or_filters
-	except Exception:
-		pass
+	fields = _parse_json_if_string(fields)
+	filters = _parse_json_if_string(filters)
+	or_filters = _parse_json_if_string(or_filters)
 
-	req_fields = _normalize_list(fields)
+	req_fields = _sanitize_project_list_fields(fields)
 	req_filters = filters if isinstance(filters, (list, dict)) else []
 	req_or_filters = _normalize_list(or_filters)
-
-	# Safety: drop unknown/non-column fields to avoid SQL 1054 when a site
-	# hasn't synced a newly introduced Custom Field yet (e.g. custom_reset_date).
-	try:
-		meta = frappe.get_meta("Project")
-		type_by_field = {
-			str(getattr(df, "fieldname", "") or "").strip(): str(getattr(df, "fieldtype", "") or "").strip()
-			for df in (meta.fields or [])
-			if str(getattr(df, "fieldname", "") or "").strip()
-		}
-		known = set(type_by_field.keys())
-		# Common built-ins that may not appear in meta.fields list.
-		known |= {"name", "owner", "creation", "modified", "modified_by", "docstatus", "idx", "_user_tags", "_comments", "_assign", "_liked_by"}
-		req_fields = [
-			f for f in req_fields
-			if (
-				(str(f or "").strip() in known)
-				and (type_by_field.get(str(f or "").strip(), "") not in {"Table", "Table MultiSelect"})
-			)
-		]
-	except Exception:
-		# Best-effort only; keep original behavior on meta failure.
-		pass
-
-	# Ensure enrich paths have the necessary inputs (adds minimal payload, safe for callers)
-	try:
-		if req_fields and "customer" not in req_fields:
-			req_fields.append("customer")
-		# Entity display depends on Customer Entity override/fallback.
-		if req_fields and "custom_entity_type" in req_fields and "custom_customer_entity" not in req_fields:
-			req_fields.append("custom_customer_entity")
-		# Year End display depends on Customer Entity override/fallback.
-		if req_fields and "custom_year_end" in req_fields and "custom_customer_entity" not in req_fields:
-			req_fields.append("custom_customer_entity")
-	except Exception:
-		pass
 
 	try:
 		limit_start = int(limit_start or 0)
@@ -516,32 +576,7 @@ def get_projects_list(
 		# Keep old behavior: return empty if user cannot read Project.
 		return {"items": []}
 
-	try:
-		_attach_customer_name(rows)
-	except Exception:
-		pass
-	# Only enrich entity display when caller asked for it (avoid extra DB reads).
-	try:
-		need_entity = bool(req_fields) and ("custom_entity_type" in req_fields or "custom_customer_entity" in req_fields)
-	except Exception:
-		need_entity = False
-	if need_entity:
-		try:
-			_attach_effective_entity_type(rows)
-		except Exception:
-			pass
-	# Year End enrichment when caller requested year_end and DB value is empty.
-	try:
-		need_year_end = bool(req_fields) and ("custom_year_end" in req_fields)
-	except Exception:
-		need_year_end = False
-	if need_year_end:
-		try:
-			_attach_effective_year_end(rows)
-		except Exception:
-			pass
-
-	return {"items": rows or []}
+	return {"items": _enrich_project_rows(rows, req_fields)}
 
 
 @frappe.whitelist()
@@ -556,21 +591,13 @@ def get_board_fiscal_start_month(projects: Any) -> dict:
 	- by_project: { project_name: start_month }
 	"""
 	_ensure_logged_in()
-	names = _normalize_list(projects)
-	names = [str(x).strip() for x in names if str(x).strip()]
-	if not names:
-		return {"start_month": None, "counts": {}, "by_project": {}}
-
-	allowed = _project_names_with_read_permission(names)
+	allowed, prows = _get_readable_project_rows(
+		projects,
+		fields=["name", "customer", "custom_customer_entity"],
+		active_only=False,
+	)
 	if not allowed:
 		return {"start_month": None, "counts": {}, "by_project": {}}
-
-	prows = frappe.get_all(
-		"Project",
-		filters=[["name", "in", allowed]],
-		fields=["name", "customer", "custom_customer_entity"],
-		limit_page_length=100000,
-	)
 	by_project, counts = _get_project_fy_start_months(prows or [])
 	start_month = None
 	if counts:
@@ -664,21 +691,13 @@ def get_monthly_status_bundle(
 	- fiscal_year: { project_name: fiscal_year } (best-effort)
 	"""
 	_ensure_logged_in()
-	names = _normalize_list(projects)
-	names = [str(x).strip() for x in names if str(x).strip()]
-	if not names:
-		return {"start_month": None, "tasks": {}, "matrix": {}, "summary": {}, "fiscal_year": {}}
-
-	allowed_projects = _project_names_with_read_permission(names)
+	allowed_projects, prows = _get_readable_project_rows(
+		projects,
+		fields=["name", "customer", "custom_customer_entity", "custom_fiscal_year"],
+		active_only=False,
+	)
 	if not allowed_projects:
 		return {"start_month": None, "tasks": {}, "matrix": {}, "summary": {}, "fiscal_year": {}}
-
-	prows = frappe.get_all(
-		"Project",
-		filters=[["name", "in", allowed_projects]],
-		fields=["name", "customer", "custom_customer_entity", "custom_fiscal_year"],
-		limit_page_length=100000,
-	)
 	by_project_start, counts = _get_project_fy_start_months(prows or [])
 	start_month = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[0][0] if counts else None
 
@@ -1881,20 +1900,14 @@ def get_my_projects_with_roles() -> dict:
 	if not parent_to_roles:
 		return {"projects": []}
 
-	# Respect Project permissions
-	allowed = _project_names_with_read_permission(list(parent_to_roles.keys()))
-	allowed = [str(x).strip() for x in (allowed or []) if str(x).strip()]
+	# Respect Project permissions and only keep active Projects for Dashboard.
+	allowed, prows = _get_readable_project_rows(
+		list(parent_to_roles.keys()),
+		fields=["name", "project_name", "project_type", "status"],
+		active_only=True,
+		limit_page_length=10000,
+	)
 	if not allowed:
-		return {"projects": []}
-
-	try:
-		prows = frappe.get_all(
-			"Project",
-			filters=[["name", "in", allowed], ["is_active", "=", "Yes"]],
-			fields=["name", "project_name", "project_type", "status"],
-			limit_page_length=10000,
-		)
-	except frappe.PermissionError:
 		return {"projects": []}
 
 	by_name = {p.get("name"): p for p in (prows or []) if p.get("name")}

@@ -2,8 +2,8 @@
 # 代码架构重构文档
 
 **项目**: Smart Accounting  
-**版本**: v1.1  
-**日期**: 2026-01-19  
+**版本**: v1.2  
+**日期**: 2026-03-10  
 **状态**: ✅ 已落地（持续迭代）
 
 ---
@@ -13,8 +13,25 @@
 > 本文档是 Smart Accounting 项目的**代码架构重构规划文档**。
 > 
 > - **分析当前架构的核心问题**
-> - **定义目标架构**（待规划）
-> - **制定重构路线图**（待规划）
+> - **定义当前已落地架构**
+> - **记录 2026-03 的主要膨胀区与后续重构路线**
+
+---
+
+## 2026-03 对齐说明
+
+### 当前实现的核心结论
+- Smart Board 已不再只是单一 board 页面，而是一个完整产品壳：`dashboard`、`board`、`client-projects`、`status-projects`、`archived-clients`、`automation-logs`、`settings`、`report`
+- 当前最值得警惕的膨胀区不是“没有模块化”，而是**某些模块已经开始补丁式扩张**：`app.js` 的导航状态机、`MainContent.showPlaceholder()` 的 view mount/destroy、`project_board.py` 的 God module 化
+- 现阶段建议采用**增量收敛**，而不是大重写：优先抽统一导航入口、product view registry、后端 shared helpers
+
+### 当前优先重构的 3 个区域
+1. `public/js/smart_board/app.js`
+   当前同时承担路由器、URL 同步、filter 生命周期、页面装配器职责，已出现多处重复导航分支。
+2. `public/js/smart_board/components/Layout/MainContent.js`
+   `showPlaceholder()` 中各 product view 的 destroy/create/init 模板重复明显，适合做 registry 化。
+3. `api/project_board.py`
+   已同时承载 Project 查询、Task 批量读取、Monthly Status、Dashboard、hydration、user meta 等职责，边界过宽。
 
 ---
 
@@ -70,14 +87,14 @@
 | **UI 与逻辑解耦** | 改 UI 不影响业务代码 | 多主题、白标、快速换肤 |
 | **消除代码冗余** | DRY 原则，组件复用 | 维护成本降低 |
 
-#### 🚧 待确定的具体方案
+#### ✅ 当前已确定的实现方案
 
 ```
-- [ ] 模块化技术选型 (ES6 Modules / ...)
-- [ ] 状态管理方案
-- [ ] 组件抽象层级
-- [ ] 构建工具选择
-- [ ] ...
+- [x] 模块化技术：ES Modules
+- [x] 状态管理：自定义 Store（modules/projects/filters/dashboard/clients）
+- [x] 构建方式：bench/esbuild 输出到 /assets/smart_accounting/js/smart_board/*
+- [x] 产品入口：/smart Website Shell + /app/project-management 内部入口
+- [x] 适配层：uiAdapter / navigationService / env
 ```
 
 ---
@@ -244,12 +261,17 @@ smart_board/
 
 ## 3. 目标架构设计
 
-> 🚧 **待规划**
+> 2026-03 更新：当前目标不是“重新设计一套新架构”，而是在现有 Smart Board 分层上继续做**去膨胀和职责收敛**。
 
 ### 3.1 架构愿景
 
 ```
-待定
+/smart 产品壳
+  ├── SmartBoardApp（只做编排 / navigateToView）
+  ├── product-view registry（dashboard / clients / client-projects / status-projects / settings / logs / report）
+  ├── board runtime（BoardTable + feature modules）
+  ├── services / controllers / store / utils
+  └── API: queries / tasks / monthly-status / automation / clients / board-settings
 ```
 
 ### 3.2 技术选型

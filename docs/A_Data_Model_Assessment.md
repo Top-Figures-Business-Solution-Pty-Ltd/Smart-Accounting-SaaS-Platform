@@ -2,13 +2,23 @@
 # 数据模型 - 重构规划文档
 
 **项目**: Smart Accounting  
-**版本**: v8.3  
-**日期**: 2026-01-19  
+**版本**: v8.4  
+**日期**: 2026-03-10  
 **状态**: ✅ 已落地（持续迭代）  
-**重构策略**: ✅ **最大化利用 ERPNext 原生 DocType + Frappe Auto Repeat**  
+**重构策略**: ✅ **最大化利用 ERPNext 原生 DocType + Smart Board 配置化模型**  
 **SaaS架构**: ✅ **Frappe原生多Site架构**（两阶段演进，无需tenant_id）
 
 ---
+
+## 更新日志 (v8.4 - 2026-03-10)
+
+### 🎯 当前实现对齐（文档校正）
+- ✅ **Dashboard / Client-scoped 视图落地**：产品入口已不只是 board，当前稳定包含 `dashboard`、`client-projects`、`status-projects`、`archived-clients`、`automation-logs`、`settings`、`report`
+- ✅ **Project 实体字段补齐**：当前数据模型已包含 `custom_customer_entity`（Link -> Customer Entity）、`custom_year_end`，其中 `custom_entity_type` 更偏向展示/派生字段
+- ✅ **Archive 元数据落地**：除 `is_active` 外，当前还使用 `custom_archive_source` / `custom_archive_source_ref` 跟踪归档来源
+- ✅ **Saved View v2**：当前实现已使用 `reference_doctype`、`is_active`、`scope`、`sidebar_order` 等字段，不再是“仅 7 字段”的极简版本
+- ✅ **状态配置口径调整**：Project 状态采用“Property Setter 全局池 + board-level allowed subset”模式，board 子集由 Board Settings API 管理
+- ✅ **说明**：文档中早期关于 Auto Repeat 的章节保留为历史设计背景，但**不再作为当前 Smart Board 的权威实现说明**
 
 ## 更新日志 (v8.3 - 2026-01-19)
 
@@ -112,10 +122,11 @@
 |------|---------|
 | **ERPNext 原生扩展** | Customer / Contact / Project / Task 保持原生，添加扩展字段 |
 | **ERPNext 原生直接使用** | User / Company / Project Type 保持原生，无需扩展 |
-| **新建 DocType** | Customer Entity（子表5字段）、Project Team Member（子表3字段）、Software（极简2字段）、Saved View（精简7字段）、Monthly Status（通用状态表）|
-| **Property Setter** | Status 等Select字段选项配置（多Site架构下每租户独立配置）|
-| **原生功能利用** | Comment 系统、User Settings、Assignment（任务分配）|
-| **Auto Repeat 自动创建** | Project创建时根据custom_project_frequency自动创建Auto Repeat |
+| **新建 DocType** | Customer Entity（子表5字段）、Project Team Member（子表3字段）、Software（极简2字段）、Saved View（v2 视图配置）、Monthly Status（通用状态表）、Board Automation、Automation Run Log、Automation Run Log Change |
+| **Property Setter** | Project.status 等全局 Select 选项配置（多Site架构下每租户独立配置）|
+| **Board 级配置** | Board Settings / Status Settings 负责 Project Type 顺序、board allowed statuses 等产品层配置 |
+| **原生功能利用** | Comment 系统、User Settings、Attach 上传、Frappe Website `/smart` 产品壳 |
+| **Auto Repeat** | `custom_project_frequency` 字段仍保留，但 Auto Repeat 不再作为当前 Smart Board 文档的主实现路径 |
 | **现有数据** | 编写迁移脚本从旧 Task 结构转移到 Project |
 
 ### 1.4 SaaS架构演进策略 ✅ **完全利用Frappe原生Site机制**
@@ -403,19 +414,23 @@ Step 5: 数据迁移
 | **扩展字段 - 团队** ||||||
 | 团队成员 | `custom_team_members` | Table | | 扩展 | 子表：Project Team Member（用户+角色）|
 | **扩展字段 - 业务** ||||||
-| 实体类型 | `custom_entity_type` | Data | | 扩展（v8.1新增）| 关联Customer Entity，如 "Client A Pty Ltd" |
+| 实体链接 | `custom_customer_entity` | Link → Customer Entity | | 扩展 | Project 当前实际关联的客户实体 |
+| 实体类型 | `custom_entity_type` | Data | | 扩展（展示/派生） | 从 `custom_customer_entity.entity_type` 或主实体推导，用于 UI 显示 |
 | 财年 | `custom_fiscal_year` | Link → Fiscal Year | | 扩展 | 如 "FY24", "FY25" |
+| Year End | `custom_year_end` | Select | | 扩展 | 与 Customer Entity.year_end 同步，用于状态矩阵与业务显示 |
 | 目标月份 | `custom_target_month` | Select | | 扩展 | January~December |
 | 法定截止日期 | `custom_lodgement_due_date` | Date | | 扩展 | ATO 规定的法定截止日期 |
-| 项目频率 | `custom_project_frequency` | Select | | 扩展 | Annually/Quarterly/Monthly/One-off（**会自动创建Auto Repeat**）|
+| 项目频率 | `custom_project_frequency` | Select | | 扩展 | Annually/Quarterly/Monthly/One-off（保留字段，不再作为本文档权威 Auto Repeat 路径） |
 | 使用软件 | `custom_softwares` | Table MultiSelect | | 扩展 | Xero/MYOB/QuickBooks/Excel/... |
+| 归档来源 | `custom_archive_source` | Data | | 扩展 | 记录是手动归档、Client Archive 还是 Automation 触发 |
+| 归档来源引用 | `custom_archive_source_ref` | Data | | 扩展 | 关联来源主键/上下文 |
 
 **团队成员子表（Project Team Member）**：
 
 | 字段 | 字段名 | 类型 | 必填 | 说明 |
 |------|--------|------|------|------|
 | 用户 | `user` | Link → User | ✅ | 团队成员（Email） |
-| 角色 | `role` | Select | ✅ | Preparer/Reviewer/Partner |
+| 角色 | `role` | Select | ✅ | Preparer/Manager/Partner |
 | 分配日期 | `assigned_date` | Date | | 分配时间（可选）|
 
 **role 选项**：
@@ -904,7 +919,7 @@ Project命名：
 
 ### 4.3 Project Team Member 子表（新建 - v8.2）
 
-> **定位**：支持Project的多角色团队分配（Preparer/Reviewer/Partner）
+> **定位**：支持 Project / Task 的多角色团队分配（Preparer/Manager/Partner）
 > 
 > **必要性**：实际业务中，一个Project需要多人协作，每人有不同角色，需要高效查询和统计
 
@@ -913,13 +928,13 @@ Project命名：
 | 字段 | 字段名 | 类型 | 必填 | 说明 |
 |------|--------|------|------|------|
 | 用户 | `user` | Link → User | ✅ | 团队成员（Email，如 bob@tf.com） |
-| 角色 | `role` | Select | ✅ | Preparer/Reviewer/Partner |
+| 角色 | `role` | Select | ✅ | Preparer/Manager/Partner |
 | 分配日期 | `assigned_date` | Date | | 分配时间（可选，用于追踪）|
 
 **role 选项：**
 ```
 Preparer (准备者)
-Reviewer (审核者)
+Manager (管理/审核)
 Partner (合伙人)
 ```
 

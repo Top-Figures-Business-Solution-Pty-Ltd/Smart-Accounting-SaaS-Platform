@@ -2,9 +2,30 @@
 # 实施教程文档
 
 **项目**: Smart Accounting  
-**版本**: v4.3  
-**日期**: 2025-12-18  
+**版本**: v4.4  
+**日期**: 2026-03-10  
 **用途**: 🔧 **开发指南** - 如何在 ERPNext 中通过 UI 实现数据结构
+
+---
+
+## 2026-03 重要校正（优先于旧步骤）
+
+> 本文档保留了若干早期实施记录；如果与当前代码不一致，请以本节为准。
+
+- **Saved View 已不是 7 字段极简版**
+  - 当前实现使用 v2 schema，至少包含：`title`、`project_type`、`columns`、`filters`、`sort_by`、`sort_order`、`is_default`、`reference_doctype`、`is_active`、`scope`、`sidebar_order`
+- **Project 状态配置不再依赖 `project.js` Client Script**
+  - 当前口径是：`Project.status` 的全局池由 Property Setter / DocType options 决定
+  - board 级 allowed subset 由 `api/board_settings.py` 管理
+- **Task 团队字段以 `custom_task_members` 为准**
+  - 任务团队不再以 ERPNext Assignment 作为 Smart Board 主要实现路径
+- **Project 实体字段现状**
+  - 当前真实字段应包含 `custom_customer_entity`、`custom_entity_type`、`custom_year_end`
+  - 其中 `custom_entity_type` 更偏展示/派生，`custom_customer_entity` 才是实际关联
+- **归档元数据已落地**
+  - 除 `is_active` 外，还应考虑 `custom_archive_source` / `custom_archive_source_ref`
+- **Auto Repeat 章节仅作历史方案参考**
+  - `custom_project_frequency` 字段仍存在，但本文档中的 Auto Repeat 自动创建步骤不应再视为当前 Smart Board 的权威实现说明
 
 ---
 
@@ -79,20 +100,18 @@
 | **扩展 Task** | 添加 2 个 custom fields（最大化利用原生字段）|
 | **创建 Software DocType** | 新建极简 DocType（2 个字段）|
 | **创建 Saved View DocType** | 新建精简 DocType（7 个字段）|
-| **Status 动态过滤** | project.js Client Script（根据project_type显示不同status）|
-| **Project Auto Repeat 钩子** | project.py 实现after_insert, validate, on_recurring方法（代码）|
+| **Board Status 配置** | `board_settings.py` + Property Setter（board allowed statuses）|
+| **Project Frequency / 历史 Auto Repeat** | 旧文档保留；不应作为当前 Smart Board 权威实现路径 |
 | **配置选项** | 配置 Select 字段的选项（通过 Property Setter）|
 
 ### 1.2 操作方式
 
 - **UI操作**：Custom Fields、DocType创建、Property Setter配置
-- **代码实现**：
-  - **Client Script（project.js）**：根据project_type动态过滤status选项
-  - **Server Override（project.py）**：
-    - Project.after_insert()：自动创建Auto Repeat
-    - Project.validate()：同步custom_project_frequency到Auto Repeat
-    - Project.on_recurring()：Auto Repeat创建新Project时的钩子
-  - **hooks.py配置**：注册doctype_js和override_doctype_class
+- **代码实现（当前口径）**：
+  - **Board 状态配置**：`api/board_settings.py` + `BoardStatusService`
+  - **/smart 产品页**：`www/smart/` + Smart Board ESM 入口
+  - **Project Server Override（project.py）**：实体同步、归档来源字段、Board Automation 执行
+  - **Saved View / Board 配置**：`services/viewService.js`、`api/board_settings.py`
 
 ### 1.3 产品入口（/smart）与 Desk（/app）隔离（2026-01 更新）
 
@@ -171,23 +190,26 @@
 | Allow Rename | ✅ Yes |
 | Track Changes | ✅ Yes |
 
-### 3.3 添加字段（精简设计，7个字段）
+### 3.3 添加字段（当前实现建议：Saved View v2）
 
 | # | Label | Fieldname | Fieldtype | Options | Mandatory | 说明 |
 |---|-------|-----------|-----------|---------|-----------|------|
-| 1 | Title | `title` | Data | | ✅ | 视图名称（如 "ITR Board", "Bob本周任务"）|
-| 2 | Project Type | `project_type` | Link | Project Type | | 关联业务类型（空=跨类型筛选）|
-| 3 | Columns | `columns` | JSON | | ✅ | 列配置（字段、顺序、标签）|
-| 4 | Filters | `filters` | JSON | | | 筛选条件组合 |
-| 5 | Sort By | `sort_by` | Data | | | 排序字段 |
-| 6 | Sort Order | `sort_order` | Select | asc<br/>desc | | 排序方向 |
-| 7 | Is Default | `is_default` | Check | | | 该 project_type 的默认视图 |
+| 1 | Title | `title` | Data | | ✅ | 视图名称 |
+| 2 | Project Type | `project_type` | Link | Project Type | | 兼容字段；普通 board 默认仍与 Project Type 对应 |
+| 3 | Columns | `columns` | JSON | | ✅ | 当前支持 `{ project, tasks }` 结构 |
+| 4 | Filters | `filters` | JSON | | | 当前包含 filters/or_filters/search/ui |
+| 5 | Sort By | `sort_by` | Data | | | 兼容旧字段 |
+| 6 | Sort Order | `sort_order` | Select | asc<br/>desc | | 兼容旧字段 |
+| 7 | Is Default | `is_default` | Check | | | 默认视图标记 |
+| 8 | Reference Doctype | `reference_doctype` | Data | | ✅ | 当前实现固定为 `Project` |
+| 9 | Is Active | `is_active` | Check | | | 当前是否启用 |
+| 10 | Scope | `scope` | Data | | | 当前实现使用 `Shared` |
+| 11 | Sidebar Order | `sidebar_order` | Int | | | 用于 sidebar 顺序 |
 
 > **说明**：
-> - 极简设计，仅保留核心功能
-> - project_type使用Link类型，确保关联到有效的Project Type；留空表示跨类型视图
-> - 不区分 company（TF/TG 共用配置）
-> - 通过 owner 字段区分系统视图和用户视图（Frappe 原生）
+> - 当前仓库实际实现已使用 **Saved View v2**；旧的“7 字段极简版”仅保留为历史背景
+> - `reference_doctype` / `is_active` / `scope` / `sidebar_order` 已在前端与后端查询链路中被使用
+> - `project_type` 目前保留作兼容字段；普通 board 的 pinned 逻辑更多体现在 `filters.ui` 中
 
 ### 3.4 设置权限
 
@@ -323,13 +345,13 @@ Completed
 | # | Label | Fieldname | Fieldtype | Options | Mandatory |
 |---|-------|-----------|-----------|---------|-----------|
 | 1 | User | `user` | Link | User | ✅ |
-| 2 | Role | `role` | Select | Preparer<br/>Reviewer<br/>Partner | ✅ |
+| 2 | Role | `role` | Select | Preparer<br/>Manager<br/>Partner | ✅ |
 | 3 | Assigned Date | `assigned_date` | Date | | |
 
 **role 选项**：
 ```
 Preparer
-Reviewer
+Manager
 Partner
 ```
 
