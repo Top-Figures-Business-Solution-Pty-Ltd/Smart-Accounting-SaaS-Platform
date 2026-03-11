@@ -31,9 +31,9 @@ export function renderPlaceholderHTML(view, store) {
     if (view === 'dashboard') {
         const loading = !!dashboard?.loading;
         const err = dashboard?.error;
-        const topStatuses = Object.entries(byStatus)
+        const activeStatuses = Object.entries(byStatus)
+            .filter(([, v]) => Number(v) > 0)
             .sort((a, b) => b[1] - a[1])
-            .slice(0, 4)
             .map(([k, v]) => `
               <button type="button" class="sb-card sb-dash-status-card" data-status="${_escapeHtml(k)}">
                 <div class="sb-card__label">${_escapeHtml(k)}</div>
@@ -84,7 +84,7 @@ export function renderPlaceholderHTML(view, store) {
                         <div class="sb-card__label">My Projects</div>
                         <div class="sb-card__value">${total}</div>
                     </div>
-                    ${topStatuses || '<div class="text-muted" style="padding:12px;">No projects loaded yet. Open a board to load data.</div>'}
+                    ${activeStatuses || '<div class="text-muted" style="padding:12px;">No projects loaded yet. Open a board to load data.</div>'}
                 </div>
                 ${list}
                 <div class="sb-page__hint">Tip: choose a Board on the left to view projects.</div>
