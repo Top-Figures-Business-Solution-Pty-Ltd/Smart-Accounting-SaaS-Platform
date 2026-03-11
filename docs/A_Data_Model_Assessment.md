@@ -125,7 +125,7 @@
 | **新建 DocType** | Customer Entity（子表5字段）、Project Team Member（子表3字段）、Software（极简2字段）、Saved View（v2 视图配置）、Monthly Status（通用状态表）、Board Automation、Automation Run Log、Automation Run Log Change |
 | **Property Setter** | Project.status 等全局 Select 选项配置（多Site架构下每租户独立配置）|
 | **Board 级配置** | Board Settings / Status Settings 负责 Project Type 顺序、board allowed statuses 等产品层配置 |
-| **原生功能利用** | Comment 系统、User Settings、Attach 上传、Frappe Website `/smart` 产品壳 |
+| **原生功能利用** | Comment 系统、User Settings、Attach 上传、Frappe Website 平台壳（`/smart` selector + `/smart-accounting` 模块入口） |
 | **Auto Repeat** | `custom_project_frequency` 字段仍保留，但 Auto Repeat 不再作为当前 Smart Board 文档的主实现路径 |
 | **现有数据** | 编写迁移脚本从旧 Task 结构转移到 Project |
 
@@ -528,9 +528,9 @@ class CustomProject(Project):
 
 ---
 
-## SaaS 产品壳（/smart）与 Desk（/app）的边界（2026-01）
+## SaaS 平台壳（/smart）与 Desk（/app）的边界（2026-03）
 
-> **结论**：对外用户只使用 **`/smart`**（你们自研 UI/导航/样式），ERPNext Desk（`/app`）只保留给管理员/内部运维角色。
+> **结论**：对外用户先进入 **`/smart`**（selector / module chooser），再按权限进入 **`/smart-accounting`** 或未来的 **`/smart-grants`**；ERPNext Desk（`/app`）只保留给管理员/内部运维角色。
 
 ### 为什么需要这个边界
 - ✅ **品牌一致**：用户永远在你们自己的 UI 壳里操作
@@ -539,7 +539,8 @@ class CustomProject(Project):
 
 ### 与数据模型的关系
 - DocType（Project/Customer/Contact/Saved View 等）仍复用 ERPNext/Frappe 原生存储结构
-- 前端只是在 `/smart` 提供你们自己的交互视图（Boards / Clients / Settings 等）
+- `/smart` 负责平台入口与模块选择；当前实际业务视图主要在 `/smart-accounting`
+- `smart-grants` 现阶段只占位入口，不承载具体业务数据模型
 
 ---
 

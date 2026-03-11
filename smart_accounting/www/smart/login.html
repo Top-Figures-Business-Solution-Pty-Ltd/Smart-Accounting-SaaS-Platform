@@ -106,8 +106,8 @@
         // Basic hardening: only allow internal paths, and never allow /app redirects for external users.
         if (!rt.startsWith("/")) return "/smart";
         if (rt.startsWith("/app")) return "/smart";
-        // Prefer keeping users in product shell.
-        if (!rt.startsWith("/smart")) return "/smart";
+        const allowedPrefixes = ["/smart", "/smart-accounting", "/smart-grants"];
+        if (!allowedPrefixes.some((prefix) => rt === prefix || rt.startsWith(`${prefix}/`))) return "/smart";
         return rt;
       } catch (e) {
         return "/smart";

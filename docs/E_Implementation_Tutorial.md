@@ -113,13 +113,15 @@
   - **Project Server Override（project.py）**：实体同步、归档来源字段、Board Automation 执行
   - **Saved View / Board 配置**：`services/viewService.js`、`api/board_settings.py`
 
-### 1.3 产品入口（/smart）与 Desk（/app）隔离（2026-01 更新）
+### 1.3 产品入口（/smart）与 Desk（/app）隔离（2026-03 更新）
 
-> **对外用户**：只使用 **`/smart`**（Website Shell），不在 Desk（`/app`）中操作。  
+> **对外用户**：先进入 **`/smart`**（selector / module chooser），当前业务主要使用 **`/smart-accounting`**，不在 Desk（`/app`）中操作。  
 > **管理员/内部**：仍可使用 Desk（`/app`）进行系统配置与维护。
 
 代码落地（已实现）：
-- `apps/smart_accounting/smart_accounting/www/smart/`：`/smart` 产品壳页面（自定义顶栏，mount Smart Board）
+- `apps/smart_accounting/smart_accounting/www/smart/`：`/smart` 平台 selector 页面
+- `apps/smart_accounting/smart_accounting/www/smart-accounting/`：`/smart-accounting` Accounting 模块入口
+- `apps/smart_accounting/smart_accounting/www/smart-grants/`：`/smart-grants` Grants 占位模块入口
 - `apps/smart_accounting/smart_accounting/access_control.py` + `hooks.py before_request`：外部用户访问 `/app*` 重定向到 `/smart`
 
 ---
@@ -261,15 +263,19 @@ Completed
 
 ## 5. 实施顺序
 
-### Phase 0（新增）：启用 /smart 产品壳（对外入口）
+### Phase 0（新增）：启用 /smart 平台壳（对外入口）
 
 1. 访问 `/smart`
    - 未登录应跳转到登录页（或提示登录）
-   - 登录后应能看到 Smart Board UI
-2. 验证访问隔离
+   - 登录后应能看到 selector / module chooser
+2. 访问 `/smart-accounting`
+   - 应能看到当前 Smart Accounting UI
+3. 访问 `/smart-grants`
+   - 当前应看到 placeholder / coming soon 页面
+4. 验证访问隔离
    - 外部用户访问 `/app` 或 `/app/*` → 应被重定向到 `/smart`
    - 管理员（System Manager/Administrator）仍可访问 `/app`
-3. 开发期注意缓存
+5. 开发期注意缓存
    - Smart Board 使用 ESM 直载 `/assets/.../*.js`，浏览器会缓存较长时间（可能需要 hard refresh 才能看到更新）
    - 推荐：Chrome DevTools 勾选 Disable cache 或使用无痕窗口测试
    - 修改代码后执行：

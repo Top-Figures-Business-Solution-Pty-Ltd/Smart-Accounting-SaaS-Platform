@@ -1,0 +1,116 @@
+{% extends "templates/web.html" %}
+
+{% block title %}Smart Grants{% endblock %}
+
+{% block navbar %}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+{% block header %}{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block page_content %}
+<div class="smart-grants">
+  <div class="smart-grants__topbar">
+    <div>
+      <div class="smart-grants__brand">Smart Grants</div>
+      <div class="smart-grants__tagline text-muted">Placeholder module</div>
+    </div>
+    <div class="smart-grants__actions">
+      <a class="btn btn-default" href="/smart">Back to modules</a>
+      <a class="btn btn-primary" href="/smart/logout">Log out</a>
+    </div>
+  </div>
+
+  <div class="smart-grants__body">
+    <div class="smart-grants__card">
+      <div class="smart-grants__eyebrow">Coming soon</div>
+      <h1 class="smart-grants__title">Smart Grants is reserved for the next business module.</h1>
+      <p class="smart-grants__desc">
+        This route is intentionally live now so navigation, access control, and platform structure can be established before
+        the grants domain model and workflows are implemented.
+      </p>
+      <div class="smart-grants__list">
+        <div>Included now: route, access control, placeholder shell.</div>
+        <div>Not included yet: grants fields, boards, workflow, reports, or automations.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .page-container,
+  .page-content,
+  .page-content-wrapper,
+  .web-page-content,
+  .container {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  body { margin: 0; }
+  .smart-grants {
+    min-height: 100vh;
+    background: #f8f9fa;
+  }
+  .smart-grants__topbar {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    background: #fff;
+    border-bottom: 1px solid #dee2e6;
+  }
+  .smart-grants__brand {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .smart-grants__tagline {
+    font-size: 13px;
+  }
+  .smart-grants__actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .smart-grants__body {
+    display: flex;
+    justify-content: center;
+    padding: 48px 24px;
+  }
+  .smart-grants__card {
+    width: 760px;
+    max-width: 100%;
+    padding: 28px;
+    border-radius: 18px;
+    border: 1px solid #dee2e6;
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.06);
+  }
+  .smart-grants__eyebrow {
+    margin-bottom: 10px;
+    color: #198754;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .smart-grants__title {
+    margin: 0 0 12px;
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .smart-grants__desc {
+    margin: 0 0 16px;
+    color: #495057;
+    line-height: 1.6;
+  }
+  .smart-grants__list {
+    display: grid;
+    gap: 8px;
+    color: #343a40;
+  }
+</style>
+{% endblock %}

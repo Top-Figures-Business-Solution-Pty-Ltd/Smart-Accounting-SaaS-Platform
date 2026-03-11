@@ -1,0 +1,278 @@
+{% extends "templates/web.html" %}
+
+{% block title %}{{ brand_name or "Smart Accounting" }}{% endblock %}
+
+{% block navbar %}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+{% block header %}{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block page_content %}
+<div id="smart-shell" class="smart-shell">
+  <div class="smart-shell__topbar">
+    <div class="smart-shell__left">
+      <div class="smart-shell__brand">{{ brand_name or "Smart Accounting" }}</div>
+    </div>
+    <div class="smart-shell__actions">
+      <button class="smart-shell__icon-btn" id="btnNotifications" aria-label="Notifications" type="button" style="position:relative;">
+        🔔
+        <span id="notificationsBadge" style="display:none; position:absolute; top:-6px; right:-6px; min-width:18px; height:18px; padding:0 5px;
+          border-radius:999px; background:#dc3545; color:#fff; font-size:11px; font-weight:700; align-items:center; justify-content:center;">
+        </span>
+      </button>
+      <button class="smart-shell__avatar" id="userAvatar" type="button" aria-label="User menu" title="{{ frappe.session.user }}">
+        {{ (frappe.session.user or 'U')[:1] | upper }}
+      </button>
+    </div>
+  </div>
+
+  <div class="smart-shell__popover" id="notificationsPopover" style="display:none;">
+    <div class="smart-shell__popover-title">Notifications</div>
+    <div class="smart-shell__popover-body" id="notificationsPopoverBody">
+      <div class="text-muted">No notifications yet.</div>
+    </div>
+  </div>
+
+  <div class="smart-shell__popover" id="profilePopover" style="display:none;">
+    <div class="smart-shell__popover-title">Account</div>
+    <div class="smart-shell__popover-body smart-shell__menu">
+      <button class="smart-shell__menu-item" id="btnMySettings" type="button">My Settings</button>
+      <div class="smart-shell__menu-divider"></div>
+      <a class="smart-shell__menu-item smart-shell__menu-link" href="/smart/logout">Log out</a>
+    </div>
+  </div>
+
+  <div id="smartBoardMount" class="smart-board-container smart-board-embedded"></div>
+</div>
+
+<link rel="stylesheet" href="/assets/smart_accounting/css/smart_board/main.css">
+<link rel="stylesheet" href="/assets/smart_accounting/css/smart_board/layout.css">
+<link rel="stylesheet" href="/assets/smart_accounting/css/smart_board/board.css">
+<link rel="stylesheet" href="/assets/smart_accounting/css/smart_board/components.css">
+
+<style>
+  .page-container,
+  .page-content,
+  .page-content-wrapper,
+  .web-page-content,
+  .container {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  body { margin: 0; }
+  .smart-shell { min-height: 100vh; background: #f8f9fa; }
+  .smart-shell__topbar {
+    height: 56px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; background: #fff; border-bottom: 1px solid #dee2e6;
+  }
+  .smart-shell__left { display:flex; align-items:center; gap: 10px; }
+  .smart-shell__brand { font-weight: 600; font-size: 16px; }
+  .smart-shell__actions { display:flex; align-items:center; gap: 10px; position: relative; }
+  .smart-shell__icon-btn {
+    width: 34px; height: 34px; border-radius: 8px;
+    border: 1px solid #dee2e6; background:#fff;
+  }
+  .smart-shell__icon-btn:hover { background:#f3f4f6; }
+  .smart-shell__avatar {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
+    max-width: 34px;
+    max-height: 34px;
+    aspect-ratio: 1 / 1;
+    flex: 0 0 34px;
+    padding: 0;
+    line-height: 1;
+    background: #0d6efd; color:#fff; font-weight: 700;
+    display:flex; align-items:center; justify-content:center;
+    user-select:none;
+    border: 0;
+    border-radius: 50%;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+  .smart-shell__avatar.smart-shell__avatar--img {
+    background: #fff;
+  }
+  .smart-shell__avatar img {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 50%;
+    display: block;
+  }
+  .smart-shell__popover {
+    position: absolute;
+    top: 56px;
+    right: 16px;
+    width: 320px;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.12);
+    z-index: 30000;
+  }
+  .smart-shell__popover-title {
+    padding: 10px 12px;
+    font-weight: 600;
+    border-bottom: 1px solid #dee2e6;
+  }
+  .smart-shell__popover-body { padding: 12px; }
+  .smart-shell__menu { padding: 6px; }
+  .smart-shell__menu-item,
+  .smart-shell__menu-link {
+    width: 100%;
+    display: block;
+    padding: 10px 10px;
+    border-radius: 8px;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    color: #111;
+    text-decoration: none;
+  }
+  .smart-shell__menu-item:hover,
+  .smart-shell__menu-link:hover { background: #f3f4f6; }
+  .smart-shell__menu-divider { height: 1px; background:#dee2e6; margin: 6px 4px; }
+  #smartBoardMount { height: calc(100vh - 56px); }
+</style>
+
+<script>
+  try {
+    window.frappe = window.frappe || {};
+    frappe.csrf_token = frappe.csrf_token || "{{ (frappe.session.data.csrf_token or '') | e }}";
+  } catch (e) {}
+</script>
+
+<script type="module">
+  const mount = document.getElementById("smartBoardMount");
+  const entry = "/assets/smart_accounting/js/smart_board/index.js?v={{ build_version }}&csrf={{ (frappe.session.data.csrf_token or '') | e }}";
+  const btnNotifications = document.getElementById("btnNotifications");
+  const popover = document.getElementById("notificationsPopover");
+  const notificationsBadge = document.getElementById("notificationsBadge");
+  const userAvatar = document.getElementById("userAvatar");
+  const profilePopover = document.getElementById("profilePopover");
+  const btnMySettings = document.getElementById("btnMySettings");
+  const defaultUser = "{{ (frappe.session.user or '') | e }}";
+
+  function hideAllPopovers() {
+    popover.style.display = "none";
+    profilePopover.style.display = "none";
+  }
+
+  function togglePopover(el, show) {
+    const next = typeof show === "boolean" ? show : (el.style.display === "none");
+    hideAllPopovers();
+    el.style.display = next ? "block" : "none";
+  }
+
+  btnNotifications?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    togglePopover(popover);
+  });
+
+  userAvatar?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    togglePopover(profilePopover);
+  });
+
+  document.addEventListener("click", () => hideAllPopovers());
+  popover?.addEventListener("click", (e) => e.stopPropagation());
+  profilePopover?.addEventListener("click", (e) => e.stopPropagation());
+
+  btnMySettings?.addEventListener("click", () => {
+    hideAllPopovers();
+    window.smart_accounting?.smart_board_instance?.handleViewChange?.("settings");
+  });
+
+  function userInitial(nameOrEmail) {
+    const s = String(nameOrEmail || defaultUser || 'U').trim();
+    return (s.charAt(0) || 'U').toUpperCase();
+  }
+
+  function renderShellAvatar({ full_name, email, user_image } = {}) {
+    if (!userAvatar) return;
+    const name = String(full_name || '').trim();
+    const mail = String(email || '').trim();
+    const img = String(user_image || '').trim();
+    const fallback = userInitial(name || mail);
+
+    const setFallback = () => {
+      userAvatar.classList.remove('smart-shell__avatar--img');
+      userAvatar.textContent = fallback;
+      userAvatar.setAttribute('title', name || mail || defaultUser || '');
+    };
+
+    if (!img) {
+      setFallback();
+      return;
+    }
+
+    const probe = new Image();
+    probe.onload = () => {
+      userAvatar.classList.add('smart-shell__avatar--img');
+      userAvatar.innerHTML = `<img src="${img}" alt="" />`;
+      userAvatar.setAttribute('title', name || mail || defaultUser || '');
+    };
+    probe.onerror = () => setFallback();
+    probe.src = img;
+  }
+
+  window.smart_accounting = window.smart_accounting || {};
+  window.smart_accounting.set_shell_avatar = renderShellAvatar;
+
+  frappe.call({ method: "smart_accounting.api.profile.get_my_profile" })
+    .then((r) => renderShellAvatar(r?.message || {}))
+    .catch(() => renderShellAvatar({}));
+
+  window.addEventListener("unhandledrejection", (ev) => {
+    try {
+      const reason = ev?.reason;
+      const detail = reason?.stack || reason?.message || String(reason);
+      mount.innerHTML = `<div class="text-muted p-3">
+        <div style="font-weight:600;margin-bottom:8px;">Smart Board crashed</div>
+        <pre style="white-space:pre-wrap;overflow:auto;">${detail}</pre>
+      </div>`;
+    } catch (e) {}
+  });
+
+  import(entry)
+    .then(() => {
+      if (window.smart_accounting?.show_smart_board) {
+        window.smart_accounting.mount_target = mount;
+        window.smart_accounting.show_smart_board();
+
+        import("/assets/smart_accounting/js/smart_board/controllers/notificationsController.js")
+          .then((m) => {
+            try {
+              window.smart_accounting.notifications_controller?.destroy?.();
+            } catch (e) {}
+            window.smart_accounting.notifications_controller = m.initNotificationsShell({
+              buttonEl: btnNotifications,
+              popoverEl: popover,
+              badgeEl: notificationsBadge,
+            });
+          })
+          .catch(() => {});
+      } else {
+        mount.innerHTML = '<div class="text-muted p-3">Smart Board entry loaded, but API not found.</div>';
+      }
+    })
+    .catch((e) => {
+      console.error(e);
+      const detail = e?.stack || e?.message || String(e);
+      mount.innerHTML = `<div class="text-muted p-3">
+        <div style="font-weight:600;margin-bottom:8px;">Failed to load Smart Board modules</div>
+        <div style="margin-bottom:8px;">Please hard refresh (Ctrl+F5). If still failing, use the error below:</div>
+        <pre style="white-space:pre-wrap;overflow:auto;">${detail}</pre>
+      </div>`;
+    });
+</script>
+{% endblock %}

@@ -136,7 +136,9 @@ smart_accounting/
 │   │   └── css/smart_board/         # Smart Board 样式
 │   │
 │   ├── www/                        # Website 页面（产品壳）
-│   │   └── smart/                  # ✅ `/smart`：外部用户入口（自定义顶栏/壳，mount Smart Board）
+│   │   ├── smart/                  # ✅ `/smart`：平台 selector / module chooser
+│   │   ├── smart-accounting/       # ✅ `/smart-accounting`：当前 Accounting 模块入口
+│   │   └── smart-grants/           # ✅ `/smart-grants`：未来 Grants 模块占位入口
 │   │
 │   ├── page/                       # Desk Page（内部/管理员可用）
 │   │   └── project_management/     # `/app/project-management`：按需加载 Smart Board（Desk 内嵌）
@@ -219,7 +221,8 @@ window.TableManager.refreshRow();
 ### 2.5.1 产品入口与隔离
 
 **对外用户**：
-- 只允许访问 `/smart`（Website Shell）
+- 先进入 `/smart`（Website Shell selector）
+- 再按角色进入 `/smart-accounting` 或 `/smart-grants`
 - 访问任何 `/app*`（Desk）会被重定向回 `/smart`（由 `hooks.py before_request` + `access_control.py` 实现）
 
 **管理员/内部**：
@@ -266,12 +269,15 @@ smart_board/
 ### 3.1 架构愿景
 
 ```
-/smart 产品壳
-  ├── SmartBoardApp（只做编排 / navigateToView）
-  ├── product-view registry（dashboard / clients / client-projects / status-projects / settings / logs / report）
-  ├── board runtime（BoardTable + feature modules）
-  ├── services / controllers / store / utils
-  └── API: queries / tasks / monthly-status / automation / clients / board-settings
+/smart 平台 selector
+  ├── /smart-accounting
+  │   ├── SmartBoardApp（只做编排 / navigateToView）
+  │   ├── product-view registry（dashboard / clients / client-projects / status-projects / settings / logs / report）
+  │   ├── board runtime（BoardTable + feature modules）
+  │   ├── services / controllers / store / utils
+  │   └── API: queries / tasks / monthly-status / automation / clients / board-settings
+  └── /smart-grants
+      └── placeholder shell（本阶段仅占位，不含 grants 业务）
 ```
 
 ### 3.2 技术选型

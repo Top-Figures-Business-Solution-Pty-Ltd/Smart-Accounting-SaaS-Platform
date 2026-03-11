@@ -40,7 +40,7 @@
 
 ### 1.2 2026-01：Smart Board 对应的“系统触点”
 
-> 目前产品主要触点在 Smart Board（`/smart`），并直接驱动 ERPNext 的 Project/Task 数据：
+> 当前平台入口为 `/smart` selector；已落地业务模块主要是 **Smart Accounting（`/smart-accounting`）**，并直接驱动 ERPNext 的 Project/Task 数据：
 - **Board（按 Project Type）**：查看/筛选/编辑 Project 字段
 - **Dashboard**：展示我的 active Projects 与高频状态卡片，可跳转 `status-projects`
 - **Client Projects**：从 Clients 进入的 cross-project-type 项目列表，带临时 customer scope
@@ -52,14 +52,17 @@
 - **Saved View**：保存列配置与过滤条件，作为默认视图来源
 - **Monthly Status**：Task 的月度网格状态 + Project 的月度汇总（Done x/y · %）
 
-### 1.1 外部用户入口（/smart）说明（2026-01 更新）
+### 1.1 外部用户入口（/smart）说明（2026-03 更新）
 
 在 SaaS 产品化模式下：
-- 外部用户不进入 ERPNext Desk（`/app`），日常操作入口为 **`/smart`**
-- `/smart` 提供你们自己的 UI 壳（Boards / Clients / Settings 等），底层仍复用 ERPNext/Frappe 的 DocType 数据
+- 外部用户不进入 ERPNext Desk（`/app`），平台入口为 **`/smart`**
+- `/smart` 负责 selector / module chooser
+- 当前日常业务主要通过 **`/smart-accounting`** 完成（Boards / Clients / Settings 等），底层仍复用 ERPNext/Frappe 的 DocType 数据
+- **`/smart-grants`** 当前只是占位模块入口，尚未承载 grants 业务流程
 
 这不会改变业务流程本身，但会改变“用户触点”：
-- USER/CLIENT 的操作入口统一在 `/smart` 完成（查看项目、更新状态、沟通/评论等）
+- USER/CLIENT 先在 `/smart` 选择模块
+- 当前实际操作入口统一在 `/smart-accounting` 完成（查看项目、更新状态、沟通/评论等）
 
 ---
 

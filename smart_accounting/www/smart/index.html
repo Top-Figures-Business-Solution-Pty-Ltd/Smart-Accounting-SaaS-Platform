@@ -1,60 +1,76 @@
 {% extends "templates/web.html" %}
 
-{% block title %}{{ brand_name or "Smart Accounting" }}{% endblock %}
+{% block title %}{{ brand_name or "Smart" }}{% endblock %}
 
-{# Product shell: remove standard website navbar + breadcrumbs #}
 {% block navbar %}{% endblock %}
 {% block breadcrumbs %}{% endblock %}
 {% block header %}{% endblock %}
 {% block footer %}{% endblock %}
 
 {% block page_content %}
-<div id="smart-shell" class="smart-shell">
-  <div class="smart-shell__topbar">
-    <div class="smart-shell__left">
-      <div class="smart-shell__brand">{{ brand_name or "Smart Accounting" }}</div>
+<div class="smart-chooser">
+  <div class="smart-chooser__topbar">
+    <div class="smart-chooser__brand-wrap">
+      <div class="smart-chooser__brand">{{ brand_name or "Smart" }}</div>
+      <div class="smart-chooser__tagline text-muted">Choose your workspace</div>
     </div>
-    <div class="smart-shell__actions">
-      <button class="smart-shell__icon-btn" id="btnNotifications" aria-label="Notifications" type="button" style="position:relative;">
-        🔔
-        <span id="notificationsBadge" style="display:none; position:absolute; top:-6px; right:-6px; min-width:18px; height:18px; padding:0 5px;
-          border-radius:999px; background:#dc3545; color:#fff; font-size:11px; font-weight:700; align-items:center; justify-content:center;">
-        </span>
-      </button>
-      <button class="smart-shell__avatar" id="userAvatar" type="button" aria-label="User menu" title="{{ frappe.session.user }}">
+    <div class="smart-chooser__actions">
+      <button class="smart-chooser__avatar" id="userAvatar" type="button" aria-label="User menu" title="{{ frappe.session.user }}">
         {{ (frappe.session.user or 'U')[:1] | upper }}
       </button>
+      <div class="smart-chooser__popover" id="profilePopover" style="display:none;">
+        <div class="smart-chooser__popover-title">Account</div>
+        <div class="smart-chooser__menu">
+          <a class="smart-chooser__menu-link" href="/smart/logout">Log out</a>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="smart-shell__popover" id="notificationsPopover" style="display:none;">
-    <div class="smart-shell__popover-title">Notifications</div>
-    <div class="smart-shell__popover-body" id="notificationsPopoverBody">
-      <div class="text-muted">No notifications yet.</div>
+  <div class="smart-chooser__body">
+    <div class="smart-chooser__hero">
+      <h1 class="smart-chooser__title">Select a module</h1>
+      <p class="smart-chooser__subtitle text-muted">
+        Smart Accounting is live now. Smart Grants is reserved as the next module and is currently a placeholder.
+      </p>
+    </div>
+
+    {% if denied_module_label %}
+    <div class="smart-chooser__alert smart-chooser__alert--warning">
+      You do not have access to {{ denied_module_label }}.
+    </div>
+    {% endif %}
+
+    {% if not has_any_module_access %}
+    <div class="smart-chooser__alert">
+      Your account does not currently have access to any module. Please contact your administrator.
+    </div>
+    {% endif %}
+
+    <div class="smart-chooser__grid">
+      {% for card in module_cards %}
+      <section class="smart-chooser__card{% if not card.available %} smart-chooser__card--disabled{% endif %}">
+        <div class="smart-chooser__card-top">
+          <div>
+            <div class="smart-chooser__card-title">{{ card.title }}</div>
+            <div class="smart-chooser__card-status{% if card.available %} smart-chooser__card-status--ok{% endif %}">
+              {{ card.status_text }}
+            </div>
+          </div>
+        </div>
+        <p class="smart-chooser__card-desc">{{ card.description }}</p>
+        {% if card.available %}
+        <a class="btn btn-primary smart-chooser__card-action" href="{{ card.href }}">Enter module</a>
+        {% else %}
+        <button class="btn btn-default smart-chooser__card-action" type="button" disabled>Unavailable</button>
+        {% endif %}
+      </section>
+      {% endfor %}
     </div>
   </div>
-
-  <div class="smart-shell__popover" id="profilePopover" style="display:none;">
-    <div class="smart-shell__popover-title">Account</div>
-    <div class="smart-shell__popover-body smart-shell__menu">
-      <button class="smart-shell__menu-item" id="btnMySettings" type="button">My Settings</button>
-      <div class="smart-shell__menu-divider"></div>
-      <a class="smart-shell__menu-item smart-shell__menu-link" href="/smart/logout">Log out</a>
-    </div>
-  </div>
-
-  <!-- Mount target for Smart Board SPA -->
-  <div id="smartBoardMount" class="smart-board-container smart-board-embedded"></div>
 </div>
 
-<!-- Smart Board styles (scoped to this page via normal CSS rules, no Desk injection) -->
-<link rel="stylesheet" href="/assets/smart_accounting/css/smart_board/main.css">
-<link rel="stylesheet" href="/assets/smart_accounting/css/smart_board/layout.css">
-<link rel="stylesheet" href="/assets/smart_accounting/css/smart_board/board.css">
-<link rel="stylesheet" href="/assets/smart_accounting/css/smart_board/components.css">
-
 <style>
-  /* Make /smart full-bleed, overriding website container width limits */
   .page-container,
   .page-content,
   .page-content-wrapper,
@@ -67,230 +83,221 @@
     padding-right: 0 !important;
   }
   body { margin: 0; }
-  .smart-shell { min-height: 100vh; background: #f8f9fa; }
-  .smart-shell__topbar {
-    height: 56px; display: flex; align-items: center; justify-content: space-between;
-    padding: 0 16px; background: #fff; border-bottom: 1px solid #dee2e6;
+  .smart-chooser { min-height: 100vh; background: #f8f9fa; }
+  .smart-chooser__topbar {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    background: #fff;
+    border-bottom: 1px solid #dee2e6;
   }
-  .smart-shell__left { display:flex; align-items:center; gap: 10px; }
-  .smart-shell__brand { font-weight: 600; font-size: 16px; }
-  .smart-shell__actions { display:flex; align-items:center; gap: 10px; position: relative; }
-  .smart-shell__icon-btn {
-    width: 34px; height: 34px; border-radius: 8px;
-    border: 1px solid #dee2e6; background:#fff;
+  .smart-chooser__brand-wrap {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
   }
-  .smart-shell__icon-btn:hover { background:#f3f4f6; }
-  .smart-shell__avatar {
+  .smart-chooser__brand { font-weight: 700; font-size: 16px; }
+  .smart-chooser__tagline { font-size: 13px; }
+  .smart-chooser__actions { position: relative; display: flex; align-items: center; }
+  .smart-chooser__avatar {
     width: 34px;
     height: 34px;
-    min-width: 34px;
-    min-height: 34px;
-    max-width: 34px;
-    max-height: 34px;
-    aspect-ratio: 1 / 1;
-    flex: 0 0 34px;
-    padding: 0;
-    line-height: 1;
-    background: #0d6efd; color:#fff; font-weight: 700;
-    display:flex; align-items:center; justify-content:center;
-    user-select:none;
-    border: 0;
     border-radius: 50%;
+    border: 0;
+    background: #0d6efd;
+    color: #fff;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     overflow: hidden;
-    box-sizing: border-box;
+    padding: 0;
   }
-  .smart-shell__avatar.smart-shell__avatar--img {
+  .smart-chooser__avatar.smart-chooser__avatar--img {
     background: #fff;
   }
-  .smart-shell__avatar img {
+  .smart-chooser__avatar img {
     width: 100%;
     height: 100%;
-    aspect-ratio: 1 / 1;
     object-fit: cover;
-    border-radius: 50%;
     display: block;
   }
-  .smart-shell__popover {
+  .smart-chooser__popover {
     position: absolute;
-    top: 56px;
-    right: 16px;
-    width: 320px;
+    top: 46px;
+    right: 0;
+    width: 200px;
     background: #fff;
     border: 1px solid #dee2e6;
     border-radius: 10px;
     box-shadow: 0 12px 30px rgba(0,0,0,0.12);
-    /* Keep above Smart Board modals (sb-modal-overlay z-index: 20000) */
-    z-index: 30000;
+    z-index: 1000;
   }
-  .smart-shell__popover-title {
+  .smart-chooser__popover-title {
     padding: 10px 12px;
-    font-weight: 600;
     border-bottom: 1px solid #dee2e6;
+    font-weight: 600;
   }
-  .smart-shell__popover-body { padding: 12px; }
-  .smart-shell__menu { padding: 6px; }
-  .smart-shell__menu-item,
-  .smart-shell__menu-link {
-    width: 100%;
+  .smart-chooser__menu { padding: 6px; }
+  .smart-chooser__menu-link {
     display: block;
-    padding: 10px 10px;
+    padding: 10px;
     border-radius: 8px;
-    text-align: left;
-    background: transparent;
-    border: 0;
     color: #111;
     text-decoration: none;
   }
-  .smart-shell__menu-item:hover,
-  .smart-shell__menu-link:hover { background: #f3f4f6; }
-  .smart-shell__menu-divider { height: 1px; background:#dee2e6; margin: 6px 4px; }
-  #smartBoardMount { height: calc(100vh - 56px); }
+  .smart-chooser__menu-link:hover { background: #f3f4f6; }
+  .smart-chooser__body {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 40px 24px 56px;
+  }
+  .smart-chooser__hero { margin-bottom: 24px; }
+  .smart-chooser__title {
+    margin: 0 0 8px;
+    font-size: 32px;
+    font-weight: 700;
+  }
+  .smart-chooser__subtitle {
+    margin: 0;
+    max-width: 760px;
+    font-size: 15px;
+  }
+  .smart-chooser__alert {
+    margin-bottom: 18px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid #dee2e6;
+    background: #fff;
+  }
+  .smart-chooser__alert--warning {
+    border-color: #f5c26b;
+    background: #fff8e8;
+  }
+  .smart-chooser__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 18px;
+  }
+  .smart-chooser__card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 220px;
+    padding: 20px;
+    border-radius: 18px;
+    border: 1px solid #dee2e6;
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.06);
+  }
+  .smart-chooser__card--disabled {
+    opacity: 0.68;
+  }
+  .smart-chooser__card-title {
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .smart-chooser__card-status {
+    margin-top: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .smart-chooser__card-status--ok {
+    color: #198754;
+  }
+  .smart-chooser__card-desc {
+    flex: 1;
+    margin: 0;
+    color: #495057;
+    line-height: 1.5;
+  }
+  .smart-chooser__card-action {
+    align-self: flex-start;
+    min-width: 140px;
+  }
 </style>
 
-{# Ensure CSRF token is available early for frappe.call in website context #}
-<script>
-  try {
-    // base.html injects csrf near end-of-body; Smart Board may call APIs before that runs.
-    window.frappe = window.frappe || {};
-    frappe.csrf_token = frappe.csrf_token || "{{ (frappe.session.data.csrf_token or '') | e }}";
-  } catch (e) {}
-</script>
-
 <script type="module">
-  // Website page: mount Smart Board into our container (not into body / Desk).
-  const mount = document.getElementById("smartBoardMount");
-  // Cache-buster: ES modules can be aggressively cached by the browser.
-  // Use build_version (changes after bench build) so UI updates always invalidate browser cache.
-  const entry = "/assets/smart_accounting/js/smart_board/index.js?v={{ build_version }}&csrf={{ (frappe.session.data.csrf_token or '') | e }}";
-  const btnNotifications = document.getElementById("btnNotifications");
-  const popover = document.getElementById("notificationsPopover");
-  const notificationsBadge = document.getElementById("notificationsBadge");
-  const userAvatar = document.getElementById("userAvatar");
-  const profilePopover = document.getElementById("profilePopover");
-  const btnMySettings = document.getElementById("btnMySettings");
-  const defaultUser = "{{ (frappe.session.user or '') | e }}";
+  (function() {
+    const userAvatar = document.getElementById("userAvatar");
+    const profilePopover = document.getElementById("profilePopover");
+    const defaultUser = "{{ (frappe.session.user or '') | e }}";
 
-  function hideAllPopovers() {
-    popover.style.display = "none";
-    profilePopover.style.display = "none";
-  }
+    function userInitial(nameOrEmail) {
+      const s = String(nameOrEmail || defaultUser || "U").trim();
+      return (s.charAt(0) || "U").toUpperCase();
+    }
 
-  function togglePopover(el, show) {
-    const next = typeof show === "boolean" ? show : (el.style.display === "none");
-    hideAllPopovers();
-    el.style.display = next ? "block" : "none";
-  }
+    function hideProfilePopover() {
+      if (profilePopover) profilePopover.style.display = "none";
+    }
 
-  btnNotifications?.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    togglePopover(popover);
-  });
+    userAvatar?.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!profilePopover) return;
+      profilePopover.style.display = profilePopover.style.display === "block" ? "none" : "block";
+    });
 
-  userAvatar?.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    togglePopover(profilePopover);
-  });
+    document.addEventListener("click", () => hideProfilePopover());
+    profilePopover?.addEventListener("click", (e) => e.stopPropagation());
 
-  document.addEventListener("click", () => hideAllPopovers());
-  popover?.addEventListener("click", (e) => e.stopPropagation());
-  profilePopover?.addEventListener("click", (e) => e.stopPropagation());
+    function renderShellAvatar({ full_name, email, user_image } = {}) {
+      if (!userAvatar) return;
+      const name = String(full_name || "").trim();
+      const mail = String(email || "").trim();
+      const img = String(user_image || "").trim();
+      const fallback = userInitial(name || mail);
 
-  btnMySettings?.addEventListener("click", () => {
-    hideAllPopovers();
-    // Reuse existing Smart Board view
-    window.smart_accounting?.smart_board_instance?.handleViewChange?.("settings");
-  });
+      const setFallback = () => {
+        userAvatar.classList.remove("smart-chooser__avatar--img");
+        userAvatar.textContent = fallback;
+        userAvatar.setAttribute("title", name || mail || defaultUser || "");
+      };
 
-  function userInitial(nameOrEmail) {
-    const s = String(nameOrEmail || defaultUser || 'U').trim();
-    return (s.charAt(0) || 'U').toUpperCase();
-  }
+      if (!img) {
+        setFallback();
+        return;
+      }
 
-  function renderShellAvatar({ full_name, email, user_image } = {}) {
-    if (!userAvatar) return;
-    const name = String(full_name || '').trim();
-    const mail = String(email || '').trim();
-    const img = String(user_image || '').trim();
-    const fallback = userInitial(name || mail);
+      const probe = new Image();
+      probe.onload = () => {
+        userAvatar.classList.add("smart-chooser__avatar--img");
+        userAvatar.innerHTML = `<img src="${img}" alt="" />`;
+        userAvatar.setAttribute("title", name || mail || defaultUser || "");
+      };
+      probe.onerror = () => setFallback();
+      probe.src = img;
+    }
 
-    const setFallback = () => {
-      userAvatar.classList.remove('smart-shell__avatar--img');
-      userAvatar.textContent = fallback;
-      userAvatar.setAttribute('title', name || mail || defaultUser || '');
-    };
+    try {
+      window.frappe = window.frappe || {};
+      frappe.csrf_token = frappe.csrf_token || "{{ (frappe.session.data.csrf_token or '') | e }}";
+    } catch (e) {}
 
-    if (!img) {
-      setFallback();
+    if (window.frappe?.call) {
+      frappe.call({ method: "smart_accounting.api.profile.get_my_profile" })
+        .then((r) => renderShellAvatar(r?.message || {}))
+        .catch(() => renderShellAvatar({}));
       return;
     }
 
-    // Preload image first to avoid intermittent broken/empty avatar states.
-    const probe = new Image();
-    probe.onload = () => {
-      userAvatar.classList.add('smart-shell__avatar--img');
-      userAvatar.innerHTML = `<img src="${img}" alt="" />`;
-      userAvatar.setAttribute('title', name || mail || defaultUser || '');
-    };
-    probe.onerror = () => setFallback();
-    probe.src = img;
-  }
-
-  // Expose for Settings/Profile to update shell avatar after upload/remove.
-  window.smart_accounting = window.smart_accounting || {};
-  window.smart_accounting.set_shell_avatar = renderShellAvatar;
-
-  // Load current profile avatar on shell startup (without opening Settings).
-  frappe.call({ method: "smart_accounting.api.profile.get_my_profile" })
-    .then((r) => renderShellAvatar(r?.message || {}))
-    .catch(() => renderShellAvatar({}));
-
-  // Surface module-load errors for debugging (Website doesn't have Desk console context)
-  window.addEventListener("unhandledrejection", (ev) => {
-    try {
-      const reason = ev?.reason;
-      const detail = reason?.stack || reason?.message || String(reason);
-      mount.innerHTML = `<div class="text-muted p-3">
-        <div style="font-weight:600;margin-bottom:8px;">Smart Board crashed</div>
-        <pre style="white-space:pre-wrap;overflow:auto;">${detail}</pre>
-      </div>`;
-    } catch (e) {}
-  });
-
-  import(entry)
-    .then(() => {
-      if (window.smart_accounting?.show_smart_board) {
-        // NOTE: Avoid "__" in Jinja templates; Frappe safe template render will block it.
-        window.smart_accounting.mount_target = mount;
-        window.smart_accounting.show_smart_board();
-
-        // Notifications (bell) for /smart shell
-        import("/assets/smart_accounting/js/smart_board/controllers/notificationsController.js")
-          .then((m) => {
-            try {
-              window.smart_accounting.notifications_controller?.destroy?.();
-            } catch (e) {}
-            window.smart_accounting.notifications_controller = m.initNotificationsShell({
-              buttonEl: btnNotifications,
-              popoverEl: popover,
-              badgeEl: notificationsBadge,
-            });
-          })
-          .catch(() => {});
-      } else {
-        mount.innerHTML = '<div class="text-muted p-3">Smart Board entry loaded, but API not found.</div>';
+    fetch("/api/method/smart_accounting.api.profile.get_my_profile", {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        "Accept": "application/json"
       }
     })
-    .catch((e) => {
-      console.error(e);
-      const detail = e?.stack || e?.message || String(e);
-      mount.innerHTML = `<div class="text-muted p-3">
-        <div style="font-weight:600;margin-bottom:8px;">Failed to load Smart Board modules</div>
-        <div style="margin-bottom:8px;">Please hard refresh (Ctrl+F5). If still failing, use the error below:</div>
-        <pre style="white-space:pre-wrap;overflow:auto;">${detail}</pre>
-      </div>`;
-    });
+      .then((resp) => resp.json())
+      .then((data) => renderShellAvatar(data?.message || {}))
+      .catch(() => renderShellAvatar({}));
+  })();
 </script>
 {% endblock %}
 

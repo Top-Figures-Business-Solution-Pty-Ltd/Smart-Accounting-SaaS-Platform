@@ -57,23 +57,25 @@ scheduler_events = {
 # Fixtures
 # Export DocTypes and Custom Fields to fixtures for version control
 fixtures = [
-    # Roles used by Smart Accounting (so test/prod imports won't miss them)
+    # Roles used by Smart platform modules (so test/prod imports won't miss them)
     {
         "doctype": "Role",
         "filters": [
             ["name", "in", [
-                "Smart Accounting User"
+                "Smart Accounting User",
+                "Smart Grants User"
             ]]
         ]
     },
     # Role permissions (customized via Role Permission Manager).
-    # NOTE: We intentionally export only the permissions for Smart Accounting User
+    # NOTE: We intentionally export only the permissions for Smart platform module roles
     # to avoid pulling unrelated system-wide permission customizations into this app.
     {
         "doctype": "Custom DocPerm",
         "filters": [
             ["role", "in", [
-                "Smart Accounting User"
+                "Smart Accounting User",
+                "Smart Grants User"
             ]]
         ]
     },

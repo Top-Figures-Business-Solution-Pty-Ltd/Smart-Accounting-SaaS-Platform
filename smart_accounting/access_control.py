@@ -107,18 +107,58 @@ SMART_PUBLIC_PATHS = {
 	"/smart/signup/",
 }
 
+SMART_SELECTOR_ROUTE = "/smart"
+SMART_ACCOUNTING_ROUTE = "/smart-accounting"
+SMART_GRANTS_ROUTE = "/smart-grants"
+SMART_ACCOUNTING_ROLE = "Smart Accounting User"
+SMART_GRANTS_ROLE = "Smart Grants User"
+
+SMART_MODULE_ROUTES = {
+	"accounting": SMART_ACCOUNTING_ROUTE,
+	"grants": SMART_GRANTS_ROUTE,
+}
+
+SMART_MODULE_ROLES = {
+	"accounting": SMART_ACCOUNTING_ROLE,
+	"grants": SMART_GRANTS_ROLE,
+}
+
 
 def _is_desk_path(path: str) -> bool:
 	# Desk routes are under /app (e.g. /app, /app/project-management)
 	return path == "/app" or path.startswith("/app/")
 
+
 def _is_smart_path(path: str) -> bool:
-	# Product shell routes are under /smart
-	return path == "/smart" or path.startswith("/smart/")
+	# Platform auth/selector routes are under /smart
+	return path == SMART_SELECTOR_ROUTE or path.startswith(f"{SMART_SELECTOR_ROUTE}/")
 
 
-def _is_allowed_to_use_desk() -> bool:
-	user = frappe.session.user
+def _is_product_path(path: str) -> bool:
+	if _is_smart_path(path):
+		return True
+	return any(path == route or path.startswith(f"{route}/") for route in SMART_MODULE_ROUTES.values())
+
+
+def _get_user_roles(user: str | None = None) -> set[str]:
+	target_user = str(user or frappe.session.user or "").strip()
+	if not target_user or target_user == "Guest":
+		return set()
+	try:
+		return set(frappe.get_roles(target_user))
+	except Exception:
+		return set()
+
+
+def _module_for_path(path: str) -> str | None:
+	for key, route in SMART_MODULE_ROUTES.items():
+		if path == route or path.startswith(f"{route}/"):
+			return key
+	return None
+
+
+def _is_allowed_to_use_desk(user: str | None = None, user_roles: set[str] | None = None) -> bool:
+	user = str(user or frappe.session.user or "").strip()
 	if not user or user == "Guest":
 		return False
 
@@ -126,10 +166,7 @@ def _is_allowed_to_use_desk() -> bool:
 	if user == "Administrator":
 		return True
 
-	try:
-		user_roles = set(frappe.get_roles(user))
-	except Exception:
-		user_roles = set()
+	user_roles = user_roles if user_roles is not None else _get_user_roles(user)
 
 	# System Manager should be able to access Desk by default.
 	if "System Manager" in user_roles:
@@ -153,6 +190,22 @@ def _is_allowed_to_use_desk() -> bool:
 	return False
 
 
+def get_product_module_access(user: str | None = None) -> dict[str, bool]:
+	target_user = str(user or frappe.session.user or "").strip()
+	if not target_user or target_user == "Guest":
+		return {key: False for key in SMART_MODULE_ROUTES}
+
+	user_roles = _get_user_roles(target_user)
+	return {
+		key: (SMART_MODULE_ROLES.get(key) in user_roles)
+		for key in SMART_MODULE_ROUTES
+	}
+
+
+def _is_allowed_to_use_module(module_key: str, user: str | None = None) -> bool:
+	return bool(get_product_module_access(user).get(str(module_key or "").strip(), False))
+
+
 def before_request():
 	"""
 	Hard-gate /app for non-admin users.
@@ -170,7 +223,7 @@ def before_request():
 
 	# Hard-gate Desk routes first (prevents non-admin users from ever seeing /app* HTML).
 	if _is_desk_path(path) and not _is_allowed_to_use_desk():
-		_redirect("/smart", 302)
+		_redirect(SMART_SELECTOR_ROUTE, 302)
 
 	# Always prefer product login (avoid exposing Desk/ERPNext login UI to end users)
 	if path == "/login":
@@ -181,10 +234,14 @@ def before_request():
 	if path == "/signup":
 		_redirect("/smart/signup", 302)
 
-	# Ensure /smart always requires login (avoid showing a half-broken shell to Guest)
+	# Ensure product routes always require login (avoid showing a half-broken shell to Guest)
 	# We route Guests to a product-branded login page under /smart/login, not Desk's /login.
-	if _is_smart_path(path) and frappe.session.user == "Guest" and path not in SMART_PUBLIC_PATHS:
+	if _is_product_path(path) and frappe.session.user == "Guest" and path not in SMART_PUBLIC_PATHS:
 		_redirect(f"/smart/login?redirect-to={path}", 302)
+
+	module_key = _module_for_path(path)
+	if module_key and not _is_allowed_to_use_module(module_key):
+		_redirect(f"{SMART_SELECTOR_ROUTE}?denied={module_key}", 302)
 
 	# Non-desk routes continue as normal.
 	if not _is_desk_path(path):

@@ -34,9 +34,11 @@
 ### 1.3 2026-01：已落地 UI 能力清单（Smart Board）
 
 - **导航/入口**
-  - `/smart`：产品壳入口（对外/日常入口）
+  - `/smart`：平台 selector / module chooser
+  - `/smart-accounting`：当前对外/日常 Accounting 入口
+  - `/smart-grants`：未来 Grants 模块占位入口
   - 左侧 Sidebar：包含 `Home`、`Report`、Boards、`Archived Projects`、`Clients`、`Archived Clients`、`Automation Logs`、`Settings`
-  - 普通 board 使用统一 SVG icon；`/smart` 页面显式注入 icon symbols，避免 website 页缺少 Desk icon 资源
+  - 普通 board 使用统一 SVG icon；`/smart-accounting` 页面显式注入 icon symbols，避免 website 页缺少 Desk icon 资源
 - **表格（BoardTable）**
   - ✅ 虚拟滚动（大量项目）+ ✅ 无限滚动分页（infinite scroll）
   - ✅ 行内编辑：text/select/date/link/multi-link/attachment
@@ -218,9 +220,9 @@
 
 ---
 
-## 4.3 产品壳（/smart）与 Desk（/app）的 UI 边界（2026-01 更新）
+## 4.3 产品壳（/smart）与 Desk（/app）的 UI 边界（2026-03 更新）
 
-> **结论**：外部用户使用 **`/smart`**（Website Shell），不在 Desk（`/app`）中进行日常操作。
+> **结论**：外部用户先进入 **`/smart`**（Website Shell selector），再进入 **`/smart-accounting`**；`/smart-grants` 当前只作为占位模块入口，不在 Desk（`/app`）中进行日常操作。
 
 ### 原则
 - ✅ **不覆盖 ERPNext Desk 顶栏/导航**：Desk 只给管理员/内部使用，避免升级风险
@@ -228,8 +230,12 @@
 
 ### 现状落地（已实现）
 - `/smart`：
+  - 平台 selector / module chooser
+- `/smart-accounting`：
   - 移除 website 默认 navbar/breadcrumb/footer
   - 自定义 topbar（通知按钮、头像下拉菜单）
+- `/smart-grants`：
+  - Placeholder shell（Coming soon）
 - `/app/project-management`：
   - 作为内部入口保留（按需加载 Smart Board），但不作为对外产品入口
 
