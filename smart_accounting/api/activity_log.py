@@ -586,4 +586,3 @@ _PROJECT_ACTIVITY_UNDO_FIELDS = {
 	"expected_end_date",
 }
 
-

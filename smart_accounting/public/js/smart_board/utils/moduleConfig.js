@@ -1,0 +1,125 @@
+const SHARED_PROJECT_FIELDS = new Set([
+  'project_name',
+  'customer',
+  'status',
+  'notes',
+  'modified',
+]);
+
+const ACCOUNTING_PROJECT_FIELDS = new Set([
+  'custom_entity_type',
+  'custom_customer_entity',
+  '__sb_project_monthly_completion',
+  'project_type',
+  'company',
+  'priority',
+  'custom_softwares',
+  'custom_engagement_letter',
+  'expected_end_date',
+  'custom_lodgement_due_date',
+  'custom_project_frequency',
+  'custom_target_month',
+  'custom_fiscal_year',
+  'custom_year_end',
+  'custom_reset_date',
+  'custom_ato_status',
+  'custom_lodgeit_status',
+  'custom_company_agent_status',
+  'custom_xeroquickbooks_status',
+  'estimated_costing',
+  'is_active',
+]);
+
+const GRANTS_PROJECT_FIELDS = new Set([
+  'project_type',
+  'custom_grants_fy_label',
+  'custom_grants_abn_snapshot',
+  'custom_grants_partner_label',
+  'custom_grants_referral_text',
+  'custom_grants_owner_name',
+  'custom_grants_address_snapshot',
+  'custom_grants_contact_name',
+  'custom_grants_primary_communication',
+  'custom_grants_status',
+  'custom_ap_submit_date',
+  'custom_industry_approval_date',
+  'custom_tax_lodgement_date',
+  'custom_rebate_amount_text',
+  'custom_fee_percentage_text',
+]);
+
+export function getModuleKey(explicitKey = null) {
+  const raw = String(
+    explicitKey
+      || window.smart_accounting?.module_key
+      || 'accounting'
+  ).trim().toLowerCase();
+  return raw === 'grants' ? 'grants' : 'accounting';
+}
+
+export function isProjectColumnAllowed(field, moduleKey = null) {
+  const key = getModuleKey(moduleKey);
+  const f = String(field || '').trim();
+  if (!f) return false;
+  if (f.startsWith('team:') || f.startsWith('__sb_')) return true;
+  if (SHARED_PROJECT_FIELDS.has(f)) return true;
+  if (key === 'grants') return GRANTS_PROJECT_FIELDS.has(f);
+  return ACCOUNTING_PROJECT_FIELDS.has(f);
+}
+
+export function getProjectColumnCatalogForModule(catalog = [], moduleKey = null, { includeHidden = true } = {}) {
+  return (Array.isArray(catalog) ? catalog : [])
+    .filter((c) => includeHidden ? true : !c?.hidden)
+    .filter((c) => isProjectColumnAllowed(c?.field, moduleKey))
+    .map((c) => ({ ...c }));
+}
+
+export function filterProjectColumnsForModule(columnsConfig = [], moduleKey = null, { viewType = '' } = {}) {
+  const key = getModuleKey(moduleKey);
+  const list = (Array.isArray(columnsConfig) ? columnsConfig : [])
+    .filter((c) => isProjectColumnAllowed(c?.field, key))
+    .map((c) => ({ ...c }));
+
+  if (key === 'grants' && String(viewType || '').trim() === 'Smart Grants') {
+    const hasAddress = list.some((c) => String(c?.field || '').trim() === 'custom_grants_address_snapshot');
+    if (!hasAddress) {
+      const addr = { field: 'custom_grants_address_snapshot', label: 'Address', width: 220 };
+      const contactIdx = list.findIndex((c) => String(c?.field || '').trim() === 'custom_grants_contact_name');
+      if (contactIdx >= 0) list.splice(contactIdx, 0, addr);
+      else list.push(addr);
+    }
+  }
+
+  return list;
+}
+
+export function getNewProjectModalConfig({ moduleKey = null, currentView = '' } = {}) {
+  const key = getModuleKey(moduleKey);
+  if (key === 'grants') {
+    return {
+      visibleFields: {
+        company: false,
+        fiscalYear: false,
+        projectType: false,
+        frequency: false,
+        grantFy: true,
+      },
+      requiredFields: ['project_name', 'customer'],
+      defaultValues: {
+        project_type: String(currentView || 'Smart Grants').trim() || 'Smart Grants',
+        custom_project_frequency: 'One-off',
+      },
+    };
+  }
+  return {
+    visibleFields: {
+      company: true,
+      fiscalYear: true,
+      projectType: true,
+      frequency: true,
+      grantFy: false,
+    },
+    requiredFields: ['project_name', 'customer', 'company', 'custom_fiscal_year', 'project_type'],
+    defaultValues: {},
+  };
+}

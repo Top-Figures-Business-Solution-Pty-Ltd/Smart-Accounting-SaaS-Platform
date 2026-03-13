@@ -46,7 +46,10 @@ export class Header {
                 
                 <!-- Right: Actions -->
                 <div class="header-right">
-                    ${renderHeaderActions(this.currentView, { isBoardView: isBoard })}
+                    ${renderHeaderActions(this.currentView, {
+                        isBoardView: isBoard,
+                        moduleKey: this.options?.moduleKey,
+                    })}
                 </div>
             </div>
         `;
@@ -55,6 +58,7 @@ export class Header {
     bindEvents() {
         bindHeaderActions(this.container, this.currentView, {
             isBoardView: this.isBoardView(),
+            moduleKey: this.options?.moduleKey,
             onAction: this.onAction,
             onShowFilter: () => this.showFilterDialog(),
         });

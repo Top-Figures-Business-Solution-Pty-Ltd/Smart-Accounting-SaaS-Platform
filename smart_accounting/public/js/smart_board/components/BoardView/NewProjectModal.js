@@ -11,11 +11,12 @@ import { getErrorMessage } from '../../utils/errorMessage.js';
 import { escapeHtml } from '../../utils/dom.js';
 
 export class NewProjectModal {
-  constructor({ title = 'New Project', initial = {}, fixedCustomer = null, lockCustomer = false, onSubmit, onCreateClient, onClose } = {}) {
+  constructor({ title = 'New Project', initial = {}, fixedCustomer = null, lockCustomer = false, formConfig = {}, onSubmit, onCreateClient, onClose } = {}) {
     this.title = title;
     this.initial = initial || {};
     this.fixedCustomer = String(fixedCustomer || '').trim();
     this.lockCustomer = !!lockCustomer;
+    this.formConfig = formConfig || {};
     this.onSubmit = onSubmit || (async () => {});
     this.onCreateClient = onCreateClient || null;
     this.onClose = onClose || (() => {});
@@ -29,6 +30,12 @@ export class NewProjectModal {
 
   async open() {
     this.close();
+    const visibleFields = this.formConfig?.visibleFields || {};
+    const showCompany = visibleFields.company !== false;
+    const showFiscalYear = visibleFields.fiscalYear !== false;
+    const showProjectType = visibleFields.projectType !== false;
+    const showFrequency = visibleFields.frequency !== false;
+    const showGrantFy = visibleFields.grantFy === true;
 
     const content = document.createElement('div');
     const customerRowHTML = this.lockCustomer
@@ -59,27 +66,42 @@ export class NewProjectModal {
 
         ${customerRowHTML}
 
-        <div class="sb-newproj__row">
-          <label class="sb-newproj__label">Company</label>
-          <div id="sbNewProjCompany"></div>
-        </div>
+        ${showCompany ? `
+          <div class="sb-newproj__row">
+            <label class="sb-newproj__label">Company</label>
+            <div id="sbNewProjCompany"></div>
+          </div>
+        ` : '<div id="sbNewProjCompany" style="display:none;"></div>'}
 
-        <div class="sb-newproj__row">
-          <label class="sb-newproj__label">Fiscal Year</label>
-          <div id="sbNewProjFiscalYear"></div>
-        </div>
+        ${showFiscalYear ? `
+          <div class="sb-newproj__row">
+            <label class="sb-newproj__label">Fiscal Year</label>
+            <div id="sbNewProjFiscalYear"></div>
+          </div>
+        ` : '<div id="sbNewProjFiscalYear" style="display:none;"></div>'}
 
-        <div class="sb-newproj__row">
-          <label class="sb-newproj__label">Project Type</label>
-          <div id="sbNewProjType"></div>
-        </div>
+        ${showGrantFy ? `
+          <div class="sb-newproj__row">
+            <label class="sb-newproj__label">Grant FY</label>
+            <input class="form-control" id="sbNewProjGrantFy" type="text" placeholder="e.g. FY25 / CY2025" />
+          </div>
+        ` : ''}
 
-        <div class="sb-newproj__row">
-          <label class="sb-newproj__label">Frequency</label>
-          <select class="form-control" id="sbNewProjFrequency">
-            <option value="" disabled selected>Loading...</option>
-          </select>
-        </div>
+        ${showProjectType ? `
+          <div class="sb-newproj__row">
+            <label class="sb-newproj__label">Project Type</label>
+            <div id="sbNewProjType"></div>
+          </div>
+        ` : '<div id="sbNewProjType" style="display:none;"></div>'}
+
+        ${showFrequency ? `
+          <div class="sb-newproj__row">
+            <label class="sb-newproj__label">Frequency</label>
+            <select class="form-control" id="sbNewProjFrequency">
+              <option value="" disabled selected>Loading...</option>
+            </select>
+          </div>
+        ` : '<select class="form-control" id="sbNewProjFrequency" style="display:none;"></select>'}
 
         <div class="sb-newproj__error text-danger" id="sbNewProjError" style="display:none;"></div>
       </div>
@@ -111,6 +133,8 @@ export class NewProjectModal {
     // Populate initial values
     const nameEl = content.querySelector('#sbNewProjName');
     if (nameEl) nameEl.value = this.initial.project_name || '';
+    const grantFyEl = content.querySelector('#sbNewProjGrantFy');
+    if (grantFyEl) grantFyEl.value = this.initial.custom_grants_fy_label || '';
 
     // Link inputs
     const customerInitial = this.fixedCustomer || this.initial.customer || null;
@@ -249,6 +273,7 @@ export class NewProjectModal {
       customer: String(this.fixedCustomer || this._readValueFromLinkInput('Customer') || '').trim(),
       company: this._readValueFromLinkInput('Company'),
       custom_fiscal_year: this._readValueFromLinkInput('Fiscal Year'),
+      custom_grants_fy_label: String(this._root?.querySelector?.('#sbNewProjGrantFy')?.value || '').trim(),
       project_type: this._readValueFromLinkInput('Project Type'),
       custom_project_frequency: String(freqSel?.value || '').trim(),
     };
@@ -314,19 +339,22 @@ export class NewProjectModal {
 
   async _handleSubmit() {
     this._setError('');
+    const required = new Set(Array.isArray(this.formConfig?.requiredFields) ? this.formConfig.requiredFields : []);
     const name = String(this._root?.querySelector?.('#sbNewProjName')?.value || '').trim();
     const customer = this.fixedCustomer || this._readValueFromLinkInput('Customer');
     const company = this._readValueFromLinkInput('Company');
     const custom_fiscal_year = this._readValueFromLinkInput('Fiscal Year');
+    const custom_grants_fy_label = String(this._root?.querySelector?.('#sbNewProjGrantFy')?.value || '').trim();
     const project_type = this._readValueFromLinkInput('Project Type');
     const custom_project_frequency = String(this._root?.querySelector?.('#sbNewProjFrequency')?.value || '').trim();
 
     const missing = [];
-    if (!name) missing.push('Project Name');
-    if (!customer) missing.push('Client');
-    if (!company) missing.push('Company');
-    if (!custom_fiscal_year) missing.push('Fiscal Year');
-    if (!project_type) missing.push('Project Type');
+    if (required.has('project_name') && !name) missing.push('Project Name');
+    if (required.has('customer') && !customer) missing.push('Client');
+    if (required.has('company') && !company) missing.push('Company');
+    if (required.has('custom_fiscal_year') && !custom_fiscal_year) missing.push('Fiscal Year');
+    if (required.has('project_type') && !project_type) missing.push('Project Type');
+    if (required.has('custom_grants_fy_label') && !custom_grants_fy_label) missing.push('Grant FY');
     if (missing.length) {
       this._setError(`Please fill: ${missing.join(', ')}`);
       return;
@@ -340,8 +368,9 @@ export class NewProjectModal {
         customer,
         company,
         custom_fiscal_year,
+        custom_grants_fy_label,
         project_type,
-        custom_project_frequency: custom_project_frequency || 'Yearly',
+        custom_project_frequency: custom_project_frequency || this.formConfig?.defaultValues?.custom_project_frequency || 'Yearly',
       });
       this.close();
     } catch (e) {

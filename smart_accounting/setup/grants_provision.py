@@ -1,0 +1,250 @@
+from __future__ import annotations
+
+import frappe
+from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
+
+
+SMART_ACCOUNTING_ROLE = "Smart Accounting User"
+SMART_GRANTS_ROLE = "Smart Grants User"
+SMART_GRANTS_PROJECT_TYPE = "Smart Grants"
+
+PERMISSION_SOURCE_DOCTYPES = [
+    "Company",
+    "Contact",
+    "Customer",
+    "Fiscal Year",
+    "Page",
+    "Project",
+    "Project Type",
+    "Saved View",
+    "Task",
+]
+
+
+def _ensure_role() -> None:
+    if frappe.db.exists("Role", SMART_GRANTS_ROLE):
+        return
+    doc = frappe.get_doc(
+        {
+            "doctype": "Role",
+            "role_name": SMART_GRANTS_ROLE,
+            "desk_access": 0,
+            "home_page": "/smart",
+        }
+    )
+    doc.insert(ignore_permissions=True)
+
+
+def _ensure_project_type() -> None:
+    if frappe.db.exists("Project Type", SMART_GRANTS_PROJECT_TYPE):
+        return
+    doc = frappe.get_doc(
+        {
+            "doctype": "Project Type",
+            "project_type": SMART_GRANTS_PROJECT_TYPE,
+        }
+    )
+    doc.insert(ignore_permissions=True)
+
+
+def _project_custom_fields() -> list[dict]:
+    return [
+        {
+            "fieldname": "custom_grants_section",
+            "label": "Grants",
+            "fieldtype": "Section Break",
+            "insert_after": "notes",
+        },
+        {
+            "fieldname": "custom_grants_fy_label",
+            "label": "Grant FY",
+            "fieldtype": "Data",
+            "insert_after": "custom_grants_section",
+        },
+        {
+            "fieldname": "custom_grants_abn_snapshot",
+            "label": "ABN",
+            "fieldtype": "Data",
+            "insert_after": "custom_grants_fy_label",
+        },
+        {
+            "fieldname": "custom_grants_partner_label",
+            "label": "Partner",
+            "fieldtype": "Data",
+            "insert_after": "custom_grants_abn_snapshot",
+        },
+        {
+            "fieldname": "custom_grants_referral_text",
+            "label": "Referral",
+            "fieldtype": "Data",
+            "insert_after": "custom_grants_partner_label",
+        },
+        {
+            "fieldname": "custom_grants_contact_section",
+            "label": "Grants Contact",
+            "fieldtype": "Section Break",
+            "insert_after": "custom_grants_referral_text",
+        },
+        {
+            "fieldname": "custom_grants_owner_name",
+            "label": "Responsible Person",
+            "fieldtype": "Data",
+            "insert_after": "custom_grants_contact_section",
+        },
+        {
+            "fieldname": "custom_grants_contact_name",
+            "label": "Contact Name",
+            "fieldtype": "Data",
+            "insert_after": "custom_grants_owner_name",
+        },
+        {
+            "fieldname": "custom_grants_address_snapshot",
+            "label": "Address",
+            "fieldtype": "Small Text",
+            "insert_after": "custom_grants_contact_name",
+        },
+        {
+            "fieldname": "custom_grants_primary_communication",
+            "label": "Primary Communication",
+            "fieldtype": "Small Text",
+            "insert_after": "custom_grants_address_snapshot",
+        },
+        {
+            "fieldname": "custom_grants_progress_section",
+            "label": "Grants Progress",
+            "fieldtype": "Section Break",
+            "insert_after": "custom_grants_primary_communication",
+        },
+        {
+            "fieldname": "custom_grants_status",
+            "label": "Application Progress",
+            "fieldtype": "Data",
+            "insert_after": "custom_grants_progress_section",
+        },
+        {
+            "fieldname": "custom_ap_submit_date",
+            "label": "AP Submit Date",
+            "fieldtype": "Date",
+            "insert_after": "custom_grants_status",
+        },
+        {
+            "fieldname": "custom_industry_approval_date",
+            "label": "Industry Approval Date",
+            "fieldtype": "Date",
+            "insert_after": "custom_ap_submit_date",
+        },
+        {
+            "fieldname": "custom_tax_lodgement_date",
+            "label": "Tax Lodgement Date",
+            "fieldtype": "Date",
+            "insert_after": "custom_industry_approval_date",
+        },
+        {
+            "fieldname": "custom_rebate_amount_text",
+            "label": "Rebate Amount",
+            "fieldtype": "Data",
+            "insert_after": "custom_tax_lodgement_date",
+        },
+        {
+            "fieldname": "custom_fee_percentage_text",
+            "label": "Fee Percentage",
+            "fieldtype": "Data",
+            "insert_after": "custom_rebate_amount_text",
+        },
+    ]
+
+
+def _ensure_custom_fields() -> None:
+    create_custom_fields({"Project": _project_custom_fields()}, update=True)
+
+
+def _permission_rows_for(role: str) -> set[tuple[str, int]]:
+    rows = frappe.get_all(
+        "Custom DocPerm",
+        filters={"role": role},
+        fields=["parent", "permlevel"],
+        limit_page_length=500,
+    )
+    return {
+        (str(row.get("parent") or "").strip(), int(row.get("permlevel") or 0))
+        for row in (rows or [])
+        if str(row.get("parent") or "").strip()
+    }
+
+
+def _clone_docperms() -> None:
+    source_rows = frappe.get_all(
+        "Custom DocPerm",
+        filters={
+            "role": SMART_ACCOUNTING_ROLE,
+            "parent": ["in", PERMISSION_SOURCE_DOCTYPES],
+        },
+        fields=[
+            "parent",
+            "permlevel",
+            "read",
+            "write",
+            "create",
+            "delete",
+            "submit",
+            "cancel",
+            "amend",
+            "report",
+            "export",
+            "import",
+            "share",
+            "print",
+            "email",
+            "select",
+            "if_owner",
+        ],
+        order_by="parent asc, permlevel asc",
+        limit_page_length=500,
+    )
+    existing = _permission_rows_for(SMART_GRANTS_ROLE)
+
+    for row in source_rows or []:
+        parent = str(row.get("parent") or "").strip()
+        permlevel = int(row.get("permlevel") or 0)
+        if not parent or (parent, permlevel) in existing:
+            continue
+
+        doc = frappe.new_doc("Custom DocPerm")
+        doc.parent = parent
+        doc.role = SMART_GRANTS_ROLE
+        doc.permlevel = permlevel
+        for key in (
+            "read",
+            "write",
+            "create",
+            "delete",
+            "submit",
+            "cancel",
+            "amend",
+            "report",
+            "export",
+            "import",
+            "share",
+            "print",
+            "email",
+            "select",
+            "if_owner",
+        ):
+            setattr(doc, key, int(row.get(key) or 0))
+        doc.insert(ignore_permissions=True)
+        existing.add((parent, permlevel))
+
+
+def provision() -> dict:
+    _ensure_role()
+    _ensure_project_type()
+    _ensure_custom_fields()
+    _clone_docperms()
+    frappe.clear_cache(doctype="Project")
+    frappe.clear_cache(doctype="Project Type")
+    return {
+        "role": SMART_GRANTS_ROLE,
+        "project_type": SMART_GRANTS_PROJECT_TYPE,
+        "custom_fields": [d["fieldname"] for d in _project_custom_fields() if d.get("fieldtype") != "Section Break"],
+        "permission_doctypes": PERMISSION_SOURCE_DOCTYPES,
+    }

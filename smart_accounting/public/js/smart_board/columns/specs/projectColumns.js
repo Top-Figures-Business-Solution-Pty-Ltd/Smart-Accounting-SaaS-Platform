@@ -592,12 +592,62 @@ export function makeProjectColumnSpecs() {
         return ed;
       }
     },
+    {
+      field: 'custom_ap_submit_date',
+      isEditable: true,
+      renderEditor: ({ cellEl, project, manager, field }) => {
+        const contentEl = cellEl.querySelector('.cell-content') || cellEl;
+        const ed = new InlineDateEditor(contentEl, { initialValue: project?.[field] || '' });
+        mountEditorHelpers(manager, contentEl, ed);
+        return ed;
+      }
+    },
+    {
+      field: 'custom_industry_approval_date',
+      isEditable: true,
+      renderEditor: ({ cellEl, project, manager, field }) => {
+        const contentEl = cellEl.querySelector('.cell-content') || cellEl;
+        const ed = new InlineDateEditor(contentEl, { initialValue: project?.[field] || '' });
+        mountEditorHelpers(manager, contentEl, ed);
+        return ed;
+      }
+    },
+    {
+      field: 'custom_tax_lodgement_date',
+      isEditable: true,
+      renderEditor: ({ cellEl, project, manager, field }) => {
+        const contentEl = cellEl.querySelector('.cell-content') || cellEl;
+        const ed = new InlineDateEditor(contentEl, { initialValue: project?.[field] || '' });
+        mountEditorHelpers(manager, contentEl, ed);
+        return ed;
+      }
+    },
 
     // (5) Notes - textarea expand
     {
       field: 'notes',
       isEditable: true,
       cellClass: 'sb-col-notes',
+      renderEditor: ({ cellEl, project, manager, field }) => {
+        const contentEl = cellEl.querySelector('.cell-content') || cellEl;
+        const ed = new InlineTextareaEditor(contentEl, { initialValue: project?.[field] || '' });
+        mountEditorHelpers(manager, contentEl, ed);
+        return ed;
+      }
+    },
+    {
+      field: 'custom_grants_address_snapshot',
+      isEditable: true,
+      renderEditor: ({ cellEl, project, manager, field }) => {
+        const contentEl = cellEl.querySelector('.cell-content') || cellEl;
+        const ed = new InlineTextareaEditor(contentEl, { initialValue: project?.[field] || '' });
+        mountEditorHelpers(manager, contentEl, ed);
+        return ed;
+      }
+    },
+    {
+      field: 'custom_grants_primary_communication',
+      isEditable: true,
       renderEditor: ({ cellEl, project, manager, field }) => {
         const contentEl = cellEl.querySelector('.cell-content') || cellEl;
         const ed = new InlineTextareaEditor(contentEl, { initialValue: project?.[field] || '' });

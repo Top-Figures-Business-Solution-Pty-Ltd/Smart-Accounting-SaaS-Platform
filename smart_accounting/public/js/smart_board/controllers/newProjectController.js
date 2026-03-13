@@ -9,6 +9,7 @@ import { openNewClientFlow } from './newClientController.js';
 import { notify } from '../services/uiAdapter.js';
 import { isDesk } from '../utils/env.js';
 import { BoardStatusService } from '../services/boardStatusService.js';
+import { getNewProjectModalConfig } from '../utils/moduleConfig.js';
 
 export async function openNewProjectFlow({ app, viewType } = {}) {
   // Desk keeps the existing behavior (open ERPNext form).
@@ -18,6 +19,7 @@ export async function openNewProjectFlow({ app, viewType } = {}) {
   }
 
   const currentView = String(viewType || app?.currentView || '').trim();
+  const moduleKey = app?.moduleKey || 'accounting';
   const store = app?.store || null;
   const stateFilters = store?.getState?.()?.filters || {};
   const fixedCustomer = (currentView === 'client-projects')
@@ -29,16 +31,32 @@ export async function openNewProjectFlow({ app, viewType } = {}) {
     return null;
   }
 
+  const formConfig = getNewProjectModalConfig({ moduleKey, currentView });
+  const defaultValues = { ...(formConfig?.defaultValues || {}) };
+  if (moduleKey === 'grants') {
+    if (!defaultValues.company) {
+      defaultValues.company = await ProjectCreateService.getDefaultCompany();
+    }
+    if (!defaultValues.custom_fiscal_year) {
+      defaultValues.custom_fiscal_year = String(stateFilters?.fiscal_year || '').trim()
+        || await ProjectCreateService.getDefaultFiscalYear();
+    }
+  }
+
   const modal = new NewProjectModal({
     title: 'New Project',
     initial: {
-      project_type: (currentView === 'client-projects') ? null : (currentView || null),
+      project_type: defaultValues.project_type || ((currentView === 'client-projects') ? null : (currentView || null)),
       // If user has an active fiscal_year filter, reuse it for creation.
-      fiscal_year: stateFilters?.fiscal_year || null,
+      fiscal_year: defaultValues.custom_fiscal_year || stateFilters?.fiscal_year || null,
+      company: defaultValues.company || null,
+      custom_project_frequency: defaultValues.custom_project_frequency || null,
       customer: fixedCustomer || null,
+      custom_grants_fy_label: defaultValues.custom_grants_fy_label || null,
     },
     fixedCustomer: fixedCustomer || null,
     lockCustomer: currentView === 'client-projects',
+    formConfig,
     onCreateClient: async ({ initialName, onCreated } = {}) => {
       if (currentView === 'client-projects') return;
       await openNewClientFlow({
@@ -63,7 +81,14 @@ export async function openNewProjectFlow({ app, viewType } = {}) {
         }
       }
 
-      const doc = await ProjectCreateService.createProject({ ...payload, status });
+      const finalPayload = {
+        ...defaultValues,
+        ...payload,
+        status,
+      };
+      const doc = await ProjectCreateService.createProject(finalPayload, {
+        requiredFields: formConfig?.requiredFields,
+      });
       notify('Project created', 'green');
       if (currentView === 'client-projects') {
         // Keep client scope and refresh cross-project-type list.
@@ -71,7 +96,7 @@ export async function openNewProjectFlow({ app, viewType } = {}) {
       } else {
         // Refresh current board list so newly created row appears and columns/hydration are consistent.
         const last = store?.getState?.()?.projects?.lastFilters || null;
-        const base = { ...(last || {}), project_type: payload.project_type };
+        const base = { ...(last || {}), project_type: finalPayload.project_type };
         try {
           await store?.dispatch?.('projects/fetchProjects', base);
         } catch (e) {

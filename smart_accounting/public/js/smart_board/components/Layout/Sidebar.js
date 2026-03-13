@@ -9,6 +9,10 @@ export class Sidebar {
         this.options = options;
         this.projectTypes = options.projectTypes || [];
         this.currentView = options.currentView || 'ITR';
+        this.allowedViews = Array.isArray(options.allowedViews) ? options.allowedViews : null;
+        this.showBoardSettings = options.showBoardSettings !== false;
+        this.showArchivedProjects = options.showArchivedProjects !== false;
+        this.showCreateProjectType = options.showCreateProjectType !== false;
         this.onViewChange = options.onViewChange || (() => {});
         this.onBoardMenuAction = options.onBoardMenuAction || (() => {});
         this._onContainerClick = null;
@@ -19,56 +23,80 @@ export class Sidebar {
     }
     
     render() {
+        const productItems = [];
+        const otherItems = [];
+        const canSee = (view) => this._isViewVisible(view);
+
+        if (canSee('dashboard')) {
+            productItems.push(`
+                <a href="#" class="nav-item" data-view="dashboard">
+                    <span class="nav-icon">🏠</span>
+                    <span class="nav-label">Home</span>
+                </a>
+            `);
+        }
+        if (canSee('report')) {
+            productItems.push(`
+                <a href="#" class="nav-item" data-view="report">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-label">Report</span>
+                </a>
+            `);
+        }
+        if (canSee('clients')) {
+            otherItems.push(`
+                <a href="#" class="nav-item" data-view="clients">
+                    <span class="nav-icon">👥</span>
+                    <span class="nav-label">Clients</span>
+                </a>
+            `);
+        }
+        if (canSee('archived-clients')) {
+            otherItems.push(`
+                <a href="#" class="nav-item" data-view="archived-clients">
+                    <span class="nav-icon">🗃️</span>
+                    <span class="nav-label">Archived Clients</span>
+                </a>
+            `);
+        }
+        if (canSee('automation-logs')) {
+            otherItems.push(`
+                <a href="#" class="nav-item" data-view="automation-logs">
+                    <span class="nav-icon">🤖</span>
+                    <span class="nav-label">Automation Logs</span>
+                </a>
+            `);
+        }
+        if (canSee('settings')) {
+            otherItems.push(`
+                <a href="#" class="nav-item" data-view="settings">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-label">Settings</span>
+                </a>
+            `);
+        }
+
+        const productSection = productItems.length
+            ? `
+                <div class="nav-section">
+                    ${productItems.join('')}
+                </div>
+            `
+            : '';
+        const boardsSection = this.renderProjectTypes();
+        const otherSection = otherItems.length
+            ? `
+                <div class="nav-section">
+                    ${otherItems.join('')}
+                </div>
+            `
+            : '';
+        const sections = [productSection, boardsSection, otherSection].filter(Boolean);
+
         this.container.innerHTML = `
             <div class="sidebar-wrapper">
-                <!-- Navigation -->
                 <nav class="sidebar-nav">
-                    <!-- Home -->
-                    <div class="nav-section">
-                        <a href="#" class="nav-item" data-view="dashboard">
-                            <span class="nav-icon">🏠</span>
-                            <span class="nav-label">Home</span>
-                        </a>
-                        <a href="#" class="nav-item" data-view="report">
-                            <span class="nav-icon">📊</span>
-                            <span class="nav-label">Report</span>
-                        </a>
-                    </div>
-                    
-                    <!-- Divider -->
-                    <div class="nav-divider"></div>
-                    
-                    <!-- Project Types -->
-                    <div class="nav-section">
-                        <div class="nav-section-title sb-boards-title">
-                            <span>Boards</span>
-                            <button type="button" class="sb-boards-settings" id="sbBoardsSettings" title="Board settings">⚙️</button>
-                        </div>
-                        ${this.renderProjectTypes()}
-                    </div>
-                    
-                    <!-- Divider -->
-                    <div class="nav-divider"></div>
-                    
-                    <!-- Other Pages -->
-                    <div class="nav-section">
-                        <a href="#" class="nav-item" data-view="clients">
-                            <span class="nav-icon">👥</span>
-                            <span class="nav-label">Clients</span>
-                        </a>
-                        <a href="#" class="nav-item" data-view="archived-clients">
-                            <span class="nav-icon">🗃️</span>
-                            <span class="nav-label">Archived Clients</span>
-                        </a>
-                        <a href="#" class="nav-item" data-view="automation-logs">
-                            <span class="nav-icon">🤖</span>
-                            <span class="nav-label">Automation Logs</span>
-                        </a>
-                        <a href="#" class="nav-item" data-view="settings">
-                            <span class="nav-icon">⚙️</span>
-                            <span class="nav-label">Settings</span>
-                        </a>
-                    </div>
+                    ${sections.join('<div class="nav-divider"></div>')}
                 </nav>
             </div>
         `;
@@ -78,16 +106,28 @@ export class Sidebar {
     }
     
     renderProjectTypes() {
+        if ((!this.projectTypes || this.projectTypes.length === 0) && !this.showCreateProjectType) {
+            return '';
+        }
+
         if (!this.projectTypes || this.projectTypes.length === 0) {
             return `
-                <div class="nav-empty">
-                    <div class="text-muted" style="padding: 8px 20px; font-size: 13px;">
-                        No Project Types yet
+                <div class="nav-section">
+                    <div class="nav-section-title sb-boards-title">
+                        <span>Boards</span>
+                        ${this.showBoardSettings ? '<button type="button" class="sb-boards-settings" id="sbBoardsSettings" title="Board settings">⚙️</button>' : ''}
                     </div>
-                    <a href="#" class="nav-item" data-view="__create_project_type__">
-                        <span class="nav-icon">➕</span>
-                        <span class="nav-label">Create Project Type</span>
-                    </a>
+                    <div class="nav-empty">
+                        <div class="text-muted" style="padding: 8px 20px; font-size: 13px;">
+                            No Project Types yet
+                        </div>
+                        ${this.showCreateProjectType ? `
+                            <a href="#" class="nav-item" data-view="__create_project_type__">
+                                <span class="nav-icon">➕</span>
+                                <span class="nav-label">Create Project Type</span>
+                            </a>
+                        ` : ''}
+                    </div>
                 </div>
             `;
         }
@@ -107,16 +147,31 @@ export class Sidebar {
             </div>
         `).join('');
 
-        const archivedRow = `
+        const archivedRow = this.showArchivedProjects && this._isViewVisible('archived-projects') ? `
             <div class="sb-board-item sb-board-item--archived" data-board-item="archived-projects">
                 <a href="#" class="nav-item nav-item--archived" data-view="archived-projects">
                     <span class="nav-icon">🗄️</span>
                     <span class="nav-label">Archived Projects</span>
                 </a>
             </div>
-        `;
+        ` : '';
 
-        return `${dynamicRows}${archivedRow}`;
+        return `
+            <div class="nav-section">
+                <div class="nav-section-title sb-boards-title">
+                    <span>Boards</span>
+                    ${this.showBoardSettings ? '<button type="button" class="sb-boards-settings" id="sbBoardsSettings" title="Board settings">⚙️</button>' : ''}
+                </div>
+                ${dynamicRows}${archivedRow}
+            </div>
+        `;
+    }
+
+    _isViewVisible(view) {
+        const v = String(view || '').trim();
+        if (!v) return false;
+        if (!Array.isArray(this.allowedViews)) return true;
+        return this.allowedViews.includes(v);
     }
     
     bindEvents() {

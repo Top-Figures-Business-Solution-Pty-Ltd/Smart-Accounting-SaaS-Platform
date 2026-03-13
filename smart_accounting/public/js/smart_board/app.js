@@ -26,14 +26,30 @@ import {
     createSimpleFilterReset,
     createTransientBoardEntryFilterReset,
 } from './utils/filterState.js';
+import { filterProjectColumnsForModule } from './utils/moduleConfig.js';
 
 export class SmartBoardApp {
     constructor(container) {
         this.container = container;
         this.store = new Store();
+        const runtimeConfig = window.smart_accounting || {};
+        this.moduleKey = String(runtimeConfig?.module_key || 'accounting').trim().toLowerCase() === 'grants' ? 'grants' : 'accounting';
+        this.initialView = String(runtimeConfig?.initial_view || '').trim();
+        this.allowedViews = Array.isArray(runtimeConfig?.allowed_views)
+            ? runtimeConfig.allowed_views.map((x) => String(x || '').trim()).filter(Boolean)
+            : null;
+        this.allowedProjectTypes = Array.isArray(runtimeConfig?.allowed_project_types)
+            ? runtimeConfig.allowed_project_types.map((x) => String(x || '').trim()).filter(Boolean)
+            : null;
+        this.excludedProjectTypes = Array.isArray(runtimeConfig?.excluded_project_types)
+            ? runtimeConfig.excluded_project_types.map((x) => String(x || '').trim()).filter(Boolean)
+            : [];
+        this.sidebarOptions = (runtimeConfig?.sidebar_options && typeof runtimeConfig.sidebar_options === 'object')
+            ? runtimeConfig.sidebar_options
+            : {};
         const urlState = getUrlState();
         // 默认先落在 dashboard，避免系统还没加载 Project Type 时误用不存在的 type（例如 ITR）
-        this.currentView = urlState?.view || 'dashboard';
+        this.currentView = urlState?.view || this.initialView || 'dashboard';
         // Only treat URL customer param as meaningful for client-projects view
         this._initialUrlCustomer = (this.currentView === 'client-projects') ? String(urlState?.customer || '').trim() : '';
         this._initialUrlStatus = (this.currentView === 'status-projects') ? String(urlState?.status || '').trim() : '';
@@ -46,8 +62,55 @@ export class SmartBoardApp {
         this._scopedProjectName = '';
         this._scopedProjectView = '';
         this._automationLogsFilters = {};
+        if (!this._isConfiguredViewAllowed(this.currentView)) {
+            this.currentView = this._resolveFallbackView();
+        }
         
         this.init();
+    }
+
+    _isConfiguredProductViewAllowed(viewType) {
+        const view = String(viewType || '').trim();
+        if (!view) return false;
+        if (this.allowedViews === null) return true;
+        return this.allowedViews.includes(view);
+    }
+
+    _isConfiguredProjectTypeAllowed(projectType) {
+        const value = String(projectType || '').trim();
+        if (!value) return false;
+        if (this.allowedProjectTypes !== null && !this.allowedProjectTypes.includes(value)) {
+            return false;
+        }
+        return !this.excludedProjectTypes.includes(value);
+    }
+
+    _isConfiguredViewAllowed(viewType) {
+        const view = String(viewType || '').trim();
+        if (!view) return false;
+        if (typeof ViewTypes?.isProductView === 'function' && ViewTypes.isProductView(view)) {
+            return this._isConfiguredProductViewAllowed(view);
+        }
+        if (this._isArchivedView(view)) {
+            return this._isConfiguredProductViewAllowed(view);
+        }
+        return this._isConfiguredProjectTypeAllowed(view);
+    }
+
+    _resolveFallbackView() {
+        if (this.initialView && this._isConfiguredViewAllowed(this.initialView)) {
+            return this.initialView;
+        }
+        if (Array.isArray(this.projectTypes) && this.projectTypes.length) {
+            return this.projectTypes[0].value;
+        }
+        if (this._isConfiguredProductViewAllowed('dashboard')) {
+            return 'dashboard';
+        }
+        if (Array.isArray(this.allowedViews) && this.allowedViews.length) {
+            return this.allowedViews[0];
+        }
+        return 'dashboard';
     }
     
     init() {
@@ -88,6 +151,10 @@ export class SmartBoardApp {
             onViewChange: (viewType, opts) => this.handleViewChange(viewType, opts),
             onBoardSettings: () => this.handleHeaderAction('board_settings'),
             onBoardMenuAction: (action, viewType) => this.handleBoardMenuAction(action, viewType),
+            allowedViews: this.allowedViews,
+            showBoardSettings: this.sidebarOptions.showBoardSettings,
+            showArchivedProjects: this.sidebarOptions.showArchivedProjects,
+            showCreateProjectType: this.sidebarOptions.showCreateProjectType,
         });
         
         // 初始化头部
@@ -95,6 +162,7 @@ export class SmartBoardApp {
         this.header = new Header(headerContainer, {
             currentView: this.currentView,
             isBoardView: (viewType) => this.isBoardView(viewType),
+            moduleKey: this.moduleKey,
             store: this.store,
             onAction: (action, data) => this.handleHeaderAction(action, data)
         });
@@ -233,7 +301,11 @@ export class SmartBoardApp {
                     return [];
                 };
 
-                const cols = sanitizeProjectColumnsConfig(parseColumns(view?.columns));
+                const cols = filterProjectColumnsForModule(
+                    sanitizeProjectColumnsConfig(parseColumns(view?.columns)),
+                    this.moduleKey,
+                    { viewType }
+                );
                 const viewFiltersPayload = ViewService.normalizeFilters(view?.filters);
                 // Derive the current first visible project column from Saved View config.
                 // Sorting rule:
@@ -334,6 +406,7 @@ export class SmartBoardApp {
     }
 
     _isLoadableView(viewType) {
+        if (!this._isConfiguredViewAllowed(viewType)) return false;
         return this.isBoardView(viewType)
             || viewType === 'dashboard'
             || viewType === 'clients'
@@ -449,11 +522,13 @@ export class SmartBoardApp {
 
     async loadProjectTypes() {
         const names = await ProjectTypeService.fetchProjectTypes();
-        this.projectTypes = names.map((name) => ({
-            value: name,
-            label: name,
-            icon: PROJECT_TYPE_ICONS[name] || DEFAULT_PROJECT_TYPE_ICON
-        }));
+        this.projectTypes = names
+            .filter((name) => this._isConfiguredProjectTypeAllowed(name))
+            .map((name) => ({
+                value: name,
+                label: name,
+                icon: PROJECT_TYPE_ICONS[name] || DEFAULT_PROJECT_TYPE_ICON
+            }));
 
         // 如果系统里有 Project Type：仅当 currentView 不是产品页且不是合法 board 时，才切到第一个
         if (
@@ -463,6 +538,9 @@ export class SmartBoardApp {
             !this.projectTypes.find(t => t.value === this.currentView)
         ) {
             this.currentView = this.projectTypes[0].value;
+        }
+        if (!this._isConfiguredViewAllowed(this.currentView)) {
+            this.currentView = this._resolveFallbackView();
         }
 
         // 刷新 Sidebar + Header 标题
@@ -474,6 +552,9 @@ export class SmartBoardApp {
     
     handleViewChange(viewType, { reselect = false } = {}) {
         console.log('View changed to:', viewType);
+        if (!this._isConfiguredViewAllowed(viewType)) {
+            return;
+        }
         // Reselect behavior:
         // - Clicking the already-active view should still be useful (Monday-like).
         // - We treat it as "close overlays / return focus to the board" without re-fetching data.
@@ -684,6 +765,10 @@ export class SmartBoardApp {
     openBoardForProject(project) {
         const pt = String(project?.project_type || '').trim();
         if (!pt) return;
+        if (!this._isConfiguredProjectTypeAllowed(pt)) {
+            notify('This project belongs to another module.', 'orange');
+            return;
+        }
 
         // Switch to the board view
         this._setCurrentView(pt);
@@ -703,6 +788,10 @@ export class SmartBoardApp {
         const name = String(project?.name || '').trim();
         const pt = String(project?.project_type || '').trim();
         if (!name || !pt) return;
+        if (!this._isConfiguredProjectTypeAllowed(pt)) {
+            notify('This project belongs to another module.', 'orange');
+            return;
+        }
 
         try {
             const st = this.store?.getState?.()?.filters || {};

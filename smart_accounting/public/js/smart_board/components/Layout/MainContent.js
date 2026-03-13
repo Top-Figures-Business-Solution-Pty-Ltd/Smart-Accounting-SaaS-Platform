@@ -11,6 +11,7 @@ import { ActivityLogApp } from '../ActivityLogView/ActivityLogApp.js';
 import { AutomationLogsApp } from '../AutomationLogsView/AutomationLogsApp.js';
 import { SettingsApp } from '../SettingsView/SettingsApp.js';
 import { ReportApp } from '../ReportView/ReportApp.js';
+import { openNewProjectFlow } from '../../controllers/newProjectController.js';
 
 const PRODUCT_APP_KEYS = [
     '_clientsApp',
@@ -96,6 +97,7 @@ export class MainContent {
         
         this.boardTable = new BoardTable(container, {
             viewType: this.currentView,
+            moduleKey: this.options?.app?.moduleKey,
             store: this.store,
             isBoardView: (viewType) => this.isBoardView(viewType),
             onSortChange: (payload) => this.options?.app?.applySort?.(payload),
@@ -193,13 +195,7 @@ export class MainContent {
     }
     
     createNewProject() {
-        // Website shell: use website-safe modal flow
-        import('../../controllers/newProjectController.js')
-            .then(({ openNewProjectFlow }) => openNewProjectFlow({ app: this.options?.app, viewType: this.currentView }))
-            .catch(() => {
-                // Fallback: call app if available
-                try { this.options?.app?.createNewProject?.(); } catch (e) {}
-            });
+        return openNewProjectFlow({ app: this.options?.app, viewType: this.currentView });
     }
 
     hidePlaceholder() {

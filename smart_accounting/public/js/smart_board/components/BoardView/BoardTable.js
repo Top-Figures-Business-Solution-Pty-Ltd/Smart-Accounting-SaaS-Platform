@@ -27,12 +27,14 @@ import { sanitizeProjectColumnsConfig } from '../../utils/deprecatedColumns.js';
 import { ProjectActivityModal } from './ProjectActivityModal.js';
 import * as ViewTypes from '../../utils/viewTypes.js';
 import { SortModal } from './SortModal.js';
+import { getProjectColumnCatalogForModule, filterProjectColumnsForModule } from '../../utils/moduleConfig.js';
 
 export class BoardTable {
     constructor(container, options = {}) {
         this.container = container;
         this.options = options;
         this.viewType = options.viewType || 'ITR';
+        this.moduleKey = options.moduleKey || 'accounting';
         this.store = options.store;
         this.isBoardView = options.isBoardView || (() => false);
         this.onRowClick = options.onRowClick || (() => {});
@@ -165,13 +167,7 @@ export class BoardTable {
     }
 
     getAvailableColumnDefs(includeHidden = true) {
-        // Available columns = global Project column catalog (not tied to project_type)
-        // includeHidden:
-        // - true: include defs that are not shown in Columns Manager (for Saved View compatibility)
-        // - false: exclude hidden defs from selection UI
-        const base = (PROJECT_COLUMN_CATALOG || [])
-            .filter((c) => includeHidden ? true : !c?.hidden)
-            .map(c => ({ ...c }));
+        const base = getProjectColumnCatalogForModule(PROJECT_COLUMN_CATALOG || [], this.moduleKey, { includeHidden });
 
         // Derived role-based team columns: team:<Role>
         const roles = this._teamRoles || TeamRoleService.peekRoles() || [];
@@ -307,7 +303,11 @@ export class BoardTable {
     }
 
     buildColumnsFromConfig(columnsConfig) {
-        const sanitized = sanitizeProjectColumnsConfig(columnsConfig);
+        const sanitized = filterProjectColumnsForModule(
+            sanitizeProjectColumnsConfig(columnsConfig),
+            this.moduleKey,
+            { viewType: this.viewType }
+        );
         const widths = loadColumnWidths(this.viewType) || {};
         // Include hidden defs so Saved View columns still render with proper labels.
         const defs = this.getAvailableColumnDefs(true);
@@ -353,7 +353,11 @@ export class BoardTable {
 
         const both = this._normalizeSavedViewColumns(view.columns);
         const cfgRaw = both.project || [];
-        const cfg = sanitizeProjectColumnsConfig(cfgRaw);
+        const cfg = filterProjectColumnsForModule(
+            sanitizeProjectColumnsConfig(cfgRaw),
+            this.moduleKey,
+            { viewType: this.viewType }
+        );
         const taskCfg = both.tasks || [];
         const nextTaskCols = this._migrateTaskColumns(taskCfg);
         this._taskCols = nextTaskCols;
@@ -364,7 +368,10 @@ export class BoardTable {
             const isLegacyArray = Array.isArray(raw);
             const tasksEmpty = !(Array.isArray(taskCfg) && taskCfg.length);
             const droppedDeprecated = Array.isArray(cfgRaw) && cfgRaw.length !== cfg.length;
-            if (view?.name && (isLegacyArray || tasksEmpty || droppedDeprecated)) {
+            const filteredByModule = Array.isArray(cfgRaw) && cfgRaw.length !== cfg.length;
+            const missingRequiredModuleCols = String(this.moduleKey || '') === 'grants'
+                && !(cfg || []).some((c) => String(c?.field || '').trim() === 'custom_grants_address_snapshot');
+            if (view?.name && (isLegacyArray || tasksEmpty || droppedDeprecated || filteredByModule || missingRequiredModuleCols)) {
                 await ViewService.updateView(view.name, { columns: { project: cfg || [], tasks: nextTaskCols } });
                 this._setSavedViewColumnsInMemory({ project: cfg || [], tasks: nextTaskCols });
             }

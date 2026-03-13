@@ -14,6 +14,7 @@
       <div class="smart-shell__brand">{{ brand_name or "Smart Accounting" }}</div>
     </div>
     <div class="smart-shell__actions">
+      <a class="btn btn-default btn-sm" href="/smart">Back to modules</a>
       <button class="smart-shell__icon-btn" id="btnNotifications" aria-label="Notifications" type="button" style="position:relative;">
         🔔
         <span id="notificationsBadge" style="display:none; position:absolute; top:-6px; right:-6px; min-width:18px; height:18px; padding:0 5px;
@@ -226,6 +227,9 @@
   }
 
   window.smart_accounting = window.smart_accounting || {};
+  window.smart_accounting.asset_version = "{{ build_version }}";
+  window.smart_accounting.module_key = "accounting";
+  window.smart_accounting.excluded_project_types = ["Smart Grants"];
   window.smart_accounting.set_shell_avatar = renderShellAvatar;
 
   frappe.call({ method: "smart_accounting.api.profile.get_my_profile" })

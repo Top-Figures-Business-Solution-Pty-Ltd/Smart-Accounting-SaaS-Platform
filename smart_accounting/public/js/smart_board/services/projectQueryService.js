@@ -78,6 +78,20 @@ export class ProjectQueryService {
       'custom_team_members',
       'custom_fiscal_year',
       'custom_year_end',
+      'custom_grants_fy_label',
+      'custom_grants_abn_snapshot',
+      'custom_grants_partner_label',
+      'custom_grants_referral_text',
+      'custom_grants_owner_name',
+      'custom_grants_address_snapshot',
+      'custom_grants_contact_name',
+      'custom_grants_primary_communication',
+      'custom_grants_status',
+      'custom_ap_submit_date',
+      'custom_industry_approval_date',
+      'custom_tax_lodgement_date',
+      'custom_rebate_amount_text',
+      'custom_fee_percentage_text',
       'custom_target_month',
       'custom_lodgement_due_date',
       'custom_reset_date',
@@ -100,6 +114,7 @@ export class ProjectQueryService {
       'expected_end_date',
       'notes',
       'is_active',
+      'custom_grants_status',
     ];
 
     // PERF:
