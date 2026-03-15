@@ -1,4 +1,5 @@
 import { BoardRow } from './BoardRow.js';
+import { escapeHtml } from '../../utils/dom.js';
 
 export function renderColGroup(columns) {
   const cols = Array.isArray(columns) ? columns : [];
