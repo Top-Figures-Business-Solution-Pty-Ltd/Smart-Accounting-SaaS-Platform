@@ -34,7 +34,7 @@ def get_context(context):
 		{
 			"key": "grants",
 			"title": "Smart Grants",
-			"description": "Future grants workspace placeholder. Business features will be added later.",
+		"description": "Grants workspace for project intake, tracking, and module-specific data management.",
 			"href": SMART_GRANTS_ROUTE,
 			"available": bool(module_access.get("grants")),
 			"status_text": "Available" if module_access.get("grants") else "No access",
