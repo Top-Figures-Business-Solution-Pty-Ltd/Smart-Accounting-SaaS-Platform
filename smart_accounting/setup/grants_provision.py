@@ -28,7 +28,7 @@ def _ensure_role() -> None:
         {
             "doctype": "Role",
             "role_name": SMART_GRANTS_ROLE,
-            "desk_access": 0,
+            "desk_access": 1,
             "home_page": "/smart",
         }
     )

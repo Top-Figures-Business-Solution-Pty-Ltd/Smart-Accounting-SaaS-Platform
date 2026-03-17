@@ -67,6 +67,15 @@ fixtures = [
             ]]
         ]
     },
+    # Module-specific Project Type records required by website entrypoints and board routing
+    {
+        "doctype": "Project Type",
+        "filters": [
+            ["name", "in", [
+                "Smart Grants"
+            ]]
+        ]
+    },
     # Role permissions (customized via Role Permission Manager).
     # NOTE: We intentionally export only the permissions for Smart platform module roles
     # to avoid pulling unrelated system-wide permission customizations into this app.
