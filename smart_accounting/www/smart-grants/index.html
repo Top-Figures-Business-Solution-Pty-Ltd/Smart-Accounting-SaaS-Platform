@@ -237,10 +237,10 @@
   window.smart_accounting.module_key = "grants";
   window.smart_accounting.initial_view = "{{ grants_project_type or 'Smart Grants' }}";
   window.smart_accounting.allowed_project_types = ["{{ grants_project_type or 'Smart Grants' }}"];
-  window.smart_accounting.allowed_views = ["settings"];
+  window.smart_accounting.allowed_views = ["clients", "client-projects", "archived-clients", "archived-projects", "settings"];
   window.smart_accounting.sidebar_options = {
     showBoardSettings: false,
-    showArchivedProjects: false,
+    showArchivedProjects: true,
     showCreateProjectType: false,
   };
   window.smart_accounting.set_shell_avatar = renderShellAvatar;

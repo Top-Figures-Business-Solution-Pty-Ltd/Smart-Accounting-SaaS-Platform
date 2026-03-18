@@ -88,8 +88,27 @@ export class Header {
         
         return viewTitles[this.currentView] || this.currentView;
     }
+
+    getModuleLabel() {
+        return String(this.options?.moduleKey || '').trim() === 'grants'
+            ? 'Smart Grants'
+            : 'Smart Accounting';
+    }
     
     getViewSubtitle() {
+        const moduleLabel = this.getModuleLabel();
+        if (this.currentView === 'clients') {
+            return `Showing clients with ${moduleLabel} project counts.`;
+        }
+        if (this.currentView === 'client-projects') {
+            return `Projects in ${moduleLabel} for the selected client.`;
+        }
+        if (this.currentView === 'archived-clients') {
+            return `Clients archived within ${moduleLabel}.`;
+        }
+        if (this.currentView === 'archived-projects') {
+            return `Archived projects in ${moduleLabel}.`;
+        }
         return '';
     }
     

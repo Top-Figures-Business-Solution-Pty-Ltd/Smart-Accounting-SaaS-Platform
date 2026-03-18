@@ -226,7 +226,7 @@ export class MainContent {
                 appKey: '_clientsApp',
                 create: (mount) => new ClientsApp(mount, {
                     store: this.store,
-                    canArchive: true,
+                    canArchive: this.options?.app?.moduleKey === 'accounting',
                     onOpenProjects: (client) => {
                         try { this.options?.app?.openCustomerProjects?.(client); } catch (e) {}
                     }
@@ -238,7 +238,7 @@ export class MainContent {
                 create: (mount) => new ClientsApp(mount, {
                     store: this.store,
                     archivedMode: true,
-                    canRestore: true,
+                    canRestore: this.options?.app?.moduleKey === 'accounting',
                 }),
             },
             'client-projects': {

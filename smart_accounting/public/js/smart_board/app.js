@@ -112,6 +112,20 @@ export class SmartBoardApp {
         }
         return 'dashboard';
     }
+
+    _getProjectScopeFilters() {
+        const out = {};
+        const allowed = Array.isArray(this.allowedProjectTypes)
+            ? this.allowedProjectTypes.map((x) => String(x || '').trim()).filter(Boolean)
+            : [];
+        const excluded = Array.isArray(this.excludedProjectTypes)
+            ? this.excludedProjectTypes.map((x) => String(x || '').trim()).filter(Boolean)
+            : [];
+        if (allowed.length === 1) out.project_type = allowed[0];
+        else if (allowed.length > 1) out.project_type_in = allowed;
+        if (excluded.length) out.excluded_project_types = excluded;
+        return out;
+    }
     
     init() {
         // 清空容器
@@ -259,7 +273,7 @@ export class SmartBoardApp {
         // Client Projects: a cross-project-type view, still backed by Projects module
         if (viewType === 'client-projects') {
             const stateFilters = this.store?.getState?.()?.filters || {};
-            const merged = { ...stateFilters };
+            const merged = { ...stateFilters, ...this._getProjectScopeFilters() };
             // Keep payload minimal; this view is read-only.
             merged.fields = ['name', 'project_name', 'customer', 'project_type', 'status', 'modified'];
             await this.store.dispatch('projects/fetchProjects', merged);
@@ -270,7 +284,7 @@ export class SmartBoardApp {
 
         // v2: board view 默认仍按 project_type 过滤（Saved View.filters 只是“默认配置来源”，不会阻塞删除 Project Type）
         const base = this._isArchivedView(viewType)
-            ? { project_type: null, is_active: false }
+            ? { ...this._getProjectScopeFilters(), is_active: false }
             : (projectTypeValues.has(viewType) ? { project_type: viewType, is_active: true } : {});
 
         const stateFilters = this.store?.getState?.()?.filters || {};
@@ -835,9 +849,10 @@ export class SmartBoardApp {
         this._setCurrentView('client-projects');
         this._clientProjects = { customer, customer_name: client?.customer_name || customer };
 
-        // Apply customer filter; do NOT set project_type so all project types are included
+        // Apply customer filter within the current module scope.
         this.applyFilters(createSimpleFilterReset({
             customer,
+            ...this._getProjectScopeFilters(),
         }));
         this._scopedCustomer = customer;
     }

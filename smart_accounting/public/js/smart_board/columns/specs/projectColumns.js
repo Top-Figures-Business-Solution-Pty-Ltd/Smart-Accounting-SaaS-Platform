@@ -597,7 +597,7 @@ export function makeProjectColumnSpecs() {
       isEditable: true,
       renderEditor: ({ cellEl, project, manager, field }) => {
         const contentEl = cellEl.querySelector('.cell-content') || cellEl;
-        const ed = new InlineDateEditor(contentEl, { initialValue: project?.[field] || '' });
+        const ed = new InlineTextEditor(contentEl, { initialValue: project?.[field] || '' });
         mountEditorHelpers(manager, contentEl, ed);
         return ed;
       }
@@ -607,7 +607,7 @@ export function makeProjectColumnSpecs() {
       isEditable: true,
       renderEditor: ({ cellEl, project, manager, field }) => {
         const contentEl = cellEl.querySelector('.cell-content') || cellEl;
-        const ed = new InlineDateEditor(contentEl, { initialValue: project?.[field] || '' });
+        const ed = new InlineTextEditor(contentEl, { initialValue: project?.[field] || '' });
         mountEditorHelpers(manager, contentEl, ed);
         return ed;
       }
@@ -617,7 +617,7 @@ export function makeProjectColumnSpecs() {
       isEditable: true,
       renderEditor: ({ cellEl, project, manager, field }) => {
         const contentEl = cellEl.querySelector('.cell-content') || cellEl;
-        const ed = new InlineDateEditor(contentEl, { initialValue: project?.[field] || '' });
+        const ed = new InlineTextEditor(contentEl, { initialValue: project?.[field] || '' });
         mountEditorHelpers(manager, contentEl, ed);
         return ed;
       }

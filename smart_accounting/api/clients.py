@@ -26,6 +26,63 @@ def _normalize_int(v: Any, default: int) -> int:
 		return int(default)
 
 
+def _parse_json_if_string(value: Any) -> Any:
+	if not isinstance(value, str):
+		return value
+	text = value.strip()
+	if not text:
+		return value
+	try:
+		return frappe.parse_json(text)
+	except Exception:
+		return value
+
+
+def _normalize_str_list(value: Any) -> list[str]:
+	parsed = _parse_json_if_string(value)
+	if parsed is None:
+		return []
+	if isinstance(parsed, (list, tuple, set)):
+		return [str(x).strip() for x in parsed if str(x).strip()]
+	text = str(parsed or "").strip()
+	return [text] if text else []
+
+
+def _append_project_scope_filters(
+	filters: list[list[Any]],
+	*,
+	project_types: Any = None,
+	excluded_project_types: Any = None,
+) -> list[list[Any]]:
+	allowed = _normalize_str_list(project_types)
+	excluded = _normalize_str_list(excluded_project_types)
+	if allowed:
+		filters.append(["project_type", "in", allowed])
+	if excluded:
+		filters.append(["project_type", "not in", excluded])
+	return filters
+
+
+def _group_project_counts(filters: list[list[Any]]) -> dict[str, int]:
+	try:
+		rows = frappe.get_all(
+			"Project",
+			filters=filters,
+			fields=["customer", "count(name) as project_count"],
+			group_by="customer",
+			limit_page_length=100000,
+		)
+	except Exception:
+		rows = []
+	out: dict[str, int] = {}
+	for row in rows or []:
+		customer = str(row.get("customer") or "").strip()
+		if not customer:
+			continue
+		out[customer] = int(row.get("project_count") or 0)
+	return out
+
+
 def _pick_default(doctype: str, preferred_name: str) -> str | None:
 	"""Best-effort pick a default value for Link fields like Customer Group / Territory."""
 	try:
@@ -126,6 +183,9 @@ def get_clients(
 	limit_page_length: int = 50,
 	include_disabled: int = 0,
 	disabled_only: int = 0,
+	project_type: str | None = None,
+	project_types: Any = None,
+	excluded_project_types: Any = None,
 ) -> dict:
 	"""
 	List Customers with an entity summary (from Customer Entity child table).
@@ -144,6 +204,26 @@ def get_clients(
 	q = (search or "").strip()
 	limit_start = max(0, _normalize_int(limit_start, 0))
 	limit_page_length = max(1, min(200, _normalize_int(limit_page_length, 50)))
+	project_types = _normalize_str_list(project_types)
+	if not project_types and str(project_type or "").strip():
+		project_types = [str(project_type or "").strip()]
+	excluded_project_types = _normalize_str_list(excluded_project_types)
+
+	relevant_project_filters: list[list[Any]] = []
+	_append_project_scope_filters(
+		relevant_project_filters,
+		project_types=project_types,
+		excluded_project_types=excluded_project_types,
+	)
+	if int(disabled_only or 0):
+		relevant_project_filters.extend([
+			["is_active", "=", "No"],
+			["custom_archive_source", "=", "Client Archive"],
+		])
+		relevant_customer_names = _group_project_counts(relevant_project_filters)
+	else:
+		relevant_project_filters.append(["is_active", "=", "Yes"])
+		relevant_customer_names = _group_project_counts(relevant_project_filters)
 
 	fields = [
 		"name",
@@ -198,51 +278,32 @@ def get_clients(
 	last_project_type: dict[str, str] = {n: "" for n in names}
 
 	if names:
-		# Total counts across all projects (active + archived)
-		try:
-			rows_all = frappe.get_all(
-				"Project",
-				filters={"customer": ["in", names]},
-				fields=["customer", "count(name) as project_count"],
-				group_by="customer",
-				limit_page_length=100000,
+		base_project_filters = [["customer", "in", names]]
+		_append_project_scope_filters(
+			base_project_filters,
+			project_types=project_types,
+			excluded_project_types=excluded_project_types,
+		)
+
+		rows_all = _group_project_counts(list(base_project_filters))
+		for cn, count in rows_all.items():
+			if cn in total_project_counts:
+				total_project_counts[cn] = int(count or 0)
+
+		rows2 = _group_project_counts(list(base_project_filters) + [["is_active", "=", "Yes"]])
+		for cn, count in rows2.items():
+			if cn in active_project_counts:
+				active_project_counts[cn] = int(count or 0)
+
+		if frappe.db.has_column("Project", "custom_archive_source") and frappe.db.has_column("Project", "custom_archive_source_ref"):
+			rows_archived = _group_project_counts(
+				list(base_project_filters)
+				+ [["is_active", "=", "No"], ["custom_archive_source", "=", "Client Archive"]]
 			)
-			for r in rows_all or []:
-				cn = r.get("customer")
-				if cn in total_project_counts:
-					total_project_counts[cn] = int(r.get("project_count") or 0)
-		except Exception:
-			pass
-		# Active-only counts (best-effort; field exists in your Project customizations)
-		try:
-			rows2 = frappe.get_all(
-				"Project",
-				filters={"customer": ["in", names], "is_active": "Yes"},
-				fields=["customer", "count(name) as project_count"],
-				group_by="customer",
-				limit_page_length=100000,
-			)
-			for r in rows2 or []:
-				cn = r.get("customer")
-				if cn in active_project_counts:
-					active_project_counts[cn] = int(r.get("project_count") or 0)
-		except Exception:
-			pass
-		# Archived-by-client counts only (used by Archived Clients view)
-		try:
-			if frappe.db.has_column("Project", "custom_archive_source") and frappe.db.has_column("Project", "custom_archive_source_ref"):
-				for cn in names:
-					client_archived_project_counts[cn] = int(frappe.db.count(
-						"Project",
-						filters={
-							"customer": cn,
-							"is_active": "No",
-							"custom_archive_source": "Client Archive",
-							"custom_archive_source_ref": cn,
-						},
-					) or 0)
-		except Exception:
-			pass
+			for cn, count in rows_archived.items():
+				if cn in client_archived_project_counts:
+					client_archived_project_counts[cn] = int(count or 0)
+
 		# Product rule:
 		# - Normal Clients table: show active-only project count
 		# - Archived Clients table: show only projects archived together with the client
@@ -250,9 +311,10 @@ def get_clients(
 
 		# Last project type (most recently modified project) per customer
 		try:
+			last_type_filters = list(base_project_filters)
 			rows3 = frappe.get_all(
 				"Project",
-				filters={"customer": ["in", names]},
+				filters=last_type_filters,
 				fields=["customer", "project_type", "modified"],
 				order_by="modified desc",
 				limit_page_length=5000,

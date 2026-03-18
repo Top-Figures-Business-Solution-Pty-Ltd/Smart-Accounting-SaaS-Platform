@@ -57,6 +57,37 @@ export function getModuleKey(explicitKey = null) {
   return raw === 'grants' ? 'grants' : 'accounting';
 }
 
+export function getAllowedProjectTypes(explicit = null) {
+  const source = Array.isArray(explicit)
+    ? explicit
+    : window.smart_accounting?.allowed_project_types;
+  return Array.isArray(source)
+    ? source.map((x) => String(x || '').trim()).filter(Boolean)
+    : [];
+}
+
+export function getExcludedProjectTypes(explicit = null) {
+  const source = Array.isArray(explicit)
+    ? explicit
+    : window.smart_accounting?.excluded_project_types;
+  return Array.isArray(source)
+    ? source.map((x) => String(x || '').trim()).filter(Boolean)
+    : [];
+}
+
+export function getModuleProjectTypeFilters({
+  allowedProjectTypes = null,
+  excludedProjectTypes = null,
+} = {}) {
+  const allowed = getAllowedProjectTypes(allowedProjectTypes);
+  const excluded = getExcludedProjectTypes(excludedProjectTypes);
+  const out = {};
+  if (allowed.length === 1) out.project_type = allowed[0];
+  else if (allowed.length > 1) out.project_type_in = allowed;
+  if (excluded.length) out.excluded_project_types = excluded;
+  return out;
+}
+
 export function isProjectColumnAllowed(field, moduleKey = null) {
   const key = getModuleKey(moduleKey);
   const f = String(field || '').trim();

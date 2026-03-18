@@ -1,5 +1,11 @@
 import { BoardRow } from './BoardRow.js';
-import { escapeHtml } from '../../utils/dom.js';
+
+function escapeHtml(input) {
+  const text = typeof input === 'string' ? input : String(input ?? '');
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
 
 export function renderColGroup(columns) {
   const cols = Array.isArray(columns) ? columns : [];

@@ -7,6 +7,11 @@ from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 SMART_ACCOUNTING_ROLE = "Smart Accounting User"
 SMART_GRANTS_ROLE = "Smart Grants User"
 SMART_GRANTS_PROJECT_TYPE = "Smart Grants"
+GRANTS_TEXT_DATE_FIELDS = (
+    "custom_ap_submit_date",
+    "custom_industry_approval_date",
+    "custom_tax_lodgement_date",
+)
 
 PERMISSION_SOURCE_DOCTYPES = [
     "Company",
@@ -124,19 +129,19 @@ def _project_custom_fields() -> list[dict]:
         {
             "fieldname": "custom_ap_submit_date",
             "label": "AP Submit Date",
-            "fieldtype": "Date",
+            "fieldtype": "Data",
             "insert_after": "custom_grants_status",
         },
         {
             "fieldname": "custom_industry_approval_date",
             "label": "Industry Approval Date",
-            "fieldtype": "Date",
+            "fieldtype": "Data",
             "insert_after": "custom_ap_submit_date",
         },
         {
             "fieldname": "custom_tax_lodgement_date",
             "label": "Tax Lodgement Date",
-            "fieldtype": "Date",
+            "fieldtype": "Data",
             "insert_after": "custom_industry_approval_date",
         },
         {
@@ -154,7 +159,54 @@ def _project_custom_fields() -> list[dict]:
     ]
 
 
+def _force_project_fieldtype_to_data(fieldname: str, length: int = 140) -> None:
+    fieldname = str(fieldname or "").strip()
+    if not fieldname:
+        return
+    custom_field_name = f"Project-{fieldname}"
+    if not frappe.db.exists("Custom Field", custom_field_name):
+        return
+
+    current_type = str(frappe.db.get_value("Custom Field", custom_field_name, "fieldtype") or "").strip()
+    if current_type != "Date":
+        return
+
+    rows = frappe.db.sql(f"SHOW COLUMNS FROM `tabProject` LIKE %s", (fieldname,), as_dict=True) or []
+    current_column_type = str((rows[0] or {}).get("Type") or "").strip().lower() if rows else ""
+    if "varchar" not in current_column_type:
+        frappe.db.sql(f"ALTER TABLE `tabProject` MODIFY COLUMN `{fieldname}` varchar({int(length or 140)})")
+    frappe.db.set_value(
+        "Custom Field",
+        custom_field_name,
+        {
+            "fieldtype": "Data",
+            "length": int(length or 140),
+        },
+        update_modified=False,
+    )
+
+
+def sync_grants_text_date_field_metadata() -> dict:
+    for fieldname in GRANTS_TEXT_DATE_FIELDS:
+        custom_field_name = f"Project-{fieldname}"
+        if not frappe.db.exists("Custom Field", custom_field_name):
+            continue
+        frappe.db.set_value(
+            "Custom Field",
+            custom_field_name,
+            {
+                "fieldtype": "Data",
+                "length": 140,
+            },
+            update_modified=False,
+        )
+    frappe.clear_cache(doctype="Project")
+    return {"updated_fields": list(GRANTS_TEXT_DATE_FIELDS)}
+
+
 def _ensure_custom_fields() -> None:
+    for fieldname in GRANTS_TEXT_DATE_FIELDS:
+        _force_project_fieldtype_to_data(fieldname)
     create_custom_fields({"Project": _project_custom_fields()}, update=True)
 
 

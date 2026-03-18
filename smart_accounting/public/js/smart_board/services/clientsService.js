@@ -4,9 +4,24 @@
  */
 import { Perf } from '../utils/perf.js';
 
+function getRuntimeProjectScope() {
+  const cfg = window.smart_accounting || {};
+  const allowed = Array.isArray(cfg?.allowed_project_types)
+    ? cfg.allowed_project_types.map((x) => String(x || '').trim()).filter(Boolean)
+    : [];
+  const excluded = Array.isArray(cfg?.excluded_project_types)
+    ? cfg.excluded_project_types.map((x) => String(x || '').trim()).filter(Boolean)
+    : [];
+  const out = {};
+  if (allowed.length) out.project_types = allowed;
+  if (excluded.length) out.excluded_project_types = excluded;
+  return out;
+}
+
 export class ClientsService {
   static async fetchClients({ search = '', limitStart = 0, limit = 50, includeDisabled = false, disabledOnly = false } = {}) {
     return await Perf.timeAsync('clients.get_clients', async () => {
+      const projectScope = getRuntimeProjectScope();
       const r = await frappe.call({
         method: 'smart_accounting.api.clients.get_clients',
         args: {
@@ -15,6 +30,7 @@ export class ClientsService {
           limit_page_length: Math.max(1, Number(limit) || 50),
           include_disabled: includeDisabled ? 1 : 0,
           disabled_only: disabledOnly ? 1 : 0,
+          ...(projectScope || {}),
         }
       });
       return {

@@ -2048,8 +2048,34 @@ def get_user_meta(users: Any) -> dict:
 	return out
 
 
+def _append_project_type_scope_filters(
+	base_filters: list,
+	project_type: str | None = None,
+	project_types: Any = None,
+	excluded_project_types: Any = None,
+) -> list:
+	pt = str(project_type or "").strip()
+	pts = [str(x).strip() for x in _normalize_list(project_types) if str(x).strip()]
+	excluded = [str(x).strip() for x in _normalize_list(excluded_project_types) if str(x).strip()]
+	if pt:
+		base_filters.append(["project_type", "=", pt])
+	elif pts:
+		base_filters.append(["project_type", "in", pts])
+	if excluded:
+		base_filters.append(["project_type", "not in", excluded])
+	return base_filters
+
+
 @frappe.whitelist()
-def query_project_names_advanced(project_type: str | None = None, groups: Any = None, limit: int = 2000, is_active_only: int = 1, search: str | None = None) -> dict:
+def query_project_names_advanced(
+	project_type: str | None = None,
+	project_types: Any = None,
+	excluded_project_types: Any = None,
+	groups: Any = None,
+	limit: int = 2000,
+	is_active_only: int = 1,
+	search: str | None = None,
+) -> dict:
 	"""
 	Resolve advanced filter groups to a list of Project names.
 
@@ -2104,8 +2130,12 @@ def query_project_names_advanced(project_type: str | None = None, groups: Any = 
 
 	def base_filters() -> list:
 		f = []
-		if project_type:
-			f.append(["project_type", "=", project_type])
+		_append_project_type_scope_filters(
+			f,
+			project_type=project_type,
+			project_types=project_types,
+			excluded_project_types=excluded_project_types,
+		)
 		if is_active_only:
 			f.append(["is_active", "=", "Yes"])
 		if search:
@@ -2344,6 +2374,8 @@ def search_project_names(
 	fields: Any = None,
 	*,
 	project_type: str | None = None,
+	project_types: Any = None,
+	excluded_project_types: Any = None,
 	is_active_only: int = 1,
 	limit: int = 5000,
 ) -> dict:
@@ -2427,9 +2459,12 @@ def search_project_names(
 	need_software_lookup = ("custom_softwares" in req_set) or ("software" in req_set)
 
 	base = []
-	pt = str(project_type or "").strip()
-	if pt:
-		base.append(["project_type", "=", pt])
+	_append_project_type_scope_filters(
+		base,
+		project_type=project_type,
+		project_types=project_types,
+		excluded_project_types=excluded_project_types,
+	)
 	if int(is_active_only or 0):
 		base.append(["is_active", "=", "Yes"])
 

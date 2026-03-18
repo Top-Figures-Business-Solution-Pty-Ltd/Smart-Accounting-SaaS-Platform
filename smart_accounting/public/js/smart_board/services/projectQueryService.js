@@ -148,6 +148,8 @@ export class ProjectQueryService {
             method: 'smart_accounting.api.project_board.query_project_names_advanced',
             args: {
               project_type: filters.project_type || null,
+              project_types: Array.isArray(filters?.project_type_in) ? filters.project_type_in : null,
+              excluded_project_types: Array.isArray(filters?.excluded_project_types) ? filters.excluded_project_types : null,
               groups: filters.advanced_groups,
               limit: resolveLimit,
               // Smart Board default: active-only (Archive => is_active="No" should disappear).
@@ -253,6 +255,8 @@ export class ProjectQueryService {
               search: rawSearch,
               fields: backendSearchFields,
               project_type: filters.project_type || null,
+              project_types: Array.isArray(filters?.project_type_in) ? filters.project_type_in : null,
+              excluded_project_types: Array.isArray(filters?.excluded_project_types) ? filters.excluded_project_types : null,
               is_active_only: filters.is_active === true ? 1 : 0,
               limit: resolveLimit,
             }
@@ -542,6 +546,12 @@ export class ProjectQueryService {
     // project_type筛选
     if (filters.project_type) {
       result.push(['project_type', '=', filters.project_type]);
+    }
+    if (Array.isArray(filters.project_type_in) && filters.project_type_in.length) {
+      result.push(['project_type', 'in', filters.project_type_in]);
+    }
+    if (Array.isArray(filters.excluded_project_types) && filters.excluded_project_types.length) {
+      result.push(['project_type', 'not in', filters.excluded_project_types]);
     }
 
     // status筛选（支持多选）
