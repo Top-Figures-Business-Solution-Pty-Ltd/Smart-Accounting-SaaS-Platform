@@ -655,6 +655,16 @@ export function makeProjectColumnSpecs() {
         return ed;
       }
     },
+    {
+      field: 'custom_grants_status',
+      isEditable: true,
+      renderEditor: ({ cellEl, project, manager, field }) => {
+        const contentEl = cellEl.querySelector('.cell-content') || cellEl;
+        const ed = new InlineTextareaEditor(contentEl, { initialValue: project?.[field] || '' });
+        mountEditorHelpers(manager, contentEl, ed);
+        return ed;
+      }
+    },
 
     // (7) Company - editable (Link to Company). Editor uses existing LinkInput.
     {

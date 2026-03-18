@@ -2124,7 +2124,7 @@
   "fetch_from": null,
   "fetch_if_empty": 0,
   "fieldname": "custom_grants_status",
-  "fieldtype": "Data",
+  "fieldtype": "Long Text",
   "hidden": 0,
   "hide_border": 0,
   "hide_days": 0,

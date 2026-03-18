@@ -12,6 +12,9 @@ GRANTS_TEXT_DATE_FIELDS = (
     "custom_industry_approval_date",
     "custom_tax_lodgement_date",
 )
+GRANTS_LONG_TEXT_FIELDS = (
+    "custom_grants_status",
+)
 
 PERMISSION_SOURCE_DOCTYPES = [
     "Company",
@@ -123,7 +126,7 @@ def _project_custom_fields() -> list[dict]:
         {
             "fieldname": "custom_grants_status",
             "label": "Application Progress",
-            "fieldtype": "Data",
+            "fieldtype": "Long Text",
             "insert_after": "custom_grants_progress_section",
         },
         {
@@ -202,6 +205,23 @@ def sync_grants_text_date_field_metadata() -> dict:
         )
     frappe.clear_cache(doctype="Project")
     return {"updated_fields": list(GRANTS_TEXT_DATE_FIELDS)}
+
+
+def sync_grants_long_text_field_metadata() -> dict:
+    for fieldname in GRANTS_LONG_TEXT_FIELDS:
+        custom_field_name = f"Project-{fieldname}"
+        if not frappe.db.exists("Custom Field", custom_field_name):
+            continue
+        frappe.db.set_value(
+            "Custom Field",
+            custom_field_name,
+            {
+                "fieldtype": "Long Text",
+            },
+            update_modified=False,
+        )
+    frappe.clear_cache(doctype="Project")
+    return {"updated_fields": list(GRANTS_LONG_TEXT_FIELDS)}
 
 
 def _ensure_custom_fields() -> None:
