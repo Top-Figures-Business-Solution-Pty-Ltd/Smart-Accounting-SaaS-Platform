@@ -33,13 +33,12 @@ export async function openNewProjectFlow({ app, viewType } = {}) {
 
   const formConfig = getNewProjectModalConfig({ moduleKey, currentView });
   const defaultValues = { ...(formConfig?.defaultValues || {}) };
+  if (!defaultValues.custom_fiscal_year) {
+    defaultValues.custom_fiscal_year = await ProjectCreateService.getCurrentFiscalYear();
+  }
   if (moduleKey === 'grants') {
     if (!defaultValues.company) {
       defaultValues.company = await ProjectCreateService.getDefaultCompany();
-    }
-    if (!defaultValues.custom_fiscal_year) {
-      defaultValues.custom_fiscal_year = String(stateFilters?.fiscal_year || '').trim()
-        || await ProjectCreateService.getDefaultFiscalYear();
     }
   }
 

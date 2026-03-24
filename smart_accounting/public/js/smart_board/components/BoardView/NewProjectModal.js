@@ -26,6 +26,7 @@ export class NewProjectModal {
     this._linkInputs = [];
     this._linkInputsByDoctype = new Map(); // key: doctype -> LinkInput
     this._initialSnapshot = null;
+    this._autoFrequencyApplied = false;
   }
 
   async open() {
@@ -181,6 +182,7 @@ export class NewProjectModal {
     this._modal = null;
     this._root = null;
     this._initialSnapshot = null;
+    this._autoFrequencyApplied = false;
   }
 
   _destroyInputs() {
@@ -210,7 +212,11 @@ export class NewProjectModal {
       placeholder: `Search ${displayLabel}...`,
       initialValue: initialValue || null,
       displayField: doctype === 'Customer' ? 'customer_name' : null,
-      onChange: () => {},
+      onChange: (value) => {
+        if (doctype === 'Project Type') {
+          this._syncFrequencyForProjectType(value, { emptyOnly: true });
+        }
+      },
     });
     this._linkInputs.push(li);
     this._linkInputsByDoctype.set(doctype, li);
@@ -266,6 +272,33 @@ export class NewProjectModal {
     return String(input?.value || '').trim();
   }
 
+  _isAdHocProjectType(projectType) {
+    return /\bad[\s-]?hoc\b/i.test(String(projectType || '').trim());
+  }
+
+  _syncFrequencyForProjectType(projectType, { emptyOnly = false } = {}) {
+    const freqSel = this._root?.querySelector?.('#sbNewProjFrequency');
+    if (!freqSel) return;
+    const current = String(freqSel.value || '').trim();
+    const shouldAutoOneOff = this._isAdHocProjectType(projectType);
+
+    if (shouldAutoOneOff) {
+      if (!current || !emptyOnly) {
+        const hasOneOff = Array.from(freqSel.options || []).some((opt) => String(opt?.value || '').trim() === 'One-off');
+        if (hasOneOff) {
+          freqSel.value = 'One-off';
+          this._autoFrequencyApplied = true;
+        }
+      }
+      return;
+    }
+
+    if (this._autoFrequencyApplied && current === 'One-off') {
+      freqSel.value = '';
+    }
+    this._autoFrequencyApplied = false;
+  }
+
   _snapshotForm() {
     const freqSel = this._root?.querySelector?.('#sbNewProjFrequency');
     return {
@@ -302,17 +335,18 @@ export class NewProjectModal {
       safe = [];
     }
     const list = safe.length ? safe : fallback;
-    freqSel.innerHTML = list
-      .map((x) => {
+    freqSel.innerHTML = [
+      '<option value="">Select frequency...</option>',
+      ...list.map((x) => {
         const v = String(x || '').trim();
         return `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`;
       })
-      .join('');
+    ].join('');
     const initial = String(this.initial.custom_project_frequency || this.initial.frequency || '').trim();
-    const preferred = initial && list.includes(initial)
-      ? initial
-      : (list.includes('Yearly') ? 'Yearly' : (list[0] || ''));
+    const preferred = initial && list.includes(initial) ? initial : '';
     if (preferred) freqSel.value = preferred;
+    else freqSel.value = '';
+    this._syncFrequencyForProjectType(this._readValueFromLinkInput('Project Type'), { emptyOnly: true });
   }
 
   async _handleCreateClient() {
@@ -370,7 +404,7 @@ export class NewProjectModal {
         custom_fiscal_year,
         custom_grants_fy_label,
         project_type,
-        custom_project_frequency: custom_project_frequency || this.formConfig?.defaultValues?.custom_project_frequency || 'Yearly',
+        custom_project_frequency: custom_project_frequency || this.formConfig?.defaultValues?.custom_project_frequency || '',
       });
       this.close();
     } catch (e) {

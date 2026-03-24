@@ -9,7 +9,7 @@ import { isDesk } from '../utils/env.js';
 
 export class ProjectCreateService {
   static _defaultCompany = undefined;
-  static _defaultFiscalYear = undefined;
+  static _currentFiscalYear = undefined;
 
   static async getDefaultCompany() {
     if (this._defaultCompany !== undefined) return this._defaultCompany;
@@ -30,8 +30,29 @@ export class ProjectCreateService {
     return this._defaultCompany;
   }
 
-  static async getDefaultFiscalYear() {
-    if (this._defaultFiscalYear !== undefined) return this._defaultFiscalYear;
+  static async getCurrentFiscalYear() {
+    if (this._currentFiscalYear !== undefined) return this._currentFiscalYear;
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      const r = await frappe.call({
+        method: 'frappe.client.get_list',
+        args: {
+          doctype: 'Fiscal Year',
+          fields: ['name'],
+          filters: [
+            ['year_start_date', '<=', today],
+            ['year_end_date', '>=', today],
+          ],
+          order_by: 'year_start_date desc, creation desc',
+          limit_page_length: 1,
+        }
+      });
+      this._currentFiscalYear = String(r?.message?.[0]?.name || '').trim();
+      if (this._currentFiscalYear) return this._currentFiscalYear;
+    } catch (e) {
+      this._currentFiscalYear = '';
+    }
+
     try {
       const r = await frappe.call({
         method: 'frappe.client.get_list',
@@ -42,11 +63,15 @@ export class ProjectCreateService {
           limit_page_length: 1,
         }
       });
-      this._defaultFiscalYear = String(r?.message?.[0]?.name || '').trim();
+      this._currentFiscalYear = String(r?.message?.[0]?.name || '').trim();
     } catch (e) {
-      this._defaultFiscalYear = '';
+      this._currentFiscalYear = '';
     }
-    return this._defaultFiscalYear;
+    return this._currentFiscalYear;
+  }
+
+  static async getDefaultFiscalYear() {
+    return await this.getCurrentFiscalYear();
   }
 
   /**
