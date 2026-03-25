@@ -12,6 +12,12 @@ from typing import Any
 
 import frappe
 
+from smart_accounting.api.notification_delivery import (
+	create_in_app_notifications,
+	get_enabled_notification_recipients,
+	send_notification_emails_safe,
+)
+
 
 def _ensure_logged_in() -> None:
 	if frappe.session.user in (None, "", "Guest"):
@@ -156,10 +162,6 @@ def add_project_update(project: str, content: str, mentions: Any = None) -> dict
 	mentions_list = list(dict.fromkeys(mentions_list))  # de-dupe, preserve order
 
 	if mentions_list:
-		# Keep in-app mentions independent from email delivery:
-		# - Notification Log insertion is muted (no implicit side-effects)
-		# - Mention emails are sent explicitly below
-		prev_mute = bool(getattr(frappe.flags, "mute_emails", False))
 		preview = frappe.utils.strip_html(content or "")
 		preview = (preview or "").strip()
 		if len(preview) > 240:
@@ -167,59 +169,32 @@ def add_project_update(project: str, content: str, mentions: Any = None) -> dict
 
 		project_title = frappe.db.get_value("Project", project, "project_name") or project
 		subject_base = f"{full_name} mentioned you in {project_title}"
+		valid_targets = get_enabled_notification_recipients(mentions_list, exclude_user=user)
 
-		# 1) In-app notifications (always)
-		frappe.flags.mute_emails = True
-		valid_targets: list[str] = []
-		try:
-			for target in mentions_list:
-				if target == user:
-					continue
-				# Validate enabled user
-				enabled = frappe.db.get_value("User", target, "enabled")
-				if not enabled:
-					continue
-				valid_targets.append(target)
-
-				n = frappe.new_doc("Notification Log")
-				n.type = "Mention"
-				n.for_user = target
-				n.from_user = user
-				n.document_type = "Project"
-				n.document_name = project
-				n.subject = subject_base
-				n.email_content = preview
-				# Link is optional; in /smart we'll navigate by document_type/name
-				n.insert(ignore_permissions=True)
-		except Exception:
-			# Never block posting updates because of notification side effects.
-			pass
-		finally:
-			# Restore flag no matter what.
-			frappe.flags.mute_emails = prev_mute
+		# 1) In-app notifications (always, never blocked by email config)
+		create_in_app_notifications(
+			valid_targets,
+			actor=user,
+			document_type="Project",
+			document_name=project,
+			subject=subject_base,
+			preview=preview,
+			notification_type="Mention",
+		)
 
 		# 2) Mention email notifications (only for @mentions)
 		# Fail-open: posting updates should still succeed even if mail is misconfigured.
-		for target in valid_targets:
-			try:
-				email = frappe.db.get_value("User", target, "email") or target
-				email = str(email or "").strip()
-				if not email:
-					continue
-
-				message_html = (
-					f"<p><b>{frappe.utils.escape_html(full_name)}</b> mentioned you in "
-					f"<b>{frappe.utils.escape_html(project_title)}</b>.</p>"
-					f"<p>{frappe.utils.escape_html(preview or '(no preview)')}</p>"
-				)
-				frappe.sendmail(
-					recipients=[email],
-					subject=subject_base,
-					message=message_html,
-					delayed=False,
-				)
-			except Exception:
-				continue
+		message_html = (
+			f"<p><b>{frappe.utils.escape_html(full_name)}</b> mentioned you in "
+			f"<b>{frappe.utils.escape_html(project_title)}</b>.</p>"
+			f"<p>{frappe.utils.escape_html(preview or '(no preview)')}</p>"
+		)
+		send_notification_emails_safe(
+			valid_targets,
+			subject=subject_base,
+			message_html=message_html,
+			context_label=f"project_mention:{project}",
+		)
 
 	return {
 		"item": {

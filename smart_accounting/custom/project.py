@@ -8,6 +8,11 @@ import json
 import frappe
 from frappe.utils import getdate, add_months, add_days, get_last_day
 from erpnext.projects.doctype.project.project import Project
+from smart_accounting.api.notification_delivery import (
+    create_in_app_notifications,
+    get_enabled_notification_recipients,
+    send_notification_emails_safe,
+)
 
 
 class CustomProject(Project):
@@ -941,18 +946,14 @@ def _send_automation_in_app_notifications(
     automation_name: str = "",
 ) -> None:
     """
-    Reuse the same in-app Notification Log channel used by @mentions.
-    Never raise from here: automation actions should not fail because of notification side effects.
+    Deliver automation notifications with in-app first, email second.
+    Both paths are fail-open so automation itself never breaks because of notification delivery.
     """
-    users = [str(u or "").strip() for u in (recipients or []) if str(u or "").strip()]
-    users = [u for u in users if u != "Guest"]
-    if not users:
-        return
-    users = list(dict.fromkeys(users))
-
     actor = str(getattr(frappe.session, "user", "") or "").strip() or "Administrator"
-    if actor != "Administrator":
-        users = [u for u in users if u != actor]
+    users = get_enabled_notification_recipients(
+        recipients,
+        exclude_user=None if actor == "Administrator" else actor,
+    )
     if not users:
         return
 
@@ -960,27 +961,25 @@ def _send_automation_in_app_notifications(
     auto_suffix = f" ({automation_name})" if automation_name else ""
     subject = f"Automation{auto_suffix} notified you in {title}"
     preview = f"Role: {role}"
-
-    prev_mute = bool(getattr(frappe.flags, "mute_emails", False))
-    frappe.flags.mute_emails = True
-    try:
-        for target in users:
-            enabled = frappe.db.get_value("User", target, "enabled")
-            if not enabled:
-                continue
-            n = frappe.new_doc("Notification Log")
-            n.type = "Mention"
-            n.for_user = target
-            n.from_user = actor
-            n.document_type = "Project"
-            n.document_name = project_name
-            n.subject = subject
-            n.email_content = preview
-            n.insert(ignore_permissions=True)
-    except Exception:
-        pass
-    finally:
-        frappe.flags.mute_emails = prev_mute
+    create_in_app_notifications(
+        users,
+        actor=actor,
+        document_type="Project",
+        document_name=project_name,
+        subject=subject,
+        preview=preview,
+        notification_type="Mention",
+    )
+    message_html = (
+        f"<p><b>{frappe.utils.escape_html(subject)}</b></p>"
+        f"<p>{frappe.utils.escape_html(preview or '(no preview)')}</p>"
+    )
+    send_notification_emails_safe(
+        users,
+        subject=subject,
+        message_html=message_html,
+        context_label=f"automation_notify:{project_name}",
+    )
 
 
 def _roll_date_by_frequency(current_date, frequency: str):
