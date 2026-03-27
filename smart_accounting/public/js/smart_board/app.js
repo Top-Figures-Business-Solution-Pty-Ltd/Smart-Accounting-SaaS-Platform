@@ -876,12 +876,15 @@ export class SmartBoardApp {
         const status = (this.currentView === 'status-projects')
             ? String((Array.isArray(state?.filters?.status) ? state.filters.status[0] : state?.filters?.status) || this._statusProjects || '').trim()
             : '';
+        const focusedProject = (String(this.currentView || '') === String(this._scopedProjectView || '').trim())
+            ? String(state?.filters?.focused_project_name || this._scopedProjectName || '').trim()
+            : '';
         // Only keep `customer` in URL for client-projects view to avoid confusing sticky filters on other pages.
         setUrlState({
             view: this.currentView,
             customer: (this.currentView === 'client-projects') ? (customer || '') : '',
             status,
-            project: '',
+            project: focusedProject,
         });
     }
     
