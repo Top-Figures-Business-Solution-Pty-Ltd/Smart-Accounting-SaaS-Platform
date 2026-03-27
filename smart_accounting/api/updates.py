@@ -9,22 +9,21 @@ Implementation strategy:
 from __future__ import annotations
 
 from contextlib import contextmanager
+from importlib import import_module
 from typing import Any
 from urllib.parse import urlencode
 
 import frappe
-from frappe.core.doctype.comment import comment as frappe_comment_module
 
 from smart_accounting.api.notification_delivery import (
 	create_in_app_notifications,
 	get_enabled_notification_recipients,
 	send_notification_emails_safe,
 )
-from smart_accounting.module_registry import (
-	SMART_ACCOUNTING_ROUTE,
-	SMART_GRANTS_PROJECT_TYPE,
-	SMART_GRANTS_ROUTE,
-)
+
+SMART_ACCOUNTING_ROUTE = "/smart-accounting"
+SMART_GRANTS_ROUTE = "/smart-grants"
+SMART_GRANTS_PROJECT_TYPE = "Smart Grants"
 
 
 def _ensure_logged_in() -> None:
@@ -50,6 +49,10 @@ def _suppress_frappe_comment_mentions():
 	Prevent Frappe's native Comment.after_insert mention handler from sending
 	a second, ERPNext-styled email for the same @mention.
 	"""
+	try:
+		frappe_comment_module = import_module("frappe.core.doctype.comment.comment")
+	except Exception:
+		frappe_comment_module = None
 	original = getattr(frappe_comment_module, "notify_mentions", None)
 	if not callable(original):
 		yield
