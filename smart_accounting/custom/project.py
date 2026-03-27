@@ -968,7 +968,7 @@ def _send_automation_in_app_notifications(
         document_name=project_name,
         subject=subject,
         preview=preview,
-        notification_type="Mention",
+        notification_type="Alert",
     )
     message_html = (
         f"<p><b>{frappe.utils.escape_html(subject)}</b></p>"

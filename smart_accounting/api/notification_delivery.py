@@ -72,9 +72,12 @@ def create_in_app_notifications(
 	subject: str,
 	preview: str = "",
 	notification_type: str = "Mention",
+	link: str = "",
 ) -> list[str]:
 	"""
-	Create Notification Log rows without triggering implicit emails.
+	Create Notification Log rows for in-app delivery only.
+	When possible, coerce the type to "Alert" so Frappe does not send its own
+	email template for the same notification.
 	Returns the users for whom insertion succeeded.
 	"""
 	users = _normalize_users(recipients)
@@ -88,13 +91,16 @@ def create_in_app_notifications(
 		for target in users:
 			try:
 				n = frappe.new_doc("Notification Log")
-				n.type = str(notification_type or "Mention").strip() or "Mention"
+				raw_type = str(notification_type or "Mention").strip() or "Mention"
+				n.type = "Alert" if raw_type != "Energy Point" else raw_type
 				n.for_user = target
 				n.from_user = actor
 				n.document_type = document_type
 				n.document_name = document_name
 				n.subject = subject
 				n.email_content = preview
+				if link:
+					n.link = str(link)
 				n.insert(ignore_permissions=True)
 				created.append(target)
 			except Exception as e:

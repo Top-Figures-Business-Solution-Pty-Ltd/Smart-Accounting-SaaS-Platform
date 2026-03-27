@@ -8,14 +8,22 @@ Implementation strategy:
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from typing import Any
+from urllib.parse import urlencode
 
 import frappe
+from frappe.core.doctype.comment import comment as frappe_comment_module
 
 from smart_accounting.api.notification_delivery import (
 	create_in_app_notifications,
 	get_enabled_notification_recipients,
 	send_notification_emails_safe,
+)
+from smart_accounting.module_registry import (
+	SMART_ACCOUNTING_ROUTE,
+	SMART_GRANTS_PROJECT_TYPE,
+	SMART_GRANTS_ROUTE,
 )
 
 
@@ -34,6 +42,47 @@ def _normalize_int(v: Any, default: int = 0) -> int:
 		return int(v)
 	except Exception:
 		return int(default)
+
+
+@contextmanager
+def _suppress_frappe_comment_mentions():
+	"""
+	Prevent Frappe's native Comment.after_insert mention handler from sending
+	a second, ERPNext-styled email for the same @mention.
+	"""
+	original = getattr(frappe_comment_module, "notify_mentions", None)
+	if not callable(original):
+		yield
+		return
+	try:
+		frappe_comment_module.notify_mentions = lambda *args, **kwargs: None
+		yield
+	finally:
+		frappe_comment_module.notify_mentions = original
+
+
+def _build_project_notification_context(project: str) -> dict[str, str]:
+	row = frappe.db.get_value(
+		"Project",
+		project,
+		["project_name", "project_type"],
+		as_dict=True,
+	) or {}
+	project_title = str(row.get("project_name") or project or "").strip() or project
+	project_type = str(row.get("project_type") or "").strip()
+	project_label = f"{project_title} from {project_type}" if project_type else project_title
+	route = SMART_GRANTS_ROUTE if project_type == SMART_GRANTS_PROJECT_TYPE else SMART_ACCOUNTING_ROUTE
+	params = {"project": project}
+	if project_type:
+		params["view"] = project_type
+	link = frappe.utils.get_url(f"{route}?{urlencode(params)}")
+	return {
+		"project_title": project_title,
+		"project_type": project_type,
+		"project_label": project_label,
+		"shell_link": link,
+		"shell_name": "Smart Grants" if route == SMART_GRANTS_ROUTE else "Smart Accounting",
+	}
 
 
 def _can_manage_update(row: dict, user: str) -> bool:
@@ -140,7 +189,8 @@ def add_project_update(project: str, content: str, mentions: Any = None) -> dict
 	c.comment_email = user
 
 	# Insert without requiring explicit Comment permissions; bounded by Project permission above.
-	c.insert(ignore_permissions=True)
+	with _suppress_frappe_comment_mentions():
+		c.insert(ignore_permissions=True)
 
 	# Optional: create in-app notifications for mentioned users.
 	mentions_raw = mentions if mentions is not None else frappe.form_dict.get("mentions")
@@ -167,8 +217,9 @@ def add_project_update(project: str, content: str, mentions: Any = None) -> dict
 		if len(preview) > 240:
 			preview = preview[:240] + "…"
 
-		project_title = frappe.db.get_value("Project", project, "project_name") or project
-		subject_base = f"{full_name} mentioned you in {project_title}"
+		project_ctx = _build_project_notification_context(project)
+		project_label = project_ctx["project_label"]
+		subject_base = f"{full_name} mentioned you in {project_label}"
 		valid_targets = get_enabled_notification_recipients(mentions_list, exclude_user=user)
 
 		# 1) In-app notifications (always, never blocked by email config)
@@ -179,15 +230,26 @@ def add_project_update(project: str, content: str, mentions: Any = None) -> dict
 			document_name=project,
 			subject=subject_base,
 			preview=preview,
-			notification_type="Mention",
+			notification_type="Alert",
+			link=project_ctx["shell_link"],
 		)
 
 		# 2) Mention email notifications (only for @mentions)
 		# Fail-open: posting updates should still succeed even if mail is misconfigured.
 		message_html = (
+			f"<div style='font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;'>"
 			f"<p><b>{frappe.utils.escape_html(full_name)}</b> mentioned you in "
-			f"<b>{frappe.utils.escape_html(project_title)}</b>.</p>"
-			f"<p>{frappe.utils.escape_html(preview or '(no preview)')}</p>"
+			f"<b>{frappe.utils.escape_html(project_label)}</b>.</p>"
+			f"<blockquote style='margin:16px 0;padding:12px 16px;border-left:4px solid #d1d5db;background:#f9fafb;'>"
+			f"{frappe.utils.escape_html(preview or '(no preview)')}"
+			f"</blockquote>"
+			f"<p style='margin:20px 0;'>"
+			f"<a href='{frappe.utils.escape_html(project_ctx['shell_link'])}' "
+			f"style='display:inline-block;padding:10px 16px;background:#2563eb;color:#ffffff;"
+			f"text-decoration:none;border-radius:8px;'>"
+			f"Open in {frappe.utils.escape_html(project_ctx['shell_name'])}"
+			f"</a></p>"
+			f"</div>"
 		)
 		send_notification_emails_safe(
 			valid_targets,

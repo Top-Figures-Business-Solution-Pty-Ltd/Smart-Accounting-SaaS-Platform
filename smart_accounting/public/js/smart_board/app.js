@@ -53,6 +53,7 @@ export class SmartBoardApp {
         // Only treat URL customer param as meaningful for client-projects view
         this._initialUrlCustomer = (this.currentView === 'client-projects') ? String(urlState?.customer || '').trim() : '';
         this._initialUrlStatus = (this.currentView === 'status-projects') ? String(urlState?.status || '').trim() : '';
+        this._initialUrlProject = String(urlState?.project || '').trim();
         this.projectTypes = [];   // 运行时从系统获取
         this._unsubscribers = [];
         this._onWindowResize = null;
@@ -222,6 +223,7 @@ export class SmartBoardApp {
             // If URL points to a scoped product view, seed filters before the first fetch.
             this._seedInitialScopedFilters();
             await this._reloadCurrentView({ syncUrl: false });
+            await this._openInitialProjectTarget();
             
             this.showLoading(false);
         } catch (error) {
@@ -504,6 +506,16 @@ export class SmartBoardApp {
             }));
             this._statusProjects = this._initialUrlStatus;
         }
+    }
+
+    async _openInitialProjectTarget() {
+        const projectName = String(this._initialUrlProject || '').trim();
+        if (!projectName) return;
+        this._initialUrlProject = '';
+        try {
+            await this.openProjectUpdatesByName(projectName);
+        } catch (e) {}
+        try { this._syncUrl?.(); } catch (e) {}
     }
 
     _clearScopedCustomerState() {
@@ -869,6 +881,7 @@ export class SmartBoardApp {
             view: this.currentView,
             customer: (this.currentView === 'client-projects') ? (customer || '') : '',
             status,
+            project: '',
         });
     }
     
