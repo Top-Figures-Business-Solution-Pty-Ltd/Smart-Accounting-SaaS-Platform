@@ -8,7 +8,8 @@
 export const ARCHIVED_PROJECTS_VIEW = 'archived-projects';
 export const REPORT_VIEW = 'report';
 export const AUTOMATION_LOGS_VIEW = 'automation-logs';
-export const PRODUCT_VIEWS = ['dashboard', 'clients', 'client-projects', 'status-projects', 'archived-clients', 'activity', 'settings', REPORT_VIEW, AUTOMATION_LOGS_VIEW];
+export const USERS_VIEW = 'users';
+export const PRODUCT_VIEWS = ['dashboard', 'clients', USERS_VIEW, 'client-projects', 'status-projects', 'archived-clients', 'activity', 'settings', REPORT_VIEW, AUTOMATION_LOGS_VIEW];
 
 export function isProductView(view) {
     return PRODUCT_VIEWS.includes(view);

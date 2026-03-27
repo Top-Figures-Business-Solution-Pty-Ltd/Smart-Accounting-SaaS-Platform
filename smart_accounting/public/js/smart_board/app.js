@@ -251,8 +251,8 @@ export class SmartBoardApp {
             await this.store.dispatch('clients/fetchClients', { search: '', limit: 50, disabledOnly: true });
             return;
         }
-        // Settings / Activity are product views (no board data needed)
-        if (viewType === 'settings' || viewType === 'activity' || viewType === 'report' || viewType === 'automation-logs') {
+        // Settings / Activity / Users are product views (no board data needed)
+        if (viewType === 'settings' || viewType === 'activity' || viewType === 'report' || viewType === 'automation-logs' || viewType === 'users') {
             return;
         }
         if (viewType === 'status-projects') {
@@ -427,6 +427,7 @@ export class SmartBoardApp {
             || viewType === 'client-projects'
             || viewType === 'status-projects'
             || viewType === 'archived-clients'
+            || viewType === 'users'
             || viewType === 'report'
             || viewType === 'automation-logs';
     }

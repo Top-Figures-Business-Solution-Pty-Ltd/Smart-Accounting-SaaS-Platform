@@ -11,6 +11,7 @@ import { ActivityLogApp } from '../ActivityLogView/ActivityLogApp.js';
 import { AutomationLogsApp } from '../AutomationLogsView/AutomationLogsApp.js';
 import { SettingsApp } from '../SettingsView/SettingsApp.js';
 import { ReportApp } from '../ReportView/ReportApp.js';
+import { UsersApp } from '../UsersView/UsersApp.js';
 import { openNewProjectFlow } from '../../controllers/newProjectController.js';
 
 const PRODUCT_APP_KEYS = [
@@ -21,6 +22,7 @@ const PRODUCT_APP_KEYS = [
     '_automationLogsApp',
     '_settingsApp',
     '_reportApp',
+    '_usersApp',
 ];
 
 export class MainContent {
@@ -39,6 +41,7 @@ export class MainContent {
         this._automationLogsApp = null;
         this._settingsApp = null;
         this._reportApp = null;
+        this._usersApp = null;
         
         this.render();
 
@@ -139,7 +142,7 @@ export class MainContent {
         this.currentView = view;
 
         // Non-board views should not show the projects table
-        if (view === 'clients' || view === 'client-projects' || view === 'status-projects' || view === 'archived-clients' || view === 'activity' || view === 'automation-logs' || view === 'settings' || view === 'report' || isPlaceholderView(view)) {
+        if (view === 'clients' || view === 'users' || view === 'client-projects' || view === 'status-projects' || view === 'archived-clients' || view === 'activity' || view === 'automation-logs' || view === 'settings' || view === 'report' || isPlaceholderView(view)) {
             this.showPlaceholder(view);
             return;
         }
@@ -240,6 +243,11 @@ export class MainContent {
                     archivedMode: true,
                     canRestore: this.options?.app?.moduleKey === 'accounting',
                 }),
+            },
+            'users': {
+                mountId: 'sbUsersMount',
+                appKey: '_usersApp',
+                create: (mount) => new UsersApp(mount),
             },
             'client-projects': {
                 mountId: 'sbClientProjectsMount',

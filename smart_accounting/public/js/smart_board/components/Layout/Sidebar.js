@@ -51,6 +51,14 @@ export class Sidebar {
                 </a>
             `);
         }
+        if (canSee('users')) {
+            otherItems.push(`
+                <a href="#" class="nav-item" data-view="users">
+                    <span class="nav-icon">🧑</span>
+                    <span class="nav-label">Users</span>
+                </a>
+            `);
+        }
         if (canSee('archived-clients')) {
             otherItems.push(`
                 <a href="#" class="nav-item" data-view="archived-clients">

@@ -76,6 +76,7 @@ export class Header {
             'Audit': 'Audit',
             'Financial Statements': 'Financial Statements',
             'clients': 'Clients',
+            'users': 'Users',
             'archived-clients': 'Archived Clients',
             'automation-logs': 'Automation Logs',
             'activity': 'Activity Log',
@@ -99,6 +100,9 @@ export class Header {
         const moduleLabel = this.getModuleLabel();
         if (this.currentView === 'clients') {
             return `Showing clients with ${moduleLabel} project counts.`;
+        }
+        if (this.currentView === 'users') {
+            return `Directory of users who can access ${moduleLabel}.`;
         }
         if (this.currentView === 'client-projects') {
             return `Projects in ${moduleLabel} for the selected client.`;
