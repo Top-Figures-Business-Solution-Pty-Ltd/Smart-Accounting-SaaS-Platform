@@ -3,6 +3,7 @@
  * - Client list state for /smart shell
  */
 import { ClientsService } from '../../services/clientsService.js';
+import { notify } from '../../services/uiAdapter.js';
 
 function _stableQueryKey(filters) {
   const f = { ...(filters || {}) };
@@ -107,8 +108,12 @@ export const ClientsModule = {
         if (Number(state.activeRequestSeq || 0) !== seq) return state;
         if (state.lastQueryKey !== key) return state;
         store.commit('clients/setClients', items);
-        store.commit('clients/setHasMore', Array.isArray(items) && items.length >= limit);
         store.commit('clients/setTotalCount', total);
+        if (total != null) {
+          store.commit('clients/setHasMore', (state.items || []).length < Number(total));
+        } else {
+          store.commit('clients/setHasMore', Array.isArray(items) && items.length >= limit);
+        }
         return state;
       } catch (e) {
         if (Number(state.activeRequestSeq || 0) === seq) store.commit('clients/setError', e?.message || String(e));
@@ -139,10 +144,17 @@ export const ClientsModule = {
         const total = r?.meta?.total_count;
         if (state.lastQueryKey !== key) return state;
         store.commit('clients/appendClients', items);
-        store.commit('clients/setHasMore', Array.isArray(items) && items.length >= limit);
         if (total != null) store.commit('clients/setTotalCount', total);
+        if (total != null) {
+          store.commit('clients/setHasMore', (state.items || []).length < Number(total));
+        } else {
+          store.commit('clients/setHasMore', Array.isArray(items) && items.length >= limit);
+        }
       } catch (e) {
-        store.commit('clients/setHasMore', false);
+        const message = e?.message || String(e || 'Failed to load more clients');
+        console.error('Failed to load more clients:', e);
+        store.commit('clients/setError', message);
+        notify(`Failed to load more clients: ${message}`, 'red');
       } finally {
         store.commit('clients/setLoadingMore', false);
       }

@@ -2,6 +2,7 @@ import { DEFAULT_COLUMNS } from './constants.js';
 import { sanitizeProjectColumnsConfig } from './deprecatedColumns.js';
 import { ViewService } from '../services/viewService.js';
 import { CLIENT_COLUMNS, getDefaultClientColumns, loadClientColumns } from './clientsColumns.js';
+import { ClientsService } from '../services/clientsService.js';
 import { notify } from '../services/uiAdapter.js';
 
 function esc(v) {
@@ -150,9 +151,20 @@ export async function exportSelectedProjectsCSV({ store, viewType, selectedNames
 }
 
 export async function exportCurrentClientsCSV({ store } = {}) {
-  const rows = store?.getState?.()?.clients?.items || [];
+  const clientState = store?.getState?.()?.clients || {};
+  const lastFilters = clientState?.lastFilters || { search: '' };
+  notify('Preparing full client export...', 'blue');
+  let rows = [];
+  try {
+    rows = await fetchAllClientsForExport(lastFilters);
+  } catch (e) {
+    const message = e?.message || String(e || 'Client export failed');
+    console.error('Client export failed:', e);
+    notify(`Client export failed: ${message}`, 'red');
+    return;
+  }
   if (!Array.isArray(rows) || !rows.length) {
-    notify('No loaded client rows to export.', 'orange');
+    notify('No client rows to export.', 'orange');
     return;
   }
   const fields = loadClientColumns() || getDefaultClientColumns();
@@ -172,6 +184,40 @@ export async function exportCurrentClientsCSV({ store } = {}) {
   }
   const file = `clients_${todayStamp()}.csv`;
   download(file, `\ufeff${lines.join('\n')}`);
-  notify(`Exported ${rows.length} loaded clients.`, 'green');
+  notify(`Exported ${rows.length} clients.`, 'green');
+}
+
+async function fetchAllClientsForExport(filters = {}) {
+  const pageSize = 200;
+  const out = [];
+  let offset = 0;
+  let total = null;
+  const seen = new Set();
+
+  for (let page = 0; page < 1000; page += 1) {
+    const r = await ClientsService.fetchClients({
+      search: filters?.search || '',
+      limitStart: offset,
+      limit: pageSize,
+      includeDisabled: !!filters?.includeDisabled,
+      disabledOnly: !!filters?.disabledOnly,
+    });
+    const items = Array.isArray(r?.items) ? r.items : [];
+    total = r?.meta?.total_count == null ? total : Number(r.meta.total_count);
+
+    for (const c of items) {
+      const name = String(c?.name || '').trim();
+      if (!name || seen.has(name)) continue;
+      out.push(c);
+      seen.add(name);
+    }
+
+    offset += items.length;
+    if (!items.length) break;
+    if (total != null && Number.isFinite(total) && offset >= total) break;
+    if (items.length < pageSize) break;
+  }
+
+  return out;
 }
 

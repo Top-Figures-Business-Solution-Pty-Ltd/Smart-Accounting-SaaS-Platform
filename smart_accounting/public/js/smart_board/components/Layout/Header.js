@@ -70,6 +70,7 @@ export class Header {
             'ITR': 'Income Tax Returns',
             'BAS': 'Business Activity Statements',
             'Payroll': 'Payroll',
+            'Payroll & Super': 'Payroll & Super',
             'Bookkeeping': 'Bookkeeping',
             'R&D Grant': 'R&D Grants',
             'SMSF': 'SMSF',

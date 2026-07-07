@@ -13,6 +13,7 @@ export const PROJECT_TYPE_ICONS = {
     'ITR': 'clipboard',
     'BAS': 'clipboard',
     'Payroll': 'clipboard',
+    'Payroll & Super': 'clipboard',
     'Bookkeeping': 'clipboard',
     'R&D Grant': 'clipboard',
     'Grants': 'clipboard',
@@ -290,6 +291,16 @@ function makeGrantsDefaultColumns() {
 }
 
 // 默认列配置（按 project_type）
+const PAYROLL_DEFAULT_COLUMNS = [
+    { field: 'customer', label: 'Client Name', width: 200, frozen: true },
+    { field: 'company', label: 'Company', width: 80 },
+    { field: 'custom_softwares', label: 'Software', width: 120 },
+    { field: 'status', label: 'Status', width: 150 },
+    { field: 'custom_project_frequency', label: 'Frequency', width: 100 },
+    { field: 'expected_end_date', label: 'Process Date', width: 120 },
+    { field: 'notes', label: 'Notes', width: 250 }
+];
+
 export const DEFAULT_COLUMNS = {
     'ITR': [
         { field: 'customer', label: 'Client Name', width: 200, frozen: true },
@@ -311,15 +322,8 @@ export const DEFAULT_COLUMNS = {
         { field: 'custom_lodgement_due_date', label: 'Due Date', width: 120 },
         { field: 'notes', label: 'Notes', width: 250 }
     ],
-    'Payroll': [
-        { field: 'customer', label: 'Client Name', width: 200, frozen: true },
-        { field: 'company', label: 'Company', width: 80 },
-        { field: 'custom_softwares', label: 'Software', width: 120 },
-        { field: 'status', label: 'Status', width: 150 },
-        { field: 'custom_project_frequency', label: 'Frequency', width: 100 },
-        { field: 'expected_end_date', label: 'Process Date', width: 120 },
-        { field: 'notes', label: 'Notes', width: 250 }
-    ],
+    'Payroll': PAYROLL_DEFAULT_COLUMNS,
+    'Payroll & Super': PAYROLL_DEFAULT_COLUMNS,
     'Bookkeeping': [
         { field: 'customer', label: 'Client Name', width: 200, frozen: true },
         { field: 'company', label: 'Company', width: 80 },
