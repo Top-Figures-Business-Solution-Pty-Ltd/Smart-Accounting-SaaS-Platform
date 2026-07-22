@@ -364,7 +364,7 @@ components/pages  →  controllers  →  services  →  backend(api/*)
 
 ## 10.1 Project-type-scoped statuses（2026-04）
 
-- **背景**：全局 status pool 是单一 Property Setter（`Project-status-options`），但并非所有 status 都应该出现在每个 board 上。典型例子是 R&D 工作流状态（`Waiting for tech meeting` 等）只适用于 `Smart Grants`。
+- **背景**：全局 status pool 是单一 Property Setter（`Project-status-options`），但并非所有 status 都应该出现在每个 board 上。典型例子是 R&D 工作流状态（`Waiting for tech meeting` 等）只适用于 Smart Grants 模块下的 FY boards。
 - **契约落点**：`smart_accounting/api/board_settings.py` 里的常量 `_STATUS_PROJECT_TYPE_SCOPE`
   - key: status 名称（与 pool 中的字符串完全一致）
   - value: 允许使用该 status 的 `Project Type` 名称集合
@@ -378,11 +378,11 @@ components/pages  →  controllers  →  services  →  backend(api/*)
   - 不做 UI 配置界面 —— 作用域是产品结构性约束，而不是业务规则
 - **前端配套**：
   - `services/boardStatusService.js` 的 `_cfgCache` 现在按 `projectType` 缓存 `pool`，不再回退到全局 `getPool()`（见该文件注释）
-  - `components/BoardView/BoardTable.js::_getHeaderHelpText` 在 `viewType === 'Smart Grants'` 时给 Status 列头加 `?` 提示，告知用户该作用域由代码管控
+  - `components/BoardView/BoardTable.js::_getHeaderHelpText` 在 `moduleKey === 'grants'` 时给 Status 列头加 `?` 提示，告知用户该作用域由代码管控
 - **如何新增 / 调整作用域**：
   1. 在 `_STATUS_PROJECT_TYPE_SCOPE` 里加 / 改 entry
   2. 如果还需要让该 status 在普通 board 上隐藏，只改这里即可；不需要动 status_admin.py、fixtures 或前端常量
-  3. 若被限定的 status 数量变化，记得同步更新 `BoardTable.js::_getHeaderHelpText` 里对应 viewType 的文本，以及（可选）architecture 文档
+  3. 若被限定的 status 数量变化，记得同步更新 `BoardTable.js::_getHeaderHelpText` 里对应 module 的文本，以及（可选）architecture 文档
 
 ## 10.2 Sort 能力边界（2026-04）
 

@@ -2383,10 +2383,19 @@ def query_project_names_advanced(
 		# No groups => no restriction
 		return {"no_restriction": 1, "names": []}
 
+	def normalize_empty_condition(cond: Any, val: Any) -> str:
+		c = str(cond or "").strip()
+		v = "" if val is None else str(val).strip()
+		if c == "equals" and not v:
+			return "is_empty"
+		if c == "not_equals" and not v:
+			return "is_not_empty"
+		return c
+
 	def rule_to_triple(r: dict) -> list | None:
 		field = (r.get("field") or "").strip()
-		cond = (r.get("condition") or "").strip()
 		val = r.get("value")
+		cond = normalize_empty_condition(r.get("condition"), val)
 		if not field or not cond:
 			return None
 		needs = cond not in ("is_empty", "is_not_empty")
@@ -2437,6 +2446,9 @@ def query_project_names_advanced(
 	def _is_effective_entity_field(fn: str) -> bool:
 		s = str(fn or "").strip().lower()
 		return s in {"custom_entity_type", "entity_type", "entity"}
+
+	def _is_software_field(fn: str) -> bool:
+		return str(fn or "").strip() in {"custom_softwares", "software"}
 
 	def _team_role(fn: str) -> str:
 		s = str(fn or "").strip()
@@ -2576,6 +2588,51 @@ def query_project_names_advanced(
 			return set(base_names) - matched
 		return set()
 
+	def _software_rule_names(cond: str, v: str | None) -> set[str]:
+		"""
+		Resolve Project.custom_softwares (Table MultiSelect) through Project Software rows.
+		The visible board value is Software.name stored in Project Software.software.
+		"""
+		cond = str(cond or "").strip()
+		val = str(v or "").strip()
+		base_names = _get_base_names()
+		if not base_names:
+			return set()
+
+		filters: list[Any] = [
+			["parenttype", "=", "Project"],
+			["parentfield", "=", "custom_softwares"],
+			["parent", "in", list(base_names)],
+		]
+		if cond in ("equals", "not_equals") and val:
+			filters.append(["software", "=", val])
+		elif cond in ("contains", "not_contains") and val:
+			filters.append(["software", "like", f"%{val}%"])
+		elif cond == "starts_with" and val:
+			filters.append(["software", "like", f"{val}%"])
+
+		try:
+			rows = frappe.get_all(
+				"Project Software",
+				filters=filters,
+				pluck="parent",
+				ignore_permissions=True,
+				limit_page_length=100000,
+			)
+		except Exception:
+			rows = []
+		matched = set([str(x).strip() for x in (rows or []) if str(x).strip()])
+
+		if cond in ("equals", "contains", "starts_with"):
+			return matched
+		if cond in ("not_equals", "not_contains"):
+			return set(base_names) - matched
+		if cond == "is_not_empty":
+			return matched
+		if cond == "is_empty":
+			return set(base_names) - matched
+		return set()
+
 	combined: set[str] | None = None
 	for idx, g in enumerate(parsed_groups):
 		if not isinstance(g, dict):
@@ -2588,8 +2645,8 @@ def query_project_names_advanced(
 			if not isinstance(r, dict):
 				continue
 			field = (r.get("field") or "").strip()
-			cond = (r.get("condition") or "").strip()
 			val = r.get("value")
+			cond = normalize_empty_condition(r.get("condition"), val)
 			needs = cond not in ("is_empty", "is_not_empty")
 			v = "" if val is None else str(val)
 			if needs and not v:
@@ -2604,6 +2661,17 @@ def query_project_names_advanced(
 				else:
 					derived_name_in &= names_for_rule
 				# Short-circuit: impossible group
+				if derived_name_in is not None and not derived_name_in:
+					break
+				continue
+
+			# Table MultiSelect: Project.custom_softwares lives in Project Software.
+			if _is_software_field(field):
+				names_for_rule = _software_rule_names(cond, v)
+				if derived_name_in is None:
+					derived_name_in = names_for_rule
+				else:
+					derived_name_in &= names_for_rule
 				if derived_name_in is not None and not derived_name_in:
 					break
 				continue

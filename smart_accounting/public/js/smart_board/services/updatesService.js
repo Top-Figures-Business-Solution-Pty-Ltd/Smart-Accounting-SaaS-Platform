@@ -60,6 +60,16 @@ export class UpdatesService {
     });
     return r?.message?.counts || {};
   }
+
+  static async getProjectUpdatesForExport(projects = []) {
+    const names = Array.isArray(projects) ? projects.map((x) => String(x || '').trim()).filter(Boolean) : [];
+    if (!names.length) return {};
+    const r = await frappe.call({
+      method: 'smart_accounting.api.updates.get_project_updates_for_export',
+      args: { projects: names }
+    });
+    return r?.message?.updates || {};
+  }
 }
 
 

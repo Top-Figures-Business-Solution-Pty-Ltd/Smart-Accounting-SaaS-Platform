@@ -9,11 +9,12 @@ import { escapeHtml } from '../../utils/dom.js';
 import { debounce } from '../../utils/helpers.js';
 
 export class LinkInput {
-  constructor(mountEl, { doctype, placeholder = 'Search...', initialValue = null, displayField = null, onChange } = {}) {
+  constructor(mountEl, { doctype, placeholder = 'Search...', initialValue = null, displayField = null, defaultList = null, onChange } = {}) {
     this.mountEl = mountEl;
     this.doctype = doctype;
     this.placeholder = placeholder;
     this.displayField = displayField || null; // e.g. 'customer_name'
+    this.defaultList = typeof defaultList === 'function' ? defaultList : null;
     this.value = initialValue || null;       // stored value (document name/ID)
     this._displayValue = null;               // human-readable label for display
     this.onChange = onChange || (() => {});
@@ -21,6 +22,8 @@ export class LinkInput {
     this._cache = new Map();
     this._seq = 0;
     this._open = false;
+    this._defaultLoaded = false;
+    this._defaultItems = [];
     this._onDocClick = null;
     this._onDocScroll = null;
     this._onWinResize = null;
@@ -68,11 +71,13 @@ export class LinkInput {
     this._input.addEventListener('input', () => {
       this.value = null;
       this._displayValue = null;
+      this.onChange(null);
       onInput();
     });
     this._input.addEventListener('focus', () => {
       const txt = (this._input.value || '').trim();
-      this._search(txt);
+      if (txt) this._search(txt);
+      else this._showDefault();
     });
 
     this._menu?.addEventListener('click', (e) => {
@@ -101,7 +106,10 @@ export class LinkInput {
 
   async _search(txt) {
     if (!this._menu) return;
-    if (!txt) { this.closeMenu(); return; }
+    if (!txt) {
+      await this._showDefault();
+      return;
+    }
 
     const key = txt.toLowerCase();
     if (this._cache.has(key)) {
@@ -151,6 +159,36 @@ export class LinkInput {
       this._renderMenu(results);
     } catch (e) {
       if (seq !== this._seq) return;
+      this._renderMenu([]);
+    }
+  }
+
+  async _showDefault() {
+    if (!this._menu) return;
+    if (!this.defaultList) {
+      this.closeMenu();
+      return;
+    }
+    if (this._defaultLoaded) {
+      this._renderMenu(this._defaultItems);
+      return;
+    }
+    try {
+      const items = await this.defaultList();
+      this._defaultItems = (Array.isArray(items) ? items : [])
+        .map((item) => {
+          if (item && typeof item === 'object') {
+            return { value: item.value || item.name || '', display: item.display || item.label || item.value || item.name || '' };
+          }
+          const v = String(item || '').trim();
+          return { value: v, display: v };
+        })
+        .filter((item) => item.value);
+      this._defaultLoaded = true;
+      this._renderMenu(this._defaultItems);
+    } catch (e) {
+      this._defaultLoaded = true;
+      this._defaultItems = [];
       this._renderMenu([]);
     }
   }

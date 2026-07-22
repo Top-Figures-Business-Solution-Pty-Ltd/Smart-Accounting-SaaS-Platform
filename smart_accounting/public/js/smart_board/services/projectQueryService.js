@@ -177,7 +177,10 @@ export class ProjectQueryService {
             return { items: [], meta: { total_count: 0 } };
           }
         } catch (e) {
-          // fall back to old path
+          console.error('Advanced filter resolution failed:', e);
+          // Advanced groups cannot be represented by the legacy get_list path.
+          // Fail closed so a broken filter never silently returns an unfiltered board.
+          return { items: [], meta: { total_count: 0 } };
         }
       }
 

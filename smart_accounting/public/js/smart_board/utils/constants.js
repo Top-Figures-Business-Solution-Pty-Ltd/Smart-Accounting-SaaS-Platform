@@ -28,55 +28,6 @@ export const PROJECT_TYPE_ICONS = {
 
 export const DEFAULT_PROJECT_TYPE_ICON = 'clipboard';
 
-// Status 配置（DEPRECATED）
-// - Status 选项（可选值）应以“单一真相”为准：来自后端 DocType meta（Project.status options，包含 Property Setter）。
-// - Smart Board 还支持按 Project Type（Board）配置“允许的子集”，见 Board Status Settings。
-// - 该常量仅保留作历史参考/兼容文档，不应在运行时使用。
-export const STATUS_OPTIONS = {
-    'ITR': [
-        'Not Started',
-        'Working',
-        'Ready for Review',
-        'Under Review',
-        'Completed',
-        'Cancelled'
-    ],
-    'BAS': [
-        'Not Started',
-        'Working',
-        'Ready for Review',
-        'Query from ATO',
-        'Resubmit',
-        'Completed',
-        'Cancelled'
-    ],
-    'Bookkeeping': [
-        'Not Started',
-        'Working',
-        'Completed',
-        'Cancelled'
-    ],
-    'R&D Grant': [
-        'Not Started',
-        'Working',
-        'Partner Review',
-        'Under Review',
-        'Query from AusIndustry',
-        'Resubmit',
-        'Approved',
-        'Completed',
-        'Cancelled'
-    ],
-    'DEFAULT': [
-        'Not Started',
-        'Working',
-        'Ready for Review',
-        'Under Review',
-        'Completed',
-        'Cancelled'
-    ]
-};
-
 // Status 颜色映射
 export const STATUS_COLORS = {
     // New global status pool (2026-02)
@@ -260,7 +211,7 @@ export function isSortableProjectField(field) {
     return !!f && SORTABLE_PROJECT_FIELDS.has(f);
 }
 
-// Shared default columns for all Smart Grants boards (Smart Grants + per-year boards).
+// Shared default columns for all Smart Grants per-year boards.
 // Returns a fresh array each call so different boards never share a mutable reference.
 function makeGrantsDefaultColumns() {
     return [
@@ -355,26 +306,5 @@ export const DEFAULT_COLUMNS = {
         { field: 'expected_end_date', label: 'Due Date', width: 120 },
         { field: 'notes', label: 'Notes', width: 250 }
     ]
-};
-
-// API 端点
-export const API_ENDPOINTS = {
-    PROJECTS: '/api/resource/Project',
-    SAVED_VIEWS: '/api/resource/Saved View',
-    USERS: '/api/resource/User',
-    CUSTOMERS: '/api/resource/Customer'
-};
-
-// 本地存储键名
-export const STORAGE_KEYS = {
-    COLUMN_WIDTHS: 'smart_board_column_widths',
-    LAST_VIEW: 'smart_board_last_view',
-    USER_PREFERENCES: 'smart_board_user_preferences'
-};
-
-// 分页配置
-export const PAGINATION = {
-    DEFAULT_PAGE_SIZE: 50,
-    PAGE_SIZE_OPTIONS: [20, 50, 100, 200]
 };
 

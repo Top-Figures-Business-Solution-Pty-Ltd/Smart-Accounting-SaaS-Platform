@@ -18,3 +18,4 @@ smart_accounting.patches.cleanup_grants_select_values
 smart_accounting.patches.rename_grants_boards_to_fy
 smart_accounting.patches.blank_default_month_selects
 smart_accounting.patches.rename_payroll_and_drop_payday_super
+smart_accounting.patches.drop_super_project_type

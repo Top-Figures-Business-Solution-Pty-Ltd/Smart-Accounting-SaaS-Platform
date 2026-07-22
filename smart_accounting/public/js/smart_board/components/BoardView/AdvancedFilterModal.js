@@ -53,6 +53,13 @@ const CONDITIONS = {
     { value: 'is_empty', label: 'is empty' },
     { value: 'is_not_empty', label: 'is not empty' },
   ],
+  software: [
+    { value: 'equals', label: 'is' },
+    { value: 'not_equals', label: 'is not' },
+    { value: 'contains', label: 'contains' },
+    { value: 'is_empty', label: 'is empty' },
+    { value: 'is_not_empty', label: 'is not empty' },
+  ],
 };
 
 function needsValue(condition) {
@@ -61,6 +68,54 @@ function needsValue(condition) {
 
 function _isNonEmptyString(v) {
   return v != null && String(v).trim().length > 0;
+}
+
+async function defaultSoftwareList() {
+  try {
+    const args = {
+      doctype: 'Software',
+      fields: ['name'],
+      order_by: 'name asc',
+      limit_page_length: 20
+    };
+    const r = await frappe.call({ method: 'frappe.client.get_list', args });
+    return (r?.message || []).map((x) => x?.name).filter(Boolean);
+  } catch (e) {
+    return [];
+  }
+}
+
+async function defaultLinkList({ doctype, displayField } = {}) {
+  const dt = String(doctype || '').trim();
+  if (!dt) return [];
+  try {
+    const fields = displayField ? ['name', displayField] : ['name'];
+    const r = await frappe.call({
+      method: 'frappe.client.get_list',
+      args: {
+        doctype: dt,
+        fields,
+        order_by: displayField ? `${displayField} asc` : 'name asc',
+        limit_page_length: 20
+      }
+    });
+    return (r?.message || [])
+      .map((row) => ({
+        value: row?.name || '',
+        display: displayField ? (row?.[displayField] || row?.name || '') : (row?.name || '')
+      }))
+      .filter((row) => row.value);
+  } catch (e) {
+    return [];
+  }
+}
+
+function normalizeEmptyValueCondition(condition, value) {
+  const cond = String(condition || '').trim();
+  const v = value == null ? '' : String(value).trim();
+  if (cond === 'equals' && !v) return 'is_empty';
+  if (cond === 'not_equals' && !v) return 'is_not_empty';
+  return cond;
 }
 
 export class AdvancedFilterModal {
@@ -321,9 +376,16 @@ export class AdvancedFilterModal {
       return;
     }
     if (role === 'condition') {
+      const prevCondition = r.condition;
       r.condition = el.value;
       // Reset value if no longer needed
       if (!needsValue(r.condition)) r.value = '';
+      const meta = this._getColMeta(r.field);
+      if (meta?.type === 'software' && needsValue(prevCondition) && needsValue(r.condition)) {
+        const prevContains = prevCondition === 'contains';
+        const nextContains = r.condition === 'contains';
+        if (prevContains !== nextContains) r.value = '';
+      }
       this._mountValueEditor(r);
       return;
     }
@@ -386,7 +448,7 @@ export class AdvancedFilterModal {
       const opts = (meta?.options || []).map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
       valueHost.innerHTML = `
         <select class="form-control">
-          <option value="" ${!rule.value ? 'selected' : ''} disabled>Select value</option>
+          <option value="" ${!rule.value ? 'selected' : ''}>(blank)</option>
           ${opts}
         </select>
       `;
@@ -404,9 +466,42 @@ export class AdvancedFilterModal {
         placeholder: meta?.placeholder || 'Search...',
         displayField: meta?.displayField || null,
         initialValue: rule.value || null,
+        defaultList: () => defaultLinkList({
+          doctype: meta?.doctype || 'Customer',
+          displayField: meta?.displayField || null,
+        }),
         onChange: (v) => { rule.value = v; }
       });
       this._linkInputs.set(rule.id, li);
+      return;
+    }
+
+    if (type === 'software') {
+      if (rule.condition === 'contains') {
+        valueHost.innerHTML = `<input class="form-control" type="text" placeholder="Software name contains" />`;
+        const inp = valueHost.querySelector('input');
+        if (inp) {
+          inp.value = rule.value || '';
+          inp.addEventListener('input', () => { rule.value = inp.value; });
+        }
+        return;
+      }
+
+      const mount = document.createElement('div');
+      valueHost.appendChild(mount);
+      const initial = rule.value ? [String(rule.value)] : [];
+      const picker = new MultiLinkPicker(mount, {
+        doctype: meta?.doctype || 'Software',
+        placeholder: meta?.placeholder || 'Search software...',
+        initialValues: initial,
+        max: 1,
+        defaultList: defaultSoftwareList,
+        onChange: () => {
+          const v = picker.getValue?.() || [];
+          rule.value = (Array.isArray(v) && v.length) ? String(v[0]) : '';
+        }
+      });
+      this._linkInputs.set(rule.id, picker);
       return;
     }
 
@@ -503,13 +598,14 @@ export class AdvancedFilterModal {
           .filter((r) => {
             if (!_isNonEmptyString(r?.field)) return false;
             if (!_isNonEmptyString(r?.condition)) return false;
-            if (needsValue(r.condition) && !_isNonEmptyString(r?.value)) return false;
+            const cond = normalizeEmptyValueCondition(r.condition, r.value);
+            if (needsValue(cond) && !_isNonEmptyString(r?.value)) return false;
             return true;
           })
           .map((r) => ({
             id: r.id,
             field: r.field,
-            condition: r.condition,
+            condition: normalizeEmptyValueCondition(r.condition, r.value),
             value: r.value,
           }));
         return {

@@ -30,7 +30,6 @@
 ```text
 smart_accounting/public/
 ├── js/
-│   ├── project.js
 │   └── smart_board/
 │       ├── index.js
 │       ├── app.js

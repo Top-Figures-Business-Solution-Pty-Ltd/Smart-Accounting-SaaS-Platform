@@ -43,6 +43,23 @@ def _normalize_int(v: Any, default: int = 0) -> int:
 		return int(default)
 
 
+def _normalize_projects_arg(projects: Any) -> list[str]:
+	names: list[str] = []
+	try:
+		if isinstance(projects, str):
+			names = frappe.parse_json(projects) or []
+		elif isinstance(projects, (list, tuple)):
+			names = list(projects)
+	except Exception:
+		names = []
+	return list(dict.fromkeys([str(n).strip() for n in (names or []) if str(n).strip()]))
+
+
+def _plain_update_text(content: Any) -> str:
+	text = frappe.utils.strip_html(str(content or ""))
+	return " ".join(str(text or "").split()).strip()
+
+
 @contextmanager
 def _suppress_frappe_comment_mentions():
 	"""
@@ -371,15 +388,7 @@ def get_project_update_counts(projects: Any = None) -> dict:
 	Respects Project read permissions by filtering to permitted projects.
 	"""
 	_ensure_logged_in()
-	names: list[str] = []
-	try:
-		if isinstance(projects, str):
-			names = frappe.parse_json(projects) or []
-		elif isinstance(projects, (list, tuple)):
-			names = list(projects)
-	except Exception:
-		names = []
-	names = [str(n).strip() for n in (names or []) if str(n).strip()]
+	names = _normalize_projects_arg(projects)
 	if not names:
 		return {"counts": {}}
 
@@ -409,5 +418,52 @@ def get_project_update_counts(projects: Any = None) -> dict:
 
 	counts = {str(r.get("reference_name")): int(r.get("cnt") or 0) for r in (rows or []) if r.get("reference_name")}
 	return {"counts": counts}
+
+
+@frappe.whitelist()
+def get_project_updates_for_export(projects: Any = None) -> dict:
+	"""
+	Return plain update bodies per project for CSV export.
+
+	Timestamps/authors are intentionally excluded; callers join each project's
+	update bodies with commas for a single CSV cell.
+	"""
+	_ensure_logged_in()
+	names = _normalize_projects_arg(projects)
+	if not names:
+		return {"updates": {}}
+
+	permitted = frappe.get_all(
+		"Project",
+		fields=["name"],
+		filters={"name": ["in", names]},
+		limit_page_length=len(names) + 5,
+	)
+	perm_names = [p.get("name") for p in (permitted or []) if p.get("name")]
+	if not perm_names:
+		return {"updates": {}}
+
+	rows = frappe.get_all(
+		"Comment",
+		fields=["reference_name", "content", "creation"],
+		filters={
+			"reference_doctype": "Project",
+			"reference_name": ["in", perm_names],
+			"comment_type": "Comment",
+		},
+		order_by="reference_name asc, creation desc",
+		limit_page_length=100000,
+		ignore_permissions=True,  # bounded by Project read permission above
+	)
+
+	out: dict[str, list[str]] = {str(n): [] for n in perm_names}
+	for row in rows or []:
+		project = str(row.get("reference_name") or "").strip()
+		if not project:
+			continue
+		text = _plain_update_text(row.get("content"))
+		if text:
+			out.setdefault(project, []).append(text)
+	return {"updates": out}
 
 

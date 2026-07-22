@@ -59,6 +59,7 @@ function metaForField(field, { viewType, statusOptions, companyOptions, projectM
   if (f === 'project_name') return { ...base, label: 'Project Name', type: 'text' };
   if (f === 'project_type') return { ...base, label: 'Project Type', type: 'link', doctype: 'Project Type', placeholder: 'Search Project Type...' };
   if (f === 'status') return { ...base, label: 'Status', type: 'select', options: statusOptions || [] };
+  if (f === 'custom_softwares') return { ...base, label: 'Software', type: 'software', doctype: 'Software', placeholder: 'Search software...' };
   if (f === 'company') {
     const opts = Array.isArray(companyOptions) ? companyOptions.filter(Boolean) : [];
     // Prefer select (prevents typos). If company list cannot be read, fall back to link search.

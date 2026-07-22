@@ -3,6 +3,7 @@ import { sanitizeProjectColumnsConfig } from './deprecatedColumns.js';
 import { ViewService } from '../services/viewService.js';
 import { CLIENT_COLUMNS, getDefaultClientColumns, loadClientColumns } from './clientsColumns.js';
 import { ClientsService } from '../services/clientsService.js';
+import { UpdatesService } from '../services/updatesService.js';
 import { notify } from '../services/uiAdapter.js';
 
 function esc(v) {
@@ -55,6 +56,7 @@ function parseSavedViewColumns(raw) {
 function projectCell(project, field) {
   const f = String(field || '').trim();
   if (!f) return '';
+  if (f === '__sb_updates_export') return asText(project?.__sb_updates_export);
   if (f.startsWith('__sb_')) return '';
   if (f.startsWith('team:')) {
     const role = f.split(':')[1] || '';
@@ -96,6 +98,26 @@ function normalizeExportColumns(cols) {
     .map((c) => ({ field: c.field, label: c.label || c.field }));
 }
 
+function withUpdatesExportColumn(cols) {
+  const list = Array.isArray(cols) ? cols.slice() : [];
+  const updatesCol = { field: '__sb_updates_export', label: 'updates' };
+  if (!list.length) return [updatesCol];
+  return [list[0], updatesCol, ...list.slice(1)];
+}
+
+async function attachUpdatesForExport(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const names = list.map((r) => String(r?.name || '').trim()).filter(Boolean);
+  if (!names.length) return list;
+
+  const updatesByProject = await UpdatesService.getProjectUpdatesForExport(names);
+  return list.map((row) => {
+    const updates = updatesByProject?.[row?.name];
+    const text = Array.isArray(updates) ? updates.map((x) => String(x || '').trim()).filter(Boolean).join(', ') : '';
+    return { ...row, __sb_updates_export: text };
+  });
+}
+
 function buildProjectsCsvText(rows, cols) {
   const header = cols.map((c) => esc(c?.label || c?.field || ''));
   const lines = [header.join(',')];
@@ -112,9 +134,11 @@ export async function exportCurrentProjectsCSV({ store, viewType } = {}) {
     notify('No loaded project rows to export.', 'orange');
     return;
   }
-  const cols = normalizeExportColumns(await resolveProjectColumns(viewType));
+  notify('Preparing project export...', 'blue');
+  const cols = withUpdatesExportColumn(normalizeExportColumns(await resolveProjectColumns(viewType)));
+  const exportRows = await attachUpdatesForExport(rows);
   const file = `projects_${String(viewType || 'board').replace(/\s+/g, '_')}_${todayStamp()}.csv`;
-  download(file, buildProjectsCsvText(rows, cols));
+  download(file, buildProjectsCsvText(exportRows, cols));
   notify(`Exported ${rows.length} loaded projects.`, 'green');
 }
 
@@ -145,8 +169,11 @@ export async function exportSelectedProjectsCSV({ store, viewType, selectedNames
     notify('No columns available to export.', 'orange');
     return;
   }
+  notify('Preparing selected project export...', 'blue');
+  cols = withUpdatesExportColumn(cols);
+  const exportRows = await attachUpdatesForExport(rows);
   const file = `projects_${String(viewType || 'board').replace(/\s+/g, '_')}_selected_${todayStamp()}.csv`;
-  download(file, buildProjectsCsvText(rows, cols));
+  download(file, buildProjectsCsvText(exportRows, cols));
   notify(`Exported ${rows.length} selected projects.`, 'green');
 }
 

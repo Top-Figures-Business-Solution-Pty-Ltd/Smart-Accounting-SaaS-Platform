@@ -1009,6 +1009,7 @@ export class BoardTable {
     _getHeaderHelpText(col) {
         const field = String(col?.field || '').trim();
         const viewType = String(this.viewType || '').trim();
+        const moduleKey = String(this.moduleKey || '').trim().toLowerCase();
         if (field === 'custom_lodgement_due_date' && ['BAS', 'IAS'].includes(viewType)) {
             return [
                 'Quarterly BAS/IAS rollover rule:',
@@ -1022,9 +1023,9 @@ export class BoardTable {
                 'Future yearly quarterly rules will be managed in Automation > Special Rules > Quarterly Due Date Rules (in development).',
             ].join('\n');
         }
-        if (field === 'status' && viewType === 'Smart Grants') {
+        if (field === 'status' && moduleKey === 'grants') {
             return [
-                'R&D workflow statuses (Smart Grants only):',
+                'R&D workflow statuses (Smart Grants boards only):',
                 '- Waiting for tech meeting',
                 '- Waiting for tech evidence',
                 '- Preparing R&D report',

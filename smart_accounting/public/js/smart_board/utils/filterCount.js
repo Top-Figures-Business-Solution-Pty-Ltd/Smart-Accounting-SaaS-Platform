@@ -26,11 +26,13 @@ export function countActiveFilters(filterState) {
         const condition = String(r.condition || '').trim();
         if (!field || !condition) continue;
         // is_empty / is_not_empty don't require a value
-        const noValue = ['is_empty', 'is_not_empty'].includes(condition);
+        const val = r.value;
+        const blankEquals = condition === 'equals' && (val == null || String(val).trim().length === 0);
+        const blankNotEquals = condition === 'not_equals' && (val == null || String(val).trim().length === 0);
+        const noValue = ['is_empty', 'is_not_empty'].includes(condition) || blankEquals || blankNotEquals;
         if (noValue) {
           count++;
         } else {
-          const val = r.value;
           if (val != null && String(val).trim().length > 0) {
             count++;
           }
