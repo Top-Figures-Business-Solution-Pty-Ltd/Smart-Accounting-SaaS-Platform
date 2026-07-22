@@ -2447,6 +2447,9 @@ def query_project_names_advanced(
 		s = str(fn or "").strip().lower()
 		return s in {"custom_entity_type", "entity_type", "entity"}
 
+	def _is_effective_year_end_field(fn: str) -> bool:
+		return str(fn or "").strip() == "custom_year_end"
+
 	def _is_software_field(fn: str) -> bool:
 		return str(fn or "").strip() in {"custom_softwares", "software"}
 
@@ -2468,7 +2471,13 @@ def query_project_names_advanced(
 		if _base_names is not None:
 			return _base_names
 		try:
-			rows = frappe.get_all("Project", filters=base_filters(), pluck="name", limit_page_length=limit)
+			rows = frappe.get_all(
+				"Project",
+				filters=base_filters(),
+				pluck="name",
+				order_by="name asc",
+				limit_page_length=100000,
+			)
 		except Exception:
 			rows = []
 		_base_names = set([str(x).strip() for x in (rows or []) if str(x).strip()])
@@ -2486,8 +2495,9 @@ def query_project_names_advanced(
 			rows = frappe.get_all(
 				"Project",
 				filters=base_filters(),
-				fields=["name", "customer", "custom_customer_entity", "custom_entity_type"],
-				limit_page_length=limit,
+				fields=["name", "customer", "custom_customer_entity", "custom_entity_type", "custom_year_end"],
+				order_by="name asc",
+				limit_page_length=100000,
 			)
 		except Exception:
 			rows = []
@@ -2496,50 +2506,56 @@ def query_project_names_advanced(
 			rows = _attach_effective_entity_type(rows or [])
 		except Exception:
 			pass
+		try:
+			rows = _attach_effective_year_end(rows or [])
+		except Exception:
+			pass
 		_base_project_rows = rows or []
 		return _base_project_rows
+
+	def _display_value_rule_names(field: str, cond: str, v: str | None) -> set[str]:
+		"""
+		Resolve display/effective value rules for columns whose table value is enriched
+		after Project rows are fetched.
+		"""
+		field = str(field or "").strip()
+		cond = str(cond or "").strip()
+		val = str(v or "").strip()
+		rows = _get_base_project_rows()
+		if not field or not rows:
+			return set()
+
+		matched = set()
+		for r in rows:
+			pn = str(r.get("name") or "").strip()
+			if not pn:
+				continue
+			display = str(r.get(field) or "").strip()
+			ok = False
+			if cond == "equals":
+				ok = bool(val) and display == val
+			elif cond == "not_equals":
+				ok = bool(val) and display != val
+			elif cond == "is_empty":
+				ok = not display
+			elif cond == "is_not_empty":
+				ok = bool(display)
+			elif cond == "contains":
+				ok = bool(val) and (val in display)
+			elif cond == "not_contains":
+				ok = bool(val) and (val not in display)
+			elif cond == "starts_with":
+				ok = bool(val) and display.startswith(val)
+			if ok:
+				matched.add(pn)
+		return matched
 
 	def _entity_rule_names(cond: str, v: str | None) -> set[str]:
 		"""
 		Resolve derived field rule: custom_entity_type (effective display value).
 		Supported conditions mirror select/text where sensible.
 		"""
-		cond = str(cond or "").strip()
-		val = str(v or "").strip()
-		rows = _get_base_project_rows()
-		if not rows:
-			return set()
-
-		base_names = set()
-		matched = set()
-		for r in rows:
-			pn = str(r.get("name") or "").strip()
-			if not pn:
-				continue
-			base_names.add(pn)
-			et = str(r.get("custom_entity_type") or "").strip()
-			ok = False
-			if cond == "equals":
-				ok = bool(val) and et == val
-			elif cond == "not_equals":
-				ok = bool(val) and et != val
-			elif cond == "is_empty":
-				ok = not et
-			elif cond == "is_not_empty":
-				ok = bool(et)
-			elif cond == "contains":
-				ok = bool(val) and (val in et)
-			elif cond == "not_contains":
-				ok = bool(val) and (val not in et)
-			elif cond == "starts_with":
-				ok = bool(val) and et.startswith(val)
-			if ok:
-				matched.add(pn)
-
-		# Keep semantics stable with other derived filters.
-		if cond == "not_equals" and val:
-			return set(base_names) & matched
-		return matched
+		return _display_value_rule_names("custom_entity_type", cond, v)
 
 	def _team_rule_names(role: str, cond: str, v: str | None) -> set[str]:
 		"""
@@ -2571,7 +2587,8 @@ def query_project_names_advanced(
 				filters=filters,
 				pluck="parent",
 				ignore_permissions=True,
-				limit_page_length=min(100000, max(1, len(base_names))),
+				order_by="parent asc, idx asc, name asc",
+				limit_page_length=100000,
 			)
 		except Exception:
 			rows = []
@@ -2617,6 +2634,7 @@ def query_project_names_advanced(
 				filters=filters,
 				pluck="parent",
 				ignore_permissions=True,
+				order_by="parent asc, idx asc, name asc",
 				limit_page_length=100000,
 			)
 		except Exception:
@@ -2687,6 +2705,17 @@ def query_project_names_advanced(
 					break
 				continue
 
+			# Display-level Year End can inherit from the selected/primary Customer Entity.
+			if _is_effective_year_end_field(field):
+				names_for_rule = _display_value_rule_names("custom_year_end", cond, v)
+				if derived_name_in is None:
+					derived_name_in = names_for_rule
+				else:
+					derived_name_in &= names_for_rule
+				if derived_name_in is not None and not derived_name_in:
+					break
+				continue
+
 			t = rule_to_triple(r)
 			if t:
 				group_filters.append(t)
@@ -2702,11 +2731,11 @@ def query_project_names_advanced(
 			if not derived_name_in:
 				names = set()
 			else:
-				group_filters.append(["name", "in", list(derived_name_in)])
-				rows = frappe.get_all("Project", filters=group_filters, pluck="name", limit_page_length=limit)
+				group_filters.append(["name", "in", sorted(derived_name_in)])
+				rows = frappe.get_all("Project", filters=group_filters, pluck="name", order_by="name asc", limit_page_length=limit)
 				names = set(rows or [])
 		else:
-			rows = frappe.get_all("Project", filters=group_filters, pluck="name", limit_page_length=limit)
+			rows = frappe.get_all("Project", filters=group_filters, pluck="name", order_by="name asc", limit_page_length=limit)
 			names = set(rows or [])
 
 		if combined is None:
