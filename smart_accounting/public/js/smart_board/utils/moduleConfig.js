@@ -33,12 +33,14 @@ const ACCOUNTING_PROJECT_FIELDS = new Set([
 const GRANTS_PROJECT_FIELDS = new Set([
   'project_type',
   'custom_grants_fy_label',
+  'custom_engagement_date',
   'custom_grants_abn_snapshot',
   // (custom_grants_deliverer removed 2026-05)
   'custom_grants_state',
   'custom_grants_industry_category',
   'custom_grants_type',
   'custom_grants_priority',
+  'custom_grants_salesperson',
   'custom_grants_partner_label',
   'custom_grants_referral_text',
   'custom_grants_owner_name',
@@ -203,6 +205,7 @@ export function getRollOverConfig({ moduleKey = null } = {}) {
         custom_team_members: { type: 'none' },
         // Project-level fields default to "clear" (a new year starts fresh).
         custom_grants_fy_label: { mode: 'clear' },
+        custom_engagement_date: { type: 'date', mode: 'clear' },
         custom_grants_status: { mode: 'clear' },
         custom_ap_submit_date: { type: 'date', mode: 'clear' },
         custom_industry_approval_date: { type: 'date', mode: 'clear' },

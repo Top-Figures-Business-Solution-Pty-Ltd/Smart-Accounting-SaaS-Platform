@@ -114,9 +114,11 @@ _SORTABLE_PROJECT_FIELDS = {
 	"custom_fiscal_year",
 	"custom_year_end",
 	"custom_grants_fy_label",
+	"custom_engagement_date",
 	"custom_grants_state",
 	"custom_grants_industry_category",
 	"custom_grants_partner_label",
+	"custom_grants_salesperson",
 	"custom_grants_owner_name",
 	"custom_grants_status",
 	"custom_ap_submit_date",
@@ -181,6 +183,12 @@ def _enrich_project_rows(rows: list[dict], requested_fields: list[str] | None = 
 	if need_year_end:
 		try:
 			_attach_effective_year_end(out)
+		except Exception:
+			pass
+
+	if "custom_grants_salesperson" in req_fields:
+		try:
+			_attach_user_link_labels(out, ["custom_grants_salesperson"])
 		except Exception:
 			pass
 
@@ -303,6 +311,34 @@ def _attach_user_image(rows: list[dict]) -> list[dict]:
 		r["user_image"] = img or ""
 		# Full name (for initials like "JR" instead of "J")
 		r["user_full_name"] = label or ""
+	return rows
+
+
+def _attach_user_link_labels(rows: list[dict], fields: list[str]) -> list[dict]:
+	"""
+	Attach `<field>_label` for Project Link/User fields so UI/export can display
+	human names while persisting the actual User id/email.
+	"""
+	user_fields = [str(f or "").strip() for f in (fields or []) if str(f or "").strip()]
+	if not rows or not user_fields:
+		return rows
+
+	users: list[str] = []
+	for row in rows or []:
+		for field in user_fields:
+			user = str(row.get(field) or "").strip()
+			if user:
+				users.append(user)
+	if not users:
+		return rows
+
+	meta = get_user_meta(users) or {}
+	for row in rows or []:
+		for field in user_fields:
+			user = str(row.get(field) or "").strip()
+			if not user:
+				continue
+			row[f"{field}_label"] = (meta.get(user) or {}).get("label") or user
 	return rows
 
 
@@ -2421,9 +2457,9 @@ def query_project_names_advanced(
 		if cond == "on_or_after":
 			return [field, ">=", v]
 		if cond == "is_empty":
-			return [field, "=", ""]
+			return [field, "is", "not set"]
 		if cond == "is_not_empty":
-			return [field, "!=", ""]
+			return [field, "is", "set"]
 		return None
 
 	def base_filters() -> list:

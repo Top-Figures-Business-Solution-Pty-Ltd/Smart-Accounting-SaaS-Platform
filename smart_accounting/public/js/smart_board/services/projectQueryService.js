@@ -83,9 +83,11 @@ export class ProjectQueryService {
       'custom_fiscal_year',
       'custom_year_end',
       'custom_grants_fy_label',
+      'custom_engagement_date',
       'custom_grants_abn_snapshot',
       'custom_grants_state',
       'custom_grants_industry_category',
+      'custom_grants_salesperson',
       'custom_grants_partner_label',
       'custom_grants_referral_text',
       'custom_grants_owner_name',
@@ -93,6 +95,9 @@ export class ProjectQueryService {
       'custom_grants_contact_name',
       'custom_grants_primary_communication',
       'custom_grants_status',
+      'custom_tg_tax_agent',
+      'custom_portal_access_received',
+      'custom_portal_access_expiry_date',
       'custom_ap_submit_date',
       'custom_industry_approval_date',
       'custom_tax_lodgement_date',
@@ -250,13 +255,20 @@ export class ProjectQueryService {
       const hasAdvOr = Array.isArray(advOrFilters) && advOrFilters.length > 0;
       const hasSearchOr = Array.isArray(searchOrFilters) && searchOrFilters.length > 0;
       const hasSpecialSearchField = searchFields.some((f) => ['custom_softwares', 'software', 'customer_name'].includes(String(f || '').trim()));
+      const hasNameInRestriction = Array.isArray(nameIn) && nameIn.length > 0;
       let searchResolvedToNameIn = false;
 
-      // Frappe get_list supports only ONE `or_filters` group. If both advanced OR rules and search OR exist,
-      // we pre-resolve search matches to a name_in list and keep advanced OR rules as-is.
-      // Also pre-resolve when search includes special fields (e.g. custom_softwares) that cannot be
-      // represented by direct Project `or_filters`.
-      if (hasSearch && ((hasAdvOr && hasSearchOr) || hasSpecialSearchField)) {
+      // Frappe get_list supports only ONE `or_filters` group. Pre-resolve search to name_in when:
+      // - advanced OR rules already consume or_filters, or
+      // - advanced filter groups already produced a name_in restriction (must intersect, not replace), or
+      // - search needs special fields (software / customer_name) that cannot be expressed as Project or_filters.
+      //
+      // Without this, search or_filters can effectively drop the advanced name_in restriction
+      // (especially when an empty intersection used to clear name_in and fall back to the full board).
+      const mustResolveSearchToNameIn = hasSearch && hasSearchOr && (
+        hasAdvOr || hasGroups || hasNameInRestriction || hasSpecialSearchField
+      );
+      if (mustResolveSearchToNameIn) {
         try {
           const backendSearchFields = Array.from(new Set([...(searchFields || []), ...(cleanSearchFields || [])]));
           const r = await frappe.call({
@@ -276,10 +288,13 @@ export class ProjectQueryService {
 
           if (Array.isArray(names) && names.length) {
             if (Array.isArray(nameIn) && nameIn.length) {
-              // Intersect with advanced group restriction
+              // Intersect with advanced group restriction — never widen past the filter set.
               const set = new Set(nameIn.map(String));
               const inter = names.map(String).filter((x) => set.has(String(x)));
-              nameIn = inter.length ? inter : [];
+              if (!inter.length) {
+                return { items: [], meta: { total_count: 0 } };
+              }
+              nameIn = inter;
             } else {
               nameIn = names;
             }
@@ -290,7 +305,7 @@ export class ProjectQueryService {
           }
         } catch (e) {
           // Fail-safe: if search resolution fails, fall back to legacy behavior (project_name only)
-          // by narrowing search to project_name in the main query.
+          // by narrowing search to project_name in the main query (still ANDed with name_in).
           fallbackSearchProjectName = rawSearch;
         }
       }
@@ -305,10 +320,16 @@ export class ProjectQueryService {
         this._resolveExplicitOrderBy(filters?.sort_field, filters?.sort_order) ||
         this._resolveBoardOrderBy(filters?.first_column);
 
+      // Empty array is truthy in JS — only pass name_in when it still restricts the set.
+      const nameInArg = (Array.isArray(nameIn) && nameIn.length) ? { name_in: nameIn } : {};
+      if (searchResolvedToNameIn && !nameInArg.name_in) {
+        return { items: [], meta: { total_count: 0 } };
+      }
+
       const args = {
         doctype: 'Project',
         fields,
-        filters: this.buildFilters({ ...filters, ...(fallbackSearchProjectName ? { __sb_search_fallback_project_name: fallbackSearchProjectName } : {}), ...(nameIn ? { name_in: nameIn } : {}) }),
+        filters: this.buildFilters({ ...filters, ...(fallbackSearchProjectName ? { __sb_search_fallback_project_name: fallbackSearchProjectName } : {}), ...nameInArg }),
         ...(effectiveOrFilters && effectiveOrFilters.length ? { or_filters: effectiveOrFilters } : {}),
         order_by: resolvedOrderBy,
         limit_start: Math.max(0, limitStart),
@@ -635,11 +656,12 @@ export class ProjectQueryService {
       result.push(['custom_lodgement_due_date', '<=', filters.date_to]);
     }
 
-    // NOTE (2026-02):
-    // Global search is resolved as:
-    // - OR across multiple visible columns (via `or_filters`) when possible
-    // - OR pre-resolution to `name_in` when advanced OR rules are present
-    // So we intentionally do NOT apply `filters.search` here (otherwise it would AND-restrict to project_name only).
+    // NOTE:
+    // Global search is resolved in fetchProjects as:
+    // - OR across columns via `or_filters` when alone, or
+    // - pre-resolution to `name_in` (intersected with advanced filter name_in) when
+    //   advanced groups / advanced OR / special search fields are present.
+    // So we intentionally do NOT apply `filters.search` here.
     // Fail-safe: allow explicit fallback to legacy project_name-only search.
     const fallbackSearch = String(filters?.__sb_search_fallback_project_name || '').trim();
     if (fallbackSearch) result.push(['project_name', 'like', `%${fallbackSearch}%`]);

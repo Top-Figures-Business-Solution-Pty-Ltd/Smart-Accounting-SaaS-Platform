@@ -1089,19 +1089,16 @@ class CustomProject(Project):
         for f in (self.meta.fields or []):
             fieldname = str(getattr(f, "fieldname", "") or "").strip()
             fieldtype = str(getattr(f, "fieldtype", "") or "").strip()
-            if not fieldname or fieldname in _AUDIT_SKIP_FIELDS:
+            if not fieldname:
                 continue
-            # Product rule: activity popup should focus on board-relevant columns only.
-            if fieldname not in _AUDIT_TRACK_FIELDS:
+            if not is_project_activity_field(fieldname, f):
                 continue
+            label = str(getattr(f, "label", "") or fieldname)
             try:
                 if not self.has_value_changed(fieldname):
                     continue
             except Exception:
                 pass
-            if fieldtype in _AUDIT_SKIP_FIELDTYPES:
-                continue
-            label = str(getattr(f, "label", "") or fieldname)
 
             old_raw = before.get(fieldname)
             new_raw = self.get(fieldname)
@@ -1557,6 +1554,27 @@ _AUDIT_SKIP_FIELDS = {
     "_comments",
     "_assign",
     "_liked_by",
+    # Internal Smart Board/system helpers, not user-facing activity rows.
+    "custom_archive_source",
+    "custom_archive_source_ref",
+    "custom_board_row_highlight",
+}
+
+_AUDIT_STANDARD_BOARD_FIELDS = {
+    # Project identity/workflow fields that Smart Accounting/Grants expose as board columns.
+    # Future Custom Fields are handled dynamically by the `custom_` prefix check below;
+    # ERPNext standard fields are opt-in so calculated timesheet/cost rollup fields stay hidden.
+    "customer",
+    "project_name",
+    "status",
+    "notes",
+    "project_type",
+    "company",
+    "priority",
+    "expected_start_date",
+    "expected_end_date",
+    "estimated_costing",
+    "is_active",
 }
 
 _AUDIT_SKIP_FIELDTYPES = {
@@ -1568,30 +1586,57 @@ _AUDIT_SKIP_FIELDTYPES = {
     "Button",
 }
 
-# Restrict to board domain columns to avoid noisy ERPNext internal recalculation logs.
-_AUDIT_TRACK_FIELDS = {
-    "customer",
-    "project_name",
-    "status",
-    "expected_end_date",
-    "expected_start_date",
-    "notes",
-    "company",
-    "custom_lodgement_due_date",
-    "custom_target_month",
-    "priority",
-    "estimated_costing",
-    "custom_entity_type",
-    "custom_customer_entity",
-    "project_type",
-    "custom_project_frequency",
-    "custom_fiscal_year",
-    "custom_reset_date",
-    "is_active",
-    "custom_team_members",
-    "custom_softwares",
-    "custom_engagement_letter",
+_AUDIT_UNDO_SKIP_FIELDTYPES = {
+    *_AUDIT_SKIP_FIELDTYPES,
+    "Table",
+    "Table MultiSelect",
 }
+
+
+def _get_project_meta_field(fieldname: str):
+    try:
+        return frappe.get_meta("Project").get_field(fieldname)
+    except Exception:
+        return None
+
+
+def is_project_activity_field(fieldname: str, meta_field=None) -> bool:
+    """
+    Dynamic activity boundary for Smart Accounting/Grants board fields.
+
+    Record Smart Board-facing Project fields without maintaining a per-column
+    list for every custom field:
+    - Custom Fields (`custom_*`) are included automatically.
+    - ERPNext standard fields are opt-in, because Project has many calculated
+      timesheet/cost fields that change as side effects and should not appear
+      in Last Updated.
+    - System/layout fields are always excluded.
+    """
+    fn = str(fieldname or "").strip()
+    if not fn or fn in _AUDIT_SKIP_FIELDS:
+        return False
+    df = meta_field or _get_project_meta_field(fn)
+    if not df:
+        return False
+    fieldtype = str(getattr(df, "fieldtype", "") or "").strip()
+    if fieldtype in _AUDIT_SKIP_FIELDTYPES:
+        return False
+    if not (fn.startswith("custom_") or fn in _AUDIT_STANDARD_BOARD_FIELDS):
+        return False
+    return True
+
+
+def is_project_activity_undo_field(fieldname: str) -> bool:
+    fn = str(fieldname or "").strip()
+    if not is_project_activity_field(fn):
+        return False
+    df = _get_project_meta_field(fn)
+    fieldtype = str(getattr(df, "fieldtype", "") or "").strip()
+    if fieldtype in _AUDIT_UNDO_SKIP_FIELDTYPES:
+        return False
+    if bool(getattr(df, "read_only", 0)):
+        return False
+    return True
 
 
 def _short_text(v: str, max_len: int = 180) -> str:

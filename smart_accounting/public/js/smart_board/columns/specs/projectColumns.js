@@ -12,6 +12,7 @@ import { DoctypeMetaService } from '../../services/doctypeMetaService.js';
 import { BoardStatusService } from '../../services/boardStatusService.js';
 import { confirmDialog, notify } from '../../services/uiAdapter.js';
 import { escapeHtml } from '../../utils/dom.js';
+import { MentionService } from '../../services/mentionService.js';
 import { openProjectTypeChangeFlow } from '../../controllers/projectTypeChangeController.js';
 import { openProjectFrequencyChangeFlow } from '../../controllers/projectFrequencyChangeController.js';
 import { openProjectEntityChangeFlow } from '../../controllers/projectEntityChangeController.js';
@@ -43,6 +44,44 @@ function monthOptions() {
 function monthOptionsWithClear() {
   return [{ value: '', label: '— Clear —' }]
     .concat(monthOptions().map((m) => ({ value: m, label: m })));
+}
+
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function formatEngagementMonth(value) {
+  const s = String(value || '').trim();
+  const m = s.match(/^(\d{4})-(\d{2})/);
+  if (!m) return s ? formatDate(s) : '';
+  const monthIdx = Math.max(0, Math.min(11, Number(m[2]) - 1));
+  return `${MONTH_SHORT[monthIdx]} ${m[1]}`;
+}
+
+function engagementMonthEditor({ cellEl, project, manager, field }) {
+  const contentEl = cellEl.querySelector('.cell-content') || cellEl;
+  const initial = String(project?.[field] || '').slice(0, 7);
+  contentEl.innerHTML = `<input class="form-control sb-inline-editor sb-inline-editor--month" type="month" min="2024-01" max="2026-12" />`;
+  const input = contentEl.querySelector('input.sb-inline-editor--month');
+  if (input) input.value = initial;
+  const ed = {
+    focus() {
+      try { input?.focus?.(); } catch (e) {}
+    },
+    getValue() {
+      const v = String(input?.value || '').trim();
+      return v ? `${v}-01` : '';
+    },
+    setValue(v) {
+      if (input) input.value = String(v || '').slice(0, 7);
+    },
+    getInputEl() {
+      return input;
+    },
+    destroy() {
+      if (contentEl) contentEl.innerHTML = '';
+    },
+  };
+  mountEditorHelpers(manager, contentEl, ed);
+  return ed;
 }
 
 function priorityOptions() {
@@ -349,6 +388,57 @@ function multiLinkEditor({ cellEl, project, manager, doctype, placeholder, initi
   return picker;
 }
 
+function singleUserPickerEditor({ cellEl, project, manager, field }) {
+  const contentEl = cellEl.querySelector('.cell-content') || cellEl;
+  contentEl.innerHTML = `<div class="sb-inline-editor sb-inline-editor--link"></div>`;
+  const mountEl = contentEl.querySelector('.sb-inline-editor--link');
+  if (!mountEl) return;
+
+  const picker = new MultiLinkPicker(mountEl, {
+    doctype: 'User',
+    placeholder: 'Search user...',
+    initialValues: project?.[field] ? [String(project[field])] : [],
+    max: 1,
+    searchProvider: searchUserValues,
+    defaultList: defaultUserList,
+    resolveMeta: resolveUserMeta,
+    onChange: () => {
+      manager?.commitAndClose?.('user-picker-change');
+    }
+  });
+
+  const editor = {
+    getValue() {
+      const values = picker.getValue?.() || [];
+      return Array.isArray(values) && values.length ? String(values[0]) : '';
+    },
+    setValue(v) {
+      picker.setValue?.(v ? [String(v)] : []);
+    },
+    getDisplayValue() {
+      const value = this.getValue();
+      if (!value) return '';
+      return picker._meta?.get?.(value)?.label || value;
+    },
+    getInputEl() {
+      return picker.getInputEl?.() || null;
+    },
+    focus(opts) {
+      picker.focus?.(opts);
+    },
+    destroy() {
+      picker.destroy?.();
+    }
+  };
+
+  manager?.bindActiveEditor?.(editor.getInputEl(), editor);
+  setTimeout(() => {
+    try { editor.focus?.(); } catch (e) {}
+  }, 0);
+
+  return editor;
+}
+
 async function defaultSoftwareList() {
   try {
     const r = await frappe.call({
@@ -368,18 +458,13 @@ async function defaultSoftwareList() {
 }
 
 async function defaultUserList() {
+  return searchUserValues('');
+}
+
+async function searchUserValues(txt) {
   try {
-    const r = await frappe.call({
-      method: 'frappe.client.get_list',
-      args: {
-        doctype: 'User',
-        fields: ['name'],
-        filters: { enabled: 1 },
-        order_by: 'modified desc',
-        limit_page_length: 20
-      }
-    });
-    return (r?.message || []).map((x) => x?.name).filter(Boolean);
+    const list = await MentionService.searchUsers(txt, { limit: 20 });
+    return (list || []).map((u) => u?.name).filter(Boolean);
   } catch (e) {
     return [];
   }
@@ -637,6 +722,17 @@ export function makeProjectColumnSpecs() {
         return ed;
       }
     },
+    // Engagement Date stores first day of month; board displays/edits month precision.
+    {
+      field: 'custom_engagement_date',
+      isEditable: true,
+      renderCell: ({ project }) => {
+        const v = formatEngagementMonth(project?.custom_engagement_date);
+        if (!v) return '<span class="text-muted">—</span><span class="sb-afford sb-afford--date">▾</span>';
+        return `${escapeHtml(v)}<span class="sb-afford sb-afford--date">▾</span>`;
+      },
+      renderEditor: engagementMonthEditor,
+    },
     // Grants "date" fields are free-text (Data) → notes-like popover editor.
     { field: 'custom_ap_submit_date', isEditable: true, renderEditor: grantsPopoverEditor },
     { field: 'custom_industry_approval_date', isEditable: true, renderEditor: grantsPopoverEditor },
@@ -663,6 +759,31 @@ export function makeProjectColumnSpecs() {
     { field: 'custom_grants_state', isEditable: true, renderEditor: grantsPopoverEditor },
     { field: 'custom_grants_industry_category', isEditable: true, renderEditor: grantsPopoverEditor },
     { field: 'custom_grants_partner_label', isEditable: true, renderEditor: grantsPopoverEditor },
+    {
+      field: 'custom_grants_salesperson',
+      isEditable: true,
+      renderCell: ({ project }) => {
+        const v = String(project?.custom_grants_salesperson_label || project?.custom_grants_salesperson || '').trim();
+        if (!v) return '<span class="text-muted">—</span><span class="sb-afford sb-afford--select">▾</span>';
+        return `${escapeHtml(v)}<span class="sb-afford sb-afford--select">▾</span>`;
+      },
+      renderEditor: singleUserPickerEditor,
+      async commit({ projectName, field, value, store, editor }) {
+        if (!projectName || !field) return;
+        const v = String(value || '').trim();
+        if (store?.dispatch) {
+          await store.dispatch('projects/updateProjectField', { name: projectName, field, value: v });
+        } else if (store?.commit) {
+          store.commit('projects/updateProject', { name: projectName, [field]: v });
+        }
+        const label = String(editor?.getDisplayValue?.() || v).trim();
+        store?.commit?.('projects/updateProject', {
+          name: projectName,
+          [field]: v,
+          [`${field}_label`]: label,
+        });
+      }
+    },
     { field: 'custom_grants_referral_text', isEditable: true, renderEditor: grantsPopoverEditor },
     { field: 'custom_grants_owner_name', isEditable: true, renderEditor: grantsPopoverEditor },
     { field: 'custom_grants_contact_name', isEditable: true, renderEditor: grantsPopoverEditor },

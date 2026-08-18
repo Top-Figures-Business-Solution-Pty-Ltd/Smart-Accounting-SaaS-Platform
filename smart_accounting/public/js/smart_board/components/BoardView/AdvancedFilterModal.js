@@ -118,6 +118,16 @@ function normalizeEmptyValueCondition(condition, value) {
   return cond;
 }
 
+function optionValue(option) {
+  if (option && typeof option === 'object') return String(option.value ?? '').trim();
+  return String(option ?? '').trim();
+}
+
+function optionLabel(option) {
+  if (option && typeof option === 'object') return String(option.label ?? option.value ?? '').trim();
+  return String(option ?? '').trim();
+}
+
 export class AdvancedFilterModal {
   constructor({ title = 'Filter', viewKey = 'global', columns = [], initial = {}, onApply, onClose } = {}) {
     this.title = title;
@@ -445,7 +455,14 @@ export class AdvancedFilterModal {
     }
 
     if (type === 'select') {
-      const opts = (meta?.options || []).map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+      const opts = (meta?.options || [])
+        .map((v) => {
+          const value = optionValue(v);
+          if (!value) return '';
+          const label = optionLabel(v) || value;
+          return `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`;
+        })
+        .join('');
       valueHost.innerHTML = `
         <select class="form-control">
           <option value="" ${!rule.value ? 'selected' : ''}>(blank)</option>

@@ -4,6 +4,7 @@ import { ViewService } from '../services/viewService.js';
 import { CLIENT_COLUMNS, getDefaultClientColumns, loadClientColumns } from './clientsColumns.js';
 import { ClientsService } from '../services/clientsService.js';
 import { UpdatesService } from '../services/updatesService.js';
+import { DoctypeMetaService } from '../services/doctypeMetaService.js';
 import { notify } from '../services/uiAdapter.js';
 
 function esc(v) {
@@ -17,6 +18,18 @@ function asText(v) {
   if (Array.isArray(v)) return v.map((x) => asText(x)).filter(Boolean).join('; ');
   if (typeof v === 'object') return JSON.stringify(v);
   return String(v);
+}
+
+function isoDateText(v) {
+  const s = String(v || '').trim();
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : s;
+}
+
+function isoMonthText(v) {
+  const s = String(v || '').trim();
+  const m = s.match(/^(\d{4}-\d{2})/);
+  return m ? m[1] : s;
 }
 
 function download(filename, text) {
@@ -53,7 +66,63 @@ function parseSavedViewColumns(raw) {
   return [];
 }
 
-function projectCell(project, field) {
+async function projectMetaMap() {
+  try {
+    const meta = await DoctypeMetaService.getMeta('Project', { force: true });
+    const map = new Map();
+    for (const df of (Array.isArray(meta?.fields) ? meta.fields : [])) {
+      const fieldname = String(df?.fieldname || '').trim();
+      if (fieldname) map.set(fieldname, df);
+    }
+    return map;
+  } catch (e) {
+    return new Map();
+  }
+}
+
+async function attachLinkLabelsForExport(rows, cols, metaMap) {
+  const list = Array.isArray(rows) ? rows : [];
+  const fields = (Array.isArray(cols) ? cols : [])
+    .map((c) => String(c?.field || '').trim())
+    .filter((f) => {
+      const df = metaMap?.get?.(f);
+      return String(df?.fieldtype || '') === 'Link' && String(df?.options || '') === 'User';
+    });
+  if (!list.length || !fields.length) return list;
+
+  const users = [];
+  for (const row of list) {
+    for (const field of fields) {
+      const value = String(row?.[field] || '').trim();
+      if (value && !row?.[`${field}_label`]) users.push(value);
+    }
+  }
+  const unique = Array.from(new Set(users));
+  if (!unique.length) return list;
+
+  let meta = {};
+  try {
+    const r = await frappe.call({
+      method: 'smart_accounting.api.project_board.get_user_meta',
+      args: { users: unique }
+    });
+    meta = r?.message || {};
+  } catch (e) {
+    meta = {};
+  }
+
+  return list.map((row) => {
+    const next = { ...row };
+    for (const field of fields) {
+      const value = String(next?.[field] || '').trim();
+      if (!value || next[`${field}_label`]) continue;
+      next[`${field}_label`] = meta?.[value]?.label || value;
+    }
+    return next;
+  });
+}
+
+function projectCell(project, field, metaMap = new Map()) {
   const f = String(field || '').trim();
   if (!f) return '';
   if (f === '__sb_updates_export') return asText(project?.__sb_updates_export);
@@ -63,7 +132,7 @@ function projectCell(project, field) {
     const team = Array.isArray(project?.custom_team_members) ? project.custom_team_members : [];
     return team
       .filter((x) => String(x?.role || '').trim() === String(role).trim())
-      .map((x) => x?.user || '')
+      .map((x) => x?.user_full_name || x?.user || '')
       .filter(Boolean)
       .join('; ');
   }
@@ -72,6 +141,12 @@ function projectCell(project, field) {
     const list = Array.isArray(project?.custom_softwares) ? project.custom_softwares : [];
     return list.map((x) => (typeof x === 'string' ? x : x?.software)).filter(Boolean).join('; ');
   }
+  if (f === 'custom_engagement_date') return isoMonthText(project?.[f]);
+  const df = metaMap?.get?.(f) || null;
+  const fieldtype = String(df?.fieldtype || '').trim();
+  if (fieldtype === 'Link') return project?.[`${f}_label`] || project?.[f] || '';
+  if (fieldtype === 'Date' || fieldtype === 'Datetime') return isoDateText(project?.[f]);
+  if (fieldtype === 'Check') return (project?.[f] === 1 || project?.[f] === '1' || project?.[f] === true) ? 'Yes' : 'No';
   return asText(project?.[f]);
 }
 
@@ -118,11 +193,11 @@ async function attachUpdatesForExport(rows) {
   });
 }
 
-function buildProjectsCsvText(rows, cols) {
+function buildProjectsCsvText(rows, cols, metaMap = new Map()) {
   const header = cols.map((c) => esc(c?.label || c?.field || ''));
   const lines = [header.join(',')];
   for (const r of rows) {
-    lines.push(cols.map((c) => esc(projectCell(r, c.field))).join(','));
+    lines.push(cols.map((c) => esc(projectCell(r, c.field, metaMap))).join(','));
   }
   // BOM so Excel opens UTF-8 cleanly.
   return `\ufeff${lines.join('\n')}`;
@@ -136,9 +211,10 @@ export async function exportCurrentProjectsCSV({ store, viewType } = {}) {
   }
   notify('Preparing project export...', 'blue');
   const cols = withUpdatesExportColumn(normalizeExportColumns(await resolveProjectColumns(viewType)));
-  const exportRows = await attachUpdatesForExport(rows);
+  const metaMap = await projectMetaMap();
+  const exportRows = await attachLinkLabelsForExport(await attachUpdatesForExport(rows), cols, metaMap);
   const file = `projects_${String(viewType || 'board').replace(/\s+/g, '_')}_${todayStamp()}.csv`;
-  download(file, buildProjectsCsvText(exportRows, cols));
+  download(file, buildProjectsCsvText(exportRows, cols, metaMap));
   notify(`Exported ${rows.length} loaded projects.`, 'green');
 }
 
@@ -171,9 +247,10 @@ export async function exportSelectedProjectsCSV({ store, viewType, selectedNames
   }
   notify('Preparing selected project export...', 'blue');
   cols = withUpdatesExportColumn(cols);
-  const exportRows = await attachUpdatesForExport(rows);
+  const metaMap = await projectMetaMap();
+  const exportRows = await attachLinkLabelsForExport(await attachUpdatesForExport(rows), cols, metaMap);
   const file = `projects_${String(viewType || 'board').replace(/\s+/g, '_')}_selected_${todayStamp()}.csv`;
-  download(file, buildProjectsCsvText(exportRows, cols));
+  download(file, buildProjectsCsvText(exportRows, cols, metaMap));
   notify(`Exported ${rows.length} selected projects.`, 'green');
 }
 

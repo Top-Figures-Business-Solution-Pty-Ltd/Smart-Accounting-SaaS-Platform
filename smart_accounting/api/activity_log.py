@@ -11,6 +11,8 @@ from typing import Any
 import frappe
 from frappe.utils import getdate
 
+from smart_accounting.custom.project import is_project_activity_field, is_project_activity_undo_field
+
 
 def _ensure_logged_in() -> None:
 	if frappe.session.user in (None, "", "Guest"):
@@ -376,7 +378,7 @@ def get_project_activity(project: str, limit_start: int = 0, limit_page_length: 
 		if not payload:
 			continue
 		field = _clean_str(payload.get("field"))
-		if field and field not in _PROJECT_ACTIVITY_FIELDS:
+		if field and not is_project_activity_field(field):
 			continue
 		user_name = _clean_str(r.get("owner"))
 		items.append(
@@ -393,7 +395,7 @@ def get_project_activity(project: str, limit_start: int = 0, limit_page_length: 
 				"automation_action_type": _clean_str(payload.get("automation_action_type")),
 				"archive_source": _clean_str(payload.get("archive_source")),
 				"archive_rule": _clean_str(payload.get("archive_rule")),
-				"undoable": field in _PROJECT_ACTIVITY_UNDO_FIELDS,
+				"undoable": is_project_activity_undo_field(field),
 				"user": user_name,
 				"user_label": _get_user_fullname(user_name, user_cache) or user_name or "Unknown",
 				"timestamp": r.get("creation"),
@@ -462,7 +464,7 @@ def get_project_activity(project: str, limit_start: int = 0, limit_page_length: 
 				field = _clean_str(c[0])
 				if not field:
 					continue
-				if field not in _PROJECT_ACTIVITY_FIELDS:
+				if not is_project_activity_field(field):
 					continue
 				items.append(
 					{
@@ -496,7 +498,7 @@ def get_project_activity(project: str, limit_start: int = 0, limit_page_length: 
 def undo_project_activity(project: str, activity_name: str, expected_to_value: str | None = None) -> dict:
 	"""
 	Undo a single project update row recorded by SB_ACTIVITY comment.
-	Only supports safe scalar fields listed in _PROJECT_ACTIVITY_UNDO_FIELDS.
+	Only supports dynamically-safe scalar Project fields.
 	"""
 	_ensure_logged_in()
 	name = _clean_str(project)
@@ -525,7 +527,7 @@ def undo_project_activity(project: str, activity_name: str, expected_to_value: s
 	if not payload:
 		frappe.throw("Unsupported activity row")
 	field = _clean_str(payload.get("field"))
-	if field not in _PROJECT_ACTIVITY_UNDO_FIELDS:
+	if not is_project_activity_undo_field(field):
 		frappe.throw("This update type cannot be undone")
 
 	from_value = payload.get("from_value")
@@ -540,50 +542,4 @@ def undo_project_activity(project: str, activity_name: str, expected_to_value: s
 	doc.set(field, _coerce_value_for_field(doc, field, from_value))
 	doc.save(ignore_permissions=True)
 	return {"ok": True, "field": field, "value": doc.get(field)}
-
-
-_PROJECT_ACTIVITY_FIELDS = {
-	"customer",
-	"project_name",
-	"status",
-	"expected_end_date",
-	"expected_start_date",
-	"notes",
-	"company",
-	"custom_lodgement_due_date",
-	"custom_target_month",
-	"priority",
-	"estimated_costing",
-	"custom_entity_type",
-	"custom_customer_entity",
-	"project_type",
-	"custom_project_frequency",
-	"custom_fiscal_year",
-	"custom_reset_date",
-	"is_active",
-	"custom_team_members",
-	"custom_softwares",
-	"custom_engagement_letter",
-}
-
-
-_PROJECT_ACTIVITY_UNDO_FIELDS = {
-	"status",
-	"project_name",
-	"company",
-	"project_type",
-	"custom_project_frequency",
-	"custom_fiscal_year",
-	"custom_entity_type",
-	"custom_customer_entity",
-	"custom_lodgement_due_date",
-	"custom_target_month",
-	"custom_reset_date",
-	"custom_engagement_letter",
-	"is_active",
-	"priority",
-	"estimated_costing",
-	"expected_start_date",
-	"expected_end_date",
-}
 

@@ -14,6 +14,11 @@ const MONTHS = [
   'July','August','September','October','November','December'
 ];
 
+const CHECK_OPTIONS = [
+  { value: '1', label: 'Yes' },
+  { value: '0', label: 'No' },
+];
+
 function parseSavedViewColumns(raw) {
   if (!raw) return [];
   let v = raw;
@@ -84,6 +89,7 @@ function metaForField(field, { viewType, statusOptions, companyOptions, projectM
       .filter(Boolean);
     if (opts.length) return { ...base, label: String(df?.label || f), type: 'select', options: opts };
   }
+  if (ft === 'Check') return { ...base, label: String(df?.label || f), type: 'select', options: CHECK_OPTIONS };
   if (ft === 'Date' || ft === 'Datetime') return { ...base, label: String(df?.label || f), type: 'date' };
   if (ft === 'Link') return { ...base, label: String(df?.label || f), type: 'link', doctype: String(df?.options || ''), placeholder: `Search ${String(df?.label || f)}...` };
 

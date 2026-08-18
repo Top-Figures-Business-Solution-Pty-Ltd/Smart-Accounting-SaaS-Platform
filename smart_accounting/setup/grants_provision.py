@@ -85,10 +85,16 @@ def _project_custom_fields() -> list[dict]:
             "insert_after": "custom_grants_section",
         },
         {
+            "fieldname": "custom_engagement_date",
+            "label": "Engagement Date",
+            "fieldtype": "Date",
+            "insert_after": "custom_grants_fy_label",
+        },
+        {
             "fieldname": "custom_grants_abn_snapshot",
             "label": "ABN",
             "fieldtype": "Data",
-            "insert_after": "custom_grants_fy_label",
+            "insert_after": "custom_engagement_date",
         },
         {
             "fieldname": "custom_grants_state",
@@ -120,10 +126,17 @@ def _project_custom_fields() -> list[dict]:
             "insert_after": "custom_grants_type",
         },
         {
+            "fieldname": "custom_grants_salesperson",
+            "label": "Salesperson",
+            "fieldtype": "Link",
+            "options": "User",
+            "insert_after": "custom_grants_priority",
+        },
+        {
             "fieldname": "custom_grants_partner_label",
             "label": "Partner",
             "fieldtype": "Data",
-            "insert_after": "custom_grants_priority",
+            "insert_after": "custom_grants_salesperson",
         },
         {
             "fieldname": "custom_grants_referral_text",
